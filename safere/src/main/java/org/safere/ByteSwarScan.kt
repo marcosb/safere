@@ -14,12 +14,11 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
     val bytes: ByteArray
     val offset: Int
     val length: Int
-
     init {
         this.bytes = Objects.requireNonNull<ByteArray>(bytes, "bytes")
-        if (offset < 0 || length < 0 || offset > bytes.length - length) {
+        if (offset < 0 || length < 0 || offset > bytes!!.size - length) {
             throw IndexOutOfBoundsException(
-                "offset=" + offset + ", length=" + length + ", arrayLength=" + bytes.length
+                "offset=" + offset + ", length=" + length + ", arrayLength=" + bytes!!.size
             )
         }
         this.offset = offset
@@ -140,12 +139,12 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
         }
 
         fun indexOfIgnoreCase(bytes: ByteArray, offset: Int, length: Int, prefix: String, start: Int): Int {
-            val prefixLen: Int = prefix.length()
+            val prefixLen: Int = prefix.length
             if (prefixLen == 0) {
                 return Math.min(Math.max(0, start), length)
             }
             for (i in 0..<prefixLen) {
-                if (prefix.charAt(i).code > 127) {
+                if (prefix[i].code > 127) {
                     return -2
                 }
             }
@@ -169,7 +168,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                 }
             }
             val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, prefixLen, true)
-            val anchor: Char = prefix.charAt(anchorOffset)
+            val anchor: Char = prefix[anchorOffset]
             val low = Ascii.toLowerCase(anchor).code.toByte()
             val high = Ascii.toUpperCase(anchor).code.toByte()
             return indexOfIgnoreCase(
@@ -181,7 +180,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             bytes: ByteArray,
             offset: Int,
             length: Int,
-            prefix: String?,
+            prefix: String,
             prefixLen: Int,
             offset1: Int,
             low1: Byte,
@@ -295,7 +294,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             bytes: ByteArray,
             offset: Int,
             length: Int,
-            prefix: String?,
+            prefix: String,
             prefixLen: Int,
             anchorOffset: Int,
             low: Byte,
@@ -517,7 +516,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
          * work budget was exhausted before either could be established
          */
         fun indexOfFiltered(bytes: ByteArray, offset: Int, length: Int, literal: ByteArray, start: Int): Int {
-            val last: Int = literal.length - 1
+            val last: Int = literal.size - 1
             val repeatedFirst = (literal[0].toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedLast = (literal[last].toLong() and 0xFFL) * Swar.BYTE_ONES
             val wordEnd = ByteScanBounds.lastLoadStart(length, last, java.lang.Long.BYTES)
@@ -546,7 +545,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                             candidateCount++
                         }
                     }
-                    work = WorkLimit.addCandidateWork(work, candidateCount, literal.length)
+                    work = WorkLimit.addCandidateWork(work, candidateCount, literal.size)
                 }
                 position += java.lang.Long.BYTES
                 work++
@@ -566,7 +565,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             bytes: ByteArray, offset: Int, length: Int, literal: ByteArray, position: Int
         ): Int {
             var position = position
-            while (position <= ByteScanBounds.lastMatchStart(length, literal.length)) {
+            while (position <= ByteScanBounds.lastMatchStart(length, literal.size)) {
                 if (matchesAt(bytes, offset, literal, position)) {
                     return position
                 }
@@ -593,7 +592,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
         fun indexOfMultipleByteRanges(
             bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, bitmap0: Long, bitmap1: Long, start: Int
         ): Int {
-            return when (ranges.length) {
+            return when (ranges.size) {
                 4 -> indexOfTwoByteRanges(bytes, offset, length, ranges, bitmap0, bitmap1, start)
                 6 -> indexOfThreeByteRanges(bytes, offset, length, ranges, bitmap0, bitmap1, start)
                 8 -> indexOfFourByteRanges(bytes, offset, length, ranges, bitmap0, bitmap1, start)
@@ -683,7 +682,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             if (!Swar.supportsAsciiRanges(ranges, 2)) {
                 return VectorScanProvider.Companion.UNSUPPORTED
             }
-            val numRanges: Int = ranges.length / 2
+            val numRanges: Int = ranges.size / 2
 
             var pos = Math.max(0, start)
             val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)

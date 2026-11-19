@@ -90,7 +90,7 @@ internal object RepresentationChecks {
             val expected = pattern.matcher(input)
             for (matcher in List.of<Utf8Matcher>(actual, expected)) {
                 if (initialState == 1) {
-                    matcher.region(input.length(), input.length()).find()
+                    matcher.region(input.length, input.length).find()
                 } else if (initialState == 2 && matcher.find()) {
                     matcher.appendReplacement(
                         Utf8Sink { storage: ByteArray?, offset: Int, size: Int -> },
@@ -246,7 +246,7 @@ internal object RepresentationChecks {
                     }
                 }
             } catch (failure: IndexOutOfBoundsException) {
-                if (!hasMatch || failure.javaClass != IndexOutOfBoundsException::class.java || (expectedMessage != failure.message) || output.size() != 0) {
+                if (!hasMatch || failure.javaClass != IndexOutOfBoundsException::class.java || (expectedMessage != failure.message) || output.size != 0) {
                     throw AssertionError("Invalid reference validation differs: " + context, failure)
                 }
                 continue

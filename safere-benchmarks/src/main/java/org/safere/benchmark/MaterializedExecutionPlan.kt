@@ -60,7 +60,7 @@ internal class MaterializedExecutionPlan private constructor(
         val measurement: DeclarativeBenchmarkPlan.Measurement?,
         val workload: ExpandedWorkload?,
         val exclusion: Exclusion?
-    ) {
+    )      {
         fun runnable(): Boolean {
             return workload != null
         }

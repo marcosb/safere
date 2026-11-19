@@ -17,44 +17,18 @@ import java.util.*
  * `and`) on `ByteVector`.
  */
 internal class TeddyModel private constructor(
-    lutLo: ByteArray?,
-    lutHi: ByteArray?,
-    lutLo1: ByteArray?,
-    lutHi1: ByteArray?,
-    lutLo2: ByteArray?,
-    lutHi2: ByteArray?,
-    literals: Array<String?>?,
-    literalBuckets: IntArray?,
-    minLength: Int,
-    is2Byte: Boolean,
-    is3Byte: Boolean
+    private val lutLo: ByteArray?,
+    private val lutHi: ByteArray?,
+    private val lutLo1: ByteArray?,
+    private val lutHi1: ByteArray?,
+    private val lutLo2: ByteArray?,
+    private val lutHi2: ByteArray?,
+    private val literals: Array<String?>?,
+    private val literalBuckets: IntArray?,
+    private val minLength: Int,
+    private val is2Byte: Boolean,
+    private val is3Byte: Boolean,
 ) : Serializable {
-    private val lutLo: ByteArray?
-    private val lutHi: ByteArray?
-    private val lutLo1: ByteArray?
-    private val lutHi1: ByteArray?
-    private val lutLo2: ByteArray?
-    private val lutHi2: ByteArray?
-    private val literals: Array<String?>?
-    private val literalBuckets: IntArray?
-    private val minLength: Int
-    private val is2Byte: Boolean
-    private val is3Byte: Boolean
-
-    init {
-        this.lutLo = lutLo
-        this.lutHi = lutHi
-        this.lutLo1 = lutLo1
-        this.lutHi1 = lutHi1
-        this.lutLo2 = lutLo2
-        this.lutHi2 = lutHi2
-        this.literals = literals
-        this.literalBuckets = literalBuckets
-        this.minLength = minLength
-        this.is2Byte = is2Byte
-        this.is3Byte = is3Byte
-    }
-
     fun lutLo(): ByteArray? {
         return lutLo
     }
@@ -118,7 +92,7 @@ internal class TeddyModel private constructor(
          * @return the compiled model, or `null` if inputs are ineligible for Teddy
          */
         fun compile(literals: Array<String?>?, vectorLength: Int): TeddyModel? {
-            if (literals == null || literals.length < 2 || literals.length > 32) {
+            if (literals == null || literals.size < 2 || literals.size > 32) {
                 return null
             }
             var minLen = Integer.MAX_VALUE
@@ -126,23 +100,46 @@ internal class TeddyModel private constructor(
                 if (lit == null || lit.isEmpty()) {
                     return null
                 }
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-                minLen = Math.min(minLen, lit.length())
+                for (i in 0 until lit.length) {
+                    if (lit[i].code > 127) {
+                        return null
+                    }
+                }
+                minLen = Math.min(minLen, lit.length)
             }
 
-            val numBuckets: Int = Math.min(literals.length, MAX_BUCKETS)
-            val literalBuckets = IntArray(literals.length)
+            val numBuckets: Int = Math.min(literals.size, MAX_BUCKETS)
+            val literalBuckets = IntArray(literals.size)
             val baseLutLo0 = ByteArray(NIBBLE_TABLE_SIZE)
             val baseLutHi0 = ByteArray(NIBBLE_TABLE_SIZE)
 
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until literals.size) {
+                val bucket = i % numBuckets
+                literalBuckets[i] = bucket
+                val mask = (1 shl bucket).toByte()
+
+                val c0: Char = literals[i]!![0]
+                val lo0 = c0.code and 0x0F
+                val hi0 = (c0.code shr 4) and 0x0F
+                baseLutLo0[lo0] = (baseLutLo0[lo0].toInt() or mask.toInt()).toByte()
+                baseLutHi0[hi0] = (baseLutHi0[hi0].toInt() or mask.toInt()).toByte()
+            }
 
             val is2Byte = minLen >= 2
             val baseLutLo1 = if (is2Byte) ByteArray(NIBBLE_TABLE_SIZE) else null
             val baseLutHi1 = if (is2Byte) ByteArray(NIBBLE_TABLE_SIZE) else null
 
             if (is2Byte) {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in 0 until literals.size) {
+                    val bucket = literalBuckets[i]
+                    val mask = (1 shl bucket).toByte()
+
+                    val c1: Char = literals[i]!![1]
+                    val lo1 = c1.code and 0x0F
+                    val hi1 = (c1.code shr 4) and 0x0F
+                    baseLutLo1!![lo1] = (baseLutLo1[lo1].toInt() or mask.toInt()).toByte()
+                    baseLutHi1!![hi1] = (baseLutHi1[hi1].toInt() or mask.toInt()).toByte()
+                }
             }
 
             val is3Byte = minLen >= 3
@@ -150,16 +147,25 @@ internal class TeddyModel private constructor(
             val baseLutHi2 = if (is3Byte) ByteArray(NIBBLE_TABLE_SIZE) else null
 
             if (is3Byte) {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in 0 until literals.size) {
+                    val bucket = literalBuckets[i]
+                    val mask = (1 shl bucket).toByte()
+
+                    val c2: Char = literals[i]!![2]
+                    val lo2 = c2.code and 0x0F
+                    val hi2 = (c2.code shr 4) and 0x0F
+                    baseLutLo2!![lo2] = (baseLutLo2[lo2].toInt() or mask.toInt()).toByte()
+                    baseLutHi2!![hi2] = (baseLutHi2[hi2].toInt() or mask.toInt()).toByte()
+                }
             }
 
             val tableSize = Math.max(64, Math.max(NIBBLE_TABLE_SIZE, vectorLength))
             val repeatedLo0: ByteArray = repeatTable(baseLutLo0, tableSize)
             val repeatedHi0: ByteArray = repeatTable(baseLutHi0, tableSize)
-            val repeatedLo1: ByteArray? = if (is2Byte) Companion.repeatTable(baseLutLo1!!, tableSize) else null
-            val repeatedHi1: ByteArray? = if (is2Byte) Companion.repeatTable(baseLutHi1!!, tableSize) else null
-            val repeatedLo2: ByteArray? = if (is3Byte) Companion.repeatTable(baseLutLo2!!, tableSize) else null
-            val repeatedHi2: ByteArray? = if (is3Byte) Companion.repeatTable(baseLutHi2!!, tableSize) else null
+            val repeatedLo1: ByteArray? = if (is2Byte) repeatTable(baseLutLo1!!, tableSize) else null
+            val repeatedHi1: ByteArray? = if (is2Byte) repeatTable(baseLutHi1!!, tableSize) else null
+            val repeatedLo2: ByteArray? = if (is3Byte) repeatTable(baseLutLo2!!, tableSize) else null
+            val repeatedHi2: ByteArray? = if (is3Byte) repeatTable(baseLutHi2!!, tableSize) else null
 
             return TeddyModel(
                 repeatedLo0,
@@ -168,7 +174,7 @@ internal class TeddyModel private constructor(
                 repeatedHi1,
                 repeatedLo2,
                 repeatedHi2,
-                Arrays.copyOf<String?>(literals, literals.length),
+                Arrays.copyOf<String?>(literals, literals.size),
                 literalBuckets,
                 minLen,
                 is2Byte,
@@ -178,7 +184,9 @@ internal class TeddyModel private constructor(
 
         private fun repeatTable(base16: ByteArray, totalSize: Int): ByteArray {
             val result = ByteArray(totalSize)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until totalSize step NIBBLE_TABLE_SIZE) {
+                System.arraycopy(base16, 0, result, i, Math.min(NIBBLE_TABLE_SIZE, totalSize - i))
+            }
             return result
         }
     }

@@ -65,7 +65,7 @@ internal class CaptureCutoffBenchmarkTest {
                         }
                         CaptureCutoffTask(
                             trial.variant(),
-                            workload.patterns().getFirst(),
+                            workload.patterns().first(),
                             prepared,
                             operation,
                             16,

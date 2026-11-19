@@ -39,7 +39,7 @@ internal class RE2ByteSearchTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("searchTests")
     fun testMatches(tc: SearchTestCase) {
-        if (Companion.hasRe2NonZeroNumericEscape(tc.pattern!!)) {
+        if (hasRe2NonZeroNumericEscape(tc.pattern!!)) {
             return
         }
         val p: Pattern?
@@ -62,7 +62,7 @@ internal class RE2ByteSearchTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("searchTests")
     fun testFind(tc: SearchTestCase) {
-        if (Companion.hasRe2NonZeroNumericEscape(tc.pattern!!)) {
+        if (hasRe2NonZeroNumericEscape(tc.pattern!!)) {
             return
         }
         val p: Pattern?
@@ -175,7 +175,7 @@ internal class RE2ByteSearchTest {
                 return text.length
             }
             val prefix = String(utf8, 0, byteOffset, StandardCharsets.UTF_8)
-            return prefix.length
+            return prefix.size
         }
 
         private fun parseResultField(field: String): Array<IntArray?>? {
@@ -204,8 +204,7 @@ internal class RE2ByteSearchTest {
             var i = 0
             while (i < s.length) {
                 if (s.get(i) == '\\' && i + 1 < s.length) {
-                    val next = s.get(i + 1)
-                    when (next) {
+                    when (val next = s.get(i + 1)) {
                         'n' -> {
                             sb.append('\n')
                             i++
@@ -341,8 +340,8 @@ internal class RE2ByteSearchTest {
                             }
 
                             val text = strings.get(si)
-                            val fullMatch: Array<IntArray?>? = Companion.parseResultField(fields[0]!!)
-                            val findMatch: Array<IntArray?>? = Companion.parseResultField(fields[1]!!)
+                            val fullMatch: Array<IntArray?>? = parseResultField(fields[0]!!)
+                            val findMatch: Array<IntArray?>? = parseResultField(fields[1]!!)
 
                             val expectedFindText: String? = extractMatchedText(text, findMatch)
 

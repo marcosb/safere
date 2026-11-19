@@ -56,8 +56,8 @@ internal object Ascii {
         if (cs == null) {
             return true
         }
-        for (i in 0..<cs.length()) {
-            if (cs.charAt(i).code > 127) {
+        for (i in 0..<cs.length) {
+            if (cs[i].code > 127) {
                 return false
             }
         }
@@ -121,13 +121,13 @@ internal object Ascii {
 
     /** Builds the KMP failure function for an ASCII case-insensitive pattern.  */
     fun ignoreCaseFailure(pattern: String): IntArray {
-        val failure = IntArray(pattern.length())
+        val failure = IntArray(pattern.length)
         var matched = 0
-        for (i in 1..<pattern.length()) {
-            while (matched > 0 && !Ascii.equalsIgnoreCase(pattern.charAt(i), pattern.charAt(matched))) {
+        for (i in 1..<pattern.length) {
+            while (matched > 0 && !Ascii.equalsIgnoreCase(pattern[i], pattern[matched])) {
                 matched = failure[matched - 1]
             }
-            if (Ascii.equalsIgnoreCase(pattern.charAt(i), pattern.charAt(matched))) {
+            if (Ascii.equalsIgnoreCase(pattern[i], pattern[matched])) {
                 matched++
             }
             failure[i] = matched
@@ -143,21 +143,21 @@ internal object Ascii {
     /** Knuth-Morris-Pratt scan on String, strictly linear in text length regardless of pattern.  */
     @JvmOverloads
     fun indexOfLinearIgnoreCase(
-        text: String, prefix: String, failure: IntArray, start: Int, end: Int = text.length()
+        text: String, prefix: String, failure: IntArray, start: Int, end: Int = text.length
     ): Int {
         var matched = 0
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         val length = end
         for (position in Math.max(0, start)..<length) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val current: Char = text.charAt(position)
+            val current: Char = text[position]
             val lower = toLowerCase(current)
-            while (matched > 0 && lower != prefix.charAt(matched)) {
+            while (matched > 0 && lower != prefix[matched]) {
                 matched = failure[matched - 1]
             }
-            if (lower == prefix.charAt(matched)) {
+            if (lower == prefix[matched]) {
                 matched++
                 if (matched == prefixLen) {
                     return position - prefixLen + 1
@@ -170,7 +170,7 @@ internal object Ascii {
     /** Returns the first index of character `ch` ignoring ASCII case, or -1 if not found.  */
     fun indexOfIgnoreCase(text: String, ch: Char, fromIndex: Int): Int {
         if (ch.code > 127) {
-            return text.indexOf(ch.code, fromIndex)
+            return text.indexOf(ch, fromIndex)
         }
         val low = toLowerCase(ch)
         val high = toUpperCase(ch)
@@ -182,13 +182,13 @@ internal object Ascii {
      */
     fun indexOfIgnoreCase(text: String, low: Char, high: Char, fromIndex: Int): Int {
         if (low == high) {
-            return text.indexOf(low.code, fromIndex)
+            return text.indexOf(low, fromIndex)
         }
-        for (i in Math.max(0, fromIndex)..<text.length()) {
+        for (i in Math.max(0, fromIndex)..<text.length) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val value: Char = text.charAt(i)
+            val value: Char = text[i]
             if (value == low || value == high) {
                 return i
             }
@@ -219,8 +219,8 @@ internal object Ascii {
         text: String, offset: Int, prefix: String, startFrom: Int, prefixLen: Int
     ): Boolean {
         for (i in startFrom..<prefixLen) {
-            val c: Char = text.charAt(offset + i)
-            val p: Char = prefix.charAt(i)
+            val c: Char = text[offset + i]
+            val p: Char = prefix[i]
             val la = toLowerCase(c)
             if (la != p && la != toLowerCase(p)) {
                 return false
@@ -233,7 +233,7 @@ internal object Ascii {
     fun regionMatchesIgnoreCase(bytes: ByteArray, offset: Int, prefix: String, prefixLen: Int): Boolean {
         for (i in 0..<prefixLen) {
             val b = bytes[offset + i].toInt() and 0xFF
-            val p: Char = prefix.charAt(i)
+            val p: Char = prefix[i]
             val lb = toLowerCase(b)
             if (lb != p.code && lb != toLowerCase(p).code) {
                 return false
@@ -245,10 +245,46 @@ internal object Ascii {
     /** Returns whether a byte array matches an exact ASCII pattern prefix.  */
     fun regionMatches(bytes: ByteArray, offset: Int, prefix: String, prefixLen: Int): Boolean {
         for (i in 0..<prefixLen) {
-            if ((bytes[offset + i].toInt() and 0xFF) != prefix.charAt(i).code) {
+            if ((bytes[offset + i].toInt() and 0xFF) != prefix[i].code) {
                 return false
             }
         }
         return true
     }
+}
+
+/** Bounded index search helpers replacing Java String.indexOf overloads. */
+internal fun String.indexOfBounded(literal: String, fromIndex: Int, endIndex: Int): Int {
+    val from = maxOf(0, fromIndex)
+    val end = minOf(length, endIndex)
+    if (literal.isEmpty()) {
+        return if (from <= end) from else -1
+    }
+    val lastStart = end - literal.length
+    var i = from
+    while (i <= lastStart) {
+        if (startsWith(literal, i)) {
+            return i
+        }
+        i++
+    }
+    return -1
+}
+
+internal fun String.indexOfCodePointBounded(codePoint: Int, fromIndex: Int, endIndex: Int): Int {
+    val from = maxOf(0, fromIndex)
+    val end = minOf(length, endIndex)
+    var i = from
+    while (i < end) {
+        val cp = codePointAt(i)
+        if (cp == codePoint) {
+            return i
+        }
+        i += Character.charCount(cp)
+    }
+    return -1
+}
+
+internal fun String.indexOfCodePoint(codePoint: Int, fromIndex: Int = 0): Int {
+    return indexOfCodePointBounded(codePoint, fromIndex, length)
 }

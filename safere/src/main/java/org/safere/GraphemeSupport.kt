@@ -15,16 +15,16 @@ internal class GraphemeSupport private constructor() {
      * UAX #29 boundary checks are finite-state, but some rules need state from earlier code
      * points. Keep that state here so engines can answer boundary questions in O(1) while scanning.
      */
-    internal open class Context private constructor(private val text: InputScanner?) {
-        private var regionalIndicatorStartsBefore: IntArray?
-        private var regionalIndicatorRunStartBefore: IntArray
-        private var extendedPictographicStartBefore: IntArray?
-        private var indicConjunctSequenceStartBefore: IntArray
-        private var indicConjunctLinkerStartBefore: IntArray?
-
-        open fun length(): Int {
-            return text!!.length()
-        }
+    internal open class Context internal constructor(internal val text: InputScanner?) {
+        private var regionalIndicatorStartsBefore: IntArray? = null
+        private lateinit var regionalIndicatorRunStartBefore: IntArray
+        private var extendedPictographicStartBefore: IntArray? = null
+        private lateinit var indicConjunctSequenceStartBefore: IntArray
+        private var indicConjunctLinkerStartBefore: IntArray? = null
+        open val length: Int
+            get() {
+                return text!!.length
+            }
 
         open fun decodeForward(pos: Int): Long {
             return text!!.decodeForward(pos)
@@ -34,8 +34,8 @@ internal class GraphemeSupport private constructor() {
             if (text == null) {
                 return true
             }
-            val start = Math.max(0, Math.min(regionStart, length()))
-            if (pos <= start || pos > length()) {
+            val start = Math.max(0, Math.min(regionStart, length))
+            if (pos <= start || pos > length) {
                 return true
             }
             ensureRegionalIndicatorRunData()
@@ -50,24 +50,21 @@ internal class GraphemeSupport private constructor() {
             if (text == null) {
                 return false
             }
-            val start = Math.max(0, Math.min(regionStart, length()))
-            if (pos <= start || pos > length()) {
+            val start = Math.max(0, Math.min(regionStart, length))
+            if (pos <= start || pos > length) {
                 return false
             }
             ensureExtendedPictographicData()
             val pictographicStart = extendedPictographicStartBefore!![pos]
-            if (pictographicStart < start) {
-                return false
-            }
-            return true
+            return pictographicStart >= start
         }
 
         fun hasIndicConjunctLinkerBefore(pos: Int, regionStart: Int): Boolean {
             if (text == null) {
                 return false
             }
-            val start = Math.max(0, Math.min(regionStart, length()))
-            if (pos <= start || pos > length()) {
+            val start = Math.max(0, Math.min(regionStart, length))
+            if (pos <= start || pos > length) {
                 return false
             }
             ensureIndicConjunctData()
@@ -78,8 +75,8 @@ internal class GraphemeSupport private constructor() {
             if (text == null) {
                 return false
             }
-            val start = Math.max(0, Math.min(regionStart, length()))
-            if (pos <= start || pos > length()) {
+            val start = Math.max(0, Math.min(regionStart, length))
+            if (pos <= start || pos > length) {
                 return false
             }
             ensureIndicConjunctData()
@@ -90,18 +87,18 @@ internal class GraphemeSupport private constructor() {
             if (regionalIndicatorStartsBefore != null) {
                 return
             }
-            regionalIndicatorStartsBefore = IntArray(length() + 1)
-            regionalIndicatorRunStartBefore = IntArray(length() + 1)
+            regionalIndicatorStartsBefore = IntArray(length + 1)
+            regionalIndicatorRunStartBefore = IntArray(length + 1)
             var runStart = 0
             var runLength = 0
             var pos = 0
-            while (pos < length()) {
+            while (pos < length) {
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 val decoded = decodeForward(pos)
-                val cp: Int = InputScanner.Companion.codePoint(decoded)
-                val next: Int = InputScanner.Companion.position(decoded)
+                val cp: Int = InputScanner.codePoint(decoded)
+                val next: Int = InputScanner.position(decoded)
                 if (isRegionalIndicator(cp)) {
                     if (runLength == 0) {
                         runStart = pos
@@ -122,21 +119,21 @@ internal class GraphemeSupport private constructor() {
             if (indicConjunctLinkerStartBefore != null) {
                 return
             }
-            indicConjunctSequenceStartBefore = IntArray(length() + 1)
-            indicConjunctLinkerStartBefore = IntArray(length() + 1)
+            indicConjunctSequenceStartBefore = IntArray(length + 1)
+            indicConjunctLinkerStartBefore = IntArray(length + 1)
             Arrays.fill(indicConjunctSequenceStartBefore, -1)
             Arrays.fill(indicConjunctLinkerStartBefore, -1)
 
             var sequenceStart = -1
             var linkerSeen = false
             var pos = 0
-            while (pos < length()) {
+            while (pos < length) {
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 val decoded = decodeForward(pos)
-                val cp: Int = InputScanner.Companion.codePoint(decoded)
-                val next: Int = InputScanner.Companion.position(decoded)
+                val cp: Int = InputScanner.codePoint(decoded)
+                val next: Int = InputScanner.position(decoded)
                 if (isIndicConjunctConsonant(cp)) {
                     sequenceStart = pos
                     linkerSeen = false
@@ -162,19 +159,19 @@ internal class GraphemeSupport private constructor() {
             if (extendedPictographicStartBefore != null) {
                 return
             }
-            extendedPictographicStartBefore = IntArray(length() + 1)
+            extendedPictographicStartBefore = IntArray(length + 1)
             Arrays.fill(extendedPictographicStartBefore, -1)
 
             var visiblePictographicStart = -1
             var pos = 0
-            while (pos < length()) {
+            while (pos < length) {
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 val decoded = decodeForward(pos)
-                val cp: Int = InputScanner.Companion.codePoint(decoded)
-                val next: Int = InputScanner.Companion.position(decoded)
-                if (GraphemeSupport.Companion.containsCodePoint(EXTENDED_PICTOGRAPHIC!!, cp)) {
+                val cp: Int = InputScanner.codePoint(decoded)
+                val next: Int = InputScanner.position(decoded)
+                if (containsCodePoint(EXTENDED_PICTOGRAPHIC!!, cp)) {
                     visiblePictographicStart = pos
                 } else if (!containsCodePoint(GCB_EXTEND, cp)) {
                     // GB11 requires Extended_Pictographic Extend* before the ZWJ. GB9/GB9a
@@ -192,21 +189,21 @@ internal class GraphemeSupport private constructor() {
             private val EMPTY = Context(null)
 
             fun createRegion(text: InputScanner, start: Int, end: Int): Context {
-                Objects.checkFromToIndex(start, end, text.length())
+                Objects.checkFromToIndex(start, end, text.length)
                 if (text is StringInputScanner) {
                     return StringRegionContext(text, start, end)
                 }
                 return RegionContext((text as Utf8InputScanner).slice(start, end), start)
             }
 
-            fun create(text: CharSequence, includeGraphemeClusterBoundary: Boolean): Context? {
+            fun create(text: CharSequence, includeGraphemeClusterBoundary: Boolean): Context {
                 if (!includeGraphemeClusterBoundary) {
                     return EMPTY
                 }
                 return Context(StringInputScanner(text.toString()))
             }
 
-            fun create(text: InputScanner?, includeGraphemeClusterBoundary: Boolean): Context? {
+            fun create(text: InputScanner?, includeGraphemeClusterBoundary: Boolean): Context {
                 if (!includeGraphemeClusterBoundary) {
                     return EMPTY
                 }
@@ -229,13 +226,14 @@ internal class GraphemeSupport private constructor() {
             regionLength = end - start
         }
 
-        override fun length(): Int {
-            return regionLength
-        }
+        override val length: Int
+            get() {
+                return regionLength
+            }
 
-        override fun charAt(index: Int): Char {
+        override fun get(index: Int): Char {
             Objects.checkIndex(index, regionLength)
-            return input.charAt(offset + index)
+            return input[offset + index]
         }
 
         override fun subSequence(start: Int, end: Int): CharSequence {
@@ -249,7 +247,7 @@ internal class GraphemeSupport private constructor() {
 
         override fun decodeForward(pos: Int): Long {
             val cp: Int = graphemeCodePointAt(this, pos, regionLength)
-            return InputScanner.Companion.decoded(cp, pos + Character.charCount(cp))
+            return InputScanner.decoded(cp, pos + Character.charCount(cp))
         }
     }
 
@@ -317,12 +315,12 @@ internal class GraphemeSupport private constructor() {
             graphemeContext: Context
         ): Int {
             val start = Math.max(consumeRegionStart, graphemeStart)
-            if (pos < 0 || pos >= endPos || pos >= text.length()) {
+            if (pos < 0 || pos >= endPos || pos >= text.length) {
                 return 0
             }
 
             var variant = 0
-            val ch: Char = text.charAt(pos)
+            val ch: Char = text[pos]
             if (Character.isLowSurrogate(ch)
                 && hasHighSurrogateBeforeLowSurrogateInRegion(text, pos, start)
             ) {
@@ -387,7 +385,7 @@ internal class GraphemeSupport private constructor() {
                 )
             }
             val start = Math.max(consumeRegionStart, graphemeStart)
-            if (pos < 0 || pos >= endPos || pos >= text.length()) {
+            if (pos < 0 || pos >= endPos || pos >= text.length) {
                 return 0
             }
             var variant = 0
@@ -417,41 +415,49 @@ internal class GraphemeSupport private constructor() {
 
         private fun inputCodePointAt(text: InputScanner, pos: Int, endPos: Int): Int {
             return when (text) {
-                -> graphemeCodePointAt(stringInput.text(), pos, endPos)
-                -> {
-                    if (pos < 0 || pos >= endPos || pos >= regionInput.length()) {
+                is StringInputScanner -> graphemeCodePointAt(text.text(), pos, endPos)
+                is StringRegionInputScanner -> {
+                    if (pos < 0 || pos >= endPos || pos >= text.length) {
                         -1
+                    } else {
+                        InputScanner.codePoint(text.decodeForward(pos, endPos))
                     }
-                    InputScanner.Companion.codePoint(regionInput.decodeForward(pos, endPos))
                 }
 
-                -> {
-                    if (pos < 0 || pos >= endPos || pos >= utf8Input.length()) {
+                is Utf8InputScanner -> {
+                    if (pos < 0 || pos >= endPos || pos >= text.length) {
                         -1
+                    } else {
+                        val decoded: Long = text.decodeForward(pos)
+                        if (InputScanner.position(decoded) <= endPos) InputScanner.codePoint(decoded) else -1
                     }
-                    val decoded: Long = utf8Input.decodeForward(pos)
-                    if (InputScanner.Companion.position(decoded) <= endPos) InputScanner.Companion.codePoint(decoded) else -1
                 }
+
+                else -> throw IllegalStateException("Unsupported input scanner: " + text)
             }
         }
 
         private fun inputNextPos(text: InputScanner, pos: Int, endPos: Int): Int {
             return when (text) {
-                -> Companion.graphemeNextPos(stringInput.text(), pos, endPos)
-                -> {
-                    if (pos < 0 || pos >= endPos || pos >= regionInput.length()) {
+                is StringInputScanner -> graphemeNextPos(text.text(), pos, endPos)
+                is StringRegionInputScanner -> {
+                    if (pos < 0 || pos >= endPos || pos >= text.length) {
                         endPos + 1
+                    } else {
+                        InputScanner.position(text.decodeForward(pos, endPos))
                     }
-                    InputScanner.Companion.position(regionInput.decodeForward(pos, endPos))
                 }
 
-                -> {
-                    if (pos < 0 || pos >= endPos || pos >= utf8Input.length()) {
+                is Utf8InputScanner -> {
+                    if (pos < 0 || pos >= endPos || pos >= text.length) {
                         endPos + 1
+                    } else {
+                        val next: Int = InputScanner.position(text.decodeForward(pos))
+                        if (next <= endPos) next else endPos + 1
                     }
-                    val next: Int = InputScanner.Companion.position(utf8Input.decodeForward(pos))
-                    if (next <= endPos) next else endPos + 1
                 }
+
+                else -> throw IllegalStateException("Unsupported input scanner: " + text)
             }
         }
 
@@ -460,32 +466,32 @@ internal class GraphemeSupport private constructor() {
         }
 
         fun graphemeCodePointAt(text: CharSequence, pos: Int, endPos: Int): Int {
-            if (pos < 0 || pos >= endPos || pos >= text.length()) {
+            if (pos < 0 || pos >= endPos || pos >= text.length) {
                 return -1
             }
-            val ch: Char = text.charAt(pos)
+            val ch: Char = text[pos]
             if (Character.isHighSurrogate(ch)
-                && pos + 1 < endPos && pos + 1 < text.length() && Character.isLowSurrogate(text.charAt(pos + 1))
+                && pos + 1 < endPos && pos + 1 < text.length && Character.isLowSurrogate(text[pos + 1])
             ) {
-                return Character.toCodePoint(ch, text.charAt(pos + 1))
+                return Character.toCodePoint(ch, text[pos + 1])
             }
             return ch.code
         }
 
         fun graphemeNextPos(text: CharSequence, pos: Int, endPos: Int): Int {
-            if (pos < 0 || pos >= endPos || pos >= text.length()) {
+            if (pos < 0 || pos >= endPos || pos >= text.length) {
                 return endPos + 1
             }
             return nextRegionLocalScalarEnd(text, pos, endPos)
         }
 
         fun nextRegionLocalScalarEnd(text: CharSequence, pos: Int, endPos: Int): Int {
-            if (pos < 0 || pos >= endPos || pos >= text.length()) {
+            if (pos < 0 || pos >= endPos || pos >= text.length) {
                 return endPos + 1
             }
-            val ch: Char = text.charAt(pos)
+            val ch: Char = text[pos]
             if (Character.isHighSurrogate(ch)
-                && pos + 1 < endPos && pos + 1 < text.length() && Character.isLowSurrogate(text.charAt(pos + 1))
+                && pos + 1 < endPos && pos + 1 < text.length && Character.isLowSurrogate(text[pos + 1])
             ) {
                 return pos + 2
             }
@@ -553,7 +559,7 @@ internal class GraphemeSupport private constructor() {
             boundaryEndPos: Int
         ): Int {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             var flags = 0
             if (isGraphemeBoundaryContextEdge(pos, regionStart, boundaryEndPos)) {
@@ -628,7 +634,7 @@ internal class GraphemeSupport private constructor() {
         }
 
         fun isGraphemeClusterBoundary(text: CharSequence, pos: Int): Boolean {
-            return isGraphemeClusterBoundary(text, pos, 0, Context.Companion.create(text, true))
+            return isGraphemeClusterBoundary(text, pos, 0, Context.create(text, true))
         }
 
         fun isGraphemeClusterBoundary(
@@ -657,12 +663,12 @@ internal class GraphemeSupport private constructor() {
                 return isGraphemeClusterBoundary(text.text(), pos, regionStart, graphemeContext)
             }
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            if (pos < 0 || pos > text.length() || !text.isCodePointBoundary(pos)) {
+            if (pos < 0 || pos > text.length || !text.isCodePointBoundary(pos)) {
                 return false
             }
-            if (pos == 0 || pos == text.length()) {
+            if (pos == 0 || pos == text.length) {
                 return true
             }
             val previous = codePointBefore(text, pos)
@@ -680,15 +686,15 @@ internal class GraphemeSupport private constructor() {
                 return false
             }
             val context =
-                (if (graphemeContext != null) graphemeContext else org.safere.GraphemeSupport.Context.Companion.create(
+                (if (graphemeContext != null) graphemeContext else Context.create(
                     text,
                     true
                 ))!!
             if (isIndicConjunctConsonant(next) && context.hasIndicConjunctLinkerBefore(pos, regionStart)) {
                 return false
             }
-            val previousStart: Int = InputScanner.Companion.position(text.decodeBackward(pos))
-            if (previous == 0x200D && Companion.containsCodePoint(EXTENDED_PICTOGRAPHIC!!, next)
+            val previousStart: Int = InputScanner.position(text.decodeBackward(pos))
+            if (previous == 0x200D && containsCodePoint(EXTENDED_PICTOGRAPHIC!!, next)
                 && context.hasExtendedPictographicBefore(previousStart, regionStart)
             ) {
                 return false
@@ -707,16 +713,16 @@ internal class GraphemeSupport private constructor() {
             text: CharSequence, pos: Int, regionStart: Int, graphemeContext: Context?
         ): Boolean {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            if (pos < 0 || pos > text.length()) {
+            if (pos < 0 || pos > text.length) {
                 return false
             }
-            if (pos == 0 || pos == text.length()) {
+            if (pos == 0 || pos == text.length) {
                 return true
             }
-            val prevChar: Char = text.charAt(pos - 1)
-            val nextChar: Char = text.charAt(pos)
+            val prevChar: Char = text[pos - 1]
+            val nextChar: Char = text[pos]
             if (Character.isHighSurrogate(prevChar) && Character.isLowSurrogate(nextChar)) {
                 return false
             }
@@ -746,14 +752,14 @@ internal class GraphemeSupport private constructor() {
                 return false
             }
             val context =
-                (if (graphemeContext != null) graphemeContext else org.safere.GraphemeSupport.Context.Companion.create(
+                (if (graphemeContext != null) graphemeContext else Context.create(
                     text,
                     true
                 ))!!
             if (isIndicConjunctConsonant(next) && context.hasIndicConjunctLinkerBefore(pos, regionStart)) {
                 return false
             }
-            if (prev == 0x200D && Companion.containsCodePoint(EXTENDED_PICTOGRAPHIC!!, next)
+            if (prev == 0x200D && containsCodePoint(EXTENDED_PICTOGRAPHIC!!, next)
                 && context.hasExtendedPictographicBefore(pos - 1, regionStart)
             ) {
                 return false
@@ -765,11 +771,11 @@ internal class GraphemeSupport private constructor() {
         }
 
         fun hasGraphemeExtendAt(text: CharSequence, pos: Int): Boolean {
-            return pos >= 0 && pos < text.length() && isGraphemeExtend(codePointAt(text, pos))
+            return pos >= 0 && pos < text.length && isGraphemeExtend(codePointAt(text, pos))
         }
 
         fun isExtendedPictographicAt(text: CharSequence, pos: Int): Boolean {
-            return pos >= 0 && pos < text.length() && Companion.containsCodePoint(
+            return pos >= 0 && pos < text.length && containsCodePoint(
                 EXTENDED_PICTOGRAPHIC!!,
                 codePointAt(text, pos)
             )
@@ -782,17 +788,17 @@ internal class GraphemeSupport private constructor() {
         }
 
         private fun isLowHighSurrogateBoundary(text: CharSequence, pos: Int): Boolean {
-            return pos > 0 && pos < text.length() && Character.isLowSurrogate(text.charAt(pos - 1))
-                    && Character.isHighSurrogate(text.charAt(pos))
+            return pos > 0 && pos < text.length && Character.isLowSurrogate(text[pos - 1])
+                    && Character.isHighSurrogate(text[pos])
         }
 
         private fun isRegionStartSplitSurrogateBoundary(
             text: CharSequence, pos: Int, regionStart: Int
         ): Boolean {
-            return pos == regionStart && regionStart > 0 && regionStart < text.length() && Character.isHighSurrogate(
-                text.charAt(regionStart - 1)
+            return pos == regionStart && regionStart > 0 && regionStart < text.length && Character.isHighSurrogate(
+                text[regionStart - 1]
             )
-                    && Character.isLowSurrogate(text.charAt(regionStart))
+                    && Character.isLowSurrogate(text[regionStart])
         }
 
         private fun isAfterRegionStartSplitLowSurrogateBoundary(
@@ -805,12 +811,12 @@ internal class GraphemeSupport private constructor() {
         private fun isRegionEndSplitSurrogateBoundary(
             text: CharSequence, pos: Int, regionEnd: Int
         ): Boolean {
-            return pos == regionEnd && regionEnd > 0 && regionEnd < text.length() && Character.isHighSurrogate(
-                text.charAt(
+            return pos == regionEnd && regionEnd > 0 && regionEnd < text.length && Character.isHighSurrogate(
+                text[
                     regionEnd - 1
-                )
+                ]
             )
-                    && Character.isLowSurrogate(text.charAt(regionEnd))
+                    && Character.isLowSurrogate(text[regionEnd])
         }
 
         private fun suppressesConsumedSplitLowSurrogateExplicitBoundary(
@@ -830,8 +836,8 @@ internal class GraphemeSupport private constructor() {
         private fun isLowSurrogateBeforeZwjBoundary(
             text: CharSequence, pos: Int, matchStart: Int, regionStart: Int
         ): Boolean {
-            return pos == matchStart && pos > 0 && pos < text.length() && Character.isLowSurrogate(text.charAt(pos - 1))
-                    && text.charAt(pos).code == 0x200D && !hasHighSurrogateBeforeLowSurrogateInRegion(
+            return pos == matchStart && pos > 0 && pos < text.length && Character.isLowSurrogate(text[pos - 1])
+                    && text[pos].code == 0x200D && !hasHighSurrogateBeforeLowSurrogateInRegion(
                 text,
                 pos - 1,
                 regionStart
@@ -852,8 +858,8 @@ internal class GraphemeSupport private constructor() {
         private fun isStandaloneZwjAfterLowSurrogateBoundary(
             text: CharSequence, pos: Int, matchStart: Int, regionStart: Int
         ): Boolean {
-            return pos == matchStart && pos > 1 && pos < text.length() && text.charAt(pos - 1).code == 0x200D && Character.isLowSurrogate(
-                text.charAt(pos - 2)
+            return pos == matchStart && pos > 1 && pos < text.length && text[pos - 1].code == 0x200D && Character.isLowSurrogate(
+                text[pos - 2]
             )
                     && !hasHighSurrogateBeforeLowSurrogateInRegion(text, pos - 2, regionStart)
         }
@@ -862,11 +868,11 @@ internal class GraphemeSupport private constructor() {
             text: CharSequence, pos: Int, regionStart: Int, graphemeContext: Context?
         ): Boolean {
             val context =
-                (if (graphemeContext != null) graphemeContext else org.safere.GraphemeSupport.Context.Companion.create(
+                (if (graphemeContext != null) graphemeContext else Context.create(
                     text,
                     true
                 ))!!
-            return pos > 0 && pos < text.length() && text.charAt(pos - 1).code == 0x200D && Companion.containsCodePoint(
+            return pos > 0 && pos < text.length && text[pos - 1].code == 0x200D && containsCodePoint(
                 EXTENDED_PICTOGRAPHIC!!,
                 codePointAt(text, pos)
             )
@@ -881,7 +887,7 @@ internal class GraphemeSupport private constructor() {
             text: CharSequence, pos: Int, regionStart: Int, graphemeContext: Context?
         ): Boolean {
             val context =
-                (if (graphemeContext != null) graphemeContext else org.safere.GraphemeSupport.Context.Companion.create(
+                (if (graphemeContext != null) graphemeContext else Context.create(
                     text,
                     true
                 ))!!
@@ -889,12 +895,12 @@ internal class GraphemeSupport private constructor() {
             if (regionStart <= lowSurrogatePos && regionStart > 0) {
                 return false
             }
-            return pos > 2 && text.charAt(pos - 1).code == 0x200D && Character.isLowSurrogate(
-                text.charAt(
+            return pos > 2 && text[pos - 1].code == 0x200D && Character.isLowSurrogate(
+                text[
                     lowSurrogatePos
-                )
+                ]
             )
-                    && Character.isHighSurrogate(text.charAt(pos - 3))
+                    && Character.isHighSurrogate(text[pos - 3])
                     && context.hasExtendedPictographicBefore(pos - 1, regionStart)
         }
 
@@ -909,19 +915,19 @@ internal class GraphemeSupport private constructor() {
             text: CharSequence, lowSurrogatePos: Int, regionStart: Int
         ): Boolean {
             return lowSurrogatePos > regionStart && lowSurrogatePos > 0 && Character.isHighSurrogate(
-                text.charAt(
+                text[
                     lowSurrogatePos - 1
-                )
+                ]
             )
         }
 
         private fun startsAtLowSurrogate(text: CharSequence, matchStart: Int): Boolean {
-            return matchStart >= 0 && matchStart < text.length() && Character.isLowSurrogate(text.charAt(matchStart))
+            return matchStart >= 0 && matchStart < text.length && Character.isLowSurrogate(text[matchStart])
         }
 
         private fun startsAtStandaloneZwj(text: CharSequence, matchStart: Int, regionStart: Int): Boolean {
-            return matchStart >= 0 && matchStart < text.length() && text.charAt(matchStart).code == 0x200D && (matchStart == 0 || matchStart <= regionStart || !Character.isLowSurrogate(
-                text.charAt(matchStart - 1)
+            return matchStart >= 0 && matchStart < text.length && text[matchStart].code == 0x200D && (matchStart == 0 || matchStart <= regionStart || !Character.isLowSurrogate(
+                text[matchStart - 1]
             ) || !hasHighSurrogateBeforeLowSurrogateInRegion(text, matchStart - 1, regionStart))
         }
 
@@ -932,12 +938,12 @@ internal class GraphemeSupport private constructor() {
         }
 
         private fun isUnpairedSurrogateAt(text: CharSequence, pos: Int): Boolean {
-            val c: Char = text.charAt(pos)
+            val c: Char = text[pos]
             if (Character.isLowSurrogate(c)) {
                 return true
             }
             return Character.isHighSurrogate(c)
-                    && (pos + 1 >= text.length() || !Character.isLowSurrogate(text.charAt(pos + 1)))
+                    && (pos + 1 >= text.length || !Character.isLowSurrogate(text[pos + 1]))
         }
 
         private fun isGraphemeControl(c: Int): Boolean {
@@ -995,11 +1001,11 @@ internal class GraphemeSupport private constructor() {
         }
 
         private fun graphemeTable(name: String?): Array<IntArray> {
-            return Objects.requireNonNull<Array<IntArray?>>(UnicodeGeneratedTables.GRAPHEME_PROPERTIES.get(name), name)
+            return Objects.requireNonNull(UnicodeGeneratedTables.GRAPHEME_PROPERTIES.get(name), name!!)!!
         }
 
         private fun containsCodePoint(ranges: Array<IntArray>, c: Int): Boolean {
-            var hi: Int = ranges.length - 1
+            var hi: Int = ranges.size - 1
             if (hi < 0 || c < ranges[0][0] || c > ranges[hi][1]) {
                 return false
             }

@@ -13,6 +13,26 @@ import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
 import java.util.regex.Pattern
+import kotlin.AssertionError
+import kotlin.Boolean
+import kotlin.Int
+import kotlin.String
+import kotlin.arrayOf
+import kotlin.booleanArrayOf
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.MutableSet
+import kotlin.collections.find
+import kotlin.collections.mutableListOf
+import kotlin.collections.plus
+import kotlin.plus
+import kotlin.sequences.find
+import kotlin.sequences.plus
+import kotlin.text.StringBuilder
+import kotlin.text.find
+import kotlin.text.repeat
+import kotlin.text.replace
+import kotlin.text.toByteArray
 
 /** Forced-path equivalence coverage for package-private engine-path controls.  */
 @DisabledForCrosscheck("uses package-private engine-path controls to compare SafeRE internals")
@@ -207,7 +227,7 @@ internal class EnginePathEquivalenceTest {
                                             regex, start, end, transparent, anchoring
                                         )
                                         .isEqualTo(
-                                            Companion.regionTrace(
+                                            regionTrace(
                                                 control,
                                                 input,
                                                 start,
@@ -280,7 +300,7 @@ internal class EnginePathEquivalenceTest {
                                                 regex, start, end, transparent, anchoring
                                             )
                                             .isEqualTo(
-                                                Companion.regionTrace(
+                                                regionTrace(
                                                     control,
                                                     input,
                                                     start,

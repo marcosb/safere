@@ -14,7 +14,7 @@ import org.safere.Pattern.StartAcceleration
 internal interface StringStartAccelerator {
     /** Returns the tuning and diagnostic policy for this accelerator.  */
     fun policy(): AcceleratorPolicy {
-        return AcceleratorPolicy.Companion.DEFAULT
+        return AcceleratorPolicy.DEFAULT
     }
 
     /**
@@ -24,29 +24,18 @@ internal interface StringStartAccelerator {
      * the whole point; see [StringLiteralSearch.singleAsciiChar].
      */
     @JvmRecord
-    data class Literal(prefix: String?, anchorOffset: Int, anchor: Char, singleAsciiChar: Int) :
+    data class Literal(val prefix: String?, val anchorOffset: Int, val anchor: Char, val singleAsciiChar: Int) :
         StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LITERAL
+            return AcceleratorPolicy.LITERAL
         }
 
         fun findCandidate(text: String?, fromIndex: Int, unixLines: Boolean): Int {
             return StringLiteralSearch.indexOfPlanned(
-                text, prefix, anchorOffset, anchor, singleAsciiChar, fromIndex
+                text!!, prefix!!, anchorOffset, anchor, singleAsciiChar, fromIndex
             )
         }
 
-        val prefix: String?
-        val anchorOffset: Int
-        val anchor: Char
-        val singleAsciiChar: Int
-
-        init {
-            this.prefix = prefix
-            this.anchorOffset = anchorOffset
-            this.anchor = anchor
-            this.singleAsciiChar = singleAsciiChar
-        }
 
         companion object {
             fun create(prefix: String?): Literal {
@@ -54,7 +43,7 @@ internal interface StringStartAccelerator {
                 return Literal(
                     prefix,
                     anchorOffset,
-                    StringLiteralSearch.anchorAt(prefix, anchorOffset),
+                    StringLiteralSearch.anchorAt(prefix!!, anchorOffset),
                     StringLiteralSearch.singleAsciiChar(prefix)
                 )
             }
@@ -63,79 +52,59 @@ internal interface StringStartAccelerator {
 
     @JvmRecord
     data class CaseInsensitiveLiteral(
-        prefix: String?,
-        anchorOffset: Int,
-        anchorLow: Char,
-        anchorHigh: Char,
-        classHashChain: ClassHashChain?
+        val prefix: String?,
+        val anchorOffset: Int,
+        val anchorLow: Char,
+        val anchorHigh: Char,
+        val classHashChain: ClassHashChain?
     ) : StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LITERAL
+            return AcceleratorPolicy.LITERAL
         }
 
         fun findCandidate(text: String?, fromIndex: Int, unixLines: Boolean): Int {
-            return Matcher.Companion.indexOfIgnoreCase(
-                text, prefix, anchorOffset, anchorLow, anchorHigh, classHashChain, fromIndex
+            return Matcher.indexOfIgnoreCase(
+                text!!, prefix!!, anchorOffset, anchorLow, anchorHigh, classHashChain, fromIndex
             )
         }
 
-        val prefix: String?
-        val anchorOffset: Int
-        val anchorLow: Char
-        val anchorHigh: Char
-        val classHashChain: ClassHashChain?
-
-        init {
-            this.prefix = prefix
-            this.anchorOffset = anchorOffset
-            this.anchorLow = anchorLow
-            this.anchorHigh = anchorHigh
-            this.classHashChain = classHashChain
-        }
 
         companion object {
             fun create(prefix: String?): CaseInsensitiveLiteral {
                 if (prefix == null || prefix.isEmpty()) {
                     return CaseInsensitiveLiteral(prefix, 0, '\u0000', '\u0000', null)
                 }
-                val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, prefix.length(), true)
-                val anchor: Char = prefix.charAt(anchorOffset)
+                val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, prefix.length, true)
+                val anchor: Char = prefix[anchorOffset]
                 val anchorLow = Ascii.toLowerCase(anchor)
                 val anchorHigh = Ascii.toUpperCase(anchor)
                 val chain: ClassHashChain? =
-                    if (prefix.length() >= 4) ClassHashChain.Companion.compileCaseInsensitive(prefix) else null
+                    if (prefix.length >= 4) ClassHashChain.compileCaseInsensitive(prefix) else null
                 return CaseInsensitiveLiteral(prefix, anchorOffset, anchorLow, anchorHigh, chain)
             }
         }
     }
 
     @JvmRecord
-    data class UnicodeCaseInsensitiveLiteral(prefix: String?, classHashChain: ClassHashChain?) :
+    data class UnicodeCaseInsensitiveLiteral(val prefix: String?, val classHashChain: ClassHashChain?) :
         StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LITERAL
+            return AcceleratorPolicy.LITERAL
         }
 
         fun findCandidate(text: String, fromIndex: Int, unixLines: Boolean): Int {
             if (prefix == null || prefix.isEmpty()) {
-                return Math.min(Math.max(0, fromIndex), text.length())
+                return Math.min(Math.max(0, fromIndex), text.length)
             }
             val pos = Math.max(0, fromIndex)
             if (classHashChain != null) {
-                val limit = WorkLimit.forRemaining(text.length() - pos)
+                val limit = WorkLimit.forRemaining(text.length - pos)
                 val result = classHashChain.search(text, pos, limit)
                 return if (result == -2) Utf16.indexOfUnicodeIgnoreCase(text, prefix, pos) else result
             }
             return Utf16.indexOfUnicodeIgnoreCase(text, prefix, pos)
         }
 
-        val prefix: String?
-        val classHashChain: ClassHashChain?
-
-        init {
-            this.prefix = prefix
-            this.classHashChain = classHashChain
-        }
 
         companion object {
             fun create(prefix: String?): UnicodeCaseInsensitiveLiteral {
@@ -143,7 +112,7 @@ internal interface StringStartAccelerator {
                     return UnicodeCaseInsensitiveLiteral(prefix, null)
                 }
                 val chain: ClassHashChain? =
-                    if (prefix.length() >= 4) ClassHashChain.Companion.compileCaseInsensitive(prefix) else null
+                    if (prefix.length >= 4) ClassHashChain.compileCaseInsensitive(prefix) else null
                 return UnicodeCaseInsensitiveLiteral(prefix, chain)
             }
         }
@@ -158,35 +127,22 @@ internal interface StringStartAccelerator {
      */
     @JvmRecord
     data class FixedOffset(
-        fixedOffset: Pattern.FixedOffsetLiteral?,
-        firstCharClass: CharClassScanInfo?,
-        anchorOffset: Int,
-        anchor: Char,
-        singleAsciiChar: Int
+        val fixedOffset: Pattern.FixedOffsetLiteral?,
+        val firstCharClass: CharClassScanInfo?,
+        val anchorOffset: Int,
+        val anchor: Char,
+        val singleAsciiChar: Int
     ) : StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LITERAL
+            return AcceleratorPolicy.LITERAL
         }
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
-            return Companion.nextFixedOffsetCandidate(
+            return nextFixedOffsetCandidate(
                 text, fixedOffset!!, firstCharClass, anchorOffset, anchor, singleAsciiChar, fromIndex
             )
         }
 
-        val fixedOffset: Pattern.FixedOffsetLiteral?
-        val firstCharClass: CharClassScanInfo?
-        val anchorOffset: Int
-        val anchor: Char
-        val singleAsciiChar: Int
-
-        init {
-            this.fixedOffset = fixedOffset
-            this.firstCharClass = firstCharClass
-            this.anchorOffset = anchorOffset
-            this.anchor = anchor
-            this.singleAsciiChar = singleAsciiChar
-        }
 
         companion object {
             fun create(fixedOffset: Pattern.FixedOffsetLiteral, firstCharClass: CharClassScanInfo?): FixedOffset {
@@ -196,7 +152,7 @@ internal interface StringStartAccelerator {
                     fixedOffset,
                     firstCharClass,
                     anchorOffset,
-                    StringLiteralSearch.anchorAt(literal, anchorOffset),
+                    StringLiteralSearch.anchorAt(literal!!, anchorOffset),
                     StringLiteralSearch.singleAsciiChar(literal)
                 )
             }
@@ -211,17 +167,17 @@ internal interface StringStartAccelerator {
                 fromIndex: Int
             ): Int {
                 val minOffset = fixedOffsetLiteral.minOffset()
-                if (minOffset > text.length() - fromIndex) {
+                if (minOffset > text.length - fromIndex) {
                     return -1
                 }
                 var literalFrom = fromIndex + minOffset
                 val discreteOffsets = fixedOffsetLiteral.discreteOffsets()
 
-                while (literalFrom <= text.length()) {
+                while (literalFrom <= text.length) {
                     val literalStart: Int =
                         indexOfPlanned(
                             text,
-                            fixedOffsetLiteral.literal(),
+                            fixedOffsetLiteral.literal()!!,
                             anchorOffset,
                             anchor,
                             singleAsciiChar,
@@ -231,11 +187,11 @@ internal interface StringStartAccelerator {
                         return -1
                     }
                     if (firstCharClass != null) {
-                        if (discreteOffsets != null && discreteOffsets.length == 1) {
+                        if (discreteOffsets != null && discreteOffsets.size == 1) {
                             val candidateStart = literalStart - discreteOffsets[0]
                             if (candidateStart >= fromIndex) {
                                 val first =
-                                    if (candidateStart < text.length()) Character.codePointAt(
+                                    if (candidateStart < text.length) Character.codePointAt(
                                         text,
                                         candidateStart
                                     ) else -1
@@ -301,7 +257,17 @@ internal interface StringStartAccelerator {
                 literalStart: Int,
                 fromIndex: Int
             ): Int {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in discreteOffsets.size - 1 downTo 0) {
+                    val start = literalStart - discreteOffsets[i]
+                    if (start >= fromIndex
+                        && start < text.length
+                        && firstCharClass.contains(Character.codePointAt(text, start))
+                    ) {
+                        return Math.max(
+                            fromIndex, Math.min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
+                        )
+                    }
+                }
                 return -1
             }
 
@@ -320,7 +286,7 @@ internal interface StringStartAccelerator {
                     retreatByCodePoints(text, literalStart, fixedOffsetLiteral.maxOffset(), fromIndex)
                 if (candidateStart >= fromIndex) {
                     val first =
-                        if (candidateStart < text.length()) Character.codePointAt(text, candidateStart) else -1
+                        if (candidateStart < text.length) Character.codePointAt(text, candidateStart) else -1
                     if (first >= 0 && firstCharClass.contains(first)) {
                         return candidateStart
                     }
@@ -333,8 +299,8 @@ internal interface StringStartAccelerator {
                 var pos = index
                 while (count > 0 && pos > minIndex) {
                     pos--
-                    if (pos > minIndex && Character.isLowSurrogate(text.charAt(pos))
-                        && Character.isHighSurrogate(text.charAt(pos - 1))
+                    if (pos > minIndex && Character.isLowSurrogate(text[pos])
+                        && Character.isHighSurrogate(text[pos - 1])
                     ) {
                         pos--
                     }
@@ -356,38 +322,38 @@ internal interface StringStartAccelerator {
      * starts inside surrogate pairs.
      */
     @JvmRecord
-    data class FixedOffsetClass(inner: CharClass?, offset: Int, leadingClass: CharClassScanInfo?) :
+    data class FixedOffsetClass(val inner: CharClass?, val offset: Int, val leadingClass: CharClassScanInfo?) :
         StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.CHAR_CLASS
+            return AcceleratorPolicy.CHAR_CLASS
         }
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
             val start = Math.max(0, fromIndex)
-            if (offset >= text.length() - start) {
+            if (offset >= text.length - start) {
                 return -1
             }
             var position = start + offset
             var cheapRejections = 0
-            while (position < text.length()) {
-                val hit: Int = Companion.findNextCandidate(inner!!, text, position, unixLines)
+            while (position < text.length) {
+                val hit: Int = findNextCandidate(inner!!, text, position, unixLines)
                 if (hit < 0) {
                     return -1
                 }
                 val candidate = hit - offset
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
-                if (leadingClass!!.contains(text.charAt(candidate).code)) {
+                if (leadingClass!!.contains(text[candidate].code)) {
                     return candidate
                 }
-                if (cheapRejections < AcceleratorPolicy.Companion.FIXED_OFFSET_CLASS_CHEAP_REJECTIONS) {
+                if (cheapRejections < AcceleratorPolicy.FIXED_OFFSET_CLASS_CHEAP_REJECTIONS) {
                     cheapRejections++
                     position = hit + 1
                     continue
                 }
-                val nextLeading: Int = Companion.indexOfClass(text, leadingClass, candidate + 1)
-                if (nextLeading < 0 || offset >= text.length() - nextLeading) {
+                val nextLeading: Int = indexOfClass(text, leadingClass, candidate + 1)
+                if (nextLeading < 0 || offset >= text.length - nextLeading) {
                     return -1
                 }
                 position = nextLeading + offset
@@ -395,40 +361,25 @@ internal interface StringStartAccelerator {
             return -1
         }
 
-        val inner: CharClass?
-        val offset: Int
-        val leadingClass: CharClassScanInfo?
 
-        init {
-            this.inner = inner
-            this.offset = offset
-            this.leadingClass = leadingClass
-        }
     }
 
     // The lookup table is immutable pattern metadata; array identity and value semantics are unused.
     @JvmRecord
-    data class CharClass(scanInfo: CharClassScanInfo?, asciiTable: BooleanArray?) : StringStartAccelerator {
+    data class CharClass(val scanInfo: CharClassScanInfo?, val asciiTable: BooleanArray?) : StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.CHAR_CLASS
+            return AcceleratorPolicy.CHAR_CLASS
         }
 
         fun findCandidate(text: String, fromIndex: Int, unixLines: Boolean): Int {
             // Three members cost three intrinsic passes over a gap, which has not been measured against
             // the table scan below, so only one- and two-member sets take the per-member search.
-            if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars().length <= 2) {
-                return StringInputScanner.Companion.indexOfSmallSet(text, scanInfo.chars(), fromIndex)
+            if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars.size <= 2) {
+                return StringInputScanner.indexOfSmallSet(text, scanInfo.chars, fromIndex)
             }
-            return Companion.indexOfCharClass(text, asciiTable!!, scanInfo!!.ranges(), scanInfo.isAscii(), fromIndex)
+            return indexOfCharClass(text, asciiTable!!, scanInfo!!.ranges, scanInfo.isAscii, fromIndex)
         }
 
-        val scanInfo: CharClassScanInfo?
-        val asciiTable: BooleanArray?
-
-        init {
-            this.scanInfo = scanInfo
-            this.asciiTable = asciiTable
-        }
 
         companion object {
             fun create(scanInfo: CharClassScanInfo): CharClass {
@@ -438,7 +389,7 @@ internal interface StringStartAccelerator {
             private fun indexOfCharClass(
                 text: String, asciiTable: BooleanArray, ranges: IntArray, isAscii: Boolean, fromIndex: Int
             ): Int {
-                val length: Int = text.length()
+                val length: Int = text.length
                 var index = fromIndex
                 while (index < length) {
                     val asciiResult: Int = scanAsciiRun(text, asciiTable, index)
@@ -451,10 +402,10 @@ internal interface StringStartAccelerator {
                     }
 
                     if (WorkCounterConfig.ENABLED) {
-                        record()
+                        WorkCounter.record()
                     }
                     val cp = text.codePointAt(index)
-                    if (!isAscii && Matcher.Companion.binarySearchRanges(ranges, cp)) {
+                    if (!isAscii && Matcher.binarySearchRanges(ranges, cp)) {
                         return index
                     }
                     index += Character.charCount(cp)
@@ -469,41 +420,60 @@ internal interface StringStartAccelerator {
              * ASCII path independently.
              */
             private fun scanAsciiRun(text: String, asciiTable: BooleanArray, fromIndex: Int): Int {
-                val length: Int = text.length()
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                val length: Int = text.length
+                for (i in fromIndex until length) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record()
+                    }
+                    val ch: Char = text[i]
+                    if (ch.code >= 128) {
+                        return i.inv()
+                    }
+                    if (asciiTable[ch.code]) {
+                        return i
+                    }
+                }
                 return length.inv()
             }
 
             private fun buildAsciiTable(scanInfo: CharClassScanInfo): BooleanArray {
                 val table = BooleanArray(128)
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in 0 until 128) {
+                    table[i] = scanInfo.contains(i)
+                }
                 return table
             }
         }
     }
 
     @JvmRecord
-    data class LineAnchor(startAcceleration: StartAcceleration?) : StringStartAccelerator {
+    data class LineAnchor(val startAcceleration: StartAcceleration?) : StringStartAccelerator {
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LINE_ANCHOR
+            return AcceleratorPolicy.LINE_ANCHOR
         }
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
-            return Companion.nextAcceleratedStart(text, startAcceleration!!, fromIndex, unixLines)
+            return nextAcceleratedStart(text, startAcceleration!!, fromIndex, unixLines)
         }
 
-        val startAcceleration: StartAcceleration?
-
-        init {
-            this.startAcceleration = startAcceleration
-        }
 
         companion object {
             private fun nextAcceleratedStart(
                 text: CharSequence, acceleration: StartAcceleration, fromIndex: Int, unixLines: Boolean
             ): Int {
                 val start = Math.max(0, fromIndex)
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                var i = start
+                while (i < text.length) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record()
+                    }
+                    if (matchesStartAcceleration(text, i, acceleration, unixLines)) {
+                        return i
+                    }
+                    val cp: Int = Character.codePointAt(text, i)
+                    i += Character.charCount(cp) - 1
+                    i++
+                }
                 return -1
             }
 
@@ -519,10 +489,10 @@ internal interface StringStartAccelerator {
             }
 
             private fun matchesAsciiStart(text: CharSequence, pos: Int, asciiStart: AsciiBitmap?): Boolean {
-                if (asciiStart == null || pos >= text.length()) {
+                if (asciiStart == null || pos >= text.length) {
                     return false
                 }
-                val ch: Char = text.charAt(pos)
+                val ch: Char = text[pos]
                 return asciiStart.contains(ch.code)
             }
 
@@ -530,16 +500,16 @@ internal interface StringStartAccelerator {
                 if (pos == 0) {
                     return !text.isEmpty()
                 }
-                if (pos >= text.length()) {
+                if (pos >= text.length) {
                     return false
                 }
-                val prev: Char = text.charAt(pos - 1)
+                val prev: Char = text[pos - 1]
                 if (unixLines) {
                     return prev == '\n'
                 }
-                return prev == '\n' || prev == '\u0085' || prev == '\u2028' || prev == '\u2029' || (prev == '\r' && text.charAt(
+                return prev == '\n' || prev == '\u0085' || prev == '\u2028' || prev == '\u2029' || (prev == '\r' && text[
                     pos
-                ) != '\n')
+                ] != '\n')
             }
         }
     }
@@ -547,18 +517,18 @@ internal interface StringStartAccelerator {
     // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
     @JvmRecord
     data class LeadingExpansion(
-        leadingClass: CharClassScanInfo?,
-        minRepetition: Int,
-        maxRepetition: Int,
-        hasLeadingAssertions: Boolean,
-        wideLeadingClass: Boolean,
-        excludedChars: CharArray?,
-        inner: StringStartAccelerator?
+        val leadingClass: CharClassScanInfo?,
+        val minRepetition: Int,
+        val maxRepetition: Int,
+        val hasLeadingAssertions: Boolean,
+        val wideLeadingClass: Boolean,
+        val excludedChars: CharArray?,
+        val inner: StringStartAccelerator?
     ) : StringStartAccelerator {
         /** Returns whether `text[from, to)` holds a code unit the leading class excludes.  */
         private fun containsExcluded(text: String, from: Int, to: Int): Boolean {
             for (c in excludedChars!!) {
-                val hit: Int = text.indexOf(c.code, from, to)
+                val hit: Int = text.indexOfCodePointBounded(c.code, from, to)
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record((if (hit < 0) to - from else hit - from + 1).toLong())
                 }
@@ -570,7 +540,7 @@ internal interface StringStartAccelerator {
         }
 
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LEADING_EXPANSION.withStrategy(inner!!.policy().strategy)
+            return AcceleratorPolicy.LEADING_EXPANSION.withStrategy(inner!!.policy().strategy)
         }
 
         /**
@@ -585,7 +555,7 @@ internal interface StringStartAccelerator {
         }
 
         fun findInnerCandidate(text: CharSequence?, searchPos: Int, unixLines: Boolean): Int {
-            return StringStartAccelerator.Companion.findNextCandidate(inner!!, text, searchPos, unixLines)
+            return findNextCandidate(inner!!, text, searchPos, unixLines)
         }
 
         fun expandBackward(text: CharSequence, innerMatch: Int, fromIndex: Int): Int {
@@ -596,7 +566,7 @@ internal interface StringStartAccelerator {
                 var cpStart = start - Character.charCount(cp)
                 if (cpStart < fromIndex) {
                     // Preserve an explicit low-surrogate cursor when its high surrogate precedes fromIndex.
-                    cp = text.charAt(fromIndex).code
+                    cp = text[fromIndex].code
                     cpStart = fromIndex
                 }
                 if (!leadingClass!!.contains(cp)) {
@@ -613,7 +583,7 @@ internal interface StringStartAccelerator {
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
             var searchPos = Math.max(0, fromIndex)
-            val textLen: Int = text.length()
+            val textLen: Int = text.length
             // A wide class's walk covers the rest of the line, so a skip shorter than
             // MIN_WIDE_LEADING_SKIP saves less than the literal scan and the walk cost. Such searches
             // start at the search start, as they would with no start plan.
@@ -644,7 +614,7 @@ internal interface StringStartAccelerator {
                     var cpStart = start - Character.charCount(cp)
                     if (cpStart < fromIndex) {
                         // Preserve an explicit low-surrogate cursor when its high surrogate precedes fromIndex.
-                        cp = text.charAt(fromIndex).code
+                        cp = text[fromIndex].code
                         cpStart = fromIndex
                     }
                     if (!leadingClass!!.contains(cp)) {
@@ -664,23 +634,6 @@ internal interface StringStartAccelerator {
             return -1
         }
 
-        val leadingClass: CharClassScanInfo?
-        val minRepetition: Int
-        val maxRepetition: Int
-        val hasLeadingAssertions: Boolean
-        val wideLeadingClass: Boolean
-        val excludedChars: CharArray?
-        val inner: StringStartAccelerator?
-
-        init {
-            this.leadingClass = leadingClass
-            this.minRepetition = minRepetition
-            this.maxRepetition = maxRepetition
-            this.hasLeadingAssertions = hasLeadingAssertions
-            this.wideLeadingClass = wideLeadingClass
-            this.excludedChars = excludedChars
-            this.inner = inner
-        }
 
         companion object {
             /**
@@ -689,12 +642,18 @@ internal interface StringStartAccelerator {
              * and the repetition must be unbounded with at most one required repetition. Otherwise null.
              */
             fun forwardScanChars(le: StartPlan.LeadingExpansion): CharArray? {
-                val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass)
+                val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
                 if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Integer.MAX_VALUE) {
                     return null
                 }
-                val chars = CharArray(excluded.length)
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                val chars = CharArray(excluded.size)
+                for (i in excluded.indices) {
+                    val cp = excluded[i]
+                    if (cp > Character.MAX_VALUE.code || Character.isSurrogate(cp.toChar())) {
+                        return null
+                    }
+                    chars[i] = cp.toChar()
+                }
                 return chars
             }
         }
@@ -719,40 +678,46 @@ internal interface StringStartAccelerator {
                 return null
             }
             return when (plan) {
-                -> null
-                -> if (lit.foldCase)
-                    (if (Ascii.isAscii(lit.prefix))
-                        CaseInsensitiveLiteral.Companion.create(lit.prefix)
+                is StartPlan.None -> null // already handled
+                is StartPlan.Literal -> if (plan.foldCase)
+                    (if (Ascii.isAscii(plan.prefix))
+                        CaseInsensitiveLiteral.create(plan.prefix)
                     else
-                        UnicodeCaseInsensitiveLiteral.Companion.create(lit.prefix))
+                        UnicodeCaseInsensitiveLiteral.create(plan.prefix))
                 else
-                    Literal.Companion.create(lit.prefix)
+                    Literal.create(plan.prefix)
 
-                -> if (hasWordBoundary || !cc.scanInfo.isSelective()) null else CharClass.Companion.create(cc.scanInfo)
-                -> FixedOffset.Companion.create(fo.fol, fo.leadingClass)
-                -> FixedOffsetClass(CharClass.Companion.create(fc.scanInfo), fc.offset, fc.leadingClass)
-                -> if (hasWordBoundary || ml.fallbackClass == null || !ml.fallbackClass.isSelective())
-                    null
-                else
-                    CharClass.Companion.create(ml.fallbackClass)
+                is StartPlan.CharClass ->
+                    if (hasWordBoundary || !plan.scanInfo!!.isSelective) null else CharClass.create(plan.scanInfo)
 
-                -> {
-                    val inner: StringStartAccelerator? = Companion.create(le.innerPlan, hasWordBoundary)
+                is StartPlan.FixedOffset -> FixedOffset.create(plan.fol!!, plan.leadingClass)
+                is StartPlan.FixedOffsetClass ->
+                    FixedOffsetClass(CharClass.create(plan.scanInfo!!), plan.offset, plan.leadingClass!!)
+
+                is StartPlan.MultiLiteral ->
+                    if (hasWordBoundary || plan.fallbackClass == null || !plan.fallbackClass.isSelective)
+                        null
+                    else
+                        CharClass.create(plan.fallbackClass)
+
+                is StartPlan.LeadingExpansion -> {
+                    val inner: StringStartAccelerator? = create(plan.innerPlan, hasWordBoundary)
                     if (inner != null)
                         LeadingExpansion(
-                            le.leadingClass,
-                            le.minRepetition,
-                            le.maxRepetition,
-                            le.hasLeadingAssertions,
-                            MultiAnchorCompiler.isWideLeadingClass(le.leadingClass),
-                            LeadingExpansion.Companion.forwardScanChars(le),
+                            plan.leadingClass,
+                            plan.minRepetition,
+                            plan.maxRepetition,
+                            plan.hasLeadingAssertions,
+                            MultiAnchorCompiler.isWideLeadingClass(plan.leadingClass!!),
+                            LeadingExpansion.forwardScanChars(plan),
                             inner
                         )
                     else
                         null
                 }
 
-                -> if (hasWordBoundary) null else LineAnchor(la.acceleration)
+                is StartPlan.LineAnchor -> if (hasWordBoundary) null else LineAnchor(plan.acceleration)
+                else -> throw AssertionError(plan)
             }
         }
 
@@ -770,14 +735,15 @@ internal interface StringStartAccelerator {
             accelerator: StringStartAccelerator, text: String, fromIndex: Int, unixLines: Boolean
         ): Int {
             return when (accelerator) {
-                -> lit.findCandidate(text, fromIndex, unixLines)
-                -> cil.findCandidate(text, fromIndex, unixLines)
-                -> ucil.findCandidate(text, fromIndex, unixLines)
-                -> fo.findCandidate(text, fromIndex, unixLines)
-                -> fc.findCandidate(text, fromIndex, unixLines)
-                -> cc.findCandidate(text, fromIndex, unixLines)
-                -> la.findCandidate(text, fromIndex, unixLines)
-                -> le.findCandidate(text, fromIndex, unixLines)
+                is Literal -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is CaseInsensitiveLiteral -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is UnicodeCaseInsensitiveLiteral -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is FixedOffset -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is FixedOffsetClass -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is CharClass -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is LineAnchor -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is LeadingExpansion -> accelerator.findCandidate(text, fromIndex, unixLines)
+                else -> throw AssertionError(accelerator)
             }
         }
 
@@ -789,28 +755,33 @@ internal interface StringStartAccelerator {
             unixLines: Boolean
         ): Int {
             return when (accelerator) {
-                -> text.indexOf(lit.prefix, fromIndex, text.length())
-                -> text.indexOfIgnoreCase(
-                    cil.prefix, cil.anchorOffset, cil.anchorLow, cil.anchorHigh, fromIndex
+                is Literal -> text.indexOf(accelerator.prefix!!, fromIndex, text.length)
+                is CaseInsensitiveLiteral -> text.indexOfIgnoreCase(
+                    accelerator.prefix!!,
+                    accelerator.anchorOffset,
+                    accelerator.anchorLow,
+                    accelerator.anchorHigh,
+                    fromIndex
                 )
 
-                -> {
-                    if (ucil.classHashChain != null) {
+                is UnicodeCaseInsensitiveLiteral -> {
+                    val chain = accelerator.classHashChain
+                    if (chain != null) {
                         val candidate: Int =
-                            ucil.classHashChain
-                                .search(text, fromIndex, WorkLimit.forRemaining(text.length() - fromIndex))
+                            chain.search(text, fromIndex, WorkLimit.forRemaining(text.length - fromIndex))
                         if (candidate != -2) {
-                            candidate
+                            return candidate
                         }
                     }
-                    Utf16.indexOfUnicodeIgnoreCase(text, ucil.prefix, fromIndex)
+                    Utf16.indexOfUnicodeIgnoreCase(text.toString(), accelerator.prefix!!, fromIndex)
                 }
 
-                -> text.indexOfCharClass(cc.scanInfo, fromIndex)
-                -> fo.findCandidate(text, fromIndex, unixLines)
-                -> fc.findCandidate(text, fromIndex, unixLines)
-                -> la.findCandidate(text, fromIndex, unixLines)
-                -> le.findCandidate(text, fromIndex, unixLines)
+                is CharClass -> text.indexOfCharClass(accelerator.scanInfo!!, fromIndex)
+                is FixedOffset -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is FixedOffsetClass -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is LineAnchor -> accelerator.findCandidate(text, fromIndex, unixLines)
+                is LeadingExpansion -> accelerator.findCandidate(text, fromIndex, unixLines)
+                else -> -1
             }
         }
 
@@ -819,7 +790,7 @@ internal interface StringStartAccelerator {
             accelerator: StringStartAccelerator, text: CharSequence?, fromIndex: Int, unixLines: Boolean
         ): Int {
             return if (text is String)
-                Companion.findNextCandidate(accelerator, text, fromIndex, unixLines)
+                findNextCandidate(accelerator, text, fromIndex, unixLines)
             else
                 findNextCandidate(accelerator, text as StringRegionInputScanner?, fromIndex, unixLines)
         }
@@ -837,12 +808,12 @@ internal interface StringStartAccelerator {
                     text, literal, anchorOffset, anchor, singleAsciiChar, fromIndex
                 )
             else
-                (text as StringRegionInputScanner).indexOf(literal, fromIndex, text.length())
+                (text as StringRegionInputScanner).indexOf(literal, fromIndex, text.length)
         }
 
         private fun indexOfClass(text: CharSequence, info: CharClassScanInfo, fromIndex: Int): Int {
             return if (text is String)
-                StringInputScanner.Companion.indexOfCharClass(text, info, fromIndex)
+                StringInputScanner.indexOfCharClass(text, info, fromIndex)
             else
                 (text as StringRegionInputScanner).indexOfCharClass(info, fromIndex)
         }

@@ -46,7 +46,7 @@ class WorkBoundFuzzer {
             Assertions.assertThat(work).isNotNegative()
             // A forced NFA visits each instruction a bounded number of times per input position.
             // Budget scales with compiled program size, not just subject size; compilation is excluded.
-            val bound = 64L * pattern.prog().size() * (input.length + 1L)
+            val bound = 64L * pattern.prog().size * (input.size + 1L)
             Assertions.assertThat(work).`as`("NFA work versus program/input bound").isLessThanOrEqualTo(bound)
         }
     }

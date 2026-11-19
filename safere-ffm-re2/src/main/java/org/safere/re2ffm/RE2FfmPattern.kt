@@ -72,7 +72,7 @@ class RE2FfmPattern private constructor(
                 val matchesSeg: MemorySegment = arena.allocate(ValueLayout.JAVA_INT, 2L * maxMatches)
 
                 numMatches =
-                    Re2Shim.findAll(nativeHandle, textSeg, inputUtf8.length, matchesSeg, maxMatches)
+                    Re2Shim.findAll(nativeHandle, textSeg, inputUtf8.size, matchesSeg, maxMatches)
 
                 if (numMatches < maxMatches || limit > 0) {
                     byteOffsets = IntArray(2 * numMatches)
@@ -86,7 +86,7 @@ class RE2FfmPattern private constructor(
         var last = 0
 
         for (i in 0..<numMatches) {
-            if (limit > 0 && parts.size() >= limit - 1) {
+            if (limit > 0 && parts.size >= limit - 1) {
                 break
             }
             val startByte = byteOffsets!![2 * i]
@@ -108,7 +108,7 @@ class RE2FfmPattern private constructor(
 
         parts.add(text.substring(last))
         if (limit == 0) {
-            var end: Int = parts.size()
+            var end: Int = parts.size
             while (end > 0 && parts.get(end - 1)!!.isEmpty()) {
                 end--
             }
@@ -165,9 +165,9 @@ class RE2FfmPattern private constructor(
             Arena.ofConfined().use { arena ->
                 val patternSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, utf8)
                 if ((flags and CASE_INSENSITIVE) != 0) {
-                    handle = Re2Shim.compileCaseInsensitive(patternSeg, utf8.length)
+                    handle = Re2Shim.compileCaseInsensitive(patternSeg, utf8.size)
                 } else {
-                    handle = Re2Shim.compile(patternSeg, utf8.length)
+                    handle = Re2Shim.compile(patternSeg, utf8.size)
                 }
             }
             if (!Re2Shim.ok(handle)) {

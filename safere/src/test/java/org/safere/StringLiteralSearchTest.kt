@@ -64,12 +64,12 @@ internal class StringLiteralSearchTest {
         Assertions.assertThat(offset).isNotEqualTo(StringLiteralSearch.NO_ANCHOR)
         val unit = StringLiteralSearch.anchorAt(literal, offset).toString() + "y".repeat(45)
         val noise = unit.repeat(64)
-        Assertions.assertThat(noise.length).isGreaterThan(StringLiteralSearch.MIN_ANCHORED_WINDOW)
+        Assertions.assertThat(noise.size).isGreaterThan(StringLiteralSearch.MIN_ANCHORED_WINDOW)
         Assertions.assertThat(anchored(noise, literal, 0)).isEqualTo(-1)
-        Assertions.assertThat(anchored(noise + literal, literal, 0)).isEqualTo(noise.length)
+        Assertions.assertThat(anchored(noise + literal, literal, 0)).isEqualTo(noise.size)
         val surrounded = noise + literal + noise
         var from = 0
-        while (from < surrounded.length) {
+        while (from < surrounded.size) {
             assertAgreesAt(surrounded, literal, from)
             from += 137
         }
@@ -230,7 +230,7 @@ internal class StringLiteralSearchTest {
     fun plannedSearchAgreesWithJdkOnOutOfRangeStarts() {
         val text = "a-b-c"
         for (literal in arrayOf<String>("-", "q", "-b")) {
-            for (from in intArrayOf(Int.Companion.MIN_VALUE, -7, -1, 6, 99, Int.Companion.MAX_VALUE)) {
+            for (from in intArrayOf(Int.MIN_VALUE, -7, -1, 6, 99, Int.MAX_VALUE)) {
                 Assertions.assertThat(planned(text, literal, from))
                     .`as`("literal=%s fromIndex=%s", literal, from)
                     .isEqualTo(text.indexOf(literal, from))

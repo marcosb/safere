@@ -5,7 +5,6 @@
 package org.safere
 
 import org.safere.Dfa.ManyMatchResult
-import org.safere.crosscheck.Pattern.Companion.compile
 import java.util.*
 import java.util.List
 
@@ -29,12 +28,12 @@ import java.util.List
  * pattern individually through the NFA.
  */
 class PatternSet private constructor(
-    anchor: Anchor?,
-    prog: Prog,
-    size: Int,
-    patterns: MutableList<String?>,
-    fallbackPatterns: MutableList<Pattern>,
-    maxDfaStates: Int
+    private val anchor: Anchor?,
+    private val prog: Prog,
+    private val size: Int,
+    private val patterns: MutableList<String?>,
+    private val fallbackPatterns: MutableList<Pattern>,
+    private val maxDfaStates: Int,
 ) {
     /** Anchor mode for the pattern set. Determines how patterns are matched against the text.  */
     enum class Anchor {
@@ -47,23 +46,6 @@ class PatternSet private constructor(
         /** Patterns must match the entire text from start to end.  */
         ANCHOR_BOTH
     }
-
-    private val anchor: Anchor?
-    private val prog: Prog
-    private val size: Int
-    private val patterns: MutableList<String?>
-    private val fallbackPatterns: MutableList<Pattern>
-    private val maxDfaStates: Int
-
-    init {
-        this.anchor = anchor
-        this.prog = prog
-        this.size = size
-        this.patterns = patterns
-        this.fallbackPatterns = fallbackPatterns
-        this.maxDfaStates = maxDfaStates
-    }
-
     /**
      * Returns the number of patterns in this set.
      * 
@@ -105,7 +87,7 @@ class PatternSet private constructor(
      * @param text the input text to match against
      * @return a sorted list of indices of matching patterns (may be empty)
      */
-    fun match(text: String?): MutableList<Int?> {
+    fun match(text: String?): MutableList<Int> {
         val anchored = (anchor != Anchor.UNANCHORED)
 
         if (prog.hasGraphemeClusterInstruction()) {
@@ -116,14 +98,14 @@ class PatternSet private constructor(
         val dfaResult: ManyMatchResult? = Dfa.Companion.searchMany(prog, text, anchored, maxDfaStates)
         if (dfaResult != null) {
             if (!dfaResult.matched) {
-                return Collections.emptyList<Int?>()
+                return Collections.emptyList<Int>()
             }
-            val result: MutableList<Int?> = ArrayList<Int?>(dfaResult.matchIds.length)
-            for (id in dfaResult.matchIds) {
+            val result: MutableList<Int> = ArrayList<Int>(dfaResult.matchIds!!.size)
+            for (id in dfaResult.matchIds!!) {
                 result.add(id)
             }
-            Collections.sort<Int?>(result)
-            return Collections.unmodifiableList<Int?>(result)
+            result.sort()
+            return Collections.unmodifiableList(result)
         }
 
         // DFA bailed out — fall back to running each pattern individually through NFA.
@@ -134,8 +116,8 @@ class PatternSet private constructor(
      * Fallback matching that runs each pattern individually through the NFA. Used when the DFA
      * exceeds its state budget.
      */
-    private fun matchFallback(text: String?): MutableList<Int?> {
-        val result: MutableList<Int?> = ArrayList<Int?>()
+    private fun matchFallback(text: String?): MutableList<Int> {
+        val result: MutableList<Int> = ArrayList<Int>()
         for (i in 0..<size) {
             val p = fallbackPatterns.get(i)
             val m = p.matcher(text)
@@ -144,6 +126,7 @@ class PatternSet private constructor(
                     Anchor.UNANCHORED -> m.find()
                     Anchor.ANCHOR_START -> m.lookingAt()
                     Anchor.ANCHOR_BOTH -> m.matches()
+                    null -> false
                 }
             if (matched) {
                 result.add(i)
@@ -159,8 +142,7 @@ class PatternSet private constructor(
      * 
      * Once [.compile] is called, no more patterns can be added.
      */
-    class Builder(anchor: Anchor?) {
-        private val anchor: Anchor?
+    class Builder(private val anchor: Anchor?) {
         private val patterns: MutableList<String?> = ArrayList<String?>()
         private var compiled = false
 
@@ -169,9 +151,7 @@ class PatternSet private constructor(
          * 
          * @param anchor the anchor mode for matching
          */
-        init {
-            this.anchor = anchor
-        }
+
 
         /**
          * Adds a pattern to the set.
@@ -187,7 +167,7 @@ class PatternSet private constructor(
             val parseFlags: Int = SET_PARSE_FLAGS
             Parser.Companion.parse(pattern, parseFlags)
 
-            val index: Int = patterns.size()
+            val index: Int = patterns.size
             patterns.add(pattern)
             return index
         }
@@ -214,26 +194,26 @@ class PatternSet private constructor(
             compiled = true
 
             val parseFlags: Int = SET_PARSE_FLAGS
-            val size: Int = patterns.size()
+            val size: Int = patterns.size
 
             val tagged: MutableList<Regexp?> = ArrayList<Regexp?>(size)
             val fallbackPatterns: MutableList<Pattern?> = ArrayList<Pattern?>(size)
             for (i in 0..<size) {
                 val pattern = patterns.get(i)
-                val re: Regexp = Parser.Companion.parse(pattern, parseFlags)
-                fallbackPatterns.add(compile(pattern))
+                val re: Regexp = Parser.Companion.parse(pattern, parseFlags)!!
+                fallbackPatterns.add(Pattern.compile(pattern!!))
                 val haveMatch: Regexp = Regexp.Companion.haveMatch(i, parseFlags)
                 tagged.add(Regexp.Companion.concat(List.of<Regexp?>(re, haveMatch), parseFlags))
             }
 
             val combined: Regexp?
             if (size == 1) {
-                combined = tagged.getFirst()
+                combined = tagged.first()!!
             } else {
                 combined = Regexp.Companion.alternate(tagged, parseFlags)
             }
 
-            val prog: Prog = Compiler.Companion.compile(combined)
+            val prog: Prog = Compiler.Companion.compile(combined!!)!!
 
             if (anchor == Anchor.ANCHOR_START || anchor == Anchor.ANCHOR_BOTH) {
                 prog.setAnchorStart(true)

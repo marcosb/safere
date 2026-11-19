@@ -9,7 +9,6 @@ import com.google.gson.JsonObject
 import org.safere.exhaustive.SweepWorkers.LineWorker
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.*
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,22 +16,16 @@ import java.util.List
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.Array
-import kotlin.Boolean
 import kotlin.IllegalStateException
-import kotlin.Int
-import kotlin.Long
 import kotlin.RuntimeException
-import kotlin.Throws
 import kotlin.check
 import kotlin.io.println
 import kotlin.io.use
 import kotlin.require
 import kotlin.text.StringBuilder
 import kotlin.text.contains
-import kotlin.text.isEmpty
 import kotlin.text.replace
 import kotlin.text.startsWith
-import kotlin.use
 
 /** Offline differential sweep for SafeRE character-class expression bugs.  */
 object CharacterClassDivergenceSweep {
@@ -785,7 +778,7 @@ object CharacterClassDivergenceSweep {
         )
     }
 
-    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+    private fun direction(jdk: Outcome, safere: Outcome): String {
         if (jdk.accepted && !safere.accepted) {
             return "jdk-accepts"
         }
@@ -795,8 +788,8 @@ object CharacterClassDivergenceSweep {
         return "matches"
     }
 
-    private fun operatorLabels(spec: CaseSpec): kotlin.String {
-        val labels: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+    private fun operatorLabels(spec: CaseSpec): String {
+        val labels: MutableList<String?> = ArrayList<String?>()
         for (piece in spec.pieces!!) {
             if (piece.text!!.startsWith("&&")) {
                 labels.add(piece.label)
@@ -805,7 +798,7 @@ object CharacterClassDivergenceSweep {
         return String.join(",", labels)
     }
 
-    private fun separatorClass(spec: CaseSpec): kotlin.String {
+    private fun separatorClass(spec: CaseSpec): String {
         val hasComment = containsLabel(spec, "comment")
         val hasSpace =
             containsLabel(spec, "space")
@@ -823,11 +816,11 @@ object CharacterClassDivergenceSweep {
                 + (if (hasEmptyQuote) "emptyQuote" else "no-emptyQuote"))
     }
 
-    private fun containsLabel(spec: CaseSpec, label: kotlin.String?): Boolean {
+    private fun containsLabel(spec: CaseSpec, label: String?): Boolean {
         return spec.pieces!!.stream().anyMatch { piece: Piece? -> piece!!.label == label }
     }
 
-    private fun containsPrefix(spec: CaseSpec, prefix: kotlin.String): Boolean {
+    private fun containsPrefix(spec: CaseSpec, prefix: String): Boolean {
         return spec.pieces!!.stream().anyMatch { piece: Piece? -> piece!!.label!!.startsWith(prefix) }
     }
 
@@ -857,13 +850,13 @@ object CharacterClassDivergenceSweep {
     }
 
     @JvmStatic
-    fun compactReplayJson(caseIndex: Long, classification: kotlin.String?): kotlin.String {
+    fun compactReplayJson(caseIndex: Long, classification: String?): String {
         return CharacterClassDivergenceSweep.compactReplayJson(caseIndex, classification, locateCase(caseIndex)!!)
     }
 
     @Throws(IOException::class)
     fun writeCompactReplayJson(
-        writer: BufferedWriter, classification: kotlin.String?, caseIndices: MutableList<Long?>
+        writer: BufferedWriter, classification: String?, caseIndices: MutableList<Long?>
     ) {
         val cases = locateCases(caseIndices)
         for (i in caseIndices.indices) {
@@ -880,7 +873,7 @@ object CharacterClassDivergenceSweep {
 
     @Throws(IOException::class)
     fun writeAllCompactReplayJson(
-        writer: BufferedWriter?, classification: kotlin.String?, indicesPath: Path
+        writer: BufferedWriter?, classification: String?, indicesPath: Path
     ) {
         DataInputStream(BufferedInputStream(Files.newInputStream(indicesPath))).use { input ->
             try {
@@ -899,7 +892,7 @@ object CharacterClassDivergenceSweep {
         throw IllegalStateException("failed to locate all character-class cases")
     }
 
-    private fun compactReplayJson(caseIndex: Long, classification: kotlin.String?, spec: CaseSpec): kotlin.String {
+    private fun compactReplayJson(caseIndex: Long, classification: String?, spec: CaseSpec): String {
         val `object` = SweepJson.`object`()
         `object`.addProperty("caseIndex", caseIndex)
         `object`.addProperty("classification", classification)
@@ -944,7 +937,7 @@ object CharacterClassDivergenceSweep {
         throw IllegalStateException("failed to locate character-class case: " + caseIndex)
     }
 
-    private fun reduce(spec: CaseSpec, expectedJdk: Outcome, expectedSafeRe: Outcome): kotlin.String {
+    private fun reduce(spec: CaseSpec, expectedJdk: Outcome, expectedSafeRe: Outcome): String {
         var pieces: MutableList<Piece> = ArrayList<Piece>(spec.pieces)
         var changed: Boolean
         do {
@@ -980,19 +973,19 @@ object CharacterClassDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Piece(val label: kotlin.String?, val text: kotlin.String?) {
+    private data class Piece(val label: String?, val text: String?) {
         val isCommentsOnly: Boolean
             get() = text!!.contains(" ") || text.contains("#")
     }
 
     @JvmRecord
     private data class CaseSpec(
-        val template: kotlin.String?,
+        val template: String?,
         val comments: Boolean,
         val negated: Boolean,
         val pieces: MutableList<Piece>?
     ) {
-        fun regex(): kotlin.String {
+        fun regex(): String {
             val regex = StringBuilder()
             if (comments) {
                 regex.append("(?x)")
@@ -1008,8 +1001,8 @@ object CharacterClassDivergenceSweep {
             return regex.toString()
         }
 
-        fun labels(): kotlin.String {
-            val labels: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+        fun labels(): String {
+            val labels: MutableList<String?> = ArrayList<String?>()
             for (piece in pieces!!) {
                 if (!piece.text!!.isEmpty()) {
                     labels.add(piece.label)
@@ -1020,18 +1013,18 @@ object CharacterClassDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Outcome(val accepted: Boolean, val matches: kotlin.String?, val error: kotlin.String?)
+    private data class Outcome(val accepted: Boolean, val matches: String?, val error: String?)
 
     @JvmRecord
     private data class Divergence(
         val spec: CaseSpec?,
-        val regex: kotlin.String?,
+        val regex: String?,
         val jdk: Outcome?,
         val safere: Outcome?,
-        val bucket: kotlin.String?,
-        val reduced: kotlin.String?
+        val bucket: String?,
+        val reduced: String?
     ) {
-        fun toJson(): kotlin.String {
+        fun toJson(): String {
             val `object` = SweepJson.`object`()
             `object`.add("case", Companion.caseJson(spec!!))
             `object`.addProperty("bucket", bucket)
@@ -1076,7 +1069,7 @@ object CharacterClassDivergenceSweep {
         val targetCaseIndices: MutableList<Long?>?
         val locatedCases: MutableList<CaseSpec?>?
         val compactWriter: BufferedWriter?
-        val compactClassification: kotlin.String?
+        val compactClassification: String?
         val compactIndices: DataInputStream?
         var targetPosition: Int = 0
         var nextCompactCaseIndex: Long = 0
@@ -1124,7 +1117,7 @@ object CharacterClassDivergenceSweep {
 
         internal constructor(
             compactWriter: BufferedWriter?,
-            compactClassification: kotlin.String?,
+            compactClassification: String?,
             compactIndices: DataInputStream?
         ) {
             this.runState = null
@@ -1141,7 +1134,7 @@ object CharacterClassDivergenceSweep {
         }
 
         fun check5(
-            template: kotlin.String?,
+            template: String?,
             comments: Boolean,
             negated: Boolean,
             p1: Piece,
@@ -1157,7 +1150,7 @@ object CharacterClassDivergenceSweep {
         }
 
         fun check6(
-            template: kotlin.String?,
+            template: String?,
             comments: Boolean,
             negated: Boolean,
             p1: Piece,
@@ -1174,7 +1167,7 @@ object CharacterClassDivergenceSweep {
         }
 
         fun check7(
-            template: kotlin.String?,
+            template: String?,
             comments: Boolean,
             negated: Boolean,
             p1: Piece,
@@ -1192,7 +1185,7 @@ object CharacterClassDivergenceSweep {
         }
 
         fun check9(
-            template: kotlin.String?,
+            template: String?,
             comments: Boolean,
             negated: Boolean,
             p1: Piece,
@@ -1214,7 +1207,7 @@ object CharacterClassDivergenceSweep {
         }
 
         fun check10(
-            template: kotlin.String?,
+            template: String?,
             comments: Boolean,
             negated: Boolean,
             p1: Piece,

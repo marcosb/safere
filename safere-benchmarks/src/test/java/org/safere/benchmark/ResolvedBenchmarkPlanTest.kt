@@ -22,6 +22,12 @@ import java.util.List
 import java.util.Set
 import java.util.function.Function
 import java.util.function.Predicate
+import kotlin.Exception
+import kotlin.RuntimeException
+import kotlin.String
+import kotlin.Throws
+import kotlin.text.startsWith
+import kotlin.text.trimIndent
 
 internal class ResolvedBenchmarkPlanTest {
     @Test
@@ -34,8 +40,8 @@ internal class ResolvedBenchmarkPlanTest {
                 Path.of("safere-benchmarks", "benchmark-data.json")
         val plan: JsonObject =
             create(
-                PatternProfiles.Companion.normalizeInline(
-                    JsonParser.parseString(Files.readString(source)).getAsJsonObject()
+                PatternProfiles.normalizeInline(
+                    JsonParser.parseString(Files.readString(source)).asJsonObject
                 )
             )
         for (workload in List.of<String?>(
@@ -44,10 +50,10 @@ internal class ResolvedBenchmarkPlanTest {
             "MatcherApiBenchmark.newMatcherRegionMatches"
         )) {
             val row: JsonObject = entry(plan, workload + "@re2-ffm-string-conversion")
-            Assertions.assertThat(row.get("status").getAsString()).`as`(workload).isEqualTo("runnable")
-            Assertions.assertThat(row.get("inputRepresentation").getAsString())
+            Assertions.assertThat(row.get("status").asString).`as`(workload).isEqualTo("runnable")
+            Assertions.assertThat(row.get("inputRepresentation").asString)
                 .isEqualTo("javaStringWithTimedUtf8Conversion")
-            Assertions.assertThat(row.getAsJsonObject("lifecycle").get("matcher").getAsString())
+            Assertions.assertThat(row.getAsJsonObject("lifecycle").get("matcher").asString)
                 .isEqualTo("newPerInvocation")
         }
         for (workload in List.of<String?>(
@@ -56,15 +62,15 @@ internal class ResolvedBenchmarkPlanTest {
             "MatcherApiBenchmark.resetAndFind"
         )) {
             val row: JsonObject = entry(plan, workload + "@re2-ffm-string-conversion")
-            Assertions.assertThat(row.get("status").getAsString()).`as`(workload).isEqualTo("excluded")
-            Assertions.assertThat(row.getAsJsonObject("exclusion").get("kind").getAsString())
+            Assertions.assertThat(row.get("status").asString).`as`(workload).isEqualTo("excluded")
+            Assertions.assertThat(row.getAsJsonObject("exclusion").get("kind").asString)
                 .isEqualTo("unsupportedTimingBoundary")
-            Assertions.assertThat(row.getAsJsonObject("exclusion").get("reason").getAsString())
+            Assertions.assertThat(row.getAsJsonObject("exclusion").get("reason").asString)
                 .contains("conversion", "setup")
         }
         val append: JsonObject = entry(plan, "ReplaceBenchmark.manualReplaceAll@re2-ffm-string-conversion")
-        Assertions.assertThat(append.get("status").getAsString()).isEqualTo("excluded")
-        Assertions.assertThat(append.getAsJsonObject("exclusion").get("reason").getAsString())
+        Assertions.assertThat(append.get("status").asString).isEqualTo("excluded")
+        Assertions.assertThat(append.getAsJsonObject("exclusion").get("reason").asString)
             .contains("appendReplacement")
     }
 
@@ -75,30 +81,30 @@ internal class ResolvedBenchmarkPlanTest {
             if (Files.exists(Path.of("benchmark-data.json"))) Path.of(".") else Path.of("safere-benchmarks")
         val data =
             JsonParser.parseString(Files.readString(benchmarkDirectory.resolve("benchmark-data.json")))
-                .getAsJsonObject()
-        val plan: JsonObject = create(PatternProfiles.Companion.normalizeInline(data))
+                .asJsonObject
+        val plan: JsonObject = create(PatternProfiles.normalizeInline(data))
         for (engine in List.of<String?>("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
             val rows =
                 plan.getAsJsonArray("entries").asList().stream()
                     .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
-                    .filter(Predicate { row: JsonObject? -> row!!.get("engineId").getAsString() == engine })
+                    .filter(Predicate { row: JsonObject? -> row!!.get("engineId").asString == engine })
                     .filter(
                         Predicate { row: JsonObject? ->
                             row!!.get("workloadId")
-                                .getAsString()
+                                .asString
                                 .startsWith("UnicodeFirstCompileBenchmark.firstCompile.")
                         })
                     .toList()
             Assertions.assertThat<JsonObject?>(rows).hasSize(36)
             Assertions.assertThat<JsonObject?>(
-                rows.stream().filter(Predicate { row: JsonObject? -> row!!.get("status").getAsString() == "runnable" })
+                rows.stream().filter(Predicate { row: JsonObject? -> row!!.get("status").asString == "runnable" })
             )
                 .hasSize(if (engine == "pcre2_jit" || engine == "rust_regex") 12 else 9)
                 .allSatisfy(
                     ThrowingConsumer { row: JsonObject? ->
-                        Assertions.assertThat(row!!.getAsJsonObject("measurement").get("mode").getAsString())
+                        Assertions.assertThat(row!!.getAsJsonObject("measurement").get("mode").asString)
                             .isEqualTo("singleShotColdStart")
-                        Assertions.assertThat(row.getAsJsonObject("measurement").get("timingUnit").getAsString())
+                        Assertions.assertThat(row.getAsJsonObject("measurement").get("timingUnit").asString)
                             .isEqualTo("milliseconds")
                         Assertions.assertThat<JsonElement?>(row.getAsJsonArray("options")).isEmpty()
                     })
@@ -111,7 +117,7 @@ internal class ResolvedBenchmarkPlanTest {
                 )
                     .getAsJsonObject("exclusion")
                     .get("kind")
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("unsupportedOptions")
             Assertions.assertThat(
@@ -122,14 +128,14 @@ internal class ResolvedBenchmarkPlanTest {
                 )
                     .getAsJsonObject("exclusion")
                     .get("kind")
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("unsupportedOptions")
             Assertions.assertThat(
                 entry(plan, "UnicodeCompileBenchmark.compile.letter.0@" + engine)
                     .getAsJsonObject("exclusion")
                     .get("kind")
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("unsupportedFeature")
             if (engine == "re2_cpp" || engine == "go_regexp") {
@@ -137,7 +143,7 @@ internal class ResolvedBenchmarkPlanTest {
                     entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
                         .getAsJsonObject("exclusion")
                         .get("kind")
-                        .getAsString()
+                        .asString
                 )
                     .isEqualTo("unsupportedSyntax")
             } else {
@@ -145,7 +151,7 @@ internal class ResolvedBenchmarkPlanTest {
                     entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
                         .getAsJsonArray("patterns")
                         .get(0)
-                        .getAsString()
+                        .asString
                 )
                     .isEqualTo("\\p{Alphabetic}+")
             }
@@ -154,21 +160,21 @@ internal class ResolvedBenchmarkPlanTest {
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.scriptLatin.0@re2_cpp")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString()
+                .asString
         )
             .isEqualTo("\\p{Latin}+")
         Assertions.assertThat(
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.scriptLatin.0@pcre2_jit")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString()
+                .asString
         )
             .isEqualTo("\\p{sc=Latin}+")
         Assertions.assertThat(
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.word.0@rust_regex")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString()
+                .asString
         )
             .isEqualTo("[A-Za-z0-9_]+")
     }
@@ -182,8 +188,8 @@ internal class ResolvedBenchmarkPlanTest {
             else
                 Path.of("safere-benchmarks", "benchmark-data.json")
         val data: JsonObject =
-            PatternProfiles.Companion.normalizeInline(
-                JsonParser.parseString(Files.readString(source)).getAsJsonObject()
+            PatternProfiles.normalizeInline(
+                JsonParser.parseString(Files.readString(source)).asJsonObject
             )
         val plan: JsonObject = create(data)
         val rows =
@@ -196,21 +202,21 @@ internal class ResolvedBenchmarkPlanTest {
                 "Utf8MatchingBenchmark.emptyMatchIteration"
             )
         for (row in rows) {
-            Assertions.assertThat(entry(plan, row + "@safere-utf8").get("status").getAsString())
+            Assertions.assertThat(entry(plan, row + "@safere-utf8").get("status").asString)
                 .isEqualTo("runnable")
             for (engine in List.of<String?>("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
                 val runnable: JsonObject = entry(plan, row + "@" + engine)
-                Assertions.assertThat(runnable.get("status").getAsString()).isEqualTo("runnable")
+                Assertions.assertThat(runnable.get("status").asString).isEqualTo("runnable")
                 Assertions.assertThat<JsonElement?>(
                     runnable.getAsJsonObject("arguments").getAsJsonArray("expectedBounds")
                 )
                     .isNotEmpty()
-                Assertions.assertThat(runnable.getAsJsonObject("expected").get("type").getAsString())
+                Assertions.assertThat(runnable.getAsJsonObject("expected").get("type").asString)
                     .isEqualTo("integer")
             }
             val excluded: JsonObject = entry(plan, row + "@dotnet_nonbacktracking")
-            Assertions.assertThat(excluded.get("status").getAsString()).isEqualTo("excluded")
-            Assertions.assertThat(excluded.getAsJsonObject("exclusion").get("kind").getAsString())
+            Assertions.assertThat(excluded.get("status").asString).isEqualTo("excluded")
+            Assertions.assertThat(excluded.getAsJsonObject("exclusion").get("kind").asString)
                 .isEqualTo("unsupportedOperation")
             for (engine in List.of<String?>(
                 "safere-string",
@@ -219,8 +225,8 @@ internal class ResolvedBenchmarkPlanTest {
                 "re2-ffm-string-conversion"
             )) {
                 val stringEntry: JsonObject = entry(plan, row + "@" + engine)
-                Assertions.assertThat(stringEntry.get("status").getAsString()).isEqualTo("excluded")
-                Assertions.assertThat(stringEntry.getAsJsonObject("exclusion").get("kind").getAsString())
+                Assertions.assertThat(stringEntry.get("status").asString).isEqualTo("excluded")
+                Assertions.assertThat(stringEntry.getAsJsonObject("exclusion").get("kind").asString)
                     .isEqualTo("unsupportedFeature")
             }
         }
@@ -228,7 +234,7 @@ internal class ResolvedBenchmarkPlanTest {
             entry(plan, "Utf8MatchingBenchmark.captureBounds.named@re2_cpp")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString()
+                .asString
         )
             .isEqualTo("(?P<key>[A-Za-z]+)=(?P<value>[^&]+)")
     }
@@ -261,15 +267,15 @@ internal class ResolvedBenchmarkPlanTest {
                 )
             )
 
-        Assertions.assertThat(plan.get("version").getAsInt()).isEqualTo(ResolvedBenchmarkPlan.VERSION)
-        Assertions.assertThat(plan.get("workloadCount").getAsInt()).isEqualTo(2)
-        Assertions.assertThat(plan.get("engineCount").getAsInt()).isEqualTo(2)
+        Assertions.assertThat(plan.get("version").asInt).isEqualTo(ResolvedBenchmarkPlan.VERSION)
+        Assertions.assertThat(plan.get("workloadCount").asInt).isEqualTo(2)
+        Assertions.assertThat(plan.get("engineCount").asInt).isEqualTo(2)
         val entries = plan.getAsJsonArray("entries")
         Assertions.assertThat<JsonElement?>(entries).hasSize(4)
         Assertions.assertThat<String?>(
             entries!!.asList().stream()
                 .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
-                .map<String?>(Function { entry: JsonObject? -> Companion.id(entry!!) })
+                .map<String?>(Function { entry: JsonObject? -> id(entry!!) })
         )
             .containsExactly(
                 "Synthetic.find@find-only",
@@ -280,19 +286,19 @@ internal class ResolvedBenchmarkPlanTest {
         Assertions.assertThat<JsonObject?>(
             entries.asList().stream()
                 .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
-                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").getAsString() == "runnable" })
+                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").asString == "runnable" })
         )
             .hasSize(3)
         Assertions.assertThat<JsonObject?>(
             entries.asList().stream()
                 .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
-                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").getAsString() == "excluded" })
+                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").asString == "excluded" })
         )
             .singleElement()
             .satisfies(
                 ThrowingConsumer { entry: JsonObject? ->
-                    Assertions.assertThat(Companion.id(entry!!)).isEqualTo("Synthetic.replace@find-only")
-                    Assertions.assertThat(entry.getAsJsonObject("exclusion").get("kind").getAsString())
+                    Assertions.assertThat(id(entry!!)).isEqualTo("Synthetic.replace@find-only")
+                    Assertions.assertThat(entry.getAsJsonObject("exclusion").get("kind").asString)
                         .isEqualTo("unsupportedOperation")
                 })
     }
@@ -321,17 +327,17 @@ internal class ResolvedBenchmarkPlanTest {
 
         val find: JsonObject = entry(plan, "Synthetic.find@alternate-engine")
         val replace: JsonObject = entry(plan, "Synthetic.replace@alternate-engine")
-        Assertions.assertThat(find.getAsJsonArray("patterns").get(0).getAsString()).isEqualTo("alternate-pattern")
-        Assertions.assertThat(replace.getAsJsonArray("patterns").get(0).getAsString())
+        Assertions.assertThat(find.getAsJsonArray("patterns").get(0).asString).isEqualTo("alternate-pattern")
+        Assertions.assertThat(replace.getAsJsonArray("patterns").get(0).asString)
             .isEqualTo("unchanged-pattern")
-        Assertions.assertThat(replace.getAsJsonObject("arguments").get("replacement").getAsString())
+        Assertions.assertThat(replace.getAsJsonObject("arguments").get("replacement").asString)
             .isEqualTo("alternate-replacement")
     }
 
     @Test
     fun explicitTrialExclusionsSurviveResolutionAndMaterializedConsumption() {
         val data: JsonObject = normalizedData()
-        val find = data.getAsJsonArray("workloads").get(0).getAsJsonObject()
+        val find = data.getAsJsonArray("workloads").get(0).asJsonObject
         find.add(
             "trialExclusions",
             JsonParser.parseString(
@@ -365,15 +371,15 @@ internal class ResolvedBenchmarkPlanTest {
             )
 
         val exclusion: JsonObject = entry(resolved, "Synthetic.find@jdk-string")
-        Assertions.assertThat(exclusion.get("status").getAsString()).isEqualTo("excluded")
-        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("kind").getAsString())
+        Assertions.assertThat(exclusion.get("status").asString).isEqualTo("excluded")
+        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("kind").asString)
             .isEqualTo("explicitTrialExclusion")
-        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("reason").getAsString())
+        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("reason").asString)
             .isEqualTo("OpenJDK 26.0.2 throws StackOverflowError for this trial")
-        Assertions.assertThat(entry(resolved, "Synthetic.find@safere-string").get("status").getAsString())
+        Assertions.assertThat(entry(resolved, "Synthetic.find@safere-string").get("status").asString)
             .isEqualTo("runnable")
 
-        val materialized: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.parse(resolved)
+        val materialized: MaterializedExecutionPlan = MaterializedExecutionPlan.parse(resolved)
         Assertions.assertThat<MaterializedExecutionPlan.Exclusion?>(materialized.resolve("Synthetic.find@jdk-string").exclusion)
             .isEqualTo(
                 MaterializedExecutionPlan.Exclusion(
@@ -466,19 +472,19 @@ internal class ResolvedBenchmarkPlanTest {
             
             """.trimIndent()
             )
-                .getAsJsonObject()
+                .asJsonObject
         }
 
         private fun entry(plan: JsonObject, id: String?): JsonObject {
             return plan.getAsJsonArray("entries").asList().stream()
                 .map<JsonObject>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
-                .filter(Predicate { entry: JsonObject? -> Companion.id(entry!!) == id })
+                .filter(Predicate { entry: JsonObject? -> id(entry!!) == id })
                 .findFirst()
                 .orElseThrow()
         }
 
         private fun id(entry: JsonObject): String? {
-            return entry.get("id").getAsString()
+            return entry.get("id").asString
         }
     }
 }

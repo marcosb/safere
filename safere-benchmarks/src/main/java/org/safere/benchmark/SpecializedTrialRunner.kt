@@ -23,7 +23,7 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
 
     override fun close() {
         if (diagnostics) {
-            Pattern.Companion.setDiagnostics(SafeReMatchDiagnostics.Companion.NONE)
+            Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
         }
     }
 
@@ -61,54 +61,54 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
         private val NO_OP: SafeReMatchDiagnostics = object : SafeReMatchDiagnostics() {}
 
         fun prepare(trialId: String?): SpecializedTrialRunner {
-            val trial: SpecializedBenchmarkPlan.Trial = SpecializedBenchmarkPlan.Companion.load().resolve(trialId)
+            val trial: SpecializedBenchmarkPlan.Trial = SpecializedBenchmarkPlan.load().resolve(trialId)
             require(!(trial.variant !== RegexEngineVariant.SAFERE_STRING && trial.variant !== RegexEngineVariant.SAFERE_UTF8 && trial.variant !== RegexEngineVariant.SAFERE_UTF8_VECTOR)) { "Specialized SafeRE trial has wrong variant: " + trialId }
             trial.variant.validateScanProvider()
             val workload = trial.workload
             return when (workload.operation) {
-                DeclarativeBenchmarkPlan.Operation.PATTERN_SET_MATCHES -> SpecializedTrialRunner(
+                Operation.PATTERN_SET_MATCHES -> SpecializedTrialRunner(
                     patternSet(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.UTF8_CAPTURE_BOUNDS -> SpecializedTrialRunner(
+                Operation.UTF8_CAPTURE_BOUNDS -> SpecializedTrialRunner(
                     captureBounds(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.UTF8_DECODE_FIND -> SpecializedTrialRunner(
+                Operation.UTF8_DECODE_FIND -> SpecializedTrialRunner(
                     decodeFind(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.UTF8_REPLACEMENT -> SpecializedTrialRunner(
+                Operation.UTF8_REPLACEMENT -> SpecializedTrialRunner(
                     utf8Replacement(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.FIND_IN_WINDOW -> SpecializedTrialRunner(
+                Operation.FIND_IN_WINDOW -> SpecializedTrialRunner(
                     findInWindow(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.MATCHER_CONSTRUCTION -> SpecializedTrialRunner(
+                Operation.MATCHER_CONSTRUCTION -> SpecializedTrialRunner(
                     constructUtf8(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.ANALYZE_PATTERN -> SpecializedTrialRunner(analyze(workload), false)
-                DeclarativeBenchmarkPlan.Operation.CACHED_ANALYSIS -> SpecializedTrialRunner(
+                Operation.ANALYZE_PATTERN -> SpecializedTrialRunner(analyze(workload), false)
+                Operation.CACHED_ANALYSIS -> SpecializedTrialRunner(
                     cachedAnalysis(workload),
                     false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_ANALYZE -> SpecializedTrialRunner(
+                Operation.COMPILE_AND_ANALYZE -> SpecializedTrialRunner(
                     compileAndAnalyze(
                         workload
                     ), false
                 )
 
-                DeclarativeBenchmarkPlan.Operation.DIAGNOSTICS_FIND -> SpecializedTrialRunner(
+                Operation.DIAGNOSTICS_FIND -> SpecializedTrialRunner(
                     diagnostics(
                         workload,
                         trial.variant
@@ -123,12 +123,12 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
 
         private fun patternSet(workload: ExpandedWorkload): Task {
             val anchor: String = stringArgument(workload, "anchor", "unanchored")
-            val patternCount: Int = integerArgument(workload, "patternCount", workload.patterns.size())
+            val patternCount: Int = integerArgument(workload, "patternCount", workload.patterns.size)
             val patternAnchor =
                 if (anchor == "anchored") PatternSet.Anchor.ANCHOR_START else PatternSet.Anchor.UNANCHORED
             val builder = PatternSet.Builder(patternAnchor)
             for (i in 0..<patternCount) {
-                builder.add(workload.patterns.get(i % workload.patterns.size()))
+                builder.add(workload.patterns.get(i % workload.patterns.size))
             }
             val patternSet = builder.compile()
             val input: String? = inputString(workload)
@@ -136,7 +136,7 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
         }
 
         private fun captureBounds(workload: ExpandedWorkload): Task {
-            val pattern: Pattern = compile(workload.patterns.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
             val input: Utf8Input = utf8Input(workload)
             val groups =
                 (workload.arguments.get("groups") as RecipeIntegerList)
@@ -170,8 +170,8 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
         }
 
         private fun decodeFind(workload: ExpandedWorkload): Task {
-            val pattern: Pattern = compile(workload.patterns.getFirst())
-            val bytes: ByteArray = BenchmarkData.Companion.get().getInputBytes(workload.inputIds.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
+            val bytes: ByteArray = BenchmarkData.get().getInputBytes(workload.inputIds.first())
             return SpecializedTrialRunner.Task { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     pattern.matcher(
@@ -185,10 +185,10 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
         }
 
         private fun utf8Replacement(workload: ExpandedWorkload): Task {
-            val pattern: Pattern = compile(workload.patterns.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
             val input: Utf8Input = utf8Input(workload)
             val replacement: Utf8Input =
-                Utf8Input.Companion.validated(
+                Utf8Input.validated(
                     stringArgument(workload, "replacement", "").getBytes(StandardCharsets.UTF_8)
                 )
             val sink = CountingSink()
@@ -196,47 +196,47 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
                 sink.reset()
                 val matcher = pattern.matcher(input)
                 matcher.replaceAll(sink, replacement)
-                blackhole!!.consume(sink.length())
+                blackhole!!.consume(sink.length)
             }
         }
 
         private fun findInWindow(workload: ExpandedWorkload): Task {
-            val storage: ByteArray = BenchmarkData.Companion.get().getInputBytes(workload.inputIds.getFirst())
+            val storage: ByteArray = BenchmarkData.get().getInputBytes(workload.inputIds.first())
             val region =
                 workload.lifecycle.steps.stream()
                     .filter(Predicate { step: LifecycleStep? -> step!!.kind == LifecycleStepKind.REGION })
                     .findFirst()
                     .orElseThrow()
             val input: Utf8Input = Utf8Input.Companion.trusted(storage, region.start, region.end - region.start)
-            val pattern: Pattern = compile(workload.patterns.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
             return SpecializedTrialRunner.Task { blackhole: Blackhole? -> blackhole!!.consume(pattern.find(input)) }
         }
 
         private fun constructUtf8(workload: ExpandedWorkload): Task {
-            val bytes: ByteArray = BenchmarkData.Companion.get().getInputBytes(workload.inputIds.getFirst())
+            val bytes: ByteArray = BenchmarkData.get().getInputBytes(workload.inputIds.first())
             val validated = stringArgument(workload, "mode", "trusted") == "validated"
             return SpecializedTrialRunner.Task { blackhole: Blackhole? ->
                 blackhole.consume(
-                    if (validated) Utf8Input.Companion.validated(
+                    if (validated) Utf8Input.validated(
                         bytes
-                    ) else Utf8Input.Companion.trusted(bytes)
+                    ) else Utf8Input.trusted(bytes)
                 )
             }
         }
 
         private fun analyze(workload: ExpandedWorkload): Task {
-            val regex: String? = workload.patterns.getFirst()
+            val regex: String = workload.patterns.first()
             return SpecializedTrialRunner.Task { blackhole: Blackhole? -> blackhole!!.consume(compile(regex!!)) }
         }
 
         private fun cachedAnalysis(workload: ExpandedWorkload): Task {
-            val pattern: Pattern = compile(workload.patterns.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
             pattern.analysis()
             return SpecializedTrialRunner.Task { blackhole: Blackhole? -> blackhole!!.consume(pattern.analysis()) }
         }
 
         private fun compileAndAnalyze(workload: ExpandedWorkload): Task {
-            val regex: String? = workload.patterns.getFirst()
+            val regex: String = workload.patterns.first()
             return SpecializedTrialRunner.Task { blackhole: Blackhole? -> blackhole.consume(compile(regex!!).analysis()) }
         }
 
@@ -244,15 +244,15 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
             workload: ExpandedWorkload, variant: RegexEngineVariant?
         ): Task {
             val listener: String = stringArgument(workload, "listener", "disabled")
-            Pattern.Companion.setDiagnostics(
+            Pattern.setDiagnostics(
                 when (listener) {
-                    "disabled" -> SafeReMatchDiagnostics.Companion.NONE
+                    "disabled" -> SafeReMatchDiagnostics.NONE
                     "noop" -> NO_OP
                     "longAdder" -> AggregatingDiagnostics()
                     else -> throw IllegalArgumentException("Unknown diagnostics listener: " + listener)
                 }
             )
-            val pattern: Pattern = compile(workload.patterns.getFirst())
+            val pattern: Pattern = compile(workload.patterns.first())
             val action: String = stringArgument(workload, "action", "find")
             if (variant !== RegexEngineVariant.SAFERE_STRING) {
                 val input: Utf8Input = utf8Input(workload)
@@ -315,13 +315,13 @@ internal class SpecializedTrialRunner private constructor(private val task: Task
             }
         }
 
-        private fun inputString(workload: ExpandedWorkload): String? {
-            return BenchmarkData.Companion.get().getInputString(workload.inputIds.getFirst())
+        private fun inputString(workload: ExpandedWorkload): String {
+            return BenchmarkData.get().getInputString(workload.inputIds.first())
         }
 
         private fun utf8Input(workload: ExpandedWorkload): Utf8Input {
-            return Utf8Input.Companion.trusted(
-                BenchmarkData.Companion.get().getInputBytes(workload.inputIds.getFirst())
+            return Utf8Input.trusted(
+                BenchmarkData.get().getInputBytes(workload.inputIds.first())
             )
         }
 

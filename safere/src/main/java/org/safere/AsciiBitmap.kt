@@ -32,11 +32,10 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
         return java.lang.Long.bitCount(bitmap0) + java.lang.Long.bitCount(bitmap1)
     }
 
-    val isEmpty: Boolean
-        get() = bitmap0 == 0L && bitmap1 == 0L
+    fun isEmpty(): Boolean = bitmap0 == 0L && bitmap1 == 0L
 
     fun union(other: AsciiBitmap?): AsciiBitmap {
-        if (other == null || other.isEmpty) {
+        if (other == null || other.isEmpty()) {
             return this
         }
         return AsciiBitmap(this.bitmap0 or other.bitmap0, this.bitmap1 or other.bitmap1)
@@ -109,7 +108,7 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
     companion object {
         val EMPTY: AsciiBitmap = AsciiBitmap(0L, 0L)
 
-        fun of(cp: Int): AsciiBitmap? {
+        fun of(cp: Int): AsciiBitmap {
             if (cp >= 0 && cp < 64) {
                 return AsciiBitmap(1L shl cp, 0L)
             }

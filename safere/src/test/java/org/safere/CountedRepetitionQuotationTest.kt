@@ -116,7 +116,7 @@ internal class CountedRepetitionQuotationTest {
             "[a{1\\Q\\E,3}]",
             "\\Qa{1\\Q\\E,3}"
         )) {
-            Companion.assertSameMatches(regex!!, 0)
+            assertSameMatches(regex!!, 0)
         }
     }
 
@@ -193,7 +193,7 @@ internal class CountedRepetitionQuotationTest {
                 Assertions.assertThat(matcher.lookingAt()).isTrue()
                 assertEmptyCapture(matcher, 0, participates)
                 matcher.reset()
-                for (position in 0..input.length) {
+                for (position in 0..input.size) {
                     Assertions.assertThat(matcher.find()).`as`("find /%s/ at %d on %s", pattern, position, input)
                         .isTrue()
                     assertEmptyCapture(matcher, position, participates)
@@ -202,7 +202,7 @@ internal class CountedRepetitionQuotationTest {
             }
         }
 
-        private fun assertEmptyCapture(matcher: org.safere.Matcher, position: Int, participates: Boolean) {
+        private fun assertEmptyCapture(matcher: Matcher, position: Int, participates: Boolean) {
             Assertions.assertThat(matcher.start()).isEqualTo(position)
             Assertions.assertThat(matcher.end()).isEqualTo(position)
             val expected = if (participates) position else -1

@@ -56,7 +56,7 @@ internal class ShiftDfaTest {
         val storage = "xxxxfalseyyyy".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(storage, 4, 5)
 
-        Assertions.assertThat(dfa.matches(scanner, 0, scanner.length())).isTrue()
+        Assertions.assertThat(dfa.matches(scanner, 0, scanner.length)).isTrue()
     }
 
     @Test
@@ -132,11 +132,11 @@ internal class ShiftDfaTest {
         val accelerator: StateAccelerator = SingleAsciiEscape('"'.code)
         val scanner = StringInputScanner("aé\"")
 
-        Assertions.assertThat(StateAccelerator.findNextEscape(accelerator, scanner, 0, scanner.length()))
+        Assertions.assertThat(StateAccelerator.findNextEscape(accelerator, scanner, 0, scanner.length))
             .isEqualTo(2)
         Assertions.assertThat(
             StateAccelerator.findNextAsciiOrNonAsciiEscape(
-                accelerator, scanner, 0, scanner.length()
+                accelerator, scanner, 0, scanner.length
             )
         )
             .isEqualTo(1)
@@ -194,7 +194,7 @@ internal class ShiftDfaTest {
                 }
             }
             for (input in mutableListOf<String?>("abcabc", "bababa", "Az09", "\u0080", "é", "😀")) {
-                Companion.assertSameMatch(dfa, expected, input!!)
+                assertSameMatch(dfa, expected, input!!)
             }
         }
     }

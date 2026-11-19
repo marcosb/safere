@@ -331,7 +331,7 @@ internal class RandomTest {
         }
 
         private fun compareMatchedGroups(
-            match: Int, byteOffsets: IntArray, chars: org.safere.Matcher, bytes: Utf8Matcher
+            match: Int, byteOffsets: IntArray, chars: Matcher, bytes: Utf8Matcher
         ): String? {
             if (chars.groupCount() != bytes.groupCount()) {
                 return String.format(
@@ -440,7 +440,7 @@ internal class RandomTest {
                 if (placeholders == 1) {
                     expr = String.format(op, expr)
                 } else if (placeholders == 2) {
-                    val other: String? = atoms[rng.nextInt(atoms.size)]
+                    val other: String = atoms[rng.nextInt(atoms.size)]
                     // Randomly decide which side gets the built-up expression.
                     if (rng.nextBoolean()) {
                         expr = String.format(op, expr, other)

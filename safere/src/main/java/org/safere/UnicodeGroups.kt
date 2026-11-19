@@ -10,7 +10,7 @@ internal object UnicodeGroups {
      * Returns an unmodifiable map of Unicode group names to their code point range tables. Keys
      * include major categories, subcategories, and script names.
      */
-    fun groups(): MutableMap<String?, Array<IntArray?>?> {
+    fun groups(): MutableMap<String, Array<IntArray>> {
         return UnicodeGeneratedTables.unicodeGroups()
     }
 }

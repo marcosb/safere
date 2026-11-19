@@ -35,7 +35,7 @@ internal class CapturePolicyCase(
         group = workload.groups()[0]
         retained = workload.lifecycle().matcher() === DeclarativeBenchmarkPlan.MatcherReuse.RETAINED
         inputs = workload.inputKeys().stream().map(inputSource).toList()
-        pattern = CapturePolicyProtocol.compile(workload.patterns().getFirst(), trial.variant())
+        pattern = CapturePolicyProtocol.compile(workload.patterns().first(), trial.variant())
         expected =
             configuration
                 .getAsJsonObject("checksums")

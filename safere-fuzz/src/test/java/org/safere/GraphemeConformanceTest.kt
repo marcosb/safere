@@ -13,26 +13,10 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.*
-import kotlin.Boolean
-import kotlin.BooleanArray
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Throws
-import kotlin.also
-import kotlin.collections.ArrayList
-import kotlin.collections.MutableList
-import kotlin.collections.contains
-import kotlin.collections.contentToString
-import kotlin.collections.dropLastWhile
-import kotlin.collections.indices
-import kotlin.collections.mutableListOf
-import kotlin.collections.toTypedArray
-import kotlin.text.StringBuilder
-import kotlin.text.codePointCount
-import kotlin.text.isEmpty
+
+()
 import kotlin.text.offsetByCodePoints
 import kotlin.text.split
 import kotlin.text.startsWith
@@ -118,7 +102,7 @@ internal class GraphemeConformanceTest {
                     }
                 }
                 val cps = String.join("", expected).codePoints().toArray()
-                Assertions.assertThat<kotlin.String?>(IcuGraphemes.clusters(cps)).`as`(line).isEqualTo(expected)
+                Assertions.assertThat<String?>(IcuGraphemes.clusters(cps)).`as`(line).isEqualTo(expected)
                 cases++
             }
             Assertions.assertThat(cases).isPositive()
@@ -169,7 +153,7 @@ internal class GraphemeConformanceTest {
 
     @Test
     fun publicRegionsFollowIcuBoundaryVisibility() {
-        for (text in mutableListOf<kotlin.String?>(
+        for (text in mutableListOf<String?>(
             "a\u0300\u0903z",
             "\r\n\u0000\u0300",
             "\u0600\u0915\u094D\u200D\u0915",
@@ -182,7 +166,7 @@ internal class GraphemeConformanceTest {
         )) {
             val fullClusters = IcuGraphemes.clusters(text!!.codePoints().toArray())
             val fullBoundaries: MutableList<Int?> = boundaries(fullClusters, 0)
-            val cpCount = text.codePointCount(0, text.length)
+            val cpCount = text.codePointCount(0, text.size)
             for (from in 0..cpCount) {
                 val start = text.offsetByCodePoints(0, from)
                 for (to in from..cpCount) {
@@ -193,7 +177,7 @@ internal class GraphemeConformanceTest {
                         val expectedBoundaries =
                             (if (transparent) fullBoundaries else boundaries(local, start))
                                 .stream().filter { pos: Int? -> pos!! >= start && pos <= end }.toList()
-                        var composed: MutableList<kotlin.String> = ArrayList<kotlin.String>()
+                        var composed: MutableList<String> = ArrayList<String>()
                         if (transparent) {
                             var clusterStart = 0
                             for (cluster in fullClusters) {
@@ -218,19 +202,19 @@ internal class GraphemeConformanceTest {
                         Assertions.assertThat<Int?>(actual)
                             .`as`("boundary %s [%s,%s], transparent=%s", text, start, end, transparent)
                             .isEqualTo(expectedBoundaries)
-                        for (regex in mutableListOf<kotlin.String?>("\\X", "\\b{g}(\\X)\\b{g}")) {
+                        for (regex in mutableListOf<String?>("\\X", "\\b{g}(\\X)\\b{g}")) {
                             val pattern = Pattern.compile(regex)
                             val matcher =
                                 pattern.matcher(text).region(start, end).useTransparentBounds(transparent)
-                            val actualClusters: MutableList<kotlin.String> = ArrayList<kotlin.String>()
+                            val actualClusters: MutableList<String> = ArrayList<String>()
                             while (matcher.find()) {
                                 actualClusters.add(matcher.group())
                                 if (matcher.groupCount() > 0) {
                                     Assertions.assertThat(matcher.group(1)).isEqualTo(matcher.group())
                                 }
                             }
-                            val expected: MutableList<kotlin.String?> = if (regex == "\\X") local else composed
-                            Assertions.assertThat<kotlin.String?>(actualClusters)
+                            val expected: MutableList<String?> = if (regex == "\\X") local else composed
+                            Assertions.assertThat<String?>(actualClusters)
                                 .`as`("%s on %s [%s,%s], transparent=%s", regex, text, start, end, transparent)
                                 .isEqualTo(expected)
                             // UTF-8 exposes opaque regions; it has no transparent/anchoring bounds API.
@@ -246,7 +230,7 @@ internal class GraphemeConformanceTest {
                                         String(bytes, utf8.start(), utf8.end() - utf8.start(), StandardCharsets.UTF_8)
                                     )
                                 }
-                                Assertions.assertThat<kotlin.String?>(actualClusters)
+                                Assertions.assertThat<String?>(actualClusters)
                                     .`as`(
                                         "UTF-8 %s on %s [%s,%s], transparent=%s",
                                         regex, text, start, end, transparent
@@ -261,7 +245,7 @@ internal class GraphemeConformanceTest {
     }
 
     companion object {
-        private fun boundaries(clusters: MutableList<kotlin.String>, start: Int): MutableList<Int?> {
+        private fun boundaries(clusters: MutableList<String>, start: Int): MutableList<Int?> {
             val result: MutableList<Int?> = ArrayList<Int?>()
             result.add(start)
             var end = start

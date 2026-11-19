@@ -55,9 +55,9 @@ internal object StringLiteralSearch {
      * compile-time constants. Reading these through an object instead costs about four times the
      * runtime of the whole search on a candidate-dense input, for no change in behaviour.
      */
-    private val STRIKE_BUDGET: Int = AcceleratorPolicy.Companion.LITERAL.strikeBudget
+    private val STRIKE_BUDGET: Int = AcceleratorPolicy.LITERAL.strikeBudget
 
-    private val MIN_DENSITY_STRIDE: Int = AcceleratorPolicy.Companion.LITERAL.minDensityStride
+    private val MIN_DENSITY_STRIDE: Int = AcceleratorPolicy.LITERAL.minDensityStride
 
     /**
      * What one dense stride costs against [.STRIKE_BUDGET].
@@ -140,11 +140,11 @@ internal object StringLiteralSearch {
      * in [.indexOf] is what bounds the cost of getting it wrong.
      */
     fun anchorOffset(literal: String?): Int {
-        if (literal == null || literal.length() < 2 || literal.length() > MAX_ANCHORED_LITERAL_LENGTH) {
+        if (literal == null || literal.length < 2 || literal.length > MAX_ANCHORED_LITERAL_LENGTH) {
             return NO_ANCHOR
         }
-        val offset: Int = rarestAsciiOffset(literal, literal.length())
-        val anchor: Char = literal.charAt(offset)
+        val offset: Int = RarityOracle.rarestAsciiOffset(literal, literal.length)
+        val anchor: Char = literal[offset]
         if (anchor.code >= 128) {
             return NO_ANCHOR
         }
@@ -156,7 +156,7 @@ internal object StringLiteralSearch {
 
     /** Returns the anchor character for an offset returned by [.anchorOffset].  */
     fun anchorAt(literal: String, anchorOffset: Int): Char {
-        return if (anchorOffset == NO_ANCHOR) '\u0000' else literal.charAt(anchorOffset)
+        return if (anchorOffset == NO_ANCHOR) '\u0000' else literal[anchorOffset]
     }
 
     /**
@@ -184,20 +184,20 @@ internal object StringLiteralSearch {
     )
     fun indexOf(text: String, literal: String, anchorOffset: Int, anchor: Char, fromIndex: Int): Int {
         var pos = Math.max(0, fromIndex)
-        val length: Int = text.length()
+        val length: Int = text.length
         if (anchorOffset == NO_ANCHOR || length - pos < MIN_ANCHORED_WINDOW) {
             return indexOfDirect(text, literal, pos)
         }
-        val literalLength: Int = literal.length()
+        val literalLength: Int = literal.length
         val lastStart = length - literalLength
-        val lastChar: Char = literal.charAt(literalLength - 1)
+        val lastChar: Char = literal[literalLength - 1]
         val lastCharOffset = literalLength - 1
         var strikes = 0
         var lastCandidate = pos
 
         while (pos <= lastStart) {
             val searchFrom = pos + anchorOffset
-            val hit: Int = text.indexOf(anchor.code, searchFrom)
+            val hit: Int = text.indexOfCodePointBounded(anchor.code, searchFrom, length)
             if (WorkCounterConfig.ENABLED) {
                 // The character at `hit` is inside the literal that the verification charge below already
                 // accounts for, so it is not charged here as well. Counting it twice would make the work
@@ -221,7 +221,7 @@ internal object StringLiteralSearch {
             // for this particular haystack: 'val=200' anchors on '=' where 'v' would have rejected every
             // false candidate outright. The literal's first character is deliberately not checked here,
             // because startsWith compares it first anyway.
-            if (text.charAt(candidate + lastCharOffset) == lastChar
+            if (text[candidate + lastCharOffset] == lastChar
                 && text.startsWith(literal, candidate)
             ) {
                 return candidate
@@ -244,7 +244,7 @@ internal object StringLiteralSearch {
     fun indexOfDirect(text: String, literal: String, fromIndex: Int): Int {
         val idx = text.indexOf(literal, fromIndex)
         if (WorkCounterConfig.ENABLED) {
-            val scanned: Int = if (idx >= 0) idx - fromIndex + literal.length() else text.length() - fromIndex
+            val scanned: Int = if (idx >= 0) idx - fromIndex + literal.length else text.length - fromIndex
             WorkCounter.record(Math.max(0, scanned).toLong())
         }
         return idx
@@ -274,8 +274,8 @@ internal object StringLiteralSearch {
      * — on anything folded.
      */
     fun singleAsciiChar(literal: String?): Int {
-        return if (literal != null && literal.length() == 1 && literal.charAt(0).code < 128)
-            literal.charAt(0)
+        return if (literal != null && literal.length == 1 && literal[0].code < 128)
+            literal[0]
                 .code
         else
             NOT_SINGLE_ASCII
@@ -293,9 +293,9 @@ internal object StringLiteralSearch {
      */
     fun indexOfChar(text: String, ch: Int, fromIndex: Int): Int {
         val pos = Math.max(0, fromIndex)
-        val idx: Int = text.indexOf(ch, pos)
+        val idx: Int = text.indexOfCodePointBounded(ch, pos, text.length)
         if (WorkCounterConfig.ENABLED) {
-            val scanned = if (idx >= 0) idx - pos + 1 else text.length() - pos
+            val scanned = if (idx >= 0) idx - pos + 1 else text.length - pos
             WorkCounter.record(Math.max(0, scanned).toLong())
         }
         return idx

@@ -9,7 +9,6 @@ package org.safere
 import org.safere.Matcher.*
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.MultiAnchorDescriptor.StartPlan
-import org.safere.crosscheck.Pattern.Companion.compile
 import java.io.Serializable
 import java.lang.invoke.MethodHandle
 import java.lang.invoke.MethodHandles
@@ -260,19 +259,13 @@ class Pattern private constructor(
     private val threadCache = ThreadLocal<SoftReference<ThreadCache?>?>()
 
     /** Holder for OnePass analysis results.  */
-    @JvmRecord
-    private data class OnePassAnalysis(onePass: OnePass?, canPrimary: Boolean, canFind: Boolean, canSubmatch: Boolean) {
-        val onePass: OnePass?
-        val canPrimary: Boolean
-        val canFind: Boolean
+    private data class OnePassAnalysis(
+        val onePass: OnePass?,
+        val canPrimary: Boolean,
+        val canFind: Boolean,
         val canSubmatch: Boolean
+    ) {
 
-        init {
-            this.onePass = onePass
-            this.canPrimary = canPrimary
-            this.canFind = canFind
-            this.canSubmatch = canSubmatch
-        }
 
         companion object {
             val DISABLED: OnePassAnalysis = OnePassAnalysis(null, false, false, false)
@@ -288,13 +281,8 @@ class Pattern private constructor(
     private var shiftDfaAnalysis: ShiftDfaAnalysis? = null
 
     /** Holder for ShiftDfa analysis results.  */
-    @JvmRecord
-    private data class ShiftDfaAnalysis(shiftDfa: ShiftDfa?) {
-        val shiftDfa: ShiftDfa?
+    private data class ShiftDfaAnalysis(val shiftDfa: ShiftDfa?) {
 
-        init {
-            this.shiftDfa = shiftDfa
-        }
 
         companion object {
             val DISABLED: ShiftDfaAnalysis = ShiftDfaAnalysis(null)
@@ -308,7 +296,7 @@ class Pattern private constructor(
      * @return a new matcher for this pattern
      */
     fun matcher(input: CharSequence?): Matcher {
-        return Matcher(this, input)
+        return Matcher(this, input!!)
     }
 
     /**
@@ -334,7 +322,7 @@ class Pattern private constructor(
         }
         val scanner = arrayInput.scanner()
         val listener: SafeReMatchDiagnostics = diagnostics()
-        if (SafeReMatchDiagnostics.Companion.isEnabled(listener)) {
+        if (SafeReMatchDiagnostics.isEnabled(listener)) {
             return findWithDiagnostics(scanner)
         }
         return if (literalAlternation != null)
@@ -352,11 +340,11 @@ class Pattern private constructor(
             if (enginePathOptions.literalFastPaths)
                 literalAlternation!!.find(scanner, 0)
             else
-                LiteralAlternation.Companion.FALLBACK
-        return if (match == LiteralAlternation.Companion.FALLBACK)
+                LiteralAlternation.FALLBACK
+        return if (match == LiteralAlternation.FALLBACK)
             findWithoutDiagnostics(scanner)
         else
-            match != LiteralAlternation.Companion.NO_MATCH
+            match != LiteralAlternation.NO_MATCH
     }
 
     /**
@@ -371,7 +359,7 @@ class Pattern private constructor(
         return enginePathOptions.dfa && !prog.hasGraphemeSemantics() && prog.numLoopRegs() == 0
     }
 
-    fun findWithDiagnostics(scanner: Utf8InputScanner): Boolean {
+    internal fun findWithDiagnostics(scanner: Utf8InputScanner): Boolean {
         val listener: SafeReMatchDiagnostics = diagnostics()
         val accumulator = DiagnosticAccumulator()
         val matched = findWithDiagnostics(scanner, accumulator)
@@ -379,7 +367,7 @@ class Pattern private constructor(
         val outcome = if (matched) MatchOutcome.MATCH else MatchOutcome.NO_MATCH
         val event =
             accumulator.toEvent(
-                descriptor(), MatchOperation.FIND, outcome, CaptureMode.NONE, scanner.length()
+                descriptor(), MatchOperation.FIND, outcome, CaptureMode.NONE, scanner.length
             )
         listener.onOperationCompleted(event)
         return matched
@@ -387,20 +375,20 @@ class Pattern private constructor(
 
     private fun findLiteralMatch(scanner: Utf8InputScanner): Boolean {
         if (prog.anchorStart()) {
-            return scanner.startsWith(literalMatchUtf8, 0)
+            return scanner.startsWith(literalMatchUtf8!!, 0)
         }
         return (scanner.indexOf(
-            literalMatchUtf8,
-            literalMatchFailure,
-            literalMatchShifts,
+            literalMatchUtf8!!,
+            literalMatchFailure!!,
+            literalMatchShifts!!,
             0,
             literalMatchRareByteOffset
         )
                 >= 0)
     }
 
-    fun findWithoutDiagnostics(scanner: Utf8InputScanner): Boolean {
-        val length = scanner.length()
+    internal fun findWithoutDiagnostics(scanner: Utf8InputScanner): Boolean {
+        val length = scanner.length
         if (matchDescriptor.minMatchLength > 0 && length < matchDescriptor.minMatchLength) {
             return false
         }
@@ -418,7 +406,7 @@ class Pattern private constructor(
                     return false
                 }
             } else if (anchoredCharClassPrefix != null) {
-                if (scanner.length() == 0) {
+                if (scanner.length == 0) {
                     return false
                 }
                 val cp = scanner.codePointAt(0)
@@ -480,7 +468,7 @@ class Pattern private constructor(
         if (result != null) {
             return result.matched
         }
-        return (Nfa.Companion.search(
+        return (Nfa.search(
             prog,
             scanner,
             searchStart,
@@ -496,7 +484,7 @@ class Pattern private constructor(
     }
 
     private fun findWithDiagnostics(scanner: Utf8InputScanner, diagnostics: DiagnosticAccumulator): Boolean {
-        val length = scanner.length()
+        val length = scanner.length
         if (matchDescriptor.minMatchLength > 0 && length < matchDescriptor.minMatchLength) {
             diagnostics.boundary(MatchStrategy.LENGTH)
             return false
@@ -515,9 +503,9 @@ class Pattern private constructor(
         }
         if (literalAlternation != null && enginePathOptions.literalFastPaths) {
             val match = literalAlternation.find(scanner, 0)
-            if (match != LiteralAlternation.Companion.FALLBACK) {
+            if (match != LiteralAlternation.FALLBACK) {
                 diagnostics.boundary(MatchStrategy.LITERAL_ALTERNATION)
-                return match != LiteralAlternation.Companion.NO_MATCH
+                return match != LiteralAlternation.NO_MATCH
             }
         }
         if (prog.anchorStart()) {
@@ -528,7 +516,7 @@ class Pattern private constructor(
                     return false
                 }
             } else if (anchoredCharClassPrefix != null) {
-                if (scanner.length() == 0) {
+                if (scanner.length == 0) {
                     diagnostics.participate(MatchStrategy.CHARACTER_CLASS, StrategyRole.REJECT_PREFILTER)
                     diagnostics.boundary(MatchStrategy.CHARACTER_CLASS)
                     return false
@@ -599,7 +587,7 @@ class Pattern private constructor(
             MatchStrategy.DFA, StrategyDisposition.FALLBACK, StrategyReason.DFA_BUDGET_EXCEEDED
         )
         val matched =
-            (Nfa.Companion.search(
+            (Nfa.search(
                 prog,
                 scanner,
                 searchStart,
@@ -630,7 +618,7 @@ class Pattern private constructor(
         ) {
             // Preserve the wide expansion's short-input decline to avoid adding literal-scan setup
             // to native verification. Nearby hits below retain its minimum profitable skip too.
-            if (scanner.length() < MultiAnchorCompiler.MIN_WIDE_LEADING_SKIP) {
+            if (scanner.length < MultiAnchorCompiler.MIN_WIDE_LEADING_SKIP) {
                 return 0
             }
             // Existence does not need the expanded match start. Every match has a suffix at or after
@@ -669,7 +657,7 @@ class Pattern private constructor(
                 return utf8StartAccelerator.expandBackward(scanner, innerMatch, 0)
             }
         } else {
-            val candidate: Int = Utf8StartAccelerator.Companion.findNextCandidate(utf8StartAccelerator, scanner, 0)
+            val candidate: Int = Utf8StartAccelerator.findNextCandidate(utf8StartAccelerator, scanner, 0)
             if (candidate >= 0) {
                 return candidate
             }
@@ -690,14 +678,14 @@ class Pattern private constructor(
      * to ordinary search.
      */
     @JvmOverloads
-    fun endAnchoredSearchStart(
+    internal fun endAnchoredSearchStart(
         scanner: InputScanner,
         searchFrom: Int,
         leftmostStart: Boolean,
         diagnostics: DiagnosticAccumulator?,
         speculative: Boolean = true
     ): Int {
-        if (!prog.anchorEnd() || scanner.length() < MIN_REVERSE_FIRST_LEN || !enginePathOptions.dfa || !enginePathOptions.reverseDfa || !canUseReverseDfa()) {
+        if (!prog.anchorEnd() || scanner.length < MIN_REVERSE_FIRST_LEN || !enginePathOptions.dfa || !enginePathOptions.reverseDfa || !canUseReverseDfa()) {
             return END_ANCHORED_SEARCH_FALLBACK
         }
         if (terminalPrefilterRejects(scanner, searchFrom, diagnostics)) {
@@ -717,7 +705,7 @@ class Pattern private constructor(
         // minimum for short loops; exceeding the probe defers to ordinary start acceleration.
         val probeUnits = Math.min(
             Integer.MAX_VALUE.toLong(),
-            Math.max(MIN_END_ANCHORED_PROBE_UNITS.toLong(), 4L * reverseProgram.size())
+            Math.max(MIN_END_ANCHORED_PROBE_UNITS.toLong(), 4L * reverseProgram.size)
         ).toInt()
         return searchEndAnchoredStart(
             reverse,
@@ -741,7 +729,7 @@ class Pattern private constructor(
             diagnostics.participate(MatchStrategy.DFA, StrategyRole.REJECT_PREFILTER)
             diagnostics.incrementReverseDfaSearchCount()
         }
-        val length = scanner.length()
+        val length = scanner.length
         val result =
             reverse.doSearchReverse(scanner, length, searchFrom, true, leftmostStart, maxInputUnits)
         var start = -1
@@ -807,15 +795,15 @@ class Pattern private constructor(
      * BitState exceeds its work budget.
      */
     private fun findAt(scanner: InputScanner, start: Int, diagnostics: DiagnosticAccumulator? = null): Boolean {
-        val length = scanner.length()
-        val maxBitStateLen: Int = BitState.Companion.maxTextSize(prog)
+        val length = scanner.length
+        val maxBitStateLen: Int = BitState.maxTextSize(prog)
         if (enginePathOptions.bitState && maxBitStateLen >= 0 && length - start <= maxBitStateLen) {
             if (diagnostics != null) {
                 diagnostics.participate(MatchStrategy.BIT_STATE, StrategyRole.CANDIDATE_VERIFICATION)
             }
             val cache = this.orCreateThreadCache
             val bitState: BitState =
-                BitState.Companion.getOrCreate(
+                BitState.getOrCreate(
                     borrowBitState(cache), prog, scanner, start, length, 2, false, prog.anchorEnd()
                 )
             val result = bitState.doSearch(start, start, true)
@@ -838,12 +826,12 @@ class Pattern private constructor(
             diagnostics.participate(MatchStrategy.NFA, StrategyRole.CANDIDATE_VERIFICATION)
         }
         val matched =
-            (Nfa.Companion.search(
+            (Nfa.search(
                 prog,
                 scanner,
                 start,
-                scanner.length(),
-                scanner.length(),
+                scanner.length,
+                scanner.length,
                 0,
                 Nfa.Anchor.ANCHORED,
                 Nfa.MatchKind.FIRST_MATCH,
@@ -1042,17 +1030,17 @@ class Pattern private constructor(
      * the reported operation is unchanged.
      */
     private fun findInString(input: String): Boolean {
-        if (!canFindWithoutMatcher() || SafeReMatchDiagnostics.Companion.isEnabled(diagnostics())) {
+        if (!canFindWithoutMatcher() || SafeReMatchDiagnostics.isEnabled(diagnostics())) {
             return matcher(input).find()
         }
-        val length: Int = input.length()
+        val length: Int = input.length
         if (matchDescriptor.minMatchLength > 0 && length < matchDescriptor.minMatchLength) {
             return false
         }
         // literalMatchUtf8 is non-null only when literal fast paths are enabled.
         if (literalMatchUtf8 != null && !literalFoldCase()) {
             val literal = matchDescriptor.literalMatch
-            return if (prog.anchorStart()) input.startsWith(literal) else input.indexOf(literal) >= 0
+            return if (prog.anchorStart()) input.startsWith(literal!!) else input.indexOf(literal!!) >= 0
         }
         val scanner = StringInputScanner(input)
         if (enginePathOptions.keywordAlternationFastPath
@@ -1127,7 +1115,7 @@ class Pattern private constructor(
         if (result != null) {
             return result.matched
         }
-        return (Nfa.Companion.search(
+        return (Nfa.search(
             prog,
             scanner,
             searchStart,
@@ -1148,13 +1136,18 @@ class Pattern private constructor(
      * leading expansion is first verified at its inner candidate, as in [ ][.findNextUtf8StartCandidate].
      */
     private fun findNextStringStartCandidate(scanner: StringInputScanner, text: String?): Int {
+        val accelerator = stringStartAccelerator
+        val haystack = text
+        if (accelerator == null || haystack == null) {
+            return -1
+        }
         val unixLines = prog.lineStartUnixLines()
-        if (stringStartAccelerator is StringStartAccelerator.LeadingExpansion
-            && stringStartAccelerator.canVerifyAtInner()
+        if (accelerator is StringStartAccelerator.LeadingExpansion
+            && accelerator.canVerifyAtInner()
         ) {
-            var innerMatch: Int = stringStartAccelerator.findInnerCandidate(text, 0, unixLines)
+            var innerMatch: Int = accelerator.findInnerCandidate(haystack, 0, unixLines)
             while (innerMatch > 0 && !scanner.isCodePointBoundary(innerMatch)) {
-                innerMatch = stringStartAccelerator.findInnerCandidate(text, innerMatch + 1, unixLines)
+                innerMatch = accelerator.findInnerCandidate(haystack, innerMatch + 1, unixLines)
             }
             if (innerMatch < 0) {
                 return -1
@@ -1166,13 +1159,13 @@ class Pattern private constructor(
             if (result != null && !result.matched) {
                 return -1
             }
-            return stringStartAccelerator.expandBackward(text, innerMatch, 0)
+            return accelerator.expandBackward(haystack, innerMatch, 0)
         }
         var candidate: Int =
-            StringStartAccelerator.Companion.findNextCandidate(stringStartAccelerator, text, 0, unixLines)
+            StringStartAccelerator.findNextCandidate(accelerator, haystack, 0, unixLines)
         while (candidate > 0 && !scanner.isCodePointBoundary(candidate)) {
             candidate =
-                StringStartAccelerator.Companion.findNextCandidate(
+                StringStartAccelerator.findNextCandidate(
                     stringStartAccelerator, text, candidate + 1, unixLines
                 )
         }
@@ -1197,11 +1190,11 @@ class Pattern private constructor(
     // Package-private accessors for Matcher
     // ---------------------------------------------------------------------------
     /** Returns the compiled program.  */
-    fun prog(): Prog {
+    internal fun prog(): Prog {
         return prog
     }
 
-    fun enginePathOptions(): EnginePathOptions {
+    internal fun enginePathOptions(): EnginePathOptions {
         return enginePathOptions
     }
 
@@ -1210,7 +1203,7 @@ class Pattern private constructor(
      * resolved lazy wrapper. Runners are immutable, so a racy publication is safe; a lazy runner
      * nested inside another runner keeps its own cached resolution instead.
      */
-    fun replacePreparedMatchRunner(
+    internal fun replacePreparedMatchRunner(
         lazy: PreparedMatchRunner?, resolved: PreparedMatchRunner?
     ) {
         if (defaultPreparedMatchRunner === lazy) {
@@ -1218,19 +1211,19 @@ class Pattern private constructor(
         }
     }
 
-    fun preparedMatchRunner(regionActive: Boolean): PreparedMatchRunner? {
+    internal fun preparedMatchRunner(regionActive: Boolean): PreparedMatchRunner? {
         return if (regionActive) regionPreparedMatchRunner else defaultPreparedMatchRunner
     }
 
     private fun createPreparedRunner(regionActive: Boolean): PreparedMatchRunner? {
         val fallback = createBasePreparedRunner(regionActive)
         if (literalAlternation != null && enginePathOptions.literalFastPaths) {
-            return LiteralAlternationPreparedRunner(literalAlternation, fallback)
+            return LiteralAlternationPreparedRunner(literalAlternation!!, fallback!!)
         }
         return fallback
     }
 
-    private fun createBasePreparedRunner(regionActive: Boolean): PreparedMatchRunner? {
+    private fun createBasePreparedRunner(regionActive: Boolean): PreparedMatchRunner {
         val literal = matchDescriptor.literalMatch
         if (canUseLiteralPreparedRunner(literal, prog.numCaptures(), enginePathOptions)) {
             return LiteralPreparedRunner(
@@ -1244,7 +1237,7 @@ class Pattern private constructor(
                 if (matchDescriptor.literalFoldCase)
                     createLiteralFallbackRunner(regionActive)
                 else
-                    FallbackPreparedRunner.Companion.INSTANCE,
+                    FallbackPreparedRunner.INSTANCE,
                 matchDescriptor.classHashChain
             )
         }
@@ -1264,7 +1257,7 @@ class Pattern private constructor(
         }
 
         if (regionActive) {
-            return FallbackPreparedRunner.Companion.INSTANCE
+            return FallbackPreparedRunner.INSTANCE
         }
 
         val keywordAlternation = matchDescriptor.keywordAlternation
@@ -1278,7 +1271,7 @@ class Pattern private constructor(
             if (mayOnePassPrimary())
                 OnePassAnchoredPreparedRunner(prog.numCaptures())
             else
-                FallbackPreparedRunner.Companion.INSTANCE
+                FallbackPreparedRunner.INSTANCE
         if (mayUseShiftDfa()) {
             return LazyShiftDfaPreparedRunner(this, fallback)
         }
@@ -1301,7 +1294,7 @@ class Pattern private constructor(
         return if (ref != null) ref.get() else null
     }
 
-    val orCreateThreadCache: ThreadCache
+    internal val orCreateThreadCache: ThreadCache
         /**
          * Returns the current thread's cache, creating it if needed. A [Matcher] fetches this once
          * and passes it to the cache accessors, so each lookup does not repeat the [ThreadLocal]
@@ -1317,7 +1310,7 @@ class Pattern private constructor(
         }
 
     /** Returns the thread-local cached BitState, or null if none has been cached yet.  */
-    fun borrowBitState(): BitState? {
+    internal fun borrowBitState(): BitState? {
         val cache = existingThreadCache()
         if (cache == null) {
             return null
@@ -1326,11 +1319,11 @@ class Pattern private constructor(
     }
 
     /** Returns a BitState to the thread-local cache for reuse by future Matchers.  */
-    fun returnBitState(bs: BitState) {
+    internal fun returnBitState(bs: BitState) {
         returnBitState(this.orCreateThreadCache, bs)
     }
 
-    fun borrowNfa(): Nfa? {
+    internal fun borrowNfa(): Nfa? {
         val cache = existingThreadCache()
         if (cache == null) {
             return null
@@ -1338,7 +1331,7 @@ class Pattern private constructor(
         return borrowNfa(cache)
     }
 
-    fun returnNfa(nfa: Nfa) {
+    internal fun returnNfa(nfa: Nfa) {
         returnNfa(this.orCreateThreadCache, nfa)
     }
 
@@ -1347,7 +1340,7 @@ class Pattern private constructor(
      * persists across Matcher instances, so repeated `pattern.matcher(t).find()` calls benefit
      * from warm DFA transitions.
      */
-    fun flatProg(): Prog? {
+    internal fun flatProg(): Prog? {
         var p = flatProg
         if (p == null && enginePathOptions.dfa) {
             synchronized(this) {
@@ -1361,7 +1354,7 @@ class Pattern private constructor(
         return p
     }
 
-    fun flatDfaProg(): Prog? {
+    internal fun flatDfaProg(): Prog? {
         var p = flatDfaProg
         if (p == null && enginePathOptions.dfa) {
             // Only reached without loop registers, where the DFA program is the flattened program.
@@ -1376,17 +1369,17 @@ class Pattern private constructor(
     }
 
     /** Returns whether DFA paths implement every instruction in [.flatDfaProg].  */
-    fun forwardDfaSupported(): Boolean {
+    internal fun forwardDfaSupported(): Boolean {
         return forwardDfaSupported
     }
 
     @JvmOverloads
-    fun forwardFirstMatchDfa(cache: ThreadCache = this.orCreateThreadCache): Dfa {
+    internal fun forwardFirstMatchDfa(cache: ThreadCache = this.orCreateThreadCache): Dfa {
         var dfa = cache.forwardFirstMatchDfa
         if (dfa == null) {
             dfa =
                 Dfa(
-                    flatDfaProg(),
+                    flatDfaProg()!!,
                     MAX_DFA_STATES,
                     forwardDfaSetup(),
                     false,
@@ -1400,12 +1393,12 @@ class Pattern private constructor(
     }
 
     @JvmOverloads
-    fun forwardLongestMatchDfa(cache: ThreadCache = this.orCreateThreadCache): Dfa {
+    internal fun forwardLongestMatchDfa(cache: ThreadCache = this.orCreateThreadCache): Dfa {
         var dfa = cache.forwardLongestMatchDfa
         if (dfa == null) {
             dfa =
                 Dfa(
-                    flatDfaProg(),
+                    flatDfaProg()!!,
                     MAX_DFA_STATES,
                     forwardDfaSetup(),
                     true,
@@ -1421,16 +1414,16 @@ class Pattern private constructor(
      * Returns the thread-local cached reverse DFA, creating it on first access. Triggers lazy
      * compilation of the reverse program if needed.
      */
-    fun reverseDfa(): Dfa? {
+    internal fun reverseDfa(): Dfa? {
         return reverseDfa(this.orCreateThreadCache)
     }
 
-    fun reverseDfa(cache: ThreadCache): Dfa? {
+    internal fun reverseDfa(cache: ThreadCache): Dfa? {
         var dfa = cache.reverseDfa
         if (dfa == null) {
             val rp = flatReverseDfaProg()
             if (rp != null) {
-                dfa = Dfa(rp, MAX_DFA_STATES, reverseDfaSetup(), true)
+                dfa = Dfa(rp, MAX_DFA_STATES, reverseDfaSetup()!!, true)
                 cache.reverseDfa = dfa
             }
         }
@@ -1438,7 +1431,7 @@ class Pattern private constructor(
     }
 
     /** Returns the currently cached forward first-match DFA without creating it. For tests.  */
-    fun cachedForwardFirstMatchDfa(): Dfa? {
+    internal fun cachedForwardFirstMatchDfa(): Dfa? {
         val cache = existingThreadCache()
         return if (cache != null) cache.forwardFirstMatchDfa else null
     }
@@ -1454,7 +1447,7 @@ class Pattern private constructor(
      */
     private fun mayBuildOnePass(): Boolean {
         return enginePathOptions.onePass
-                && !astAnalysis.hasLazy && !astAnalysis.hasNullableAlt && prog.numLoopRegs() == 0 && !prog.hasGraphemeSemantics() && prog.numCaptures() <= OnePass.Companion.MAX_CAPTURE_GROUPS
+                && !astAnalysis.hasLazy && !astAnalysis.hasNullableAlt && prog.numLoopRegs() == 0 && !prog.hasGraphemeSemantics() && prog.numCaptures() <= OnePass.MAX_CAPTURE_GROUPS
     }
 
     /**
@@ -1468,9 +1461,9 @@ class Pattern private constructor(
                 analysis = onePassAnalysis
                 if (analysis == null) {
                     if (!mayBuildOnePass()) {
-                        analysis = OnePassAnalysis.Companion.DISABLED
+                        analysis = OnePassAnalysis.DISABLED
                     } else {
-                        val op: OnePass? = OnePass.Companion.build(prog)
+                        val op: OnePass? = OnePass.build(prog)
                         // Primary matching requires the whole pattern to be non-nullable so unanchored / prefix
                         // searches cannot prefer a consuming path over an empty match.
                         val canPrimary = op != null && op.search("", false, 0) == null
@@ -1486,7 +1479,7 @@ class Pattern private constructor(
     }
 
     /** Returns the one-pass automaton, or `null` if the pattern is not one-pass.  */
-    fun onePass(): OnePass? {
+    internal fun onePass(): OnePass? {
         return onePassAnalysis().onePass
     }
 
@@ -1534,7 +1527,7 @@ class Pattern private constructor(
     }
 
     /** Returns whether the OnePass analysis has been computed. For tests.  */
-    fun onePassAnalyzed(): Boolean {
+    internal fun onePassAnalyzed(): Boolean {
         return onePassAnalysis != null
     }
 
@@ -1555,7 +1548,7 @@ class Pattern private constructor(
             )
                     && !matchDescriptor.literalFoldCase
         return enginePathOptions.shiftDfa
-                && !literalSupersedesShiftDfa && prog.numCaptures() == 1 && astAnalysis.minMatchLength < ShiftDfa.Companion.MAX_STATES && !prog.hasGraphemeSemantics() && !prog.hasWordBoundary() && !prog.anchorEnd() && !prog.dollarAnchorEnd() && prog.start() != 0
+                && !literalSupersedesShiftDfa && prog.numCaptures() == 1 && astAnalysis.minMatchLength < ShiftDfa.MAX_STATES && !prog.hasGraphemeSemantics() && !prog.hasWordBoundary() && !prog.anchorEnd() && !prog.dollarAnchorEnd() && prog.start() != 0
     }
 
     private fun shiftDfaAnalysis(): ShiftDfaAnalysis {
@@ -1564,8 +1557,8 @@ class Pattern private constructor(
             synchronized(this) {
                 analysis = shiftDfaAnalysis
                 if (analysis == null) {
-                    val compiled: ShiftDfa? = if (mayUseShiftDfa()) ShiftDfa.Companion.compile(prog) else null
-                    analysis = if (compiled != null) ShiftDfaAnalysis(compiled) else ShiftDfaAnalysis.Companion.DISABLED
+                    val compiled: ShiftDfa? = if (mayUseShiftDfa()) ShiftDfa.compile(prog) else null
+                    analysis = if (compiled != null) ShiftDfaAnalysis(compiled) else ShiftDfaAnalysis.DISABLED
                     shiftDfaAnalysis = analysis
                 }
             }
@@ -1573,12 +1566,12 @@ class Pattern private constructor(
         return analysis!!
     }
 
-    fun shiftDfa(): ShiftDfa? {
+    internal fun shiftDfa(): ShiftDfa? {
         return shiftDfaAnalysis().shiftDfa
     }
 
     /** Returns whether the ShiftDfa analysis has been computed. For tests.  */
-    fun shiftDfaAnalyzed(): Boolean {
+    internal fun shiftDfaAnalyzed(): Boolean {
         return shiftDfaAnalysis != null
     }
 
@@ -1634,12 +1627,12 @@ class Pattern private constructor(
      * Returns the literal prefix for this pattern, or `null` if the pattern has no fixed
      * literal prefix. Used for prefix acceleration in [Matcher.doFind].
      */
-    fun prefix(): String? {
+    internal fun prefix(): String? {
         return prefix
     }
 
     /** Returns whether the prefix should be matched case-insensitively.  */
-    fun prefixFoldCase(): Boolean {
+    internal fun prefixFoldCase(): Boolean {
         return prefixFoldCase
     }
 
@@ -1648,58 +1641,58 @@ class Pattern private constructor(
      * pattern has no character-class prefix. Used for prefix acceleration in [Matcher.doFind]
      * when no literal prefix exists.
      */
-    fun charClassPrefix(): CharClassScanInfo? {
+    internal fun charClassPrefix(): CharClassScanInfo? {
         return charClassPrefix
     }
 
-    fun anchoredPrefix(): String? {
+    internal fun anchoredPrefix(): String? {
         return anchoredPrefix
     }
 
-    fun anchoredPrefixUtf8(): ByteArray? {
+    internal fun anchoredPrefixUtf8(): ByteArray? {
         return anchoredPrefixUtf8
     }
 
-    fun anchoredCharClassPrefix(): CharClassScanInfo? {
+    internal fun anchoredCharClassPrefix(): CharClassScanInfo? {
         return anchoredCharClassPrefix
     }
 
     /** Returns the compiled UTF-8 start-position accelerator strategy, or `null`.  */
-    fun utf8StartAccelerator(): Utf8StartAccelerator? {
+    internal fun utf8StartAccelerator(): Utf8StartAccelerator? {
         return utf8StartAccelerator
     }
 
     /** Returns the compiled String start-position accelerator strategy, or `null`.  */
-    fun stringStartAccelerator(): StringStartAccelerator? {
+    internal fun stringStartAccelerator(): StringStartAccelerator? {
         return stringStartAccelerator
     }
 
-    fun matchDescriptor(): MatchDescriptor {
+    internal fun matchDescriptor(): MatchDescriptor {
         return matchDescriptor
     }
 
     /** Returns case-insensitive keyword-alternation fast-path data, or `null`.  */
-    fun keywordAlternation(): KeywordAlternation? {
+    internal fun keywordAlternation(): KeywordAlternation? {
         return matchDescriptor.keywordAlternation
     }
 
     /** Returns AST metadata for whole-input rejection.  */
-    fun rejectPlan(): RejectPlan? {
+    internal fun rejectPlan(): RejectPlan {
         return multiAnchor.rejectPlan()
     }
 
     /** Returns AST metadata for start-position acceleration.  */
-    fun startPlan(): StartPlan? {
+    internal fun startPlan(): StartPlan {
         return multiAnchor.startPlan()
     }
 
     /** Returns whole-input rejection prefilter, or `null`.  */
-    fun rejectPrefilter(): RejectPrefilter? {
+    internal fun rejectPrefilter(): RejectPrefilter? {
         return rejectPrefilter
     }
 
     /** Applies bounded terminal rejection and records the rejecting diagnostic strategy.  */
-    fun terminalPrefilterRejects(
+    internal fun terminalPrefilterRejects(
         scanner: InputScanner?, searchFrom: Int, diagnostics: DiagnosticAccumulator?
     ): Boolean {
         if (rejectPrefilter == null) {
@@ -1740,27 +1733,27 @@ class Pattern private constructor(
     }
 
     /** Forward DFA narrowing checks the suffix after failure; avoid an eager duplicate scan.  */
-    fun findRejectPrefilter(): RejectPrefilter? {
+    internal fun findRejectPrefilter(): RejectPrefilter? {
         return if (innerLiteralSearch == null || !forwardDfaSupported) rejectPrefilter else null
     }
 
     /**
      * UTF-8 `find()` counterpart to [.findRejectPrefilter]: also omits [ ] when UTF-8 start acceleration already covers the search.
      */
-    fun utf8FindRejectPrefilter(): RejectPrefilter? {
+    internal fun utf8FindRejectPrefilter(): RejectPrefilter? {
         return utf8FindRejectPrefilter
     }
 
-    fun startPrecedesFindReject(): Boolean {
+    internal fun startPrecedesFindReject(): Boolean {
         return startPrecedesFindReject
     }
 
     /** Returns whether find() skips the reject prefilter in favor of the start accelerator.  */
-    fun startSubsumesFindReject(): Boolean {
+    internal fun startSubsumesFindReject(): Boolean {
         return startSubsumesFindReject
     }
 
-    fun multiAnchor(): MultiAnchorDescriptor {
+    internal fun multiAnchor(): MultiAnchorDescriptor {
         return multiAnchor
     }
 
@@ -1771,13 +1764,13 @@ class Pattern private constructor(
      * Like the other lazily built artifacts, the volatile fast path serves initialized readers and
      * the synchronized slow path builds the program once under concurrent first use.
      */
-    fun reverseProg(): Prog? {
+    internal fun reverseProg(): Prog? {
         var rp = reverseProg
         if (rp == null) {
             synchronized(this) {
                 rp = reverseProg
                 if (rp == null) {
-                    rp = Compiler.Companion.compile(ast, true)
+                    rp = Compiler.compile(ast, true)
                     reverseProg = rp
                 }
             }
@@ -1785,7 +1778,7 @@ class Pattern private constructor(
         return rp
     }
 
-    fun flatReverseProg(): Prog? {
+    internal fun flatReverseProg(): Prog? {
         var frp = flatReverseProg
         if (frp == null) {
             synchronized(this) {
@@ -1802,7 +1795,7 @@ class Pattern private constructor(
         return frp
     }
 
-    fun flatReverseDfaProg(): Prog? {
+    internal fun flatReverseDfaProg(): Prog? {
         var frp = flatReverseDfaProg
         if (frp == null) {
             // Build once, so that reverseDfaSetup always describes the published flatReverseDfaProg.
@@ -1810,15 +1803,15 @@ class Pattern private constructor(
                 frp = flatReverseDfaProg
                 if (frp == null) {
                     // Prepare once under the lock rather than retaining the tree after construction.
-                    val prepared: Compiler.Prepared? = Compiler.Companion.prepare(ast)
+                    val prepared: Compiler.Prepared? = Compiler.prepare(ast)
                     var rp = reverseProg
                     if (rp == null) {
-                        rp = Compiler.Companion.compile(prepared, true)
+                        rp = Compiler.compile(prepared, true)
                         reverseProg = rp
                     }
                     if (rp != null) {
                         if (rp.numLoopRegs() > 0) {
-                            val dfaRp: Prog? = Compiler.Companion.compileForDfa(prepared, true)
+                            val dfaRp: Prog? = Compiler.compileForDfa(prepared, true)
                             if (dfaRp != null) {
                                 frp = dfaRp.flattenedCopy()
                             } else {
@@ -1827,7 +1820,7 @@ class Pattern private constructor(
                         } else {
                             frp = flatReverseProg()
                         }
-                        reverseDfaSetup = Dfa.Companion.buildSetup(frp)
+                        reverseDfaSetup = Dfa.buildSetup(frp!!)
                         flatReverseDfaProg = frp
                     }
                 }
@@ -1836,14 +1829,14 @@ class Pattern private constructor(
         return frp
     }
 
-    fun forwardDfaSetup(): Dfa.Setup {
+    internal fun forwardDfaSetup(): Dfa.Setup {
         var setup = forwardDfaSetup
         if (setup == null) {
             synchronized(this) {
                 setup = forwardDfaSetup
                 if (setup == null) {
                     val flat = flatProg()
-                    setup = Dfa.Companion.buildSetup(if (flat != null) flat else prog)
+                    setup = Dfa.buildSetup(if (flat != null) flat else prog)
                     forwardDfaSetup = setup
                 }
             }
@@ -1851,7 +1844,7 @@ class Pattern private constructor(
         return setup!!
     }
 
-    fun reverseDfaSetup(): Dfa.Setup? {
+    internal fun reverseDfaSetup(): Dfa.Setup? {
         flatReverseDfaProg() // ensure flat reverse dfa prog and its setup are computed
         return reverseDfaSetup
     }
@@ -1861,7 +1854,7 @@ class Pattern private constructor(
      * `null` if the pattern is not fully literal. For case-insensitive patterns, returns the
      * lowercase version.
      */
-    fun literalMatch(): String {
+    fun literalMatch(): String? {
         return matchDescriptor.literalMatch
     }
 
@@ -1869,7 +1862,7 @@ class Pattern private constructor(
         return matchDescriptor.literalFoldCase
     }
 
-    fun literalMatchUtf8(): ByteArray? {
+    internal fun literalMatchUtf8(): ByteArray? {
         return literalMatchUtf8
     }
 
@@ -1881,7 +1874,7 @@ class Pattern private constructor(
         return literalMatchShifts
     }
 
-    fun prefixUtf8(): ByteArray? {
+    internal fun prefixUtf8(): ByteArray? {
         return prefixUtf8
     }
 
@@ -1898,7 +1891,7 @@ class Pattern private constructor(
     }
 
     /** Returns the parsed AST.  */
-    fun ast(): Regexp {
+    internal fun ast(): Regexp {
         return ast
     }
 
@@ -1911,11 +1904,11 @@ class Pattern private constructor(
      * @return an unmodifiable map from group names to group numbers
      * @since 20
      */
-    fun namedGroups(): MutableMap<String?, Int?>? {
+    fun namedGroups(): Map<String, Int> {
         return astAnalysis.namedGroups
     }
 
-    fun astAnalysis(): AstAnalysis {
+    internal fun astAnalysis(): AstAnalysis {
         return astAnalysis
     }
 
@@ -1934,7 +1927,7 @@ class Pattern private constructor(
      * 
      * @return this pattern's diagnostics identity
      */
-    fun patternId(): Long {
+    internal fun patternId(): Long {
         return patternId
     }
 
@@ -2044,7 +2037,7 @@ class Pattern private constructor(
                 capabilities.add(PatternCapability.DFA_REJECT_PREFILTER)
             }
         }
-        val maxBitStateText: Int = BitState.Companion.maxTextSize(prog)
+        val maxBitStateText: Int = BitState.maxTextSize(prog)
         if (maxBitStateText >= 0) {
             capabilities.add(PatternCapability.BIT_STATE)
         } else {
@@ -2064,22 +2057,13 @@ class Pattern private constructor(
         }
 
         return PatternAnalysis(
-            features, capabilities, limitations, prog.size(), prog.numCaptures() - 1
+            features, capabilities, limitations, prog.size, prog.numCaptures() - 1
         )
     }
 
-    @JvmRecord
-    private data class AstAnalysisNode(regexp: Regexp, insideQuantifier: Boolean) {
-        val regexp: Regexp
-        val insideQuantifier: Boolean
+    private data class AstAnalysisNode(val regexp: Regexp, val insideQuantifier: Boolean)
 
-        init {
-            this.regexp = regexp
-            this.insideQuantifier = insideQuantifier
-        }
-    }
-
-    private fun addAstAnalysisFeatures(features: EnumSet<PatternFeature?>) {
+    private fun addAstAnalysisFeatures(features: EnumSet<PatternFeature>) {
         val stack: Deque<AstAnalysisNode> = ArrayDeque<AstAnalysisNode>()
         stack.push(AstAnalysisNode(ast, false))
         while (!stack.isEmpty()) {
@@ -2111,7 +2095,7 @@ class Pattern private constructor(
             }
             if (node.subs != null) {
                 for (sub in node.subs) {
-                    stack.push(AstAnalysisNode(sub, current.insideQuantifier || quantifier))
+                    stack.push(AstAnalysisNode(sub!!, current.insideQuantifier || quantifier))
                 }
             }
         }
@@ -2130,35 +2114,38 @@ class Pattern private constructor(
         this.pattern = pattern
         this.flags = flags
         this.prog = prog
+        this.ast = ast
+        this.astAnalysis = astAnalysis
+        this.startsWithGraphemeClusterBoundary = startsWithGraphemeClusterBoundary
+        this.hasInternalGraphemeClusterBoundary = hasInternalGraphemeClusterBoundary
+        this.enginePathOptions = enginePathOptions
         if (enginePathOptions.dfa && prog.numLoopRegs() > 0) {
             this.flatProg = prog.flattenedCopy()
-            val dfaProg: Prog? = Compiler.Companion.compileForDfa(prepared, false)
+            val dfaProg: Prog? = Compiler.compileForDfa(prepared, false)
             this.flatDfaProg = if (dfaProg != null) dfaProg.flattenedCopy() else this.flatProg
         }
 
-        this.ast = ast
-        this.astAnalysis = astAnalysis
-        this.multiAnchor = if (multiAnchor != null) multiAnchor else MultiAnchorDescriptor.Companion.NONE
+        this.multiAnchor = if (multiAnchor != null) multiAnchor else MultiAnchorDescriptor.NONE
         this.prefix = this.multiAnchor.prefix()
         this.prefixFoldCase = this.multiAnchor.prefixFoldCase()
         this.prefixUtf8 =
             if (this.prefix == null || this.prefix.isEmpty())
                 null
             else
-                this.prefix.getBytes(StandardCharsets.UTF_8)
+                this.prefix.toByteArray(StandardCharsets.UTF_8)
         this.anchoredPrefix = this.multiAnchor.anchoredPrefix()
         this.anchoredPrefixUtf8 =
             if (this.anchoredPrefix == null || this.anchoredPrefix.isEmpty())
                 null
             else
-                this.anchoredPrefix.getBytes(StandardCharsets.UTF_8)
-        this.matchDescriptor = if (matchDescriptor != null) matchDescriptor else MatchDescriptor.Companion.NONE
+                this.anchoredPrefix.toByteArray(StandardCharsets.UTF_8)
+        this.matchDescriptor = if (matchDescriptor != null) matchDescriptor else MatchDescriptor.NONE
         // Fold the option into prepared literal data so the search methods need no extra guard.
         // An extra guard there can perturb C2 compilation of their inlined byte-scanning loops.
         val literalMatch =
             if (enginePathOptions.literalFastPaths) this.matchDescriptor.literalMatch else null
         this.literalMatchUtf8 =
-            if (literalMatch == null) null else literalMatch.getBytes(StandardCharsets.UTF_8)
+            if (literalMatch == null) null else literalMatch.toByteArray(StandardCharsets.UTF_8)
         this.literalMatchFailure = if (literalMatchUtf8 == null) null else literalFailure(literalMatchUtf8)
         this.literalMatchShifts = if (literalMatchUtf8 == null) null else literalShifts(literalMatchUtf8)
         this.literalMatchRareByteOffset =
@@ -2166,27 +2153,25 @@ class Pattern private constructor(
                 -1
             else
                 RarityOracle.rarestUtf8LiteralByteOffset(literalMatchUtf8)
-        this.startsWithGraphemeClusterBoundary = startsWithGraphemeClusterBoundary
-        this.hasInternalGraphemeClusterBoundary = hasInternalGraphemeClusterBoundary
         this.charClassPrefix = this.multiAnchor.charClassPrefix()
         this.anchoredCharClassPrefix = this.multiAnchor.anchoredCharClassPrefix()
         this.utf8StartAccelerator =
-            Utf8StartAccelerator.Companion.create(this.multiAnchor, prog.hasWordBoundary())
+            Utf8StartAccelerator.create(this.multiAnchor, prog.hasWordBoundary())
+        val startPlan = this.multiAnchor.startPlan()
         val wideLeadingExpansion =
-            this.multiAnchor.startPlan() is StartPlan.LeadingExpansion
-                    && MultiAnchorCompiler.isWideLeadingClass(le.leadingClass)
+            startPlan is StartPlan.LeadingExpansion
+                    && MultiAnchorCompiler.isWideLeadingClass(startPlan.leadingClass!!)
         // A String program containing \X may start at the low half of a surrogate pair. A scalar
         // backward walk can see the excluded pair and miss a valid start at its low surrogate.
         this.stringStartAccelerator =
             if (wideLeadingExpansion && prog.hasGraphemeClusterInstruction())
                 null
             else
-                StringStartAccelerator.Companion.create(this.multiAnchor, prog.hasWordBoundary())
+                StringStartAccelerator.create(this.multiAnchor, prog.hasWordBoundary())
         // The wide expansion can walk backward over an entire line. Keep it out of the DFA loop,
         // which could otherwise repeat that walk at each position before the same inner hit.
         this.dfaStartAcceleration = !wideLeadingExpansion
-        this.enginePathOptions = enginePathOptions
-        this.rejectPrefilter = RejectPrefilter.Companion.create(this.multiAnchor)
+        this.rejectPrefilter = RejectPrefilter.create(this.multiAnchor)
         // When find() runs a wide-class leading expansion, its inner literal search fails exactly when
         // the reject prefilter would reject, so the prefilter's scan would only repeat it.
         this.startSubsumesFindReject =
@@ -2195,11 +2180,11 @@ class Pattern private constructor(
         this.innerLiteralSearch =
             if (enginePathOptions.startAcceleration
                 && enginePathOptions.literalFastPaths
-                && this.matchDescriptor.literalMatch == null && !prog.anchorStart() && this.multiAnchor.startPlan()
+                && this.matchDescriptor.literalMatch == null && !prog.anchorStart() && startPlan
                         is StartPlan.Literal
-                && !lit.foldCase
+                && !startPlan.foldCase
             )
-                InnerLiteralSearch.Companion.compile(ast, rejectPrefilter)
+                InnerLiteralSearch.compile(ast, rejectPrefilter)
             else
                 null
         this.startPrecedesFindReject =
@@ -2213,7 +2198,7 @@ class Pattern private constructor(
                 && (rejectPrefilter == null
                         || rejectPrefilter is RejectPrefilter.DisjointLiterals)
             )
-                LiteralAlternation.Companion.compile(
+                LiteralAlternation.compile(
                     ast,
                     rejectPrefilter is RejectPrefilter.DisjointLiterals,
                     if (utf8StartAccelerator is Utf8StartAccelerator.CharClass)
@@ -2248,37 +2233,24 @@ class Pattern private constructor(
             if (baseFindReject != null && enginePathOptions.startAcceleration
                 && this.utf8StartAccelerator != null && !prog.anchorStart()
             )
-                RejectPrefilter.Companion.withoutDisjointLiterals(baseFindReject)
+                RejectPrefilter.withoutDisjointLiterals(baseFindReject)
             else
                 baseFindReject
 
         val listener: SafeReMatchDiagnostics = diagnostics()
-        if (SafeReMatchDiagnostics.Companion.isEnabled(listener)) {
+        if (SafeReMatchDiagnostics.isEnabled(listener)) {
             listener.onPatternCompiled(PatternCompiledEvent(descriptor()))
         }
     }
 
-    @JvmRecord
     private data class GraphemeBoundaryContext(
-        canMatchEmpty: Boolean,
-        canConsume: Boolean,
-        startsWithExplicitBoundary: Boolean,
-        endsWithExplicitBoundary: Boolean,
-        hasInternalExplicitBoundary: Boolean
-    ) {
-        val canMatchEmpty: Boolean
-        val canConsume: Boolean
-        val startsWithExplicitBoundary: Boolean
-        val endsWithExplicitBoundary: Boolean
+        val canMatchEmpty: Boolean,
+        val canConsume: Boolean,
+        val startsWithExplicitBoundary: Boolean,
+        val endsWithExplicitBoundary: Boolean,
         val hasInternalExplicitBoundary: Boolean
+    ) {
 
-        init {
-            this.canMatchEmpty = canMatchEmpty
-            this.canConsume = canConsume
-            this.startsWithExplicitBoundary = startsWithExplicitBoundary
-            this.endsWithExplicitBoundary = endsWithExplicitBoundary
-            this.hasInternalExplicitBoundary = hasInternalExplicitBoundary
-        }
 
         companion object {
             fun noMatch(): GraphemeBoundaryContext {
@@ -2300,8 +2272,8 @@ class Pattern private constructor(
     }
 
     private class GraphemeBoundaryContextWalker : Walker<GraphemeBoundaryContext?>() {
-        override fun shortVisit(re: Regexp?, parentArg: GraphemeBoundaryContext?): GraphemeBoundaryContext {
-            return GraphemeBoundaryContext.Companion.noMatch()
+        override fun shortVisit(re: Regexp, parentArg: GraphemeBoundaryContext?): GraphemeBoundaryContext {
+            return GraphemeBoundaryContext.noMatch()
         }
 
         override fun copy(arg: GraphemeBoundaryContext?): GraphemeBoundaryContext? {
@@ -2312,13 +2284,13 @@ class Pattern private constructor(
             re: Regexp,
             parentArg: GraphemeBoundaryContext?,
             preArg: GraphemeBoundaryContext?,
-            childArgs: MutableList<GraphemeBoundaryContext>
+            childArgs: MutableList<GraphemeBoundaryContext?>
         ): GraphemeBoundaryContext? {
-            return when (re.op) {
-                RegexpOp.NO_MATCH -> GraphemeBoundaryContext.Companion.noMatch()
-                RegexpOp.EMPTY_MATCH, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.HAVE_MATCH -> GraphemeBoundaryContext.Companion.empty()
-                RegexpOp.LITERAL, RegexpOp.LITERAL_STRING, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.CHAR_CLASS, RegexpOp.GRAPHEME_CLUSTER -> GraphemeBoundaryContext.Companion.consuming()
-                RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> GraphemeBoundaryContext.Companion.explicitBoundary()
+            return when (re!!.op) {
+                RegexpOp.NO_MATCH -> GraphemeBoundaryContext.noMatch()
+                RegexpOp.EMPTY_MATCH, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.HAVE_MATCH -> GraphemeBoundaryContext.empty()
+                RegexpOp.LITERAL, RegexpOp.LITERAL_STRING, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.CHAR_CLASS, RegexpOp.GRAPHEME_CLUSTER -> GraphemeBoundaryContext.consuming()
+                RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> GraphemeBoundaryContext.explicitBoundary()
                 RegexpOp.CONCAT -> concatBoundaryContext(childArgs)
                 RegexpOp.ALTERNATE -> alternateBoundaryContext(childArgs)
                 RegexpOp.STAR, RegexpOp.QUEST -> optionalBoundaryContext(childArgs)
@@ -2329,7 +2301,7 @@ class Pattern private constructor(
 
         companion object {
             private fun concatBoundaryContext(
-                childArgs: MutableList<GraphemeBoundaryContext>
+                childArgs: MutableList<GraphemeBoundaryContext?>
             ): GraphemeBoundaryContext {
                 var canMatchEmpty = true
                 var canConsume = false
@@ -2337,38 +2309,38 @@ class Pattern private constructor(
                 var canStillStartAtChild = true
                 var hasInternalExplicitBoundary = false
                 var hasConsumingPrefix = false
-                val consumingSuffix = BooleanArray(childArgs.size())
+                val consumingSuffix = BooleanArray(childArgs.size)
                 var hasConsumingSuffix = false
                 for (i in childArgs.indices.reversed()) {
                     consumingSuffix[i] = hasConsumingSuffix
-                    hasConsumingSuffix = hasConsumingSuffix or childArgs.get(i).canConsume
+                    hasConsumingSuffix = hasConsumingSuffix || childArgs[i]!!.canConsume
                 }
                 for (i in childArgs.indices) {
-                    val child = childArgs.get(i)
-                    canMatchEmpty = canMatchEmpty and child.canMatchEmpty
-                    canConsume = canConsume or child.canConsume
+                    val child = childArgs[i]!!
+                    canMatchEmpty = canMatchEmpty && child.canMatchEmpty
+                    canConsume = canConsume || child.canConsume
                     if (canStillStartAtChild && child.startsWithExplicitBoundary) {
                         startsWithExplicitBoundary = true
                     }
-                    canStillStartAtChild = canStillStartAtChild and child.canMatchEmpty
-                    hasInternalExplicitBoundary = hasInternalExplicitBoundary or child.hasInternalExplicitBoundary
+                    canStillStartAtChild = canStillStartAtChild && child.canMatchEmpty
+                    hasInternalExplicitBoundary = hasInternalExplicitBoundary || child.hasInternalExplicitBoundary
                     if ((child.startsWithExplicitBoundary || child.endsWithExplicitBoundary)
                         && hasConsumingPrefix
                         && consumingSuffix[i]
                     ) {
                         hasInternalExplicitBoundary = true
                     }
-                    hasConsumingPrefix = hasConsumingPrefix or child.canConsume
+                    hasConsumingPrefix = hasConsumingPrefix || child.canConsume
                 }
 
                 var endsWithExplicitBoundary = false
                 var canStillEndAtChild = true
                 for (i in childArgs.indices.reversed()) {
-                    val child = childArgs.get(i)
+                    val child = childArgs[i]!!
                     if (canStillEndAtChild && child.endsWithExplicitBoundary) {
                         endsWithExplicitBoundary = true
                     }
-                    canStillEndAtChild = canStillEndAtChild and child.canMatchEmpty
+                    canStillEndAtChild = canStillEndAtChild && child.canMatchEmpty
                 }
                 return GraphemeBoundaryContext(
                     canMatchEmpty,
@@ -2380,19 +2352,20 @@ class Pattern private constructor(
             }
 
             private fun alternateBoundaryContext(
-                childArgs: MutableList<GraphemeBoundaryContext>
+                childArgs: MutableList<GraphemeBoundaryContext?>
             ): GraphemeBoundaryContext {
                 var canMatchEmpty = childArgs.isEmpty()
                 var canConsume = false
                 var startsWithExplicitBoundary = false
                 var endsWithExplicitBoundary = false
                 var hasInternalExplicitBoundary = false
-                for (child in childArgs) {
-                    canMatchEmpty = canMatchEmpty or child.canMatchEmpty
-                    canConsume = canConsume or child.canConsume
-                    startsWithExplicitBoundary = startsWithExplicitBoundary or child.startsWithExplicitBoundary
-                    endsWithExplicitBoundary = endsWithExplicitBoundary or child.endsWithExplicitBoundary
-                    hasInternalExplicitBoundary = hasInternalExplicitBoundary or child.hasInternalExplicitBoundary
+                for (nullableChild in childArgs) {
+                    val child = nullableChild!!
+                    canMatchEmpty = canMatchEmpty || child.canMatchEmpty
+                    canConsume = canConsume || child.canConsume
+                    startsWithExplicitBoundary = startsWithExplicitBoundary || child.startsWithExplicitBoundary
+                    endsWithExplicitBoundary = endsWithExplicitBoundary || child.endsWithExplicitBoundary
+                    hasInternalExplicitBoundary = hasInternalExplicitBoundary || child.hasInternalExplicitBoundary
                 }
                 return GraphemeBoundaryContext(
                     canMatchEmpty,
@@ -2404,7 +2377,7 @@ class Pattern private constructor(
             }
 
             private fun optionalBoundaryContext(
-                childArgs: MutableList<GraphemeBoundaryContext>
+                childArgs: MutableList<GraphemeBoundaryContext?>
             ): GraphemeBoundaryContext {
                 val child = childBoundaryContext(childArgs)
                 return GraphemeBoundaryContext(
@@ -2417,7 +2390,7 @@ class Pattern private constructor(
             }
 
             private fun repeatBoundaryContext(
-                re: Regexp, childArgs: MutableList<GraphemeBoundaryContext>
+                re: Regexp, childArgs: MutableList<GraphemeBoundaryContext?>
             ): GraphemeBoundaryContext {
                 val child = childBoundaryContext(childArgs)
                 val canMatchEmpty = re.min == 0 || child.canMatchEmpty
@@ -2432,9 +2405,9 @@ class Pattern private constructor(
             }
 
             private fun childBoundaryContext(
-                childArgs: MutableList<GraphemeBoundaryContext>
+                childArgs: MutableList<GraphemeBoundaryContext?>
             ): GraphemeBoundaryContext {
-                return if (childArgs.isEmpty()) GraphemeBoundaryContext.Companion.noMatch() else childArgs.getFirst()
+                return if (childArgs.isEmpty()) GraphemeBoundaryContext.noMatch() else childArgs.first()!!
             }
         }
     }
@@ -2475,7 +2448,7 @@ class Pattern private constructor(
             this.minOffset = minOffset
             this.maxOffset = maxOffset
             this.discreteOffsets = discreteOffsets
-            this.utf8 = literal.getBytes(StandardCharsets.UTF_8)
+            this.utf8 = literal.toByteArray(StandardCharsets.UTF_8)
             this.failure = literalFailure(utf8)
             this.shifts = literalShifts(utf8)
         }
@@ -2543,7 +2516,7 @@ class Pattern private constructor(
         fun find(scanner: InputScanner, startPos: Int): Long {
             val matchStart = Math.max(0, startPos)
             if (greedyWholeInput) {
-                for (position in scanner.length() - 1 downTo matchStart) {
+                for (position in scanner.length - 1 downTo matchStart) {
                     val match = matchAt(scanner, position)
                     if (match >= 0) {
                         return match
@@ -2552,29 +2525,29 @@ class Pattern private constructor(
                 return -1
             }
             var position = matchStart
-            while (position < scanner.length()) {
+            while (position < scanner.length) {
                 val match = matchAt(scanner, position)
                 if (match >= 0) {
                     return match
                 }
                 val ascii = scanner.asciiAt(position)
                 position =
-                    if (ascii >= 0) position + 1 else InputScanner.Companion.position(scanner.decodeForward(position))
+                    if (ascii >= 0) position + 1 else InputScanner.position(scanner.decodeForward(position))
             }
             return -1
         }
 
         fun matchAt(scanner: InputScanner, position: Int): Long {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             val first = scanner.asciiAt(position)
             if (first < 0 || !firstAsciiTable[Ascii.toLowerCase(first)] || !isWordBoundaryAt(scanner, position)) {
                 return -1
             }
             for (keyword in keywords) {
-                val end: Int = position + keyword.length()
-                if (end <= scanner.length() && matchesAsciiIgnoreCase(scanner, position, keyword)
+                val end: Int = position + keyword.length
+                if (end <= scanner.length && matchesAsciiIgnoreCase(scanner, position, keyword)
                     && isWordBoundaryAt(scanner, end)
                 ) {
                     return (position.toLong() shl 32) or (end.toLong() and 0xFFFFFFFFL)
@@ -2588,7 +2561,7 @@ class Pattern private constructor(
                 position > 0
                         && isBoundaryWordChar(scanner.codePointBefore(position), unicodeWordBoundary)
             val nextWord =
-                position < scanner.length()
+                position < scanner.length
                         && isBoundaryWordChar(scanner.codePointAt(position), unicodeWordBoundary)
             return previousWord != nextWord
         }
@@ -2597,9 +2570,9 @@ class Pattern private constructor(
             private fun matchesAsciiIgnoreCase(
                 scanner: InputScanner, position: Int, keyword: String
             ): Boolean {
-                for (index in 0..<keyword.length()) {
+                for (index in 0..<keyword.length) {
                     val input = scanner.asciiAt(position + index)
-                    if (input < 0 || Ascii.toLowerCase(input) != keyword.charAt(index).code) {
+                    if (input < 0 || Ascii.toLowerCase(input) != keyword[index].code) {
                         return false
                     }
                 }
@@ -2607,7 +2580,7 @@ class Pattern private constructor(
             }
 
             private fun isBoundaryWordChar(codePoint: Int, unicodeWordBoundary: Boolean): Boolean {
-                return if (unicodeWordBoundary) Nfa.Companion.isUnicodeWordChar(codePoint) else Nfa.Companion.isWordChar(
+                return if (unicodeWordBoundary) Nfa.isUnicodeWordChar(codePoint) else Nfa.isWordChar(
                     codePoint
                 )
             }
@@ -2623,64 +2596,38 @@ class Pattern private constructor(
     }
 
     /** Holds precomputed data for the character-class-match fast path.  */ // TODO(#98): Replace int[] with Guava ImmutableIntArray to get proper value semantics.
-    @JvmRecord
-    internal data class CharClassMatchInfo(ranges: IntArray?, bitmap0: Long, bitmap1: Long, allowEmpty: Boolean) {
-        val ranges: IntArray?
-        val bitmap0: Long
-        val bitmap1: Long
+    internal data class CharClassMatchInfo(
+        val ranges: IntArray?,
+        val bitmap0: Long,
+        val bitmap1: Long,
         val allowEmpty: Boolean
+    )
 
-        init {
-            this.ranges = ranges
-            this.bitmap0 = bitmap0
-            this.bitmap1 = bitmap1
-            this.allowEmpty = allowEmpty
-        }
-    }
-
-    @JvmRecord
-    internal data class SuffixInfo(suffix: String?, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean) {
+    internal data class SuffixInfo(
+        val suffix: String?,
+        val wasDollar: Boolean,
+        val unixLines: Boolean,
+        val foldCase: Boolean
+    ) {
         constructor(suffix: String?, wasDollar: Boolean) : this(suffix, wasDollar, false, false)
 
         constructor(suffix: String?, wasDollar: Boolean, unixLines: Boolean) : this(suffix, wasDollar, unixLines, false)
 
-        val suffix: String?
-        val wasDollar: Boolean
-        val unixLines: Boolean
-        val foldCase: Boolean
 
-        init {
-            this.suffix = suffix
-            this.wasDollar = wasDollar
-            this.unixLines = unixLines
-            this.foldCase = foldCase
-        }
     }
 
-    @JvmRecord
-    internal data class EndAnchoredCharClassInfo(bitmap: AsciiBitmap?, wasDollar: Boolean, unixLines: Boolean) {
+    internal data class EndAnchoredCharClassInfo(
+        val bitmap: AsciiBitmap?,
+        val wasDollar: Boolean,
+        val unixLines: Boolean
+    ) {
         constructor(bitmap: AsciiBitmap?, wasDollar: Boolean) : this(bitmap, wasDollar, false)
 
-        val bitmap: AsciiBitmap?
-        val wasDollar: Boolean
-        val unixLines: Boolean
 
-        init {
-            this.bitmap = bitmap
-            this.wasDollar = wasDollar
-            this.unixLines = unixLines
-        }
     }
 
-    @JvmRecord
-    private data class LiteralResult(literal: String?, foldCase: Boolean) {
-        val literal: String?
-        val foldCase: Boolean
+    private data class LiteralResult(val literal: String?, val foldCase: Boolean) {
 
-        init {
-            this.literal = literal
-            this.foldCase = foldCase
-        }
 
         companion object {
             val NONE: LiteralResult = LiteralResult(null, false)
@@ -2715,7 +2662,7 @@ class Pattern private constructor(
         private val DIAGNOSTICS_INVOKER: MethodHandle = DIAGNOSTICS_SITE.dynamicInvoker()
 
         init {
-            setDiagnosticsTarget(SafeReMatchDiagnostics.Companion.NONE)
+            setDiagnosticsTarget(SafeReMatchDiagnostics.NONE)
         }
 
         /**
@@ -2783,7 +2730,7 @@ class Pattern private constructor(
             val ccMatch: CharClassMatchInfo? = extractCharClassMatch(metadataAst, hasUserCaptures)
             val minMatchLength = astAnalysis.minMatchLength
             if (literalMatch == null && singleCharClass == null && keywordAlternation == null && ccMatch == null && minMatchLength <= 0) {
-                return MatchDescriptor.Companion.NONE
+                return MatchDescriptor.NONE
             }
             return MatchDescriptor(
                 literalMatch,
@@ -2820,7 +2767,7 @@ class Pattern private constructor(
          * 
          * @return the installed listener
          */
-        fun diagnostics(): SafeReMatchDiagnostics {
+        internal fun diagnostics(): SafeReMatchDiagnostics {
             try {
                 return DIAGNOSTICS_INVOKER.invokeExact() as SafeReMatchDiagnostics
             } catch (impossible: Throwable) {
@@ -2849,18 +2796,18 @@ class Pattern private constructor(
          * @throws PatternSyntaxException if the expression's syntax is invalid
          */
         @JvmOverloads
-        fun compile(regex: String?, flags: Int = 0): Pattern {
-            return compile(regex, flags, EnginePathOptions.Companion.allEnabled())
+        internal fun compile(regex: String?, flags: Int = 0): Pattern {
+            return compile(regex, flags, EnginePathOptions.allEnabled())
         }
 
-        fun compile(regex: String?, flags: Int, enginePathOptions: EnginePathOptions?): Pattern {
+        internal fun compile(regex: String?, flags: Int, enginePathOptions: EnginePathOptions?): Pattern {
             validateFlags(flags)
             Objects.requireNonNull<EnginePathOptions?>(enginePathOptions, "enginePathOptions")
             val effectiveFlags: Int = effectiveFlags(flags)
             val parseFlags: Int = toParseFlags(effectiveFlags)
-            val re: Regexp = Parser.Companion.parse(regex, parseFlags)
-            val prepared: Compiler.Prepared? = Compiler.Companion.prepare(re)
-            val compiled: Prog = Compiler.Companion.compile(prepared, false)
+            val re: Regexp = Parser.parse(regex, parseFlags)!!
+            val prepared: Compiler.Prepared? = Compiler.prepare(re)
+            val compiled: Prog = Compiler.compile(prepared, false)!!
             if (compiled == null) {
                 throw PatternSyntaxException("compiled program too large", regex, -1)
             }
@@ -2869,9 +2816,9 @@ class Pattern private constructor(
             // below still inspect the source AST because source quantifiers carry matching semantics that
             // simplification deliberately lowers away.
             val metadataAst = prepared!!.simplifiedSource()
-            val astAnalysis: AstAnalysis = AstAnalysis.Companion.analyze(re)
+            val astAnalysis: AstAnalysis = AstAnalysis.analyze(re)
             val multiAnchor = MultiAnchorCompiler.compile(metadataAst, effectiveFlags)
-            val matchDescriptor: MatchDescriptor = extractMatchDescriptor(metadataAst, astAnalysis, flags)
+            val matchDescriptor: MatchDescriptor = extractMatchDescriptor(metadataAst!!, astAnalysis, flags)
             val startsWithGcb =
                 compiled.hasGraphemeSemantics() && startsWithGraphemeClusterBoundary(metadataAst)
             val hasInternalGcb =
@@ -2901,6 +2848,8 @@ class Pattern private constructor(
          * @return `true` if the entire input matches the pattern
          * @throws PatternSyntaxException if the expression's syntax is invalid
          */
+        @JvmStatic
+
         fun matches(regex: String?, input: CharSequence?): Boolean {
             return compile(regex).matcher(input).matches()
         }
@@ -2913,10 +2862,10 @@ class Pattern private constructor(
             if (cs is String) {
                 return cs
             }
-            val len: Int = cs.length()
+            val len: Int = cs.length
             val chars = CharArray(len)
             for (i in 0..<len) {
-                chars[i] = cs.charAt(i)
+                chars[i] = cs[i]
             }
             return String(chars)
         }
@@ -2942,15 +2891,15 @@ class Pattern private constructor(
                 sb.append("\\E\\\\E\\Q")
                 last = idx + 2
             }
-            sb.append(s, last, s.length())
+            sb.append(s, last, s.length)
             sb.append("\\E")
             return sb.toString()
         }
 
         fun literalFailure(literal: ByteArray): IntArray {
-            val failure = IntArray(literal.length)
+            val failure = IntArray(literal.size)
             var matched = 0
-            for (index in 1..<literal.length) {
+            for (index in 1..<literal.size) {
                 while (matched > 0 && literal[index] != literal[matched]) {
                     matched = failure[matched - 1]
                 }
@@ -2963,35 +2912,35 @@ class Pattern private constructor(
         }
 
         fun literalShifts(literal: ByteArray): IntArray? {
-            if (literal.length < 2) {
+            if (literal.size < 2) {
                 return null
             }
             val shifts = IntArray(256)
-            Arrays.fill(shifts, literal.length)
-            for (index in 0..<literal.length - 1) {
-                shifts[literal[index].toInt() and 0xFF] = literal.length - index - 1
+            Arrays.fill(shifts, literal.size)
+            for (index in 0..<literal.size - 1) {
+                shifts[literal[index].toInt() and 0xFF] = literal.size - index - 1
             }
             return shifts
         }
 
-        fun borrowBitState(cache: ThreadCache): BitState? {
+        internal fun borrowBitState(cache: ThreadCache): BitState? {
             val bs = cache.bitState
             cache.bitState = null // take ownership
             return bs
         }
 
-        fun returnBitState(cache: ThreadCache, bs: BitState) {
+        internal fun returnBitState(cache: ThreadCache, bs: BitState) {
             bs.releaseInput()
             cache.bitState = bs
         }
 
-        fun borrowNfa(cache: ThreadCache): Nfa? {
+        internal fun borrowNfa(cache: ThreadCache): Nfa? {
             val nfa = cache.nfa
             cache.nfa = null
             return nfa
         }
 
-        fun returnNfa(cache: ThreadCache, nfa: Nfa) {
+        internal fun returnNfa(cache: ThreadCache, nfa: Nfa) {
             nfa.releaseInputContext()
             cache.nfa = nfa
         }
@@ -3096,7 +3045,7 @@ class Pattern private constructor(
 
         private fun hasInternalExplicitGraphemeBoundary(re: Regexp?): Boolean {
             return GraphemeBoundaryContextWalker()
-                .walk(re, GraphemeBoundaryContext.Companion.noMatch())!!
+                .walk(re, GraphemeBoundaryContext.noMatch())!!
                 .hasInternalExplicitBoundary
         }
 
@@ -3111,17 +3060,18 @@ class Pattern private constructor(
             }
             var greedyWholeInput = false
             var coreOffset = 0
-            if (node.nsub() == 5 && isGreedyAnyCharStar(node.subs.getFirst())
-                && isGreedyAnyCharStar(node.subs.getLast())
+            val nodeSubs = node.subs!!
+            if (node.nsub() == 5 && isGreedyAnyCharStar(nodeSubs.first())
+                && isGreedyAnyCharStar(nodeSubs.last())
             ) {
                 greedyWholeInput = true
                 coreOffset = 1
             } else if (node.nsub() != 3) {
                 return null
             }
-            val before: Regexp? = unwrapImplicitCapture(node.subs.get(coreOffset))
-            var middle: Regexp? = unwrapImplicitCapture(node.subs.get(coreOffset + 1))
-            val after: Regexp? = unwrapImplicitCapture(node.subs.get(coreOffset + 2))
+            val before: Regexp? = unwrapImplicitCapture(nodeSubs.get(coreOffset))
+            var middle: Regexp? = unwrapImplicitCapture(nodeSubs.get(coreOffset + 1))
+            val after: Regexp? = unwrapImplicitCapture(nodeSubs.get(coreOffset + 2))
             if (before == null || before.op != RegexpOp.WORD_BOUNDARY || after == null || after.op != RegexpOp.WORD_BOUNDARY) {
                 return null
             }
@@ -3131,22 +3081,23 @@ class Pattern private constructor(
                 captureGroup = middle.cap
                 middle = unwrapImplicitCapture(middle.sub())
             }
-            if (middle == null || middle.op != RegexpOp.ALTERNATE || middle.subs == null || middle.subs.isEmpty()) {
+            val middleSubs = middle?.subs
+            if (middle == null || middle.op != RegexpOp.ALTERNATE || middleSubs == null || middleSubs.isEmpty()) {
                 return null
             }
             if (hasOtherUserCaptures(middle, captureGroup)) {
                 return null
             }
 
-            val keywords: Array<String> = arrayOfNulls<String>(middle.subs.size())
+            val keywords = arrayOfNulls<String>(middleSubs.size)
             val firstAscii = AsciiBitmap.Builder()
-            for (i in middle.subs.indices) {
-                val keyword: String? = extractAsciiCaseInsensitiveLiteral(middle.subs.get(i))
+            for (i in middleSubs.indices) {
+                val keyword: String? = extractAsciiCaseInsensitiveLiteral(middleSubs.get(i))
                 if (keyword == null || keyword.isEmpty()) {
                     return null
                 }
                 keywords[i] = keyword
-                firstAscii.add(keyword.charAt(0).code)
+                firstAscii.add(keyword[0].code)
             }
 
             val beforeUnicodeWordBoundary = (before.flags and ParseFlags.UNICODE_CHAR_CLASS) != 0
@@ -3155,7 +3106,7 @@ class Pattern private constructor(
                 return null
             }
             return KeywordAlternation(
-                keywords, firstAscii.build(), captureGroup, beforeUnicodeWordBoundary, greedyWholeInput
+                keywords.requireNoNulls(), firstAscii.build(), captureGroup, beforeUnicodeWordBoundary, greedyWholeInput
             )
         }
 
@@ -3172,9 +3123,12 @@ class Pattern private constructor(
                 if (node.op == RegexpOp.CAPTURE && node.cap > 0 && node.cap != allowedCapture) {
                     return true
                 }
-                if (node.subs != null) {
-                    for (sub in node.subs) {
-                        stack.push(sub)
+                val subs = node.subs
+                if (subs != null) {
+                    for (sub in subs) {
+                        if (sub != null) {
+                            stack.push(sub)
+                        }
                     }
                 }
             }
@@ -3182,7 +3136,7 @@ class Pattern private constructor(
         }
 
         private fun unwrapImplicitCapture(re: Regexp?): Regexp? {
-            var node = re
+            var node: Regexp? = re
             while (node != null && node.op == RegexpOp.CAPTURE && node.cap == 0) {
                 node = node.sub()
             }
@@ -3209,12 +3163,13 @@ class Pattern private constructor(
             }
             return when (node.op) {
                 RegexpOp.CONCAT -> {
-                    if (node.subs == null || node.subs.isEmpty()) {
-                        false
+                    val subs = node.subs
+                    if (subs == null || subs.isEmpty()) {
+                        return false
                     }
-                    for (sub in node.subs) {
+                    for (sub in subs) {
                         if (!appendAsciiCaseInsensitiveLiteral(sub, sb)) {
-                            false
+                            return false
                         }
                     }
                     true
@@ -3223,25 +3178,26 @@ class Pattern private constructor(
                 RegexpOp.LITERAL -> {
                     val cp = node.rune
                     if (cp < 0 || cp >= 128 || !isAsciiLiteralKeywordChar(cp)) {
-                        false
+                        return false
                     }
                     if ((node.flags and ParseFlags.FOLD_CASE) == 0) {
-                        false
+                        return false
                     }
                     sb.append(Ascii.toLowerCase(cp).toChar())
                     true
                 }
 
                 RegexpOp.LITERAL_STRING -> {
-                    if (node.runes == null || node.runes.length == 0) {
-                        false
+                    val runes = node.runes
+                    if (runes == null || runes.size == 0) {
+                        return false
                     }
                     if ((node.flags and ParseFlags.FOLD_CASE) == 0) {
-                        false
+                        return false
                     }
-                    for (cp in node.runes) {
+                    for (cp in runes) {
                         if (cp < 0 || cp >= 128 || !isAsciiLiteralKeywordChar(cp)) {
-                            false
+                            return false
                         }
                         sb.append(Ascii.toLowerCase(cp).toChar())
                     }
@@ -3251,7 +3207,7 @@ class Pattern private constructor(
                 RegexpOp.CHAR_CLASS -> {
                     val cp: Int = asciiFoldedLiteralChar(node.charClass)
                     if (cp < 0) {
-                        false
+                        return false
                     }
                     sb.append(cp.toChar())
                     true
@@ -3266,7 +3222,7 @@ class Pattern private constructor(
         }
 
         private fun asciiFoldedLiteralChar(cc: CharClass?): Int {
-            if (cc == null || cc.numRunes() != 2) {
+            if (cc == null || cc!!.numRunes() != 2) {
                 return -1
             }
             var cp = 'a'.code
@@ -3285,15 +3241,15 @@ class Pattern private constructor(
                 return null
             }
             if (node.op == RegexpOp.CONCAT && node.nsub() > 0) {
-                return unwrapCaptures(node.subs.get(0))
+                return unwrapCaptures(node.subs!!.get(0))
             }
             return node
         }
 
         private fun unwrapCaptures(re: Regexp?): Regexp? {
-            var node = re
+            var node: Regexp? = re
             while (node != null && (node.op == RegexpOp.CAPTURE || node.op == RegexpOp.NON_CAPTURE)) {
-                node = node.sub()
+                node = node.sub()!!
             }
             return node
         }
@@ -3309,11 +3265,11 @@ class Pattern private constructor(
          * any user capture groups (the fast path only produces group 0).
          */
         private fun extractCharClassMatch(re: Regexp, hasUserCaptures: Boolean): CharClassMatchInfo? {
-            var node = re
+            var node: Regexp = re
 
             // Unwrap implicit group-0 capture.
             if (node.op == RegexpOp.CAPTURE && node.cap == 0) {
-                node = node.sub()
+                node = node.sub()!!
             }
 
             // Must be a quantifier: PLUS (min=1), STAR (min=0), or REPEAT (min >= 0, max = -1).
@@ -3336,7 +3292,7 @@ class Pattern private constructor(
                 }
             }
 
-            val inner = node.sub()
+            val inner = node.sub()!!
 
             // Reject if the original pattern has user capture groups — the fast path only produces
             // group 0, so it can't provide group(1) etc.
@@ -3352,7 +3308,7 @@ class Pattern private constructor(
             } else {
                 return null
             }
-            if (cc.isEmpty()) {
+            if (cc!!.isEmpty()) {
                 return null
             }
 
@@ -3384,18 +3340,18 @@ class Pattern private constructor(
          * excluded.
          */
         private fun extractSingleCharClass(re: Regexp, hasUserCaptures: Boolean): CharClassScanInfo? {
-            var node = re
+            var node: Regexp = re
             if (node.op == RegexpOp.CAPTURE && node.cap == 0) {
-                node = node.sub()
+                node = node.sub()!!
             }
             if (node.op != RegexpOp.CHAR_CLASS || node.charClass == null || hasUserCaptures) {
                 return null
             }
-            val cc = node.charClass
+            val cc = node.charClass!!
             if (cc.isEmpty()) {
                 return null
             }
-            return CharClassScanInfo.Companion.fromCharClass(cc)
+            return CharClassScanInfo.fromCharClass(cc)
         }
 
         private fun literalCharClass(cp: Int, flags: Int): CharClass {
@@ -3419,14 +3375,14 @@ class Pattern private constructor(
          * patterns, returns the lowercase version and foldCase=true.
          */
         private fun extractLiteralMatch(re: Regexp?): LiteralResult {
-            var node = re
+            var node: Regexp? = re
 
             // Unwrap outer CAPTURE (group 0).
             while (node != null && node.op == RegexpOp.CAPTURE) {
-                node = node.sub()
+                node = node.sub()!!
             }
             if (node == null) {
-                return LiteralResult.Companion.NONE
+                return LiteralResult.NONE
             }
 
             var foldCase = false
@@ -3436,7 +3392,7 @@ class Pattern private constructor(
             when (node.op) {
                 RegexpOp.LITERAL -> {
                     if (!Utils.isValidRune(node.rune)) {
-                        return LiteralResult.Companion.NONE
+                        return LiteralResult.NONE
                     }
                     foldCase = (node.flags and ParseFlags.FOLD_CASE) != 0
                     sb.appendCodePoint(node.rune)
@@ -3447,7 +3403,7 @@ class Pattern private constructor(
                     if (node.runes != null) {
                         for (r in node.runes) {
                             if (!Utils.isValidRune(r)) {
-                                return LiteralResult.Companion.NONE
+                                return LiteralResult.NONE
                             }
                             sb.appendCodePoint(r)
                         }
@@ -3455,18 +3411,18 @@ class Pattern private constructor(
                 }
 
                 RegexpOp.CONCAT -> {
-                    for (child in node.subs) {
+                    for (child in node.subs!!) {
                         // Each child must be LITERAL or LITERAL_STRING (not wrapped in CAPTURE etc.)
                         var c = child
                         while (c != null && (c.op == RegexpOp.CAPTURE || c.op == RegexpOp.NON_CAPTURE)) {
                             c = c.sub()
                         }
                         if (c == null) {
-                            return LiteralResult.Companion.NONE
+                            return LiteralResult.NONE
                         }
                         if (c.op == RegexpOp.BEGIN_TEXT) {
-                            if (sb.length() > 0) {
-                                return LiteralResult.Companion.NONE
+                            if (sb.length > 0) {
+                                return LiteralResult.NONE
                             }
                             continue
                         }
@@ -3474,14 +3430,14 @@ class Pattern private constructor(
                         when (c.op) {
                             RegexpOp.LITERAL -> {
                                 if (!Utils.isValidRune(c.rune)) {
-                                    return LiteralResult.Companion.NONE
+                                    return LiteralResult.NONE
                                 }
-                                if (Inst.Companion.simpleFold(c.rune) != c.rune) {
+                                if (Inst.simpleFold(c.rune) != c.rune) {
                                     if (!foldCaseInitialized) {
                                         foldCase = childFoldCase
                                         foldCaseInitialized = true
                                     } else if (childFoldCase != foldCase) {
-                                        return LiteralResult.Companion.NONE
+                                        return LiteralResult.NONE
                                     }
                                 }
                                 sb.appendCodePoint(c.rune)
@@ -3489,18 +3445,18 @@ class Pattern private constructor(
 
                             RegexpOp.LITERAL_STRING -> {
                                 if (c.runes == null) {
-                                    return LiteralResult.Companion.NONE
+                                    return LiteralResult.NONE
                                 }
                                 for (r in c.runes) {
                                     if (!Utils.isValidRune(r)) {
-                                        return LiteralResult.Companion.NONE
+                                        return LiteralResult.NONE
                                     }
-                                    if (Inst.Companion.simpleFold(r) != r) {
+                                    if (Inst.simpleFold(r) != r) {
                                         if (!foldCaseInitialized) {
                                             foldCase = childFoldCase
                                             foldCaseInitialized = true
                                         } else if (childFoldCase != foldCase) {
-                                            return LiteralResult.Companion.NONE
+                                            return LiteralResult.NONE
                                         }
                                     }
                                     sb.appendCodePoint(r)
@@ -3508,7 +3464,7 @@ class Pattern private constructor(
                             }
 
                             else -> {
-                                return LiteralResult.Companion.NONE
+                                return LiteralResult.NONE
                             }
                         }
                     }
@@ -3520,7 +3476,7 @@ class Pattern private constructor(
                 }
 
                 else -> {
-                    return LiteralResult.Companion.NONE
+                    return LiteralResult.NONE
                 }
             }
 
@@ -3528,7 +3484,7 @@ class Pattern private constructor(
                 return LiteralResult("", false)
             }
             return LiteralResult(
-                if (foldCase) sb.toString().toLowerCase(Locale.ROOT) else sb.toString(), foldCase
+                if (foldCase) sb.toString().lowercase(Locale.ROOT) else sb.toString(), foldCase
             )
         }
     }

@@ -66,8 +66,41 @@ internal object Simplifier {
         }
 
         // Recursively compare children using an explicit stack.
-        val stk = ArrayDeque<Regexp?>()
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        val stk = ArrayDeque<Regexp>()
+        while (true) {
+            when (a!!.op) {
+                RegexpOp.ALTERNATE, RegexpOp.CONCAT -> {
+                    for (i in 0 until a.subs!!.size) {
+                        val a2 = a.subs!![i]!!
+                        val b2 = b!!.subs!![i]!!
+                        if (!topEqual(a2, b2)) {
+                            return false
+                        }
+                        stk.push(a2)
+                        stk.push(b2)
+                    }
+                }
+
+                RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST, RegexpOp.REPEAT, RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> {
+                    val a2 = a.subs!![0]!!
+                    val b2 = b!!.subs!![0]!!
+                    if (!topEqual(a2, b2)) {
+                        return false
+                    }
+                    a = a2
+                    b = b2
+                    continue
+                }
+
+                else -> {}
+            }
+
+            if (stk.isEmpty()) {
+                break
+            }
+            b = stk.pop()
+            a = stk.pop()
+        }
         return true
     }
 
@@ -88,7 +121,7 @@ internal object Simplifier {
                 b.runes
             ) && ((a.flags xor b.flags) and ParseFlags.FOLD_CASE) == 0
 
-            RegexpOp.ALTERNATE, RegexpOp.CONCAT -> return a.subs.size() == b.subs.size()
+            RegexpOp.ALTERNATE, RegexpOp.CONCAT -> return a.subs!!.size == b.subs!!.size
 
             RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> return ((a.flags xor b.flags) and ParseFlags.NON_GREEDY) == 0
 
@@ -100,7 +133,7 @@ internal object Simplifier {
 
             RegexpOp.HAVE_MATCH -> return a.matchId == b.matchId
 
-            RegexpOp.CHAR_CLASS -> return Arrays.equals(a.charClass.flatRanges(), b.charClass.flatRanges())
+            RegexpOp.CHAR_CLASS -> return Arrays.equals(a.charClass!!.flatRanges(), b.charClass!!.flatRanges())
 
             else -> return false
         }
@@ -133,32 +166,36 @@ internal object Simplifier {
             leaf = leaf.sub()
         }
         val consumingAtom =
-            leaf.op == RegexpOp.LITERAL || (leaf.op == RegexpOp.LITERAL_STRING && leaf.runes.length > 0)
+            leaf.op == RegexpOp.LITERAL || (leaf.op == RegexpOp.LITERAL_STRING && leaf.runes.size > 0)
                     || leaf.op == RegexpOp.CHAR_CLASS || leaf.op == RegexpOp.ANY_CHAR
         if (!consumingAtom) {
             return null
         }
         val op = if (outer.op == RegexpOp.PLUS && sub.min == 1) RegexpOp.PLUS else RegexpOp.STAR
-        return Regexp.Companion.rawQuantifier(op, atom, outer.flags)
+        return Regexp.rawQuantifier(op, atom, outer.flags)
     }
 
     /** Returns true if the child args differ from the original subs.  */
-    private fun childArgsChanged(re: Regexp, childArgs: MutableList<Regexp>): Boolean {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+    private fun childArgsChanged(re: Regexp, childArgs: MutableList<Regexp?>): Boolean {
+        for (i in childArgs.indices) {
+            if (childArgs[i] !== re.subs!![i]) {
+                return true
+            }
+        }
         return false
     }
 
     /** Creates a copy of `re` with new sub-expressions, preserving op-specific fields.  */ // Switch mirrors the C++ RE2 structure and is clearer as a statement switch.
-    private fun copyWithNewSubs(re: Regexp, newSubs: MutableList<Regexp>): Regexp {
+    private fun copyWithNewSubs(re: Regexp, newSubs: MutableList<Regexp?>): Regexp {
         when (re.op) {
-            RegexpOp.REPEAT -> return Regexp.Companion.repeat(newSubs.getFirst(), re.flags, re.min, re.max)
-            RegexpOp.NON_CAPTURE -> return Regexp.Companion.nonCapture(newSubs.getFirst(), re.flags)
-            RegexpOp.CAPTURE -> return Regexp.Companion.capture(newSubs.getFirst(), re.flags, re.cap, re.name)
-            RegexpOp.STAR -> return Regexp.Companion.star(newSubs.getFirst(), re.flags)
-            RegexpOp.PLUS -> return Regexp.Companion.plus(newSubs.getFirst(), re.flags)
-            RegexpOp.QUEST -> return Regexp.Companion.quest(newSubs.getFirst(), re.flags)
-            RegexpOp.ALTERNATE -> return Regexp.Companion.alternate(newSubs, re.flags)
-            RegexpOp.CONCAT -> return Regexp.Companion.concat(newSubs, re.flags)
+            RegexpOp.REPEAT -> return Regexp.repeat(newSubs[0]!!, re.flags, re.min, re.max)
+            RegexpOp.NON_CAPTURE -> return Regexp.nonCapture(newSubs[0]!!, re.flags)
+            RegexpOp.CAPTURE -> return Regexp.capture(newSubs[0]!!, re.flags, re.cap, re.name)
+            RegexpOp.STAR -> return Regexp.star(newSubs[0]!!, re.flags)
+            RegexpOp.PLUS -> return Regexp.plus(newSubs[0]!!, re.flags)
+            RegexpOp.QUEST -> return Regexp.quest(newSubs[0]!!, re.flags)
+            RegexpOp.ALTERNATE -> return Regexp.alternate(newSubs, re.flags)
+            RegexpOp.CONCAT -> return Regexp.concat(newSubs, re.flags)
             else -> throw IllegalArgumentException("Unexpected op: " + re.op)
         }
     }
@@ -172,14 +209,14 @@ internal object Simplifier {
         if (r1.op != RegexpOp.STAR && r1.op != RegexpOp.PLUS && r1.op != RegexpOp.QUEST && r1.op != RegexpOp.REPEAT) {
             return false
         }
-        val r1sub: Regexp = r1.subs.getFirst()
+        val r1sub: Regexp = r1.subs!![0]!!
         if (r1sub.op != RegexpOp.LITERAL && r1sub.op != RegexpOp.CHAR_CLASS && r1sub.op != RegexpOp.ANY_CHAR && r1sub.op != RegexpOp.ANY_BYTE) {
             return false
         }
 
         // r2 is a quantifier of the same thing.
         if ((r2.op == RegexpOp.STAR || r2.op == RegexpOp.PLUS || r2.op == RegexpOp.QUEST || r2.op == RegexpOp.REPEAT)
-            && equal(r1sub, r2.subs.getFirst())
+            && equal(r1sub, r2.subs!!.first())
             && ((r1.flags and ParseFlags.NON_GREEDY) == (r2.flags and ParseFlags.NON_GREEDY))
         ) {
             return true
@@ -191,7 +228,7 @@ internal object Simplifier {
         }
 
         // r2 is a literal string beginning with r1's literal.
-        if (r1sub.op == RegexpOp.LITERAL && r2.op == RegexpOp.LITERAL_STRING && r2.runes.length > 0 && r2.runes[0] == r1sub.rune && ((r1sub.flags and ParseFlags.FOLD_CASE) == (r2.flags and ParseFlags.FOLD_CASE))) {
+        if (r1sub.op == RegexpOp.LITERAL && r2.op == RegexpOp.LITERAL_STRING && r2.runes.size > 0 && r2.runes[0] == r1sub.rune && ((r1sub.flags and ParseFlags.FOLD_CASE) == (r2.flags and ParseFlags.FOLD_CASE))) {
             return true
         }
 
@@ -207,7 +244,7 @@ internal object Simplifier {
     private fun doCoalesce(r1: Regexp, r2: Regexp): CoalescePair {
         var min: Int
         var max: Int
-        val operand: Regexp? = r1.subs.getFirst()
+        val operand: Regexp? = r1.subs!!.first()
 
         when (r1.op) {
             RegexpOp.STAR -> {
@@ -271,22 +308,22 @@ internal object Simplifier {
             }
 
             RegexpOp.LITERAL_STRING -> {
-                val r: Int = r1.subs.getFirst().rune
+                val r: Int = r1.subs!![0]!!.rune
                 var n = 1
-                while (n < r2.runes.length && r2.runes[n] == r) {
+                while (n < r2.runes.size && r2.runes[n] == r) {
                     n++
                 }
                 min += n
                 if (max != -1) {
                     max += n
                 }
-                if (n == r2.runes.length) {
+                if (n == r2.runes.size) {
                     return leaveEmpty(operand, r1.flags, min, max)
                 }
                 // Partial match: the repeat goes first, remainder of literal string second.
-                val nre: Regexp = Regexp.Companion.repeat(operand, r1.flags, min, max)
-                val remainRunes = Arrays.copyOfRange(r2.runes, n, r2.runes.length)
-                val remainder: Regexp = Regexp.Companion.literalString(remainRunes, r2.flags)
+                val nre: Regexp = Regexp.repeat(operand, r1.flags, min, max)
+                val remainRunes = Arrays.copyOfRange(r2.runes, n, r2.runes.size)
+                val remainder: Regexp = Regexp.literalString(remainRunes, r2.flags)
                 return CoalescePair(nre, remainder)
             }
 
@@ -300,7 +337,7 @@ internal object Simplifier {
      */
     private fun leaveEmpty(operand: Regexp?, flags: Int, min: Int, max: Int): CoalescePair {
         return CoalescePair(
-            Regexp.Companion.emptyMatch(ParseFlags.NONE), Regexp.Companion.repeat(operand, flags, min, max)
+            Regexp.emptyMatch(ParseFlags.NONE), Regexp.repeat(operand, flags, min, max)
         )
     }
 
@@ -315,17 +352,17 @@ internal object Simplifier {
             val node = stack.pop()
             when (node.op) {
                 RegexpOp.NO_MATCH, RegexpOp.EMPTY_MATCH, RegexpOp.LITERAL, RegexpOp.LITERAL_STRING, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.END_TEXT, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.HAVE_MATCH -> {}
-                RegexpOp.CONCAT, RegexpOp.ALTERNATE -> for (sub in node.subs) {
+                RegexpOp.CONCAT, RegexpOp.ALTERNATE -> for (sub in node.subs!!) {
                     stack.push(sub)
                 }
 
-                RegexpOp.CHAR_CLASS -> if (node.charClass.isEmpty() || isFull(node.charClass)) {
+                RegexpOp.CHAR_CLASS -> if (node.charClass!!.isEmpty() || isFull(node.charClass!!)) {
                     return false
                 }
 
-                RegexpOp.CAPTURE -> stack.push(node.subs.getFirst())
+                RegexpOp.CAPTURE -> stack.push(node.subs!![0]!!)
                 RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> {
-                    val sub: Regexp = node.subs.getFirst()
+                    val sub: Regexp = node.subs!![0]!!
                     val subOp = sub.op
                     if (subOp == RegexpOp.STAR || subOp == RegexpOp.PLUS || subOp == RegexpOp.QUEST || subOp == RegexpOp.EMPTY_MATCH || subOp == RegexpOp.NO_MATCH) {
                         return false
@@ -344,16 +381,13 @@ internal object Simplifier {
      * Creates a STAR/PLUS/QUEST node without any cross-op squashing. Used by the SimplifyWalker's
      * postVisit to match the C++ behavior (which also creates nodes directly).
      */
-    private fun rawQuantifier(op: RegexpOp?, sub: Regexp?, flags: Int): Regexp {
-        return Regexp.Companion.rawQuantifier(op, sub, flags)
+    private fun rawQuantifier(op: RegexpOp, sub: Regexp, flags: Int): Regexp {
+        return Regexp.rawQuantifier(op, sub, flags)
     }
 
     /** Returns true if the character class matches every Java string code point.  */
     private fun isFull(cc: CharClass): Boolean {
-        if (cc.numRanges() == 1 && cc.lo(0) == 0 && cc.hi(0) == Utils.MAX_RUNE) {
-            return true
-        }
-        return false
+        return cc.numRanges() == 1 && cc.lo(0) == 0 && cc.hi(0) == Utils.MAX_RUNE
     }
 
     /**
@@ -362,11 +396,11 @@ internal object Simplifier {
      * 
      * Zero-width operands have already been reduced to at most one iteration by the caller.
      */
-    private fun simplifyRepeat(re: Regexp, min: Int, max: Int, flags: Int): Regexp? {
-        if (max > min && max > 1 && AstAnalysis.Companion.analyze(re).canMatchEmpty) {
+    private fun simplifyRepeat(re: Regexp, min: Int, max: Int, flags: Int): Regexp {
+        if (max > min && max > 1 && AstAnalysis.analyze(re).canMatchEmpty) {
             // The final required iteration and optional iterations share one empty-stop invocation.
             // Preserve its bounds for the compiler instead of turning it into independent copies.
-            return Regexp.Companion.repeat(re, flags, min, max)
+            return Regexp.repeat(re, flags, min, max)
         }
 
         // x{n,} means at least n matches.
@@ -381,14 +415,16 @@ internal object Simplifier {
             // copy: the language-only optimization of stripping captures from the
             // mandatory prefix changes JDK-visible group state for quantified captures.
             val subs: MutableList<Regexp> = ArrayList<Regexp>(min)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until min - 1) {
+                subs.add(re)
+            }
             subs.add(starPlusOrQuest(RegexpOp.PLUS, re, flags))
-            return Regexp.Companion.concat(subs, flags)
+            return Regexp.concat(subs, flags)
         }
 
         // x{0} → empty match
         if (min == 0 && max == 0) {
-            return Regexp.Companion.emptyMatch(flags)
+            return Regexp.emptyMatch(flags)
         }
 
         // x{1} → x
@@ -401,8 +437,10 @@ internal object Simplifier {
         var nre: Regexp? = null
         if (min > 0) {
             val subs: MutableList<Regexp> = ArrayList<Regexp>(min)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-            nre = Regexp.Companion.concat(subs, flags)
+            for (i in 0 until min) {
+                subs.add(re)
+            }
+            nre = Regexp.concat(subs, flags)
         }
 
         if (max > min) {
@@ -410,27 +448,35 @@ internal object Simplifier {
             // when re does. Checking once keeps x{0,n} linear instead of rescanning the growing suffix.
             val reHasVisibleCapture = hasVisibleCapture(re)
             var suf = starPlusOrQuest(RegexpOp.QUEST, re, flags, reHasVisibleCapture)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in min + 1 until max) {
+                suf =
+                    starPlusOrQuest(
+                        RegexpOp.QUEST,
+                        Regexp.concat(List.of(re, suf), flags),
+                        flags,
+                        reHasVisibleCapture,
+                    )
+            }
             if (nre == null) {
                 nre = suf
             } else {
-                nre = Regexp.Companion.concat(List.of<Regexp?>(nre, suf), flags)
+                nre = Regexp.concat(List.of<Regexp?>(nre, suf), flags)
             }
         }
 
         if (nre == null) {
-            return Regexp.Companion.noMatch(flags)
+            return Regexp.noMatch(flags)
         }
         return nre
     }
 
     /** Simplifies a character class: empty → NO_MATCH, full → ANY_CHAR.  */
     private fun simplifyCharClass(re: Regexp): Regexp {
-        if (re.charClass.isEmpty()) {
-            return Regexp.Companion.noMatch(re.flags)
+        if (re.charClass!!.isEmpty()) {
+            return Regexp.noMatch(re.flags)
         }
-        if (isFull(re.charClass)) {
-            return Regexp.Companion.anyChar(re.flags)
+        if (isFull(re.charClass!!)) {
+            return Regexp.anyChar(re.flags)
         }
         return re
     }
@@ -465,12 +511,12 @@ internal object Simplifier {
             if (sub.op == RegexpOp.STAR) {
                 return sub
             }
-            return Regexp.Companion.star(sub.subs.getFirst(), flags)
+            return Regexp.star(sub.subs!!.first(), flags)
         }
         when (op) {
-            RegexpOp.STAR -> return Regexp.Companion.star(sub, flags)
-            RegexpOp.PLUS -> return Regexp.Companion.plus(sub, flags)
-            RegexpOp.QUEST -> return Regexp.Companion.quest(sub, flags)
+            RegexpOp.STAR -> return Regexp.star(sub, flags)
+            RegexpOp.PLUS -> return Regexp.plus(sub, flags)
+            RegexpOp.QUEST -> return Regexp.quest(sub, flags)
             else -> throw IllegalArgumentException("Bad op: " + op)
         }
     }
@@ -490,7 +536,7 @@ internal object Simplifier {
             return re // No ref-counting in Java.
         }
 
-        override fun shortVisit(re: Regexp?, parentArg: Regexp?): Regexp? {
+        override fun shortVisit(re: Regexp, parentArg: Regexp?): Regexp {
             return re
         }
 
@@ -498,13 +544,13 @@ internal object Simplifier {
             re: Regexp,
             parentArg: Regexp?,
             preArg: Regexp?,
-            childArgs: MutableList<Regexp>
-        ): Regexp? {
+            childArgs: MutableList<Regexp?>
+        ): Regexp {
             if (childArgs.isEmpty()) {
                 return re
             }
 
-            val repeatedAtom = coalesceGreedyAtomRepeat(re, childArgs.getFirst())
+            val repeatedAtom = coalesceGreedyAtomRepeat(re, childArgs[0]!!)
             if (repeatedAtom != null) {
                 return repeatedAtom
             }
@@ -519,39 +565,51 @@ internal object Simplifier {
 
             // CONCAT: check if any adjacent pair can coalesce.
             var canCoalesce = false
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            var i = 0
+            while (i + 1 < childArgs.size) {
+                if (canCoalesce(childArgs[i]!!, childArgs[i + 1]!!)) {
+                    canCoalesce = true
+                    break
+                }
+                i++
+            }
 
             if (!canCoalesce) {
                 if (!childArgsChanged(re, childArgs)) {
                     return re
                 }
-                return Regexp.Companion.concat(childArgs, re.flags)
+                return Regexp.concat(childArgs, re.flags)
             }
 
             // Do the coalescing in-place on childArgs.
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            i = 0
+            while (i + 1 < childArgs.size) {
+                if (canCoalesce(childArgs[i]!!, childArgs[i + 1]!!)) {
+                    val pair = doCoalesce(childArgs[i]!!, childArgs[i + 1]!!)
+                    childArgs[i] = pair.first!!
+                    childArgs[i + 1] = pair.second!!
+                }
+                i++
+            }
 
             // Build new CONCAT without the empty matches left by coalescing.
-            val newSubs: MutableList<Regexp> = ArrayList<Regexp>(childArgs.size())
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-            if (newSubs.size() == 1) {
-                return newSubs.getFirst()
+            val newSubs: MutableList<Regexp> = ArrayList<Regexp>(childArgs.size)
+            for (j in childArgs.indices) {
+                val cj = childArgs[j]!!
+                if (cj.op != RegexpOp.EMPTY_MATCH) {
+                    newSubs.add(cj)
+                }
             }
-            return Regexp.Companion.concat(newSubs, re.flags)
+            if (newSubs.size == 1) {
+                return newSubs.first()
+            }
+            return Regexp.concat(newSubs, re.flags)
         }
     }
 
     /** A pair of coalesced regexp results.  */
     @JvmRecord
-    private data class CoalescePair(first: Regexp?, second: Regexp?) {
-        val first: Regexp?
-        val second: Regexp?
-
-        init {
-            this.first = first
-            this.second = second
-        }
-    }
+    private data class CoalescePair(val first: Regexp?, val second: Regexp?)
 
     // ---------------------------------------------------------------------------
     // SimplifyWalker
@@ -564,7 +622,7 @@ internal object Simplifier {
             return re
         }
 
-        override fun shortVisit(re: Regexp?, parentArg: Regexp?): Regexp? {
+        override fun shortVisit(re: Regexp, parentArg: Regexp?): Regexp {
             return re
         }
 
@@ -580,7 +638,7 @@ internal object Simplifier {
             re: Regexp,
             parentArg: Regexp?,
             preArg: Regexp?,
-            childArgs: MutableList<Regexp>
+            childArgs: MutableList<Regexp?>
         ): Regexp? {
             when (re.op) {
                 RegexpOp.NO_MATCH, RegexpOp.EMPTY_MATCH, RegexpOp.LITERAL, RegexpOp.LITERAL_STRING, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.END_TEXT, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.HAVE_MATCH -> return re
@@ -590,29 +648,29 @@ internal object Simplifier {
                         return re
                     }
                     if (re.op == RegexpOp.CONCAT) {
-                        return Regexp.Companion.concat(childArgs, re.flags)
+                        return Regexp.concat(childArgs, re.flags)
                     } else {
-                        return Regexp.Companion.alternate(childArgs, re.flags)
+                        return Regexp.alternate(childArgs, re.flags)
                     }
                 }
 
                 RegexpOp.NON_CAPTURE -> return childArgs.get(0)
 
                 RegexpOp.CAPTURE -> {
-                    val newsub: Regexp? = childArgs.get(0)
-                    if (newsub == re.subs.getFirst()) {
+                    val newsub: Regexp = childArgs[0]!!
+                    if (newsub === re.subs!![0]) {
                         return re
                     }
-                    return Regexp.Companion.capture(newsub, re.flags, re.cap, re.name)
+                    return Regexp.capture(newsub, re.flags, re.cap, re.name)
                 }
 
                 RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> {
-                    val newsub = childArgs.get(0)
+                    val newsub: Regexp = childArgs[0]!!
                     // Repeat of empty string is still empty string.
                     if (newsub.op == RegexpOp.EMPTY_MATCH) {
                         return newsub
                     }
-                    if (newsub == re.subs.getFirst()) {
+                    if (newsub === re.subs!![0]) {
                         return re
                     }
                     // Idempotent squashing: e.g. STAR(STAR(x)) → STAR(x).
@@ -623,7 +681,7 @@ internal object Simplifier {
                 }
 
                 RegexpOp.REPEAT -> {
-                    val newsub = childArgs.get(0)
+                    val newsub: Regexp = childArgs[0]!!
                     if (newsub.op == RegexpOp.EMPTY_MATCH) {
                         return newsub
                     }
@@ -631,7 +689,7 @@ internal object Simplifier {
                         if (zeroWidth == null) {
                             zeroWidth = ZeroWidthWalker()
                         }
-                        if (zeroWidth!!.walk(newsub, false)) {
+                        if (zeroWidth!!.walk(newsub, false) == true) {
                             // At a fixed position, another zero-width iteration makes the same choices and
                             // writes the same capture bounds. Keep one required or optional iteration, so
                             // reluctant zero-minimum repeats can still omit it and failed assertions can
@@ -670,20 +728,20 @@ internal object Simplifier {
         }
 
         override fun postVisit(
-            re: Regexp?, parentArg: Boolean?, preArg: Boolean?, childArgs: MutableList<Boolean?>
+            re: Regexp, parentArg: Boolean?, preArg: Boolean?, childArgs: MutableList<Boolean?>
         ): Boolean {
             val result = !childArgs.contains(false)
             known.put(re, result)
             return result
         }
 
-        override fun shortVisit(re: Regexp?, parentArg: Boolean?): Boolean {
+        override fun shortVisit(re: Regexp, parentArg: Boolean?): Boolean {
             return false
         }
     }
 
     private class HasVisibleCaptureWalker : Walker<Boolean?>() {
-        override fun shortVisit(re: Regexp?, parentArg: Boolean?): Boolean {
+        override fun shortVisit(re: Regexp, parentArg: Boolean?): Boolean {
             return false
         }
 
@@ -694,7 +752,7 @@ internal object Simplifier {
                 return true
             }
             for (childHasCapture in childArgs) {
-                if (childHasCapture) {
+                if (childHasCapture == true) {
                     return true
                 }
             }

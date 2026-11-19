@@ -214,8 +214,8 @@ internal class LineAnchorRegionTest {
             val matcher =
                 Matcher(pattern, Utf8InputScanner(input))
                     .region(
-                        Companion.byteOffset(region.input, region.start),
-                        Companion.byteOffset(region.input, region.end)
+                        byteOffset(region.input, region.start),
+                        byteOffset(region.input, region.end)
                     )
                     .useAnchoringBounds(anchoring)
                     .useTransparentBounds(transparent)
@@ -249,7 +249,7 @@ internal class LineAnchorRegionTest {
                     "UTF-8 %s %s %s anchoring=%s transparent=%s",
                     region, pattern, operation, anchoring, transparent
                 )
-                .isEqualTo(Companion.utf8Trace(region.input, expected))
+                .isEqualTo(utf8Trace(region.input, expected))
         }
 
         private fun utf8Trace(

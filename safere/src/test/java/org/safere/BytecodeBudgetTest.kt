@@ -69,7 +69,7 @@ internal class BytecodeBudgetTest {
         @Throws(IOException::class, URISyntaxException::class)
         private fun forEachClassFile(consumer: ClassFileConsumer) {
             val location =
-                Path.of(Pattern::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
+                Path.of(Pattern::class.java.getProtectionDomain().codeSource.location.toURI())
             if (Files.isDirectory(location)) {
                 forEachClassFile(location.resolve("org/safere"), consumer)
             } else {
@@ -99,7 +99,7 @@ internal class BytecodeBudgetTest {
                     override fun visitMethod(
                         access: Int, name: String?, descriptor: String?, signature: String?, exceptions: Array<String?>?
                     ): MethodVisitor {
-                        val method = reader.getClassName().replace('/', '.') + "." + name + descriptor
+                        val method = reader.className.replace('/', '.') + "." + name + descriptor
                         return object : MethodVisitor(Opcodes.ASM9) {
                             override fun visitAnnotation(annotation: String, visible: Boolean): AnnotationVisitor? {
                                 if (annotation != ANNOTATION) {
@@ -121,7 +121,7 @@ internal class BytecodeBudgetTest {
 
                                     override fun visitEnd() {
                                         budgets.add(
-                                            BytecodeBudgetTest.Budget(
+                                            Budget(
                                                 method,
                                                 max,
                                                 min,
@@ -148,7 +148,7 @@ internal class BytecodeBudgetTest {
          * class file (JVMS 4.1, 4.6, 4.7.3) with ASM's constant-pool-aware readers.
          */
         private fun codeLengths(reader: ClassReader): MutableMap<String?, Int?> {
-            val buffer = CharArray(reader.getMaxStringLength())
+            val buffer = CharArray(reader.maxStringLength)
             // Skip access_flags, this_class, super_class and the interfaces.
             var offset = reader.header + 6
             offset += 2 + 2 * reader.readUnsignedShort(offset)

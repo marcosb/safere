@@ -103,7 +103,7 @@ internal class LiteralAlternationTest {
                 val text = padding!!.repeat(1024) + "barfoo banana apple abc cherry" + padding
                 for (transparent in booleanArrayOf(false, true)) {
                     for (anchoring in booleanArrayOf(false, true)) {
-                        for (start in intArrayOf(0, 1, padding.length * 1024 + 3)) {
+                        for (start in intArrayOf(0, 1, padding.size * 1024 + 3)) {
                             val actual =
                                 org.safere.Pattern.compile(regex)
                                     .matcher(text)

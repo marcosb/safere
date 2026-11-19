@@ -41,7 +41,7 @@ internal class CharClassBuilder {
     }
 
     private fun append(lo: Int, hi: Int) {
-        if (size == ranges.length) {
+        if (size == ranges.size) {
             ranges = Arrays.copyOf(ranges, size * 2)
         }
         ranges[size++] = pack(lo, hi)
@@ -180,7 +180,7 @@ internal class CharClassBuilder {
             negated[out++] = pack(next, Utils.MAX_RUNE)
             count += Utils.MAX_RUNE - next + 1
         }
-        ranges = if (negated.length >= 8) negated else Arrays.copyOf(negated, 8)
+        ranges = if (negated.size >= 8) negated else Arrays.copyOf(negated, 8)
         size = out
         nrunes = count
         return this
@@ -217,7 +217,7 @@ internal class CharClassBuilder {
                 count += rhi - hi
             }
         }
-        ranges = if (result.length >= 8) result else Arrays.copyOf(result, 8)
+        ranges = if (result.size >= 8) result else Arrays.copyOf(result, 8)
         size = out
         nrunes = count
         return this
@@ -248,9 +248,7 @@ internal class CharClassBuilder {
         return nrunes
     }
 
-    val isEmpty: Boolean
-        /** Returns true if this builder contains no ranges.  */
-        get() = size == 0
+    fun isEmpty(): Boolean = size == 0
 
     /**
      * Intersects this builder with another, keeping only code points present in both. Replaces the

@@ -8,7 +8,6 @@ import com.google.gson.JsonObject
 import org.safere.exhaustive.SweepWorkers.LineWorker
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.IOException
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,6 +20,7 @@ import kotlin.Boolean
 import kotlin.Char
 import kotlin.Int
 import kotlin.Long
+import kotlin.String
 import kotlin.Throws
 import kotlin.check
 import kotlin.collections.ArrayList
@@ -29,14 +29,25 @@ import kotlin.collections.LinkedHashSet
 import kotlin.collections.MutableList
 import kotlin.collections.MutableMap
 import kotlin.collections.MutableSet
-import kotlin.collections.contains
 import kotlin.collections.dropLastWhile
+import kotlin.collections.indexOf
 import kotlin.collections.toTypedArray
-import kotlin.io.println
+import kotlin.compareTo
 import kotlin.io.use
 import kotlin.math.min
 import kotlin.plus
 import kotlin.require
+import kotlin.sequences.indexOf
+import kotlin.text.StringBuilder
+import kotlin.text.contains
+import kotlin.text.indexOf
+import kotlin.text.lastIndexOf
+import kotlin.text.repeat
+import kotlin.text.replace
+import kotlin.text.split
+import kotlin.text.startsWith
+import kotlin.text.substring
+import kotlin.text.toRegex
 import kotlin.use
 
 /** Offline differential sweep for repeated quantifiers over zero-width operands.  */
@@ -409,7 +420,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         )
     }
 
-    private fun direction(jdk: RegexSweep.Outcome, safere: RegexSweep.Outcome): kotlin.String {
+    private fun direction(jdk: RegexSweep.Outcome, safere: RegexSweep.Outcome): String {
         if (jdk.accepted && !safere.accepted) {
             return "jdk-accepts"
         }
@@ -473,7 +484,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         )
     }
 
-    private fun nestedNonCapturingGroups(inner: kotlin.String, depth: Int): kotlin.String {
+    private fun nestedNonCapturingGroups(inner: String, depth: Int): String {
         val regex = StringBuilder(inner.length + 4 * depth)
         regex.append("(?:".repeat(depth))
         regex.append(inner)
@@ -481,7 +492,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         return regex.toString()
     }
 
-    private fun nestedAlternation(initial: kotlin.String?, otherBranch: kotlin.String?, depth: Int): kotlin.String? {
+    private fun nestedAlternation(initial: String?, otherBranch: String?, depth: Int): String? {
         var regex = initial
         for (i in 0..<depth) {
             regex = "(?:" + regex + "|" + otherBranch + ")"
@@ -510,13 +521,13 @@ object ZeroWidthQuantifierDivergenceSweep {
     }
 
     private fun buildQuantifierChains(): MutableList<QuantifierChain> {
-        val chains: MutableMap<kotlin.String?, QuantifierChain?> = LinkedHashMap<kotlin.String?, QuantifierChain?>()
+        val chains: MutableMap<String?, QuantifierChain?> = LinkedHashMap<String?, QuantifierChain?>()
         appendQuantifierChains(chains, ArrayList<Quantifier>(), 0)
         return List.copyOf<QuantifierChain?>(chains.values)
     }
 
     private fun appendQuantifierChains(
-        chains: MutableMap<kotlin.String?, QuantifierChain?>, current: MutableList<Quantifier>, depth: Int
+        chains: MutableMap<String?, QuantifierChain?>, current: MutableList<Quantifier>, depth: Int
     ) {
         if (depth > 0) {
             val chain = quantifierChain(current)
@@ -532,19 +543,19 @@ object ZeroWidthQuantifierDivergenceSweep {
         }
     }
 
-    private fun atom(label: kotlin.String?, regex: kotlin.String?): Atom {
+    private fun atom(label: String?, regex: String?): Atom {
         return Atom(label, regex)
     }
 
-    private fun operand(label: kotlin.String, regex: kotlin.String?): Operand {
+    private fun operand(label: String, regex: String?): Operand {
         return Operand(label, regex)
     }
 
-    private fun wrapper(label: kotlin.String?, template: kotlin.String?): Wrapper {
+    private fun wrapper(label: String?, template: String?): Wrapper {
         return Wrapper(label, template)
     }
 
-    private fun quantifier(label: kotlin.String?, text: kotlin.String?): Quantifier {
+    private fun quantifier(label: String?, text: String?): Quantifier {
         return Quantifier(label, text)
     }
 
@@ -565,7 +576,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         return QuantifierChain(label.toString(), text.toString())
     }
 
-    private fun context(label: kotlin.String?, template: kotlin.String?): Context {
+    private fun context(label: String?, template: String?): Context {
         return Context(label, template)
     }
 
@@ -580,9 +591,9 @@ object ZeroWidthQuantifierDivergenceSweep {
     }
 
     @JvmStatic
-    fun divergenceClassificationNames(): MutableList<kotlin.String?> {
+    fun divergenceClassificationNames(): MutableList<String?> {
         return Arrays.stream<DivergenceClass?>(DivergenceClass.entries.toTypedArray())
-            .map<kotlin.String?> { obj: DivergenceClass? -> obj!!.name }.toList()
+            .map<String?> { obj: DivergenceClass? -> obj!!.name }.toList()
     }
 
     @JvmStatic
@@ -591,15 +602,15 @@ object ZeroWidthQuantifierDivergenceSweep {
             .map<DivergenceStatus?> { obj: DivergenceClass? -> obj!!.status() }.toList()
     }
 
-    fun divergenceClassificationStatusMap(): MutableMap<kotlin.String?, DivergenceStatus?> {
-        val statuses: MutableMap<kotlin.String?, DivergenceStatus?> = LinkedHashMap<kotlin.String?, DivergenceStatus?>()
+    fun divergenceClassificationStatusMap(): MutableMap<String?, DivergenceStatus?> {
+        val statuses: MutableMap<String?, DivergenceStatus?> = LinkedHashMap<String?, DivergenceStatus?>()
         for (classification in DivergenceClass.entries) {
             statuses.put(classification.name, classification.status())
         }
         return statuses
     }
 
-    fun auditClassificationName(caseIndex: Long): kotlin.String? {
+    fun auditClassificationName(caseIndex: Long): String? {
         val classification = auditClassification(caseAt(caseIndex))
         return if (classification == null) null else classification.name
     }
@@ -682,7 +693,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         spec: CaseSpec?,
         jdk: RegexSweep.Outcome?,
         safere: RegexSweep.Outcome?,
-        bucketName: kotlin.String?,
+        bucketName: String?,
         classification: DivergenceClass,
         workerIndex: Int
     ) {
@@ -764,7 +775,7 @@ object ZeroWidthQuantifierDivergenceSweep {
                 && safere.accepted
                 && containsPossessiveQuantifierModifier(spec.quantifierChain!!.text)
                 && isZeroWidthPossessiveCaptureRetentionSpec(spec)
-                && ZeroWidthQuantifierDivergenceSweep.isDirectZeroWidthPossessiveCaptureRetentionContext(spec.context!!)
+                && isDirectZeroWidthPossessiveCaptureRetentionContext(spec.context!!)
                 && normalizeCaptureFields(jdk.trace) == normalizeCaptureFields(safere.trace)
     }
 
@@ -791,7 +802,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         }
     }
 
-    private fun containsPossessiveQuantifierModifier(quantifierChain: kotlin.String): Boolean {
+    private fun containsPossessiveQuantifierModifier(quantifierChain: String): Boolean {
         for (i in 1..<quantifierChain.length) {
             if (quantifierChain.get(i) == '+'
                 && isQuantifierModifierPrefix(quantifierChain.get(i - 1))
@@ -813,7 +824,7 @@ object ZeroWidthQuantifierDivergenceSweep {
                 && !safere.accepted && containsReluctantQuantifierModifier(spec.quantifierChain!!.text)
     }
 
-    private fun containsReluctantQuantifierModifier(quantifierChain: kotlin.String): Boolean {
+    private fun containsReluctantQuantifierModifier(quantifierChain: String): Boolean {
         for (i in 1..<quantifierChain.length) {
             if (quantifierChain.get(i) == '?'
                 && isQuantifierModifierPrefix(quantifierChain.get(i - 1))
@@ -855,7 +866,7 @@ object ZeroWidthQuantifierDivergenceSweep {
 
     @JvmStatic
     fun isKnownGraphemeBoundaryAlternativeFindCursorForTesting(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         return isFindOnlyTraceDifference(jdkTrace, safereTrace)
     }
@@ -894,7 +905,7 @@ object ZeroWidthQuantifierDivergenceSweep {
                 || operand.regex.contains("\\\\b{g}")
     }
 
-    private fun hasGraphemeSensitiveTrace(jdkTrace: kotlin.String, safereTrace: kotlin.String): Boolean {
+    private fun hasGraphemeSensitiveTrace(jdkTrace: String, safereTrace: String): Boolean {
         return jdkTrace.contains("\\uD83D")
                 || safereTrace.contains("\\uD83D")
                 || jdkTrace.indexOf('\u200D') >= 0 || safereTrace.indexOf('\u200D') >= 0
@@ -902,53 +913,53 @@ object ZeroWidthQuantifierDivergenceSweep {
 
     @JvmStatic
     fun isRepeatedGraphemeBoundaryCompositionTraceDifferenceForTesting(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         return isRepeatedGraphemeBoundaryCompositionTraceDifference(jdkTrace, safereTrace)
     }
 
     private fun isRepeatedGraphemeBoundaryCompositionTraceDifference(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         if (jdkTrace == safereTrace) {
             return false
         }
         return isRepeatedGraphemeBoundaryCompositionTraceDifference(
             nonReplacementTraceFields(
-                ZeroWidthQuantifierDivergenceSweep.normalizeCaptureFields(
+                normalizeCaptureFields(
                     removeDecomposedEAcuteFields(jdkTrace)!!
                 )
             ),
             nonReplacementTraceFields(
-                ZeroWidthQuantifierDivergenceSweep.normalizeCaptureFields(removeDecomposedEAcuteFields(safereTrace)!!)
+                normalizeCaptureFields(removeDecomposedEAcuteFields(safereTrace)!!)
             )
         )
     }
 
     private fun isGraphemeSensitiveAlternativeTraceDifference(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         if (jdkTrace == safereTrace) {
             return false
         }
         val jdkOperations =
             nonReplacementTraceFields(
-                ZeroWidthQuantifierDivergenceSweep.normalizeCaptureFields(
+                normalizeCaptureFields(
                     removeDecomposedEAcuteFields(jdkTrace)!!
                 )
             )
         val safeReOperations =
             nonReplacementTraceFields(
-                ZeroWidthQuantifierDivergenceSweep.normalizeCaptureFields(removeDecomposedEAcuteFields(safereTrace)!!)
+                normalizeCaptureFields(removeDecomposedEAcuteFields(safereTrace)!!)
             )
-        val nonSensitiveJdkOperations: MutableMap<kotlin.String?, kotlin.String?> =
-            LinkedHashMap<kotlin.String?, kotlin.String?>()
-        val nonSensitiveSafeReOperations: MutableMap<kotlin.String?, kotlin.String?> =
-            LinkedHashMap<kotlin.String?, kotlin.String?>()
+        val nonSensitiveJdkOperations: MutableMap<String?, String?> =
+            LinkedHashMap<String?, String?>()
+        val nonSensitiveSafeReOperations: MutableMap<String?, String?> =
+            LinkedHashMap<String?, String?>()
         var sawSensitiveDifference = false
         for (entry in jdkOperations.entries) {
             val safeReValue = safeReOperations.get(entry.key)
-            if (ZeroWidthQuantifierDivergenceSweep.isGraphemeSensitiveTraceKey(entry.key!!)) {
+            if (isGraphemeSensitiveTraceKey(entry.key!!)) {
                 if (entry.value != safeReValue) {
                     sawSensitiveDifference = true
                 }
@@ -957,7 +968,7 @@ object ZeroWidthQuantifierDivergenceSweep {
             }
         }
         for (entry in safeReOperations.entries) {
-            if (ZeroWidthQuantifierDivergenceSweep.isGraphemeSensitiveTraceKey(entry.key!!)) {
+            if (isGraphemeSensitiveTraceKey(entry.key!!)) {
                 if (entry.value != jdkOperations.get(entry.key)) {
                     sawSensitiveDifference = true
                 }
@@ -972,19 +983,19 @@ object ZeroWidthQuantifierDivergenceSweep {
         ))
     }
 
-    private fun isGraphemeSensitiveTraceKey(key: kotlin.String): Boolean {
+    private fun isGraphemeSensitiveTraceKey(key: String): Boolean {
         val colon = key.lastIndexOf(':')
         val input = if (colon >= 0) key.substring(0, colon) else key
         return input.contains("\\uD83D") || input.indexOf('\u200D') >= 0
     }
 
     private fun isRepeatedGraphemeBoundaryCompositionTraceDifference(
-        jdkOperations: MutableMap<kotlin.String?, kotlin.String?>,
-        safeReOperations: MutableMap<kotlin.String?, kotlin.String?>
+        jdkOperations: MutableMap<String?, String?>,
+        safeReOperations: MutableMap<String?, String?>
     ): Boolean {
         var sawCompositionalExtra = false
         for (entry in jdkOperations.entries) {
-            if (ZeroWidthQuantifierDivergenceSweep.isFindTraceKey(entry.key!!)) {
+            if (isFindTraceKey(entry.key!!)) {
                 continue
             }
             val safeReValue = safeReOperations.get(entry.key)
@@ -1018,7 +1029,7 @@ object ZeroWidthQuantifierDivergenceSweep {
             }
         }
         for (entry in safeReOperations.entries) {
-            if (ZeroWidthQuantifierDivergenceSweep.isFindTraceKey(entry.key!!)) {
+            if (isFindTraceKey(entry.key!!)) {
                 continue
             }
             if (!jdkOperations.containsKey(entry.key)) {
@@ -1032,16 +1043,16 @@ object ZeroWidthQuantifierDivergenceSweep {
         return sawCompositionalExtra
     }
 
-    private fun isFindTraceKey(key: kotlin.String): Boolean {
+    private fun isFindTraceKey(key: String): Boolean {
         val colon = key.lastIndexOf(':')
         return colon >= 0 && key.startsWith("find", colon + 1)
     }
 
-    private fun findSuccessesByInput(fields: MutableMap<kotlin.String?, kotlin.String?>): MutableMap<kotlin.String?, MutableSet<kotlin.String?>?> {
-        val successes: MutableMap<kotlin.String?, MutableSet<kotlin.String?>?> =
-            LinkedHashMap<kotlin.String?, MutableSet<kotlin.String?>?>()
+    private fun findSuccessesByInput(fields: MutableMap<String?, String?>): MutableMap<String?, MutableSet<String?>?> {
+        val successes: MutableMap<String?, MutableSet<String?>?> =
+            LinkedHashMap<String?, MutableSet<String?>?>()
         for (entry in fields.entries) {
-            if (!ZeroWidthQuantifierDivergenceSweep.isFindTraceKey(entry.key!!) || !entry.value!!.startsWith("true@")) {
+            if (!isFindTraceKey(entry.key!!) || !entry.value!!.startsWith("true@")) {
                 continue
             }
             val colon = entry.key!!.lastIndexOf(':')
@@ -1051,14 +1062,14 @@ object ZeroWidthQuantifierDivergenceSweep {
                         0,
                         colon
                     )
-                ) { ignored: kotlin.String? -> LinkedHashSet<kotlin.String?>() }!!
+                ) { ignored: String? -> LinkedHashSet<String?>() }!!
                 .add(entry.value)
         }
         return successes
     }
 
-    private fun nonReplacementTraceFields(trace: kotlin.String): MutableMap<kotlin.String?, kotlin.String?> {
-        val fields: MutableMap<kotlin.String?, kotlin.String?> = LinkedHashMap<kotlin.String?, kotlin.String?>()
+    private fun nonReplacementTraceFields(trace: String): MutableMap<String?, String?> {
+        val fields: MutableMap<String?, String?> = LinkedHashMap<String?, String?>()
         val matcher = NON_REPLACEMENT_TRACE_FIELD.matcher(trace)
         while (matcher.find()) {
             fields.put(matcher.group(1), matcher.group(2))
@@ -1066,7 +1077,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         return fields
     }
 
-    private fun isFindOnlyTraceDifference(jdkTrace: kotlin.String, safereTrace: kotlin.String): Boolean {
+    private fun isFindOnlyTraceDifference(jdkTrace: String, safereTrace: String): Boolean {
         return jdkTrace != safereTrace && (FIND_TRACE_FIELD
             .matcher(jdkTrace)
             .replaceAll("")
@@ -1091,20 +1102,20 @@ object ZeroWidthQuantifierDivergenceSweep {
 
     @JvmStatic
     fun isDecomposedEAcuteOnlyTraceDifferenceForTesting(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         return isDecomposedEAcuteOnlyTraceDifference(jdkTrace, safereTrace)
     }
 
     private fun isDecomposedEAcuteOnlyTraceDifference(
-        jdkTrace: kotlin.String, safereTrace: kotlin.String
+        jdkTrace: String, safereTrace: String
     ): Boolean {
         return jdkTrace != safereTrace && removeDecomposedEAcuteFields(jdkTrace) == removeDecomposedEAcuteFields(
             safereTrace
         )
     }
 
-    private fun removeDecomposedEAcuteFields(trace: kotlin.String): kotlin.String? {
+    private fun removeDecomposedEAcuteFields(trace: String): String? {
         return DECOMPOSED_E_ACUTE_TRACE_FIELD.matcher(trace).replaceAll("")
     }
 
@@ -1128,7 +1139,7 @@ object ZeroWidthQuantifierDivergenceSweep {
 
     private fun isPossessiveZeroWidthFailedPathCaptureLeakage(spec: CaseSpec): Boolean {
         return containsPossessiveQuantifierModifier(spec.quantifierChain!!.text)
-                && ZeroWidthQuantifierDivergenceSweep.isFailedPathCaptureLeakageContext(spec.context!!)
+                && isFailedPathCaptureLeakageContext(spec.context!!)
                 && isEmptyCaptureLeakageShape(spec)
     }
 
@@ -1260,7 +1271,7 @@ object ZeroWidthQuantifierDivergenceSweep {
                 && isConditionalZeroWidthPart(body.substring(plus + 1))
     }
 
-    private fun isConditionalZeroWidthPart(label: kotlin.String): Boolean {
+    private fun isConditionalZeroWidthPart(label: String): Boolean {
         return when (label) {
             "beginLine", "endLine", "beginText", "endTextBeforeFinalTerminator", "endText", "wordBoundary", "nonWordBoundary", "graphemeBoundary" -> true
             else -> false
@@ -1281,7 +1292,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         }
     }
 
-    private fun normalizeCaptureFields(trace: kotlin.String): kotlin.String {
+    private fun normalizeCaptureFields(trace: String): String {
         return CAPTURE_FIELD.matcher(trace).replaceAll("g$1=<capture>").replace("[null]", "[]")
     }
 
@@ -1291,37 +1302,37 @@ object ZeroWidthQuantifierDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Atom(val label: kotlin.String?, val regex: kotlin.String?)
+    private data class Atom(val label: String?, val regex: String?)
 
     @JvmRecord
-    private data class Operand(val label: kotlin.String, val regex: kotlin.String?)
+    private data class Operand(val label: String, val regex: String?)
 
     @JvmRecord
-    private data class Wrapper(val label: kotlin.String?, val template: kotlin.String?) {
-        fun regex(operand: kotlin.String?): kotlin.String {
+    private data class Wrapper(val label: String?, val template: String?) {
+        fun regex(operand: String?): String {
             return template.formatted(operand)
         }
     }
 
     @JvmRecord
-    private data class Quantifier(val label: kotlin.String?, val text: kotlin.String?)
+    private data class Quantifier(val label: String?, val text: String?)
 
     @JvmRecord
-    private data class QuantifierChain(val label: kotlin.String?, val text: kotlin.String)
+    private data class QuantifierChain(val label: String?, val text: String)
 
     @JvmRecord
-    private data class Context(val label: kotlin.String?, val template: kotlin.String?) {
-        fun regex(repeated: kotlin.String?): kotlin.String {
+    private data class Context(val label: String?, val template: String?) {
+        fun regex(repeated: String?): String {
             return template.formatted(repeated)
         }
     }
 
     @JvmRecord
     private data class FlagMode(
-        val label: kotlin.String?,
-        val prefix: kotlin.String?,
+        val label: String?,
+        val prefix: String?,
         val flags: Int,
-        val trivia: kotlin.String?
+        val trivia: String?
     )
 
     @JvmRecord
@@ -1339,7 +1350,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         }
     }
 
-    private enum class DivergenceClass(status: DivergenceStatus, rationale: kotlin.String) : DivergenceClassification {
+    private enum class DivergenceClass(status: DivergenceStatus, rationale: String) : DivergenceClassification {
         STACK_OVERFLOW(
             DivergenceStatus.EXPECTED_ZERO,
             "Generated stack-safety sentinel cases must not throw StackOverflowError in SafeRE."
@@ -1406,7 +1417,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         UNKNOWN(DivergenceStatus.UNKNOWN, "Unclassified SafeRE/JDK zero-width quantifier divergence.");
 
         private val status: DivergenceStatus?
-        private val rationale: kotlin.String?
+        private val rationale: String?
 
         init {
             this.status = status
@@ -1417,7 +1428,7 @@ object ZeroWidthQuantifierDivergenceSweep {
             return status
         }
 
-        override fun rationale(): kotlin.String? {
+        override fun rationale(): String? {
             return rationale
         }
     }
@@ -1430,12 +1441,12 @@ object ZeroWidthQuantifierDivergenceSweep {
         val context: Context?,
         val flagMode: FlagMode?
     ) {
-        fun regex(): kotlin.String {
+        fun regex(): String {
             val quantified = wrapper!!.regex(operand.regex) + quantifiedTriviaChain()
             return flagMode!!.prefix + context!!.regex(quantified)
         }
 
-        fun quantifiedTriviaChain(): kotlin.String {
+        fun quantifiedTriviaChain(): String {
             if (flagMode!!.trivia!!.isEmpty()) {
                 return quantifierChain!!.text
             }
@@ -1450,8 +1461,8 @@ object ZeroWidthQuantifierDivergenceSweep {
             return result.toString()
         }
 
-        fun inputs(): MutableList<kotlin.String?> {
-            val inputs: MutableSet<kotlin.String?> = LinkedHashSet<kotlin.String?>()
+        fun inputs(): MutableList<String?> {
+            val inputs: MutableSet<String?> = LinkedHashSet<String?>()
             inputs.add("")
             inputs.add("a")
             inputs.add("b")
@@ -1470,10 +1481,10 @@ object ZeroWidthQuantifierDivergenceSweep {
             ) {
                 inputs.add("x\uD83D\uDC69\u200D\uD83D\uDCBBx")
             }
-            return List.copyOf<kotlin.String?>(inputs)
+            return List.copyOf<String?>(inputs)
         }
 
-        fun labels(): kotlin.String {
+        fun labels(): String {
             return ("operand="
                     + operand.label
                     + ",wrapper="
@@ -1493,13 +1504,13 @@ object ZeroWidthQuantifierDivergenceSweep {
         val spec: CaseSpec?,
         val jdk: RegexSweep.Outcome?,
         val safere: RegexSweep.Outcome?,
-        val bucket: kotlin.String?,
+        val bucket: String?,
         val classification: DivergenceClass?
     ) {
-        fun toJson(): kotlin.String {
+        fun toJson(): String {
             val `object` = SweepJson.`object`()
             `object`.addProperty("caseIndex", caseIndex)
-            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.add("case", caseJson(spec!!))
             `object`.addProperty("bucket", bucket)
             `object`.addProperty("classification", classification!!.name)
             `object`.addProperty("classificationStatus", classification.status()!!.name)
@@ -1581,7 +1592,7 @@ object ZeroWidthQuantifierDivergenceSweep {
         }
 
         fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
-            ZeroWidthQuantifierDivergenceSweep.evaluateCase(
+            evaluateCase(
                 runState!!, summary, spec, caseIndex, workerIndex
             )
             reportProgressIfNeeded()
@@ -1600,4 +1611,232 @@ object ZeroWidthQuantifierDivergenceSweep {
             return min(options.rangeEndExclusive, totalCases())
         }
     }
+}
+
+@JvmRecord
+private data class Divergence(
+    val caseIndex: Long,
+    val spec: CaseSpec?,
+    val jdk: RegexSweep.Outcome?,
+    val safere: RegexSweep.Outcome?,
+    val bucket: String?,
+    val classification: DivergenceClass?
+) {
+    fun toJson(): String {
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("caseIndex", caseIndex)
+        `object`.add("case", caseJson(spec!!))
+        `object`.addProperty("bucket", bucket)
+        `object`.addProperty("classification", classification!!.name)
+        `object`.addProperty("classificationStatus", classification.status()!!.name)
+        `object`.addProperty("labels", spec.labels())
+        `object`.addProperty("regex", spec.regex())
+        `object`.addProperty("operand", spec.operand.label)
+        `object`.addProperty("wrapper", spec.wrapper!!.label)
+        `object`.addProperty("quantifierChain", spec.quantifierChain!!.label)
+        `object`.addProperty(
+            "quantifierChainLength",
+            spec.quantifierChain.label!!.split(",".toRegex()).dropLastWhile { it.isEmpty() }
+                .toTypedArray().size)
+        `object`.addProperty("context", spec.context!!.label)
+        `object`.addProperty("flags", spec.flagMode!!.label)
+        `object`.addProperty("jdkAccepted", jdk!!.accepted)
+        `object`.addProperty("safeReAccepted", safere!!.accepted)
+        `object`.addProperty("jdkTrace", jdk.trace)
+        `object`.addProperty("safeReTrace", safere.trace)
+        `object`.addProperty("jdkError", jdk.error)
+        `object`.addProperty("safeReError", safere.error)
+        return SweepJson.toJson(`object`)
+    }
+
+    companion object {
+        private fun caseJson(spec: CaseSpec): JsonObject {
+            val `object` = SweepJson.`object`()
+            `object`.addProperty("operandLabel", spec.operand.label)
+            `object`.addProperty("operandRegex", spec.operand.regex)
+            `object`.addProperty("wrapperLabel", spec.wrapper!!.label)
+            `object`.addProperty("wrapperTemplate", spec.wrapper.template)
+            `object`.addProperty("quantifierChainLabel", spec.quantifierChain!!.label)
+            `object`.addProperty("quantifierChain", spec.quantifierChain.text)
+            `object`.addProperty("contextLabel", spec.context!!.label)
+            `object`.addProperty("contextTemplate", spec.context.template)
+            `object`.addProperty("flagLabel", spec.flagMode!!.label)
+            `object`.addProperty("flagPrefix", spec.flagMode.prefix)
+            `object`.addProperty("flags", spec.flagMode.flags)
+            `object`.addProperty("trivia", spec.flagMode.trivia)
+            return `object`
+        }
+    }
+}
+
+private class SweepState(
+    runState: SweepRunState,
+    summary: ClassifiedDivergenceSummary<DivergenceClass?>,
+    workerIndex: Int
+) {
+    val runState: SweepRunState?
+    val summary: ClassifiedDivergenceSummary<DivergenceClass?>
+    val options: SweepOptions
+    val progressReporter: ProgressReporter
+    val workerIndex: Int
+    var generated: Long = 0
+
+    init {
+        this.runState = runState
+        this.summary = summary
+        this.options = runState.options
+        this.progressReporter = ProgressReporter(runState, workerIndex)
+        this.workerIndex = workerIndex
+    }
+
+    fun run() {
+        val end = min(options.rangeEndExclusive, totalCases())
+        generated = firstOwnedCaseIndex()
+        while (generated < end) {
+            val caseIndex = generated
+            generated += options.threads.toLong()
+            progressReporter.checked()
+            evaluateCase(caseIndex, caseAt(caseIndex))
+        }
+    }
+
+    fun firstOwnedCaseIndex(): Long {
+        return SweepWorkers.firstOwnedCaseIndex(
+            options.rangeStartInclusive, endExclusive(), options.threads, workerIndex
+        )
+    }
+
+    fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
+        ZeroWidthQuantifierDivergenceSweep.evaluateCase(
+            runState!!, summary, spec, caseIndex, workerIndex
+        )
+        reportProgressIfNeeded()
+    }
+
+    fun finish() {
+        runState!!.recordGenerated(min(generated, endExclusive()))
+        runState.updateWorkerNextCaseIndex(workerIndex, min(generated, endExclusive()))
+    }
+
+    fun reportProgressIfNeeded() {
+        progressReporter.reportIfNeeded(min(generated, endExclusive()))
+    }
+
+    fun endExclusive(): Long {
+        return min(options.rangeEndExclusive, totalCases())
+    }
+}
+}@JvmRecord
+private data class Divergence(
+    val caseIndex: Long,
+    val spec: CaseSpec?,
+    val jdk: RegexSweep.Outcome?,
+    val safere: RegexSweep.Outcome?,
+    val bucket: String?,
+    val classification: DivergenceClass?
+) {
+    fun toJson(): String {
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("caseIndex", caseIndex)
+        `object`.add("case", caseJson(spec!!))
+        `object`.addProperty("bucket", bucket)
+        `object`.addProperty("classification", classification!!.name)
+        `object`.addProperty("classificationStatus", classification.status()!!.name)
+        `object`.addProperty("labels", spec.labels())
+        `object`.addProperty("regex", spec.regex())
+        `object`.addProperty("operand", spec.operand.label)
+        `object`.addProperty("wrapper", spec.wrapper!!.label)
+        `object`.addProperty("quantifierChain", spec.quantifierChain!!.label)
+        `object`.addProperty(
+            "quantifierChainLength",
+            spec.quantifierChain.label!!.split(",".toRegex()).dropLastWhile { it.isEmpty() }
+                .toTypedArray().size)
+        `object`.addProperty("context", spec.context!!.label)
+        `object`.addProperty("flags", spec.flagMode!!.label)
+        `object`.addProperty("jdkAccepted", jdk!!.accepted)
+        `object`.addProperty("safeReAccepted", safere!!.accepted)
+        `object`.addProperty("jdkTrace", jdk.trace)
+        `object`.addProperty("safeReTrace", safere.trace)
+        `object`.addProperty("jdkError", jdk.error)
+        `object`.addProperty("safeReError", safere.error)
+        return SweepJson.toJson(`object`)
+    }
+
+    companion object {
+        private fun caseJson(spec: CaseSpec): JsonObject {
+            val `object` = SweepJson.`object`()
+            `object`.addProperty("operandLabel", spec.operand.label)
+            `object`.addProperty("operandRegex", spec.operand.regex)
+            `object`.addProperty("wrapperLabel", spec.wrapper!!.label)
+            `object`.addProperty("wrapperTemplate", spec.wrapper.template)
+            `object`.addProperty("quantifierChainLabel", spec.quantifierChain!!.label)
+            `object`.addProperty("quantifierChain", spec.quantifierChain.text)
+            `object`.addProperty("contextLabel", spec.context!!.label)
+            `object`.addProperty("contextTemplate", spec.context.template)
+            `object`.addProperty("flagLabel", spec.flagMode!!.label)
+            `object`.addProperty("flagPrefix", spec.flagMode.prefix)
+            `object`.addProperty("flags", spec.flagMode.flags)
+            `object`.addProperty("trivia", spec.flagMode.trivia)
+            return `object`
+        }
+    }
+}
+
+private class SweepState(
+    runState: SweepRunState,
+    summary: ClassifiedDivergenceSummary<DivergenceClass?>,
+    workerIndex: Int
+) {
+    val runState: SweepRunState?
+    val summary: ClassifiedDivergenceSummary<DivergenceClass?>
+    val options: SweepOptions
+    val progressReporter: ProgressReporter
+    val workerIndex: Int
+    var generated: Long = 0
+
+    init {
+        this.runState = runState
+        this.summary = summary
+        this.options = runState.options
+        this.progressReporter = ProgressReporter(runState, workerIndex)
+        this.workerIndex = workerIndex
+    }
+
+    fun run() {
+        val end = min(options.rangeEndExclusive, totalCases())
+        generated = firstOwnedCaseIndex()
+        while (generated < end) {
+            val caseIndex = generated
+            generated += options.threads.toLong()
+            progressReporter.checked()
+            evaluateCase(caseIndex, caseAt(caseIndex))
+        }
+    }
+
+    fun firstOwnedCaseIndex(): Long {
+        return SweepWorkers.firstOwnedCaseIndex(
+            options.rangeStartInclusive, endExclusive(), options.threads, workerIndex
+        )
+    }
+
+    fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
+        ZeroWidthQuantifierDivergenceSweep.evaluateCase(
+            runState!!, summary, spec, caseIndex, workerIndex
+        )
+        reportProgressIfNeeded()
+    }
+
+    fun finish() {
+        runState!!.recordGenerated(min(generated, endExclusive()))
+        runState.updateWorkerNextCaseIndex(workerIndex, min(generated, endExclusive()))
+    }
+
+    fun reportProgressIfNeeded() {
+        progressReporter.reportIfNeeded(min(generated, endExclusive()))
+    }
+
+    fun endExclusive(): Long {
+        return min(options.rangeEndExclusive, totalCases())
+    }
+}
 }

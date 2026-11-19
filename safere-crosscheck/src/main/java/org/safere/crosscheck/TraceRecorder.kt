@@ -18,11 +18,11 @@ class TraceRecorder {
     /** A single recorded API call with results from both engines.  */
     @JvmRecord
     data class TraceEntry(
-      val method: String?,
-      val args: String?,
-      val safereResult: String?,
-      val jdkResult: String?,
-      @JvmField val matched: Boolean
+        val method: String?,
+        val args: String?,
+        val safereResult: String?,
+        val jdkResult: String?,
+        @JvmField val matched: Boolean
     ) {
         companion object {
             /** Creates a trace entry, converting results to strings.  */
@@ -42,12 +42,12 @@ class TraceRecorder {
 
     /** Records a call where the engines produced different results.  */
     fun recordDivergence(method: String?, args: String?, safereResult: Any?, jdkResult: Any?) {
-        entries.add(TraceEntry.Companion.of(method, args, safereResult, jdkResult))
+        entries.add(TraceEntry.of(method, args, safereResult, jdkResult))
     }
 
     /** Records a call with explicit results from both engines.  */
     fun record(method: String?, args: String?, safereResult: Any?, jdkResult: Any?) {
-        entries.add(TraceEntry.Companion.of(method, args, safereResult, jdkResult))
+        entries.add(TraceEntry.of(method, args, safereResult, jdkResult))
     }
 
     /** Returns an unmodifiable view of all recorded entries.  */

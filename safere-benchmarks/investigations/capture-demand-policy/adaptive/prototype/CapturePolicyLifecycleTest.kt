@@ -20,8 +20,8 @@ internal class CapturePolicyLifecycleTest {
             expected.reset(input)
             actual.useTransparentBounds((cycle and 1) == 0).useAnchoringBounds((cycle and 2) == 0)
             expected.useTransparentBounds((cycle and 1) == 0).useAnchoringBounds((cycle and 2) == 0)
-            actual.region(2, input.length() - 1)
-            expected.region(2, input.length() - 1)
+            actual.region(2, input.length - 1)
+            expected.region(2, input.length - 1)
             while (expected.find()) {
                 assertThat(actual.find()).isTrue()
                 assertThat(actual.start()).isEqualTo(expected.start())
@@ -96,7 +96,7 @@ internal class CapturePolicyLifecycleTest {
         for (cycle in 0..63) {
             val start = if (cycle % 2 == 0) 0 else 96
             actual.reset().region(start, bytes.size)
-            expected.reset().region(start, input.length())
+            expected.reset().region(start, input.length)
             while (expected.find()) {
                 assertThat(actual.find()).isTrue()
                 for (group in 0..2) {

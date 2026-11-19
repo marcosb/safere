@@ -29,7 +29,7 @@ internal class RepetitionPolicyTest {
             for (region in booleanArrayOf(false, true)) {
                 val prefix = if (region) "😀#" else ""
                 val input = prefix + testCase.input + (if (region) "!" else "")
-                val offset = prefix.length
+                val offset = prefix.size
                 for (operation in 0..2) {
                     val matcher = pattern.matcher(input)
                     val bytes = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
@@ -143,7 +143,7 @@ internal class RepetitionPolicyTest {
         private fun policyCases(): Stream<Arguments?>? {
             val cases: MutableList<PolicyCase?> =
                 List.of<PolicyCase?>(
-                    policy("(?:b?|a){0,2}b", "abb", 3),
+                    policy("(?:b?|a) {0,2}b", "abb", 3),
                     policy("(?:b?|a){1,2}b", "abb", 3),
                     policy("(?:b?|a){2}b", "abb", 2),
                     policy("(?:()|\\W+){0,2}y", " y", 2, 1, 1),

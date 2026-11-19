@@ -30,7 +30,7 @@ internal class AdaptiveCaptureCase(
         kotlin.require(!(definition == null || !(representation.equals("string") || representation.equals("utf8")))) { "Unknown adaptive scenario or representation" }
         utf8 = representation.equals("utf8")
         val trial = definition.get("reference").getAsString() + "@safere-" + representation
-        regex = trials.apply(trial).workload().patterns().getFirst()
+        regex = trials.apply(trial).workload().patterns().first()
         groups =
             definition.getAsJsonArray("groups").asList().stream().mapToInt({ v -> v.getAsInt() }).toArray()
         inputs = arrayOfNulls<Input>(2)
@@ -43,10 +43,10 @@ internal class AdaptiveCaptureCase(
         offsets = definition.get("consumption").getAsString().equals("offset")
         lifetime = definition.get("lifetime").getAsString()
         val phases: JsonArray = definition.getAsJsonArray("phases")
-        kotlin.require(phases.size() === 3) { "Expected exactly three adaptive phases" }
-        readEvery = IntArray(phases.size())
-        order = arrayOfNulls<IntArray>(phases.size())
-        for (phase in 0..<phases.size()) {
+        kotlin.require(phases.size === 3) { "Expected exactly three adaptive phases" }
+        readEvery = IntArray(phases.size)
+        order = arrayOfNulls<IntArray>(phases.size)
+        for (phase in 0..<phases.size) {
             val phaseConfig: JsonObject = phases.get(phase).getAsJsonObject()
             readEvery[phase] = phaseConfig.get("readEvery").getAsInt()
             kotlin.require(readEvery[phase] >= 0) { "Capture-read period must be nonnegative" }
@@ -72,9 +72,6 @@ internal class AdaptiveCaptureCase(
     internal inner class Shared private constructor(pattern: Pattern) {
         private val pattern: Pattern
 
-        init {
-            this.pattern = pattern
-        }
 
         fun task(booleanOnly: Boolean): Task {
             return org.safere.benchmark.AdaptiveCaptureCase.Task(pattern, booleanOnly)
@@ -115,7 +112,7 @@ internal class AdaptiveCaptureCase(
                                             0
                                         else
                                             if (offsets)
-                                                (if (utf8) value.getBytes(StandardCharsets.UTF_8).length else value.length())
+                                                (if (utf8) value.getBytes(StandardCharsets.UTF_8).length else value.length)
                                             else
                                                 value.hashCode()).toLong()
                         }
@@ -250,10 +247,10 @@ internal class AdaptiveCaptureCase(
             val bytes: ByteArray?
             val split: Int
             if (rotate) {
-                split = inputs[0].bytes.length
-                bytes = ByteArray(split + inputs[1].bytes.length)
+                split = inputs[0].bytes.size
+                bytes = ByteArray(split + inputs[1].bytes.size)
                 System.arraycopy(inputs[0].bytes, 0, bytes, 0, split)
-                System.arraycopy(inputs[1].bytes, 0, bytes, split, inputs[1].bytes.length)
+                System.arraycopy(inputs[1].bytes, 0, bytes, split, inputs[1].bytes.size)
             } else {
                 bytes = inputs[slot].bytes
                 split = 0

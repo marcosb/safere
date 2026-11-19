@@ -144,20 +144,20 @@ class EngineEquivalenceFuzzer {
             val regex = "([^" + delimiter + "]" + repetition + ")" + literal + "\\X"
             val input = "p".repeat(data.consumeInt(256, 320)) + delimiter + literal + cluster
             // String grapheme programs can start at a low surrogate; UTF-8 cannot represent that start.
-            val expected: MutableList<String?> = trace(Pattern.compile(regex, 0, PATHS.getLast()), input, 0)
+            val expected: MutableList<String?> = trace(Pattern.compile(regex, 0, PATHS.last()), input, 0)
             for (path in PATHS) {
                 Assertions.assertThat<String?>(trace(Pattern.compile(regex, 0, path), input, 0)).isEqualTo(expected)
             }
         }
 
         fun check(regex: String?, input: String, start: Int) {
-            val expected: MutableList<String?> = trace(Pattern.compile(regex, 0, PATHS.getLast()), input, start)
+            val expected: MutableList<String?> = trace(Pattern.compile(regex, 0, PATHS.last()), input, start)
             val expectedUtf8: MutableList<String?>? =
-                if (validScalars(input)) utf8Trace(Pattern.compile(regex, 0, PATHS.getLast()), input) else null
+                if (validScalars(input)) utf8Trace(Pattern.compile(regex, 0, PATHS.last()), input) else null
             val utf8Input =
                 if (expectedUtf8 == null) null else Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
             val expectedUtf8Find =
-                utf8Input != null && Pattern.compile(regex, 0, PATHS.getLast()).matcher(utf8Input).find()
+                utf8Input != null && Pattern.compile(regex, 0, PATHS.last()).matcher(utf8Input).find()
             for (path in PATHS) {
                 val pattern = Pattern.compile(regex, 0, path)
                 Assertions.assertThat<String?>(trace(pattern, input, start))
@@ -183,7 +183,7 @@ class EngineEquivalenceFuzzer {
         ) {
             val expected: MutableList<String?> =
                 regionTrace(
-                    Pattern.compile(regex, 0, PATHS.getLast()), input, start, end, transparent, anchoring
+                    Pattern.compile(regex, 0, PATHS.last()), input, start, end, transparent, anchoring
                 )
             for (path in PATHS) {
                 Assertions.assertThat<String?>(

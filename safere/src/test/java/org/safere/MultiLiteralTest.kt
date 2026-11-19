@@ -9,16 +9,12 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.safere.MultiAnchorDescriptor.StartPlan
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.regex.Pattern
-import kotlin.CharArray
-import kotlin.arrayOf
-import kotlin.code
 import kotlin.math.max
-import kotlin.text.StringBuilder
-import kotlin.text.isEmpty
+
+()
 import kotlin.text.split
 import kotlin.text.toByteArray
 import kotlin.text.toCharArray
@@ -74,7 +70,7 @@ internal class MultiLiteralTest {
             val m = pattern.matcher(Utf8Input.validated(bytes))
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.start()).isEqualTo(7)
-            Assertions.assertThat(m.end()).isEqualTo(7 + kw.length)
+            Assertions.assertThat(m.end()).isEqualTo(7 + kw.size)
             Assertions.assertThat(String(bytes, m.start(), m.end() - m.start(), StandardCharsets.UTF_8)).isEqualTo(kw)
         }
 
@@ -142,12 +138,12 @@ internal class MultiLiteralTest {
             val len = 64 + rnd.nextInt(500)
             val chars = CharArray(len)
             for (i in 0..<len) {
-                chars[i] = alphabet[rnd.nextInt(alphabet.size)]
+                chars[i] = alphabet[rnd.nextInt(alphabet.length)]
             }
             if (rnd.nextBoolean()) {
                 val kw = keywords[rnd.nextInt(keywords.size)]
-                val insertPos = rnd.nextInt(max(1, len - kw.length))
-                for (i in 0..<kw.length) {
+                val insertPos = rnd.nextInt(max(1, len - kw.size))
+                for (i in 0..<kw.size) {
                     chars[insertPos + i] = kw.get(i)
                 }
             }

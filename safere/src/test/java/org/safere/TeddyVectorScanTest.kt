@@ -88,7 +88,7 @@ internal class TeddyVectorScanTest {
         private fun expected(text: String, literals: Array<String>, start: Int): Int {
             var first = -1
             for (literal in literals) {
-                val found = text.indexOf(literal, max(0, start))
+                val found = text.indexOfBounded(literal, max(0, start))
                 if (found >= 0 && (first < 0 || found < first)) {
                     first = found
                 }

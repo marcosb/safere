@@ -30,7 +30,7 @@ internal class ZeroCountPossessiveTest {
             for (regex in List.of<String>(repeated, "x(" + repeated + ")(y)", "(" + repeated + ")|a")) {
                 for (flags in List.of<Int?>(0, Pattern.COMMENTS)) {
                     for (input in mutableListOf<String?>("", "a", "xy", "xay", "\uD83D\uDE00")) {
-                        Companion.assertOperationsSame(regex, flags, input!!)
+                        assertOperationsSame(regex, flags, input!!)
                     }
                 }
             }
@@ -44,7 +44,7 @@ internal class ZeroCountPossessiveTest {
     )
     fun archivedZeroCountShapesMatchLikeJdk(regex: String) {
         for (input in mutableListOf<String?>("", "x", "xy", "xc", "xaa", "xx")) {
-            Companion.assertOperationsSame(regex, 0, input!!)
+            assertOperationsSame(regex, 0, input!!)
         }
     }
 

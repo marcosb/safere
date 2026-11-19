@@ -58,7 +58,7 @@ internal class UnicodeTablesTest {
         Assertions.assertThat(cn).isNotNull()
         Assertions.assertThat(c).isNotNull()
         for (range in cn!!) {
-            Assertions.assertThat(Companion.rangeContainedIn(c!!, range))
+            Assertions.assertThat(rangeContainedIn(c!!, range))
                 .`as`("Cn range U+%04X..U+%04X should be included in C", range[0], range[1])
                 .isTrue()
         }
@@ -71,10 +71,10 @@ internal class UnicodeTablesTest {
         Assertions.assertThat(cn).isNotNull()
         for (entry in UnicodeGeneratedTables.CATEGORIES.entries) {
             val name = entry.key
-            if (name.length != 2 || name == "Cn") {
+            if (name.size != 2 || name == "Cn") {
                 continue
             }
-            Assertions.assertThat(Companion.overlaps(cn!!, entry.value))
+            Assertions.assertThat(overlaps(cn!!, entry.value))
                 .`as`("Cn should not overlap generated category %s", name)
                 .isFalse()
         }
@@ -100,22 +100,22 @@ internal class UnicodeTablesTest {
         Assertions.assertThat(ranges).isNotNull()
         Assertions.assertThat(ranges!!.size >= 2).isTrue()
         // Should include tab (0x09), vertical tab (0x0B), and space (0x20).
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 0x09)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 0x0B)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 0x20)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 0x09)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 0x0B)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 0x20)).isTrue()
     }
 
     @Test
     fun perlWord_matchesWordChars() {
         val ranges = UnicodeTables.PERL_GROUPS.get("\\w")
         Assertions.assertThat(ranges).isNotNull()
-        Assertions.assertThat(Companion.containsCodePoint(ranges!!, '0'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, '9'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 'A'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 'Z'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, '_'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 'a'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(ranges, 'z'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges!!, '0'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, '9'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 'A'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 'Z'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, '_'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 'a'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(ranges, 'z'.code)).isTrue()
     }
 
     // --- POSIX property groups ---
@@ -236,10 +236,10 @@ internal class UnicodeTablesTest {
     fun unicodeGroups_latinContainsAsciiLetters() {
         val latin = UnicodeTables.UNICODE_GROUPS.get("Latin")
         Assertions.assertThat(latin).isNotNull()
-        Assertions.assertThat(Companion.containsCodePoint(latin!!, 'A'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(latin, 'Z'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(latin, 'a'.code)).isTrue()
-        Assertions.assertThat(Companion.containsCodePoint(latin, 'z'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(latin!!, 'A'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(latin, 'Z'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(latin, 'a'.code)).isTrue()
+        Assertions.assertThat(containsCodePoint(latin, 'z'.code)).isTrue()
     }
 
     @Test

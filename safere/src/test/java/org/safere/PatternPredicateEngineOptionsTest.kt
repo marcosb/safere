@@ -17,12 +17,12 @@ internal class PatternPredicateEngineOptionsTest {
     @MethodSource("engineOptions")
     fun asPredicateHonorsEnginePathOptions(name: String?, options: EnginePathOptions.Builder) {
         val failures: MutableList<String?> = ArrayList<String?>()
-        PatternPredicateTest.Companion.patterns()
+        PatternPredicateTest.patterns()
             .forEach { arguments: Arguments? ->
                 val regex = arguments!!.get()[0] as String?
                 val flags = arguments.get()[1] as Int
                 val pattern = Pattern.compile(regex, flags, options.build())
-                for (input in PatternPredicateTest.Companion.INPUTS) {
+                for (input in PatternPredicateTest.INPUTS) {
                     if (pattern.asPredicate().test(input) != pattern.matcher(input).find()) {
                         failures.add(
                             ("/"
@@ -30,7 +30,7 @@ internal class PatternPredicateEngineOptionsTest {
                                     + "/ flags="
                                     + flags
                                     + " on "
-                                    + PatternPredicateTest.Companion.escape(input))
+                                    + PatternPredicateTest.escape(input))
                         )
                     }
                 }

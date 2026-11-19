@@ -153,7 +153,7 @@ internal class LiteralRunnerLazyDfaTest {
             }
             ready.await()
             start.countDown()
-            val shared: Any? = results.getFirst().get()
+            val shared: Any? = results.first().get()
             Assertions.assertThat<Any?>(shared).isNotNull()
             for (result in results) {
                 Assertions.assertThat<Any?>(result.get()).`as`(artifact).isSameAs(shared)

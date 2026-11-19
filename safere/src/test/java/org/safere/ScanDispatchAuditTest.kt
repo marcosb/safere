@@ -34,7 +34,7 @@ internal class ScanDispatchAuditTest {
         val teddy = Teddy(model)
         val scanner = Utf8InputScanner(LONG_INPUT)
         val window = provider.minimumWindowLength(ScanKind.TEDDY) - 1
-        val fromIndex: Int = LONG_INPUT.size - window
+        val fromIndex: Int = LONG_INPUT.length - window
 
         val events =
             ScanAudit.captureForTesting(
@@ -61,7 +61,7 @@ internal class ScanDispatchAuditTest {
             )
         val scanner = Utf8InputScanner(LONG_INPUT)
         val window = provider.minimumWindowLength(ScanKind.MULTI_LITERAL) - 1
-        val fromIndex: Int = LONG_INPUT.size - window
+        val fromIndex: Int = LONG_INPUT.length - window
 
         val events =
             ScanAudit.captureForTesting(
@@ -317,7 +317,7 @@ internal class ScanDispatchAuditTest {
         // 5. IGNORE_CASE (single-anchor and pair-anchor ladders)
         val ignoreCaseMin = provider.minimumWindowLength(ScanKind.IGNORE_CASE)
         val failure = intArrayOf(0, 0, 0)
-        val fromNarrow: Int = LONG_INPUT.size - (ignoreCaseMin - 1)
+        val fromNarrow: Int = LONG_INPUT.length - (ignoreCaseMin - 1)
         Assertions.assertThat<ScanEvent?>(
             captureScan(
                 IntSupplier {
@@ -354,7 +354,7 @@ internal class ScanDispatchAuditTest {
                     ScanKind.IGNORE_CASE, ScanDirection.FORWARD, ignoreCaseMin - 1, ScanPath.SWAR
                 )
             )
-        val fromWide: Int = LONG_INPUT.size - ignoreCaseMin
+        val fromWide: Int = LONG_INPUT.length - ignoreCaseMin
         Assertions.assertThat<ScanEvent?>(
             captureScan(
                 IntSupplier {
@@ -402,7 +402,7 @@ internal class ScanDispatchAuditTest {
         Assertions.assertThat<TeddyModel?>(teddyModel).isNotNull()
         val teddy = Teddy(teddyModel)
         val teddyMin = provider.minimumWindowLength(ScanKind.TEDDY)
-        val teddyFromNarrow: Int = LONG_INPUT.size - (teddyMin - 1)
+        val teddyFromNarrow: Int = LONG_INPUT.length - (teddyMin - 1)
         val teddyNarrowEvents =
             ScanAudit.captureForTesting(
                 Runnable {
@@ -414,7 +414,7 @@ internal class ScanDispatchAuditTest {
                 consulted(ScanKind.TEDDY, teddyMin - 1),
                 ScanEvent(ScanKind.TEDDY, ScanDirection.FORWARD, teddyMin - 1, ScanPath.DECLINED)
             )
-        val teddyFromWide: Int = LONG_INPUT.size - teddyMin
+        val teddyFromWide: Int = LONG_INPUT.length - teddyMin
         Assertions.assertThat<ScanEvent?>(captureScan(IntSupplier { teddy.findCandidate(scanner, teddyFromWide) }))
             .containsExactly(
                 consulted(ScanKind.TEDDY, teddyMin),
@@ -427,7 +427,7 @@ internal class ScanDispatchAuditTest {
         val multiLiteral =
             Utf8StartAccelerator.MultiLiteral(multiLiteralInfo, teddyModel)
         val multiLiteralMin = provider.minimumWindowLength(ScanKind.MULTI_LITERAL)
-        val mlFromNarrow: Int = LONG_INPUT.size - (multiLiteralMin - 1)
+        val mlFromNarrow: Int = LONG_INPUT.length - (multiLiteralMin - 1)
         Assertions.assertThat<ScanEvent?>(captureScan(IntSupplier {
             multiLiteral.findCandidate(
                 scanner,
@@ -443,7 +443,7 @@ internal class ScanDispatchAuditTest {
                     ScanPath.SCALAR
                 )
             )
-        val mlFromWide: Int = LONG_INPUT.size - multiLiteralMin
+        val mlFromWide: Int = LONG_INPUT.length - multiLiteralMin
         Assertions.assertThat<ScanEvent?>(captureScan(IntSupplier { multiLiteral.findCandidate(scanner, mlFromWide) }))
             .containsExactly(
                 consulted(ScanKind.MULTI_LITERAL, multiLiteralMin),
@@ -560,7 +560,7 @@ internal class ScanDispatchAuditTest {
 
         /** Captures the dispatch events of one scan, asserting it finds nothing.  */
         private fun captureScan(scan: IntSupplier): MutableList<ScanEvent?> {
-            return ScanAudit.captureForTesting(Runnable { Assertions.assertThat(scan.getAsInt()).isEqualTo(-1) })
+            return ScanAudit.captureForTesting(Runnable { Assertions.assertThat(scan.asInt).isEqualTo(-1) })
         }
     }
 }

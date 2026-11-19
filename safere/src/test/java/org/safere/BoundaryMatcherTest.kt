@@ -451,7 +451,7 @@ internal class BoundaryMatcherTest {
 
                 Assertions.assertThat<IntArray?>(safeMatches)
                     .`as`("find() positions for /%s/ on %s", regex, input)
-                    .containsExactly(*jdkMatches.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                    .containsExactly(*jdkMatches.toTypedArray())
             }
 
             private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
@@ -490,7 +490,7 @@ internal class BoundaryMatcherTest {
 
                 Assertions.assertThat<IntArray?>(safeMatches)
                     .`as`("find() positions for /%s/ on %s region [%s,%s]", regex, input, start, end)
-                    .containsExactly(*jdkMatches.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                    .containsExactly(*jdkMatches.toTypedArray())
             }
 
             private fun assertNoMatchInRegion(regex: String?, input: String?, start: Int, end: Int) {
@@ -561,7 +561,7 @@ internal class BoundaryMatcherTest {
                         "transparent find() positions for /%s/ on %s region [%s,%s]",
                         regex, input, start, end
                     )
-                    .containsExactly(*jdkMatches.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                    .containsExactly(*jdkMatches.toTypedArray())
             }
 
             private fun assertCapturedFindTraceSameAsJdk(

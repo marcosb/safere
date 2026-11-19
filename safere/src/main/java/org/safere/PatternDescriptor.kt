@@ -13,14 +13,10 @@ import java.util.*
  * The identity has the scope and lifetime described by [Pattern.patternId].
  */
 @JvmRecord
-data class PatternDescriptor(patternId: Long, analysis: PatternAnalysis?) {
-    val patternId: Long
-    val analysis: PatternAnalysis?
+data class PatternDescriptor(val patternId: Long, val analysis: PatternAnalysis?) {
 
     /** Creates a descriptor.  */
     init {
-        this.analysis = analysis
-        this.patternId = patternId
         require(patternId > 0) { "patternId must be positive" }
         Objects.requireNonNull<PatternAnalysis?>(analysis, "analysis")
     }

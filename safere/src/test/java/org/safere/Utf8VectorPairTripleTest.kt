@@ -78,7 +78,7 @@ internal class Utf8VectorPairTripleTest {
             Assertions.assertThat(maximum).isGreaterThanOrEqualTo(minimum)
             Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(kind, minimum)).isNotNull()
             Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(kind, minimum - 1)).isNull()
-            if (maximum != Int.Companion.MAX_VALUE) {
+            if (maximum != Int.MAX_VALUE) {
                 Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(kind, maximum)).isNotNull()
                 Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(kind, maximum + 1)).isNull()
             }

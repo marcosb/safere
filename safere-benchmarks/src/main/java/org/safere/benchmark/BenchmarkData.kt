@@ -90,7 +90,7 @@ class BenchmarkData private constructor() {
             requireNotNull(el) { "No value at path: " + path }
         }
         val arr = el.getAsJsonArray()
-        val result: MutableList<String?> = ArrayList<String?>(arr.size())
+        val result: MutableList<String?> = ArrayList<String?>(arr.size)
         for (item in arr) {
             result.add(item.getAsString())
         }

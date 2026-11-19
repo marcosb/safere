@@ -121,7 +121,7 @@ internal object SweepJson {
     private fun appendUnicodeEscape(result: StringBuilder, c: Char) {
         result.append("\\u")
         val hex = Integer.toHexString(c.code)
-        for (i in hex.length..3) {
+        for (i in hex.size..3) {
             result.append('0')
         }
         result.append(hex)

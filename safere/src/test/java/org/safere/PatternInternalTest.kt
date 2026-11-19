@@ -29,6 +29,16 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
 import java.util.function.IntConsumer
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.first
+import kotlin.collections.indices
+import kotlin.collections.mutableListOf
+import kotlin.text.StringBuilder
+import kotlin.text.append
+import kotlin.text.repeat
+import kotlin.text.startsWith
+import kotlin.text.toByteArray
 
 /** Tests for package-private [Pattern] metadata.  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
@@ -72,7 +82,7 @@ internal class PatternInternalTest {
                         })
                 )
             }
-            val shared = futures.getFirst().get()
+            val shared = futures.first().get()
             for (future in futures) {
                 val artifacts = future.get()
                 for (i in shared.indices) {
@@ -108,10 +118,10 @@ internal class PatternInternalTest {
         try {
             synchronized(pattern) {
                 worker.start()
-                while (worker.isAlive() && worker.getState() != Thread.State.BLOCKED) {
+                while (worker.isAlive && worker.state != Thread.State.BLOCKED) {
                     Thread.sleep(1)
                 }
-                Assertions.assertThat<Thread.State?>(worker.getState()).isEqualTo(Thread.State.BLOCKED)
+                Assertions.assertThat<Thread.State?>(worker.state).isEqualTo(Thread.State.BLOCKED)
                 Assertions.assertThat(sourceReads.get()).isZero()
             }
             Assertions.assertThat<Prog?>(result.get()).isNotNull()
@@ -223,7 +233,7 @@ internal class PatternInternalTest {
                         })
                 )
             }
-            val shared = futures.getFirst().get()
+            val shared = futures.first().get()
             Assertions.assertThat<OnePass?>(shared).isNotNull()
             for (future in futures) {
                 Assertions.assertThat<OnePass?>(future.get()).isSameAs(shared)
@@ -306,8 +316,8 @@ internal class PatternInternalTest {
     fun asciiPrefixScanInfoPreservesMembersAcrossBitmapBoundary() {
         val info: CharClassScanInfo = assertAsciiScanInfo(intArrayOf(62, 63, 64, 65), intArrayOf(62, 65))
 
-        Assertions.assertThat(info.bitmap0()).isEqualTo((1L shl 62) or (1L shl 63))
-        Assertions.assertThat(info.bitmap1()).isEqualTo((1L shl 0) or (1L shl 1))
+        Assertions.assertThat(info.bitmap0).isEqualTo((1L shl 62) or (1L shl 63))
+        Assertions.assertThat(info.bitmap1).isEqualTo((1L shl 0) or (1L shl 1))
     }
 
     @Test
@@ -1002,7 +1012,7 @@ internal class PatternInternalTest {
         private fun requiredClassContains(pattern: Pattern, codePoint: Int): Boolean {
             val info: CharClassScanInfo? = requiredCharClass(pattern)
             return info != null
-                    && InputScanner.classContains(info.ranges(), info.bitmap0(), info.bitmap1(), codePoint)
+                    && InputScanner.classContains(info.ranges, info.bitmap0, info.bitmap1, codePoint)
         }
 
         private fun assertAsciiScanInfo(members: IntArray, expectedRanges: IntArray): CharClassScanInfo {
@@ -1015,10 +1025,10 @@ internal class PatternInternalTest {
             val info = CharClassScanInfo.fromAsciiBitmap(asciiClass)
 
             Assertions.assertThat<CharClassScanInfo?>(info).isNotNull()
-            Assertions.assertThat(info.ranges()).containsExactly(*expectedRanges)
+            Assertions.assertThat(info.ranges).containsExactly(*expectedRanges)
             for (codePoint in 0..127) {
                 Assertions.assertThat(
-                    InputScanner.classContains(info.ranges(), info.bitmap0(), info.bitmap1(), codePoint)
+                    InputScanner.classContains(info.ranges, info.bitmap0, info.bitmap1, codePoint)
                 )
                     .`as`("ASCII member %s", codePoint)
                     .isEqualTo(asciiClass!!.containsAscii(codePoint))
@@ -1096,8 +1106,8 @@ internal class PatternInternalTest {
         @Throws(Exception::class)
         private fun createIsolatedLoaderAndPopulateCaches(): WeakReference<ClassLoader?> {
             val urls = arrayOf<URL?>(
-                Pattern::class.java.getProtectionDomain().getCodeSource().getLocation(),
-                PatternInternalTest::class.java.getProtectionDomain().getCodeSource().getLocation(),
+                Pattern::class.java.getProtectionDomain().codeSource.location,
+                PatternInternalTest::class.java.getProtectionDomain().codeSource.location,
             )
             object : URLClassLoader(urls, Pattern::class.java.getClassLoader()) {
                 @Throws(ClassNotFoundException::class)

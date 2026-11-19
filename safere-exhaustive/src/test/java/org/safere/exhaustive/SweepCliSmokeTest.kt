@@ -1055,11 +1055,11 @@ internal class SweepCliSmokeTest {
         }
 
         private fun replayArgs(outputDir: Path?, replayFile: Path?, vararg extraArgs: String?): Array<String?> {
-            val args = arrayOfNulls<String>(3 + extraArgs.size)
+            val args = arrayOfNulls<String>(3 + extraArgs.length)
             args[0] = "--threads=2"
             args[1] = "--output-dir=" + outputDir
             args[2] = "--replay-file=" + replayFile
-            System.arraycopy(extraArgs, 0, args, 3, extraArgs.size)
+            System.arraycopy(extraArgs, 0, args, 3, extraArgs.length)
             return args
         }
 

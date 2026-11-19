@@ -8,7 +8,6 @@ import com.google.gson.JsonObject
 import org.safere.exhaustive.SweepWorkers.LineWorker
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.IOException
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,20 +15,9 @@ import java.util.*
 import java.util.List
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.Int
-import kotlin.Long
-import kotlin.RuntimeException
-import kotlin.Throws
-import kotlin.check
-import kotlin.code
-import kotlin.io.println
-import kotlin.io.use
+import kotlin.collections.MutableList
+import kotlin.collections.mutableListOf
 import kotlin.math.min
-import kotlin.text.StringBuilder
-import kotlin.text.format
-import kotlin.use
 
 /** Offline differential sweep for case-insensitive character-class closure bugs.  */
 object CaseFoldingCharacterClassDivergenceSweep {
@@ -90,7 +78,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
     @JvmStatic
     fun main(args: Array<String>) {
         val options: SweepOptions =
-            SweepOptions.Companion.parse(
+            SweepOptions.parse(
                 args,
                 Path.of("target", "exhaustive-reports", "case-folding-character-class-sweep"),
                 "case-folding-character-class-divergences.jsonl",
@@ -206,7 +194,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
                 true, Pattern.compile(regex, flags).matcher(input).matches(), ""
             )
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, false, e.getDescription())
+            return Outcome(false, false, e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, false, e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -218,7 +206,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
                 true, org.safere.Pattern.compile(regex, flags).matcher(input).matches(), ""
             )
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, false, e.getDescription())
+            return Outcome(false, false, e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, false, e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -238,8 +226,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
     private fun escape(value: String): String {
         val result = StringBuilder()
         for (i in 0..<value.length) {
-            val c = value.get(i)
-            when (c) {
+            when (val c = value.get(i)) {
                 '\\' -> result.append("\\\\")
                 '\n' -> result.append("\\n")
                 '\t' -> result.append("\\t")
@@ -272,7 +259,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
         )
     }
 
-    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+    private fun direction(jdk: Outcome, safere: Outcome): String {
         if (jdk.accepted && !safere.accepted) {
             return "jdk-accepts"
         }
@@ -285,15 +272,14 @@ object CaseFoldingCharacterClassDivergenceSweep {
         return "safere-matches"
     }
 
-    private fun inputClass(codePoint: Int): kotlin.String {
+    private fun inputClass(codePoint: Int): String {
         if (codePoint <= Character.MAX_VALUE.code && Character.isHighSurrogate(codePoint.toChar())) {
             return "high-surrogate"
         }
         if (codePoint <= Character.MAX_VALUE.code && Character.isLowSurrogate(codePoint.toChar())) {
             return "low-surrogate"
         }
-        val type = Character.getType(codePoint)
-        return when (type) {
+        return when (val type = Character.getType(codePoint)) {
             Character.UPPERCASE_LETTER -> "uppercase-letter"
             Character.LOWERCASE_LETTER -> "lowercase-letter"
             Character.TITLECASE_LETTER -> "titlecase-letter"
@@ -310,11 +296,11 @@ object CaseFoldingCharacterClassDivergenceSweep {
         return !left.accepted || left.matches == right.matches
     }
 
-    private fun pattern(label: kotlin.String, regex: kotlin.String?): PatternSpec {
+    private fun pattern(label: String, regex: String?): PatternSpec {
         return PatternSpec(label, regex, 1)
     }
 
-    private fun pattern(label: kotlin.String, regex: kotlin.String?, inputRepeat: Int): PatternSpec {
+    private fun pattern(label: String, regex: String?, inputRepeat: Int): PatternSpec {
         return PatternSpec(label, regex, inputRepeat)
     }
 
@@ -323,7 +309,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
     ) {
         val input = inputFor(spec)
         val jdk =
-            CaseFoldingCharacterClassDivergenceSweep.jdkOutcome(spec.pattern!!.regex!!, spec.flagMode!!.flags, input)
+            jdkOutcome(spec.pattern!!.regex!!, spec.flagMode!!.flags, input)
         val safere = safeReOutcome(spec.pattern.regex, spec.flagMode.flags, input)
         if (semanticallyEqual(jdk, safere)) {
             return
@@ -338,44 +324,44 @@ object CaseFoldingCharacterClassDivergenceSweep {
     }
 
     @JvmRecord
-    private data class PatternSpec(val label: kotlin.String, val regex: kotlin.String?, val inputRepeat: Int)
+    private data class PatternSpec(val label: String, val regex: String?, val inputRepeat: Int)
 
     @JvmRecord
-    private data class FlagMode(val label: kotlin.String?, val flags: Int)
+    private data class FlagMode(val label: String?, val flags: Int)
 
     @JvmRecord
     private data class CaseSpec(val pattern: PatternSpec?, val flagMode: FlagMode?, val inputCodePoint: Int) {
-        fun labels(): kotlin.String {
+        fun labels(): String {
             return ("pattern="
                     + pattern!!.label
                     + ",flags="
                     + flagMode!!.label
                     + ",input="
-                    + kotlin.String.format(Locale.ROOT, "U+%04X", inputCodePoint) + ",inputClass="
+                    + String.format(Locale.ROOT, "U+%04X", inputCodePoint) + ",inputClass="
                     + inputClass(inputCodePoint))
         }
     }
 
     @JvmRecord
-    private data class Outcome(val accepted: Boolean, val matches: Boolean, val error: kotlin.String?)
+    private data class Outcome(val accepted: Boolean, val matches: Boolean, val error: String?)
 
     @JvmRecord
     private data class Divergence(
         val spec: CaseSpec?,
-        val input: kotlin.String?,
+        val input: String?,
         val jdk: Outcome?,
         val safere: Outcome?,
-        val bucket: kotlin.String?
+        val bucket: String?
     ) {
-        fun toJson(): kotlin.String {
+        fun toJson(): String {
             val `object` = SweepJson.`object`()
-            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.add("case", caseJson(spec!!))
             `object`.addProperty("bucket", bucket)
             `object`.addProperty("labels", spec.labels())
             `object`.addProperty("regex", spec.pattern!!.regex)
             `object`.addProperty("flags", spec.flagMode!!.label)
             `object`.addProperty("inputCodePoint", spec.inputCodePoint)
-            `object`.addProperty("input", CaseFoldingCharacterClassDivergenceSweep.escape(input!!))
+            `object`.addProperty("input", escape(input!!))
             `object`.addProperty("jdkAccepted", jdk!!.accepted)
             `object`.addProperty("safeReAccepted", safere!!.accepted)
             `object`.addProperty("jdkMatches", jdk.matches)
@@ -430,7 +416,7 @@ object CaseFoldingCharacterClassDivergenceSweep {
         }
 
         fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
-            CaseFoldingCharacterClassDivergenceSweep.evaluateCase(runState!!, spec, workerIndex, caseIndex)
+            evaluateCase(runState!!, spec, workerIndex, caseIndex)
             reportProgressIfNeeded()
         }
 

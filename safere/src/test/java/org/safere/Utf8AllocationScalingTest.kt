@@ -33,7 +33,7 @@ internal class Utf8AllocationScalingTest {
     }
 
     @JvmRecord
-    private data class AllocationTracker(val threadBean: Any?, val allocatedBytesMethod: Method?) {
+    private data class AllocationTracker(val threadBean: Any?, val allocatedBytesMethod: Method?)      {
         fun allocatedBytes(threadId: Long): Long {
             try {
                 return allocatedBytesMethod!!.invoke(threadBean, threadId) as Long
@@ -68,7 +68,7 @@ internal class Utf8AllocationScalingTest {
                     allocationBeanClass.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType)
                 val allocated = allocationBeanClass.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
                 Assumptions.assumeTrue(supported.invoke(threadBean) as Boolean)
-                if (!enabled.invoke(threadBean) as Boolean) {
+                if ((enabled.invoke(threadBean) as Boolean?) != true) {
                     enable.invoke(threadBean, true)
                 }
                 return AllocationTracker(threadBean, allocated)

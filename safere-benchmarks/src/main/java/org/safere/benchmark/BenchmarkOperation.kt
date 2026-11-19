@@ -62,36 +62,36 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
         groups: IntArray,
         replacement: PreparedReplacement?,
         limit: Int,
-        lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle,
+        lifecycle: MatcherLifecycle,
         flagSet: String?,
         seed: Int,
         count: Int,
         mode: String
     ): BenchmarkTask {
-        if (this == BenchmarkOperation.COMPILE) {
+        if (this == COMPILE) {
             return BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     variant.compileForBenchmark(
-                        patternSources.getFirst(),
+                        patternSources.first(),
                         flagSet
                     )
                 )
             }
         }
-        if (this == BenchmarkOperation.FIND_ROTATING_UTF16 || this == BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16) {
+        if (this == FIND_ROTATING_UTF16 || this == COMPILE_AND_FIND_ROTATING_UTF16) {
             return rotatingUtf16Task(
                 variant,
-                patternSources.getFirst(),
+                patternSources.first(),
                 patterns,
                 seed,
                 count,
-                this == BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16
+                this == COMPILE_AND_FIND_ROTATING_UTF16
             )
         }
-        val pattern: CompiledRegex = patterns.getFirst()
-        val input: RegexInput = inputs.getFirst()
+        val pattern: CompiledRegex = patterns.first()
+        val input: RegexInput = inputs.first()
         return when (this) {
-            BenchmarkOperation.MATCHES -> BenchmarkTask { blackhole: Blackhole? ->
+            MATCHES -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     pattern.matches(
                         input
@@ -99,12 +99,12 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 )
             }
 
-            BenchmarkOperation.FIND -> if (lifecycle.matcher == MatcherReuse.NONE)
+            FIND -> if (lifecycle.matcher == MatcherReuse.NONE)
                 BenchmarkTask { blackhole: Blackhole? -> blackhole!!.consume(pattern.find(input)) }
             else
                 BenchmarkTask { blackhole: Blackhole? -> blackhole!!.consume(pattern.matcher(input).find()) }
 
-            BenchmarkOperation.LOOKING_AT -> BenchmarkTask { blackhole: Blackhole? ->
+            LOOKING_AT -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     pattern.matcher(
                         input
@@ -112,88 +112,88 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 )
             }
 
-            BenchmarkOperation.FIND_ALL_COUNT -> BenchmarkTask { blackhole: Blackhole? ->
+            FIND_ALL_COUNT -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     findAllCount(pattern.matcher(input))
                 )
             }
 
-            BenchmarkOperation.MATCHES_CORPUS -> BenchmarkTask { blackhole: Blackhole? ->
+            MATCHES_CORPUS -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     matchesCorpus(pattern, inputs)
                 )
             }
 
-            BenchmarkOperation.MATCHES_GROUP_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
+            MATCHES_GROUP_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     matchesGroupLengthSum(pattern, inputs, groups)
                 )
             }
 
-            BenchmarkOperation.FIND_ALL_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
+            FIND_ALL_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     findAllLengthSum(pattern.matcher(input))
                 )
             }
 
-            BenchmarkOperation.FIND_ALL_GROUP_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
+            FIND_ALL_GROUP_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     findAllGroupLengthSum(pattern.matcher(input), groups)
                 )
             }
 
-            BenchmarkOperation.CAPTURE_GROUPS -> BenchmarkTask { blackhole: Blackhole? ->
+            CAPTURE_GROUPS -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     captureGroups(pattern.matcher(input), groups)
                 )
             }
 
-            BenchmarkOperation.REPLACE_FIRST -> BenchmarkTask { blackhole: Blackhole? ->
+            REPLACE_FIRST -> BenchmarkTask { blackhole: Blackhole? ->
                 pattern.replaceFirst(
                     input,
                     replacement
                 ).consume(blackhole)
             }
 
-            BenchmarkOperation.REPLACE_ALL -> BenchmarkTask { blackhole: Blackhole? ->
+            REPLACE_ALL -> BenchmarkTask { blackhole: Blackhole? ->
                 pattern.replaceAll(
                     input,
                     replacement
                 ).consume(blackhole)
             }
 
-            BenchmarkOperation.REPLACE_ALL_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
+            REPLACE_ALL_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     replaceAllLengthSum(patterns, input, replacement)
                 )
             }
 
-            BenchmarkOperation.MANUAL_REPLACE_ALL -> BenchmarkTask { blackhole: Blackhole? ->
+            MANUAL_REPLACE_ALL -> BenchmarkTask { blackhole: Blackhole? ->
                 pattern.manualReplaceAll(
                     input,
                     replacement
                 ).consume(blackhole)
             }
 
-            BenchmarkOperation.SPLIT_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
+            SPLIT_LENGTH_SUM -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     splitLengthSum(pattern.split(input, limit))
                 )
             }
 
-            BenchmarkOperation.COMPILE_AND_FIND -> BenchmarkTask { blackhole: Blackhole? ->
-                variant.compile(patternSources.getFirst()).use { compiled ->
+            COMPILE_AND_FIND -> BenchmarkTask { blackhole: Blackhole? ->
+                variant.compile(patternSources.first()).use { compiled ->
                     blackhole!!.consume(compiled.find(input))
                 }
             }
 
-            BenchmarkOperation.COMPILE_AND_MATCHES -> BenchmarkTask { blackhole: Blackhole? ->
-                variant.compile(patternSources.getFirst()).use { compiled ->
+            COMPILE_AND_MATCHES -> BenchmarkTask { blackhole: Blackhole? ->
+                variant.compile(patternSources.first()).use { compiled ->
                     blackhole!!.consume(compiled.matches(input))
                 }
             }
 
-            BenchmarkOperation.MATCHER_RESET_FIND -> {
+            MATCHER_RESET_FIND -> {
                 val retainedMatcher =
                     if (lifecycle.matcher == MatcherReuse.RETAINED)
                         pattern.matcher(input)
@@ -207,7 +207,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 }
             }
 
-            BenchmarkOperation.MATCHER_REGION_FIND -> {
+            MATCHER_REGION_FIND -> {
                 val retainedMatcher =
                     if (lifecycle.matcher == MatcherReuse.RETAINED)
                         pattern.matcher(input)
@@ -222,7 +222,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 }
             }
 
-            BenchmarkOperation.MATCHER_REGION_MATCHES -> {
+            MATCHER_REGION_MATCHES -> {
                 val retainedMatcher =
                     if (lifecycle.matcher == MatcherReuse.RETAINED)
                         pattern.matcher(input)
@@ -237,7 +237,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 }
             }
 
-            BenchmarkOperation.MATCHER_REGION_TOKENIZE -> {
+            MATCHER_REGION_TOKENIZE -> {
                 val retainedMatcher =
                     if (lifecycle.matcher == MatcherReuse.RETAINED)
                         pattern.matcher(input)
@@ -254,7 +254,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 }
             }
 
-            BenchmarkOperation.FIND_SAMPLED_GROUP -> {
+            FIND_SAMPLED_GROUP -> {
                 val capture = mode == "capture"
                 primeCaptureDemand(pattern, inputs, groups[0], capture)
                 val retained =
@@ -275,13 +275,13 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 }
             }
 
-            BenchmarkOperation.FIND_GROUP_PRESENT -> BenchmarkTask { blackhole: Blackhole? ->
+            FIND_GROUP_PRESENT -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     findGroupPresent(pattern.matcher(input), groups[0])
                 )
             }
 
-            BenchmarkOperation.FIND_GROUP -> BenchmarkTask { blackhole: Blackhole? ->
+            FIND_GROUP -> BenchmarkTask { blackhole: Blackhole? ->
                 blackhole!!.consume(
                     findGroup(
                         pattern.matcher(input),
@@ -290,8 +290,8 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
                 )
             }
 
-            BenchmarkOperation.COMPILE -> throw AssertionError()
-            BenchmarkOperation.FIND_ROTATING_UTF16, BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16 -> throw AssertionError()
+            COMPILE -> throw AssertionError()
+            FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 -> throw AssertionError()
         }
     }
 
@@ -303,99 +303,87 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
         groups: IntArray,
         replacement: PreparedReplacement?,
         limit: Int,
-        lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle,
+        lifecycle: MatcherLifecycle,
         flagSet: String?,
         seed: Int,
         count: Int,
         mode: String
     ): Any? {
-        if (this == BenchmarkOperation.COMPILE) {
+        if (this == COMPILE) {
             return true
         }
-        if (this == BenchmarkOperation.FIND_ROTATING_UTF16 || this == BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16) {
+        if (this == FIND_ROTATING_UTF16 || this == COMPILE_AND_FIND_ROTATING_UTF16) {
             val input: String? = rotatingUtf16Inputs(seed, count)[0]
-            if (this == BenchmarkOperation.FIND_ROTATING_UTF16) {
-                return patterns.getFirst().find(StringRegexInput(input))
+            if (this == FIND_ROTATING_UTF16) {
+                return patterns.first().find(StringRegexInput(input))
             }
-            variant.compile(patternSources.getFirst()).use { compiled ->
+            variant.compile(patternSources.first()).use { compiled ->
                 return compiled.find(StringRegexInput(input))
             }
         }
-        val pattern: CompiledRegex = patterns.getFirst()
-        val input: RegexInput = inputs.getFirst()
+        val pattern: CompiledRegex = patterns.first()
+        val input: RegexInput = inputs.first()
         return when (this) {
-            BenchmarkOperation.MATCHES -> pattern.matches(input)
-            BenchmarkOperation.FIND -> if (lifecycle.matcher == MatcherReuse.NONE)
+            MATCHES -> pattern.matches(input)
+            FIND -> if (lifecycle.matcher == MatcherReuse.NONE)
                 pattern.find(input)
             else
                 pattern.matcher(input).find()
 
-            BenchmarkOperation.LOOKING_AT -> pattern.matcher(input).lookingAt()
-            BenchmarkOperation.FIND_ALL_COUNT -> findAllCount(pattern.matcher(input))
-            BenchmarkOperation.MATCHES_CORPUS -> matchesCorpus(pattern, inputs)
-            BenchmarkOperation.MATCHES_GROUP_LENGTH_SUM -> matchesGroupLengthSum(pattern, inputs, groups)
-            BenchmarkOperation.FIND_ALL_LENGTH_SUM -> findAllLengthSum(pattern.matcher(input))
-            BenchmarkOperation.FIND_ALL_GROUP_LENGTH_SUM -> findAllGroupLengthSum(pattern.matcher(input), groups)
-            BenchmarkOperation.CAPTURE_GROUPS -> captureGroups(pattern.matcher(input), groups)
-            BenchmarkOperation.REPLACE_FIRST -> pattern.replaceFirst(input, replacement).validationValue()
-            BenchmarkOperation.REPLACE_ALL -> pattern.replaceAll(input, replacement).validationValue()
-            BenchmarkOperation.REPLACE_ALL_LENGTH_SUM -> replaceAllLengthSum(patterns, input, replacement)
-            BenchmarkOperation.MANUAL_REPLACE_ALL -> pattern.manualReplaceAll(input, replacement).validationValue()
-            BenchmarkOperation.SPLIT_LENGTH_SUM -> splitLengthSum(pattern.split(input, limit))
-            BenchmarkOperation.COMPILE_AND_FIND -> {
-                variant.compile(patternSources.getFirst()).use { compiled ->
-                    TODO(
-                        """
-                    |Cannot convert element: yield is not allowed outside switch expression
-                    |With text:
-                    |yield compiled.find(input);
-                    """.trimMargin()
-                    )
+            LOOKING_AT -> pattern.matcher(input).lookingAt()
+            FIND_ALL_COUNT -> findAllCount(pattern.matcher(input))
+            MATCHES_CORPUS -> matchesCorpus(pattern, inputs)
+            MATCHES_GROUP_LENGTH_SUM -> matchesGroupLengthSum(pattern, inputs, groups)
+            FIND_ALL_LENGTH_SUM -> findAllLengthSum(pattern.matcher(input))
+            FIND_ALL_GROUP_LENGTH_SUM -> findAllGroupLengthSum(pattern.matcher(input), groups)
+            CAPTURE_GROUPS -> captureGroups(pattern.matcher(input), groups)
+            REPLACE_FIRST -> pattern.replaceFirst(input, replacement).validationValue()
+            REPLACE_ALL -> pattern.replaceAll(input, replacement).validationValue()
+            REPLACE_ALL_LENGTH_SUM -> replaceAllLengthSum(patterns, input, replacement)
+            MANUAL_REPLACE_ALL -> pattern.manualReplaceAll(input, replacement).validationValue()
+            SPLIT_LENGTH_SUM -> splitLengthSum(pattern.split(input, limit))
+            COMPILE_AND_FIND -> {
+                variant.compile(patternSources.first()).use { compiled ->
+                    compiled.find(input)
                 }
             }
 
-            BenchmarkOperation.COMPILE_AND_MATCHES -> {
-                variant.compile(patternSources.getFirst()).use { compiled ->
-                    TODO(
-                        """
-                    |Cannot convert element: yield is not allowed outside switch expression
-                    |With text:
-                    |yield compiled.matches(input);
-                    """.trimMargin()
-                    )
+            COMPILE_AND_MATCHES -> {
+                variant.compile(patternSources.first()).use { compiled ->
+                    compiled.matches(input)
                 }
             }
 
-            BenchmarkOperation.MATCHER_RESET_FIND -> {
+            MATCHER_RESET_FIND -> {
                 val matcher = pattern.matcher(input)
                 matcher.reset()
                 findAllCount(matcher)
             }
 
-            BenchmarkOperation.MATCHER_REGION_FIND -> {
+            MATCHER_REGION_FIND -> {
                 val matcher = pattern.matcher(input)
                 val region: LifecycleStep = region(lifecycle)
                 matcher.region(region.start, region.end)
                 matcher.find()
             }
 
-            BenchmarkOperation.MATCHER_REGION_MATCHES -> {
+            MATCHER_REGION_MATCHES -> {
                 val matcher = pattern.matcher(input)
                 val region: LifecycleStep = region(lifecycle)
                 matcher.region(region.start, region.end)
                 matcher.matches()
             }
 
-            BenchmarkOperation.MATCHER_REGION_TOKENIZE -> tokenize(pattern.matcher(input), input.nativeLength(), mode)
-            BenchmarkOperation.FIND_SAMPLED_GROUP -> {
+            MATCHER_REGION_TOKENIZE -> tokenize(pattern.matcher(input), input.nativeLength(), mode)
+            FIND_SAMPLED_GROUP -> {
                 primeCaptureDemand(pattern, inputs, groups[0], mode == "capture")
                 findSampledGroup(pattern.matcher(input), groups[0], mode == "capture")
             }
 
-            BenchmarkOperation.FIND_GROUP_PRESENT -> findGroupPresent(pattern.matcher(input), groups[0])
-            BenchmarkOperation.FIND_GROUP -> findGroup(pattern.matcher(input), groups[0])
-            BenchmarkOperation.COMPILE -> throw AssertionError()
-            BenchmarkOperation.FIND_ROTATING_UTF16, BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16 -> throw AssertionError()
+            FIND_GROUP_PRESENT -> findGroupPresent(pattern.matcher(input), groups[0])
+            FIND_GROUP -> findGroup(pattern.matcher(input), groups[0])
+            COMPILE -> throw AssertionError()
+            FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 -> throw AssertionError()
         }
     }
 
@@ -404,34 +392,34 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
     }
 
     companion object {
-        fun fromDeclarative(operation: DeclarativeBenchmarkPlan.Operation): BenchmarkOperation {
+        fun fromDeclarative(operation: Operation): BenchmarkOperation {
             return when (operation) {
-                DeclarativeBenchmarkPlan.Operation.MATCHES -> BenchmarkOperation.MATCHES
-                DeclarativeBenchmarkPlan.Operation.FIND -> BenchmarkOperation.FIND
-                DeclarativeBenchmarkPlan.Operation.LOOKING_AT -> BenchmarkOperation.LOOKING_AT
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_COUNT -> BenchmarkOperation.FIND_ALL_COUNT
-                DeclarativeBenchmarkPlan.Operation.MATCHES_CORPUS -> BenchmarkOperation.MATCHES_CORPUS
-                DeclarativeBenchmarkPlan.Operation.MATCHES_GROUP_LENGTH_SUM -> BenchmarkOperation.MATCHES_GROUP_LENGTH_SUM
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_LENGTH_SUM -> BenchmarkOperation.FIND_ALL_LENGTH_SUM
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_GROUP_LENGTH_SUM -> BenchmarkOperation.FIND_ALL_GROUP_LENGTH_SUM
-                DeclarativeBenchmarkPlan.Operation.CAPTURE_GROUPS -> BenchmarkOperation.CAPTURE_GROUPS
-                DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST -> BenchmarkOperation.REPLACE_FIRST
-                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL -> BenchmarkOperation.REPLACE_ALL
-                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM -> BenchmarkOperation.REPLACE_ALL_LENGTH_SUM
-                DeclarativeBenchmarkPlan.Operation.MANUAL_REPLACE_ALL -> BenchmarkOperation.MANUAL_REPLACE_ALL
-                DeclarativeBenchmarkPlan.Operation.SPLIT_LENGTH_SUM -> BenchmarkOperation.SPLIT_LENGTH_SUM
-                DeclarativeBenchmarkPlan.Operation.COMPILE -> BenchmarkOperation.COMPILE
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND -> BenchmarkOperation.COMPILE_AND_FIND
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_MATCHES -> BenchmarkOperation.COMPILE_AND_MATCHES
-                DeclarativeBenchmarkPlan.Operation.FIND_ROTATING_UTF16 -> BenchmarkOperation.FIND_ROTATING_UTF16
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16
-                DeclarativeBenchmarkPlan.Operation.MATCHER_RESET_FIND -> BenchmarkOperation.MATCHER_RESET_FIND
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_FIND -> BenchmarkOperation.MATCHER_REGION_FIND
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_MATCHES -> BenchmarkOperation.MATCHER_REGION_MATCHES
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_TOKENIZE -> BenchmarkOperation.MATCHER_REGION_TOKENIZE
-                DeclarativeBenchmarkPlan.Operation.FIND_SAMPLED_GROUP -> BenchmarkOperation.FIND_SAMPLED_GROUP
-                DeclarativeBenchmarkPlan.Operation.FIND_GROUP_PRESENT -> BenchmarkOperation.FIND_GROUP_PRESENT
-                DeclarativeBenchmarkPlan.Operation.FIND_GROUP -> BenchmarkOperation.FIND_GROUP
+                Operation.MATCHES -> MATCHES
+                Operation.FIND -> FIND
+                Operation.LOOKING_AT -> LOOKING_AT
+                Operation.FIND_ALL_COUNT -> FIND_ALL_COUNT
+                Operation.MATCHES_CORPUS -> MATCHES_CORPUS
+                Operation.MATCHES_GROUP_LENGTH_SUM -> MATCHES_GROUP_LENGTH_SUM
+                Operation.FIND_ALL_LENGTH_SUM -> FIND_ALL_LENGTH_SUM
+                Operation.FIND_ALL_GROUP_LENGTH_SUM -> FIND_ALL_GROUP_LENGTH_SUM
+                Operation.CAPTURE_GROUPS -> CAPTURE_GROUPS
+                Operation.REPLACE_FIRST -> REPLACE_FIRST
+                Operation.REPLACE_ALL -> REPLACE_ALL
+                Operation.REPLACE_ALL_LENGTH_SUM -> REPLACE_ALL_LENGTH_SUM
+                Operation.MANUAL_REPLACE_ALL -> MANUAL_REPLACE_ALL
+                Operation.SPLIT_LENGTH_SUM -> SPLIT_LENGTH_SUM
+                Operation.COMPILE -> COMPILE
+                Operation.COMPILE_AND_FIND -> COMPILE_AND_FIND
+                Operation.COMPILE_AND_MATCHES -> COMPILE_AND_MATCHES
+                Operation.FIND_ROTATING_UTF16 -> FIND_ROTATING_UTF16
+                Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> COMPILE_AND_FIND_ROTATING_UTF16
+                Operation.MATCHER_RESET_FIND -> MATCHER_RESET_FIND
+                Operation.MATCHER_REGION_FIND -> MATCHER_REGION_FIND
+                Operation.MATCHER_REGION_MATCHES -> MATCHER_REGION_MATCHES
+                Operation.MATCHER_REGION_TOKENIZE -> MATCHER_REGION_TOKENIZE
+                Operation.FIND_SAMPLED_GROUP -> FIND_SAMPLED_GROUP
+                Operation.FIND_GROUP_PRESENT -> FIND_GROUP_PRESENT
+                Operation.FIND_GROUP -> FIND_GROUP
                 else -> throw IllegalArgumentException(
                     "Operation is not implemented by the cross-engine runner: " + operation
                 )
@@ -475,7 +463,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
             val inputs: Array<String?> = rotatingUtf16Inputs(seed, count)
             val index = intArrayOf(0)
             if (!compileEachInvocation) {
-                val pattern: CompiledRegex = patterns.getFirst()
+                val pattern: CompiledRegex = patterns.first()
                 return BenchmarkTask { blackhole: Blackhole? ->
                     val input = inputs[index[0]]
                     index[0] = (index[0] + 1) % inputs.size
@@ -501,7 +489,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
         }
 
         private fun region(
-            lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle
+            lifecycle: MatcherLifecycle
         ): LifecycleStep {
             return lifecycle.steps.stream()
                 .filter { step: LifecycleStep? -> step!!.kind == LifecycleStepKind.REGION }
@@ -566,7 +554,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
             for (group in groups) {
                 val value = matcher.group(group)
                 if (value != null) {
-                    sum += value.length
+                    sum += value.size
                 }
             }
             return sum
@@ -604,7 +592,7 @@ internal enum class BenchmarkOperation(vararg requiredCapabilities: EngineCapabi
         private fun splitLengthSum(parts: Array<String>): Int {
             var sum = parts.size
             for (part in parts) {
-                sum += part.length
+                sum += part.size
             }
             return sum
         }

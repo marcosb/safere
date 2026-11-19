@@ -17,6 +17,24 @@ import java.util.function.Consumer
 import java.util.function.IntFunction
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashMap
+import kotlin.collections.LinkedHashSet
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.MutableSet
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.forEach
+import kotlin.collections.mutableListOf
+import kotlin.collections.mutableSetOf
+import kotlin.collections.toTypedArray
+import kotlin.text.StringBuilder
+import kotlin.text.contains
+import kotlin.text.indexOf
+import kotlin.text.isBlank
+import kotlin.text.matches
+import kotlin.text.toRegex
 
 /**
  * Strict, versioned model for the normalized declarative benchmark plan.
@@ -80,7 +98,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 continue
             }
             for (engine in engines) {
-                val exclusion: Exclusion? = Companion.exclusion(workload, engine, implementedOperations!!)
+                val exclusion: Exclusion? = exclusion(workload, engine, implementedOperations!!)
                 if (exclusion == null) {
                     trials.add(Trial(workload, engine))
                 } else {
@@ -99,7 +117,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         val result: MutableList<ExpandedWorkload> = ArrayList<ExpandedWorkload>()
         val ids: MutableSet<String?> = LinkedHashSet<String?>()
         for (workload in workloads) {
-            for (parameters in Companion.parameterBindings(workload.axes!!)) {
+            for (parameters in parameterBindings(workload.axes!!)) {
                 val id = substitute(workload.idTemplate!!, parameters, "workload ID")
                 require(!(id.isBlank() || id.indexOf('@') >= 0)) { "Invalid expanded benchmark workload ID: " + id }
                 require(ids.add(id)) { "Duplicate expanded benchmark workload ID: " + id }
@@ -200,7 +218,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
             Objects.requireNonNull<InputRecipe?>(recipe)
             parameters =
                 Collections.unmodifiableMap<String?, ParameterValue?>(LinkedHashMap<String?, ParameterValue?>(parameters))
-            this.parameters = parameters
         }
     }
 
@@ -305,14 +322,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
             requirements = requirements!!.clone()
             inputRepresentations = inputRepresentations!!.clone()
             trialExclusions = List.copyOf<TrialExclusion?>(trialExclusions)
-            this.patternTemplates = patternTemplates
-            this.inputTemplates = inputTemplates
-            this.axes = axes
-            this.arguments = arguments
-            this.flags = flags
-            this.requirements = requirements
-            this.inputRepresentations = inputRepresentations
-            this.trialExclusions = trialExclusions
         }
     }
 
@@ -386,14 +395,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
             requirements = requirements!!.clone()
             inputRepresentations = inputRepresentations!!.clone()
             trialExclusions = List.copyOf<TrialExclusion?>(trialExclusions)
-            this.patterns = patterns
-            this.inputIds = inputIds
-            this.parameters = parameters
-            this.arguments = arguments
-            this.flags = flags
-            this.requirements = requirements
-            this.inputRepresentations = inputRepresentations
-            this.trialExclusions = trialExclusions
         }
     }
 
@@ -487,7 +488,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         init {
             var steps = steps
             steps = List.copyOf<LifecycleStep?>(steps)
-            this.steps = steps
         }
 
         companion object {
@@ -518,7 +518,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         init {
             var constraints = constraints
             constraints = constraints!!.clone()
-            this.constraints = constraints
         }
     }
 
@@ -543,14 +542,12 @@ internal class DeclarativeBenchmarkPlan private constructor(
         init {
             var features = features
             var supportedFlags = supportedFlags
-            Companion.requireSimpleId(id!!, "benchmark engine")
+            requireSimpleId(id!!, "benchmark engine")
             Objects.requireNonNull<InputRepresentation?>(
                 inputRepresentation
             )
             features = features!!.clone()
             supportedFlags = supportedFlags!!.clone()
-            this.features = features
-            this.supportedFlags = supportedFlags
         }
     }
 
@@ -620,9 +617,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
             workloads = List.copyOf<ExpandedWorkload?>(workloads)
             trials = List.copyOf<Trial?>(trials)
             exclusions = List.copyOf<Exclusion?>(exclusions)
-            this.workloads = workloads
-            this.trials = trials
-            this.exclusions = exclusions
         }
     }
 
@@ -638,10 +632,10 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 value: JsonElement, type: RecipeValueType, context: String?, field: String?
             ): RecipeValue {
                 try {
-                    if (type != RecipeValueType.STRING && value.isJsonPrimitive()
-                        && value.getAsJsonPrimitive().isString()
+                    if (type != RecipeValueType.STRING && value.isJsonPrimitive
+                        && value.asJsonPrimitive.isString
                     ) {
-                        val reference = value.getAsString()
+                        val reference = value.asString
                         val matcher: Matcher = PLACEHOLDER.matcher(reference)
                         if (matcher.matches()) {
                             return RecipeAxisReference(matcher.group(1), type)
@@ -650,22 +644,22 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     return when (type) {
                         RecipeValueType.STRING -> {
                             require(isString(value))
-                            RecipeString(value.getAsString())
+                            RecipeString(value.asString)
                         }
 
                         RecipeValueType.INTEGER -> {
                             require(isIntegerPrimitive(value))
-                            RecipeInteger(value.getAsBigDecimal().intValueExact())
+                            RecipeInteger(value.asBigDecimal.intValueExact())
                         }
 
                         RecipeValueType.STRING_LIST -> {
                             val values: MutableList<String> = ArrayList<String>()
                             value
-                                .getAsJsonArray()
+                                .asJsonArray
                                 .forEach(
                                     Consumer { item: JsonElement? ->
-                                        require(DeclarativeBenchmarkPlan.Companion.isString(item!!))
-                                        values.add(item.getAsString())
+                                        require(isString(item!!))
+                                        values.add(item.asString)
                                     })
                             RecipeStringList(values)
                         }
@@ -673,11 +667,11 @@ internal class DeclarativeBenchmarkPlan private constructor(
                         RecipeValueType.INTEGER_LIST -> {
                             val values: MutableList<Int> = ArrayList<Int>()
                             value
-                                .getAsJsonArray()
+                                .asJsonArray
                                 .forEach(
                                     Consumer { item: JsonElement? ->
-                                        require(DeclarativeBenchmarkPlan.Companion.isIntegerPrimitive(item!!))
-                                        values.add(item.getAsBigDecimal().intValueExact())
+                                        require(isIntegerPrimitive(item!!))
+                                        values.add(item.asBigDecimal.intValueExact())
                                     })
                             RecipeIntegerList(values)
                         }
@@ -724,7 +718,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
     internal class RecipeStringList(values: MutableList<String>?) : RecipeValue {
         override fun placeholders(): MutableSet<String?> {
             val result: MutableSet<String?> = LinkedHashSet<String?>()
-            values!!.forEach(Consumer { value: String? -> result.addAll(Companion.placeholders(value!!)) })
+            values!!.forEach(Consumer { value: String? -> result.addAll(placeholders(value!!)) })
             return result
         }
 
@@ -734,7 +728,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
             return RecipeStringList(
                 values!!.stream()
                     .map<String?> { value: String? ->
-                        Companion.substituteValue(
+                        substituteValue(
                             value!!, parameters, inputId + " recipe " + argumentName
                         )
                     }
@@ -746,7 +740,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         init {
             var values = values
             values = List.copyOf<String?>(values)
-            this.values = values
         }
     }
 
@@ -766,7 +759,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         init {
             var values = values
             values = List.copyOf<Int?>(values)
-            this.values = values
         }
     }
 
@@ -797,7 +789,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
     @JvmRecord
     internal data class ParameterValue(val type: ParameterType?, val value: Any?, val stableText: String) {
-        fun valueText(): String? {
+        fun valueText(): String {
             return value.toString()
         }
 
@@ -809,23 +801,23 @@ internal class DeclarativeBenchmarkPlan private constructor(
             private fun parse(
                 element: JsonElement, axis: String?, validateStableValue: Boolean
             ): ParameterValue {
-                if (element.isJsonObject()) {
-                    val labeled: JsonReader = JsonReader.Companion.`object`("benchmark axis value", element)
+                if (element.isJsonObject) {
+                    val labeled: JsonReader = JsonReader.`object`("benchmark axis value", element)
                     labeled.requireOnly("id", "value")
                     val id = labeled.requiredString("id")
                     validateStableText(id)
-                    val value = parse(element.getAsJsonObject().get("value"), axis, false)
+                    val value = parse(element.asJsonObject.get("value"), axis, false)
                     return ParameterValue(value.type, value.value, id)
                 }
-                require(element.isJsonPrimitive()) { "Benchmark axis values must be scalars or labeled {id,value} objects: " + axis }
-                val primitive = element.getAsJsonPrimitive()
-                if (primitive.isBoolean()) {
-                    val value = primitive.getAsBoolean()
+                require(element.isJsonPrimitive) { "Benchmark axis values must be scalars or labeled {id,value} objects: " + axis }
+                val primitive = element.asJsonPrimitive
+                if (primitive.isBoolean) {
+                    val value = primitive.asBoolean
                     return ParameterValue(ParameterType.BOOLEAN, value, value.toString())
                 }
-                if (primitive.isNumber()) {
+                if (primitive.isNumber) {
                     try {
-                        val value = primitive.getAsBigDecimal().intValueExact()
+                        val value = primitive.asBigDecimal.intValueExact()
                         return ParameterValue(ParameterType.INTEGER, value, value.toString())
                     } catch (exception: ArithmeticException) {
                         throw IllegalArgumentException(
@@ -837,7 +829,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                         )
                     }
                 }
-                val value = primitive.getAsString()
+                val value = primitive.asString
                 if (validateStableValue) {
                     validateStableText(value)
                 }
@@ -977,13 +969,13 @@ internal class DeclarativeBenchmarkPlan private constructor(
             val names: MutableList<String?> = ArrayList<String?>()
             names.add("kind")
             fields.forEach(Consumer { field: RecipeField? -> names.add(field!!.name) })
-            return names.toArray<String?>(IntFunction { _Dummy_.__Array__() })
+            return names.toTypedArray()
         }
 
         fun validate(arguments: MutableMap<String?, RecipeValue?>) {
             when (this) {
-                RecipeKind.LITERAL -> {}
-                RecipeKind.FILE -> {
+                LITERAL -> {}
+                FILE -> {
                     requireNonEmpty(arguments, "path")
                     require(
                         string(
@@ -993,30 +985,30 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     ) { "file recipe requires a lowercase SHA-256 digest" }
                 }
 
-                RecipeKind.REPEAT -> requireNonNegative(arguments, "count")
-                RecipeKind.REPEAT_TO_LENGTH -> {
+                REPEAT -> requireNonNegative(arguments, "count")
+                REPEAT_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireUnitWhenOutputIsRequired(arguments, "unit", "length", 0)
                 }
 
-                RecipeKind.REPEAT_AT_LEAST_LENGTH -> {
+                REPEAT_AT_LEAST_LENGTH -> {
                     requireNonNegative(arguments, "minimumLength")
                     requireUnitWhenOutputIsRequired(arguments, "unit", "minimumLength", 0)
                 }
 
-                RecipeKind.DELIMITED_REPEAT_TO_LENGTH -> {
+                DELIMITED_REPEAT_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "value")
                     requireNonEmpty(arguments, "delimiterAlphabet")
                 }
 
-                RecipeKind.APPEND_INPUT -> requireNonEmpty(arguments, "input")
-                RecipeKind.RANDOM_CHARS -> {
+                APPEND_INPUT -> requireNonEmpty(arguments, "input")
+                RANDOM_CHARS -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "alphabet")
                 }
 
-                RecipeKind.RANDOM_CODE_POINTS -> {
+                RANDOM_CODE_POINTS -> {
                     requireNonNegative(arguments, "minimumCodeUnits")
                     val codePoints = integers(arguments, "codePoints")
                     require(
@@ -1030,27 +1022,27 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     ) { "randomCodePoints recipe requires valid Unicode scalar codePoints" }
                 }
 
-                RecipeKind.SURROUND_TO_LENGTH -> {
+                SURROUND_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     val fixedLength =
                         string(arguments, "prefix").length + string(arguments, "suffix").length
                     requireUnitWhenOutputIsRequired(arguments, "unit", "length", fixedLength)
                 }
 
-                RecipeKind.SUFFIX_TO_LENGTH -> {
+                SUFFIX_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireUnitWhenOutputIsRequired(
                         arguments, "prefixUnit", "length", string(arguments, "suffix").length
                     )
                 }
 
-                RecipeKind.PREFIXED_REPEAT_TO_LENGTH -> {
+                PREFIXED_REPEAT_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "value")
                     requireNonEmpty(arguments, "delimiterAlphabet")
                 }
 
-                RecipeKind.SPARSE_MATCH_TO_LENGTH -> {
+                SPARSE_MATCH_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "match")
                     requireNonEmpty(arguments, "nonMatch")
@@ -1058,29 +1050,29 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     requireNonEmpty(arguments, "delimiterAlphabet")
                 }
 
-                RecipeKind.CENTER_IN_SPACES -> requireNonNegative(arguments, "length")
-                RecipeKind.SCALED_CENTER_IN_SPACES -> {
+                CENTER_IN_SPACES -> requireNonNegative(arguments, "length")
+                SCALED_CENTER_IN_SPACES -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "bodyFill")
                     val percent = integer(arguments, "bodyScalePercent")
                     require(!(percent < 0 || percent > 100)) { "scaledCenterInSpaces recipe bodyScalePercent must be between 0 and 100" }
                 }
 
-                RecipeKind.LAZY_ALTERNATION_TO_LENGTH -> {
+                LAZY_ALTERNATION_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "prefixUnit")
                     requireNonEmpty(arguments, "match")
                     requireNonEmpty(arguments, "suffixUnit")
                 }
 
-                RecipeKind.PERIODIC_ALTERNATION_TO_LENGTH -> {
+                PERIODIC_ALTERNATION_TO_LENGTH -> {
                     requireNonNegative(arguments, "length")
                     requireNonEmpty(arguments, "hitUnit")
                     requireNonEmpty(arguments, "missUnit")
                     requirePositive(arguments, "hitInterval")
                 }
 
-                RecipeKind.OPTIONAL_REQUIRED_REPEAT_PATTERN -> {
+                OPTIONAL_REQUIRED_REPEAT_PATTERN -> {
                     requireNonEmpty(arguments, "literal")
                     requireNonNegative(arguments, "count")
                 }
@@ -1141,9 +1133,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1249,11 +1238,11 @@ internal class DeclarativeBenchmarkPlan private constructor(
             measurement: Measurement
         ) {
             require(!(inputRequired && inputs.isEmpty())) { id + " operation " + jsonName + " requires inputs" }
-            require(!(!inputRequired && !inputs.isEmpty() && (this == Operation.COMPILE || this == Operation.PATTERN_SET_COMPILE || this == Operation.ANALYZE_PATTERN || this == Operation.CACHED_ANALYSIS || this == Operation.COMPILE_AND_ANALYZE))) { id + " operation " + jsonName + " must not declare inputs" }
+            require(!(!inputRequired && !inputs.isEmpty() && (this == COMPILE || this == PATTERN_SET_COMPILE || this == ANALYZE_PATTERN || this == CACHED_ANALYSIS || this == COMPILE_AND_ANALYZE))) { id + " operation " + jsonName + " must not declare inputs" }
             require(!(lifecycleRequired && lifecycle.matcher == MatcherReuse.NONE)) { id + " operation " + jsonName + " requires lifecycle" }
-            require(!(!lifecycleRequired && lifecycle.matcher != MatcherReuse.NONE && this != Operation.FIND && this != Operation.FIND_ALL_COUNT && this != Operation.DIAGNOSTICS_FIND)) { id + " operation " + jsonName + " is incompatible with matcher lifecycle" }
+            require(!(!lifecycleRequired && lifecycle.matcher != MatcherReuse.NONE && this != FIND && this != FIND_ALL_COUNT && this != DIAGNOSTICS_FIND)) { id + " operation " + jsonName + " is incompatible with matcher lifecycle" }
             require(
-                !((this == Operation.PATTERN_SET_COMPILE || this == Operation.PATTERN_SET_FIND || this == Operation.PATTERN_SET_MATCHES)
+                !((this == PATTERN_SET_COMPILE || this == PATTERN_SET_FIND || this == PATTERN_SET_MATCHES)
                         && patterns.size < 2)
             ) { id + " pattern-set operation requires multiple patterns" }
             require(supports(consumption)) {
@@ -1263,7 +1252,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                         + " cannot use result consumption "
                         + consumption.jsonName())
             }
-            val compileOperation = this == Operation.COMPILE || this == Operation.PATTERN_SET_COMPILE
+            val compileOperation = this == COMPILE || this == PATTERN_SET_COMPILE
             require(
                 !(compileOperation
                         && measurement.mode != MeasurementMode.COMPILE_ONLY && measurement.mode != MeasurementMode.SINGLE_SHOT_COLD_START && measurement.mode != MeasurementMode.RETAINED_MEMORY && measurement.mode != MeasurementMode.SUBPROCESS_MEMORY)
@@ -1277,40 +1266,40 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private fun supports(consumption: ResultConsumption?): Boolean {
             return when (this) {
-                Operation.MATCHES, Operation.FIND, Operation.LOOKING_AT, Operation.FIND_GROUP_PRESENT, Operation.FIND_SAMPLED_GROUP, Operation.COMPILE_AND_FIND, Operation.COMPILE_AND_MATCHES, Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16, Operation.MATCHER_REGION_FIND, Operation.MATCHER_REGION_MATCHES, Operation.FIND_IN_WINDOW, Operation.UTF8_DECODE_FIND -> consumption == ResultConsumption.BOOLEAN
-                Operation.DIAGNOSTICS_FIND -> consumption == ResultConsumption.BOOLEAN
+                MATCHES, FIND, LOOKING_AT, FIND_GROUP_PRESENT, FIND_SAMPLED_GROUP, COMPILE_AND_FIND, COMPILE_AND_MATCHES, FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16, MATCHER_REGION_FIND, MATCHER_REGION_MATCHES, FIND_IN_WINDOW, UTF8_DECODE_FIND -> consumption == ResultConsumption.BOOLEAN
+                DIAGNOSTICS_FIND -> consumption == ResultConsumption.BOOLEAN
                         || consumption == ResultConsumption.BLACKHOLE_OBJECT
 
-                Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> consumption == ResultConsumption.BOOLEAN
+                PATTERN_SET_FIND, PATTERN_SET_MATCHES -> consumption == ResultConsumption.BOOLEAN
                         || consumption == ResultConsumption.BLACKHOLE_OBJECT
 
-                Operation.FIND_ALL_COUNT, Operation.FIND_ALL_LENGTH_SUM, Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_CORPUS, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.MATCHER_RESET_FIND, Operation.MATCHER_REGION_TOKENIZE, Operation.REPLACE_ALL_LENGTH_SUM, Operation.SPLIT_LENGTH_SUM, Operation.UTF8_CAPTURE_BOUNDS, Operation.UTF8_REPLACEMENT -> consumption == ResultConsumption.INTEGER
-                Operation.FIND_GROUP, Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL -> consumption == ResultConsumption.STRING
-                Operation.CAPTURE_GROUPS -> consumption == ResultConsumption.STRING || consumption == ResultConsumption.STRING_LIST
-                Operation.SPLIT -> consumption == ResultConsumption.STRING_LIST
+                FIND_ALL_COUNT, FIND_ALL_LENGTH_SUM, FIND_ALL_GROUP_LENGTH_SUM, MATCHES_CORPUS, MATCHES_GROUP_LENGTH_SUM, MATCHER_RESET_FIND, MATCHER_REGION_TOKENIZE, REPLACE_ALL_LENGTH_SUM, SPLIT_LENGTH_SUM, UTF8_CAPTURE_BOUNDS, UTF8_REPLACEMENT -> consumption == ResultConsumption.INTEGER
+                FIND_GROUP, REPLACE_FIRST, REPLACE_ALL, APPEND_REPLACEMENT, MANUAL_REPLACE_ALL -> consumption == ResultConsumption.STRING
+                CAPTURE_GROUPS -> consumption == ResultConsumption.STRING || consumption == ResultConsumption.STRING_LIST
+                SPLIT -> consumption == ResultConsumption.STRING_LIST
                         || consumption == ResultConsumption.BLACKHOLE_OBJECT
 
-                Operation.COMPILE, Operation.PATTERN_SET_COMPILE -> consumption == ResultConsumption.COMPILED_OBJECT
-                Operation.MATCHER_CONSTRUCTION, Operation.ANALYZE_PATTERN, Operation.CACHED_ANALYSIS, Operation.COMPILE_AND_ANALYZE -> consumption == ResultConsumption.BLACKHOLE_OBJECT
-                Operation.DFA_CACHE_GROWTH -> consumption == ResultConsumption.INTEGER
+                COMPILE, PATTERN_SET_COMPILE -> consumption == ResultConsumption.COMPILED_OBJECT
+                MATCHER_CONSTRUCTION, ANALYZE_PATTERN, CACHED_ANALYSIS, COMPILE_AND_ANALYZE -> consumption == ResultConsumption.BLACKHOLE_OBJECT
+                DFA_CACHE_GROWTH -> consumption == ResultConsumption.INTEGER
             }
         }
 
         fun argumentTypes(): MutableMap<String?, RecipeValueType?> {
             return when (this) {
-                Operation.MATCHER_REGION_TOKENIZE -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
-                Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.CAPTURE_GROUPS -> Map.of<String?, RecipeValueType?>(
+                MATCHER_REGION_TOKENIZE -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
+                FIND_ALL_GROUP_LENGTH_SUM, MATCHES_GROUP_LENGTH_SUM, CAPTURE_GROUPS -> Map.of<String?, RecipeValueType?>(
                     "groups",
                     RecipeValueType.INTEGER_LIST
                 )
 
-                Operation.UTF8_CAPTURE_BOUNDS -> Map.of<String?, RecipeValueType?>(
+                UTF8_CAPTURE_BOUNDS -> Map.of<String?, RecipeValueType?>(
                     "groups", RecipeValueType.INTEGER_LIST,
                     "bounds", RecipeValueType.STRING,
                     "expectedBounds", RecipeValueType.INTEGER_LIST
                 )
 
-                Operation.FIND_SAMPLED_GROUP -> Map.of<String?, RecipeValueType?>(
+                FIND_SAMPLED_GROUP -> Map.of<String?, RecipeValueType?>(
                     "group",
                     RecipeValueType.INTEGER,
                     "count",
@@ -1319,35 +1308,35 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     RecipeValueType.STRING
                 )
 
-                Operation.FIND_GROUP_PRESENT, Operation.FIND_GROUP -> Map.of<String?, RecipeValueType?>(
+                FIND_GROUP_PRESENT, FIND_GROUP -> Map.of<String?, RecipeValueType?>(
                     "group",
                     RecipeValueType.INTEGER
                 )
 
-                Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.REPLACE_ALL_LENGTH_SUM, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL, Operation.UTF8_REPLACEMENT -> Map.of<String?, RecipeValueType?>(
+                REPLACE_FIRST, REPLACE_ALL, REPLACE_ALL_LENGTH_SUM, APPEND_REPLACEMENT, MANUAL_REPLACE_ALL, UTF8_REPLACEMENT -> Map.of<String?, RecipeValueType?>(
                     "replacement",
                     RecipeValueType.STRING
                 )
 
-                Operation.SPLIT, Operation.SPLIT_LENGTH_SUM -> Map.of<String?, RecipeValueType?>(
+                SPLIT, SPLIT_LENGTH_SUM -> Map.of<String?, RecipeValueType?>(
                     "limit",
                     RecipeValueType.INTEGER
                 )
 
-                Operation.COMPILE -> Map.of<String?, RecipeValueType?>("flagSet", RecipeValueType.STRING)
-                Operation.MATCHER_CONSTRUCTION -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
-                Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> Map.of<String?, RecipeValueType?>(
+                COMPILE -> Map.of<String?, RecipeValueType?>("flagSet", RecipeValueType.STRING)
+                MATCHER_CONSTRUCTION -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
+                FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 -> Map.of<String?, RecipeValueType?>(
                     "seed", RecipeValueType.INTEGER,
                     "count", RecipeValueType.INTEGER
                 )
 
-                Operation.DIAGNOSTICS_FIND -> Map.of<String?, RecipeValueType?>(
+                DIAGNOSTICS_FIND -> Map.of<String?, RecipeValueType?>(
                     "action", RecipeValueType.STRING,
                     "listener", RecipeValueType.STRING,
                     "replacement", RecipeValueType.STRING
                 )
 
-                Operation.PATTERN_SET_COMPILE, Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> Map.of<String?, RecipeValueType?>(
+                PATTERN_SET_COMPILE, PATTERN_SET_FIND, PATTERN_SET_MATCHES -> Map.of<String?, RecipeValueType?>(
                     "anchor", RecipeValueType.STRING,
                     "patternCount", RecipeValueType.INTEGER
                 )
@@ -1358,22 +1347,22 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun requiredArguments(): MutableSet<String?> {
             return when (this) {
-                Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.CAPTURE_GROUPS -> mutableSetOf<String?>(
+                FIND_ALL_GROUP_LENGTH_SUM, MATCHES_GROUP_LENGTH_SUM, CAPTURE_GROUPS -> mutableSetOf<String?>(
                     "groups"
                 )
 
-                Operation.UTF8_CAPTURE_BOUNDS -> mutableSetOf<String?>("groups", "expectedBounds")
-                Operation.FIND_SAMPLED_GROUP -> mutableSetOf<String?>("group", "count", "mode")
-                Operation.FIND_GROUP_PRESENT, Operation.FIND_GROUP -> mutableSetOf<String?>("group")
-                Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.REPLACE_ALL_LENGTH_SUM, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL, Operation.UTF8_REPLACEMENT -> mutableSetOf<String?>(
+                UTF8_CAPTURE_BOUNDS -> mutableSetOf<String?>("groups", "expectedBounds")
+                FIND_SAMPLED_GROUP -> mutableSetOf<String?>("group", "count", "mode")
+                FIND_GROUP_PRESENT, FIND_GROUP -> mutableSetOf<String?>("group")
+                REPLACE_FIRST, REPLACE_ALL, REPLACE_ALL_LENGTH_SUM, APPEND_REPLACEMENT, MANUAL_REPLACE_ALL, UTF8_REPLACEMENT -> mutableSetOf<String?>(
                     "replacement"
                 )
 
-                Operation.PATTERN_SET_COMPILE, Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> mutableSetOf<String?>(
+                PATTERN_SET_COMPILE, PATTERN_SET_FIND, PATTERN_SET_MATCHES -> mutableSetOf<String?>(
                     "anchor"
                 )
 
-                Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> mutableSetOf<String?>(
+                FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 -> mutableSetOf<String?>(
                     "seed",
                     "count"
                 )
@@ -1383,7 +1372,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         }
 
         fun validateArguments(id: String?, arguments: MutableMap<String?, RecipeValue?>) {
-            if (this == Operation.FIND_SAMPLED_GROUP) {
+            if (this == FIND_SAMPLED_GROUP) {
                 val mode: String = (arguments.get("mode") as RecipeString).value
                 require(!(mode != "boolean" && mode != "capture")) { id + " mode must be boolean or capture" }
             }
@@ -1393,7 +1382,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
             if (groups != null) {
                 val values: MutableList<Int> = (groups as RecipeIntegerList).values
                 require(
-                    !(values.isEmpty() || values.stream()
+                    !(values.isEmpty || values.stream()
                         .anyMatch { value: Int? -> value!! < 0 })
                 ) { id + " groups argument must contain nonnegative group numbers" }
             }
@@ -1416,7 +1405,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         companion object {
             fun fromJson(name: String?): Operation {
                 return Companion.enumFromJson<Operation>(
-                    org.safere.benchmark.DeclarativeBenchmarkPlan.Operation.entries.toTypedArray(),
+                    Operation.entries.toTypedArray(),
                     name,
                     "benchmark operation"
                 )!!
@@ -1435,9 +1424,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1446,7 +1432,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         companion object {
             fun fromJson(name: String?): Flag {
                 return Companion.enumFromJson<Flag>(
-                    org.safere.benchmark.DeclarativeBenchmarkPlan.Flag.entries.toTypedArray(),
+                    Flag.entries.toTypedArray(),
                     name,
                     "regex flag"
                 )!!
@@ -1482,9 +1468,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1493,7 +1476,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         companion object {
             fun fromJson(name: String?): Feature {
                 return Companion.enumFromJson<Feature>(
-                    org.safere.benchmark.DeclarativeBenchmarkPlan.Feature.entries.toTypedArray(),
+                    Feature.entries.toTypedArray(),
                     name,
                     "engine-neutral feature requirement"
                 )!!
@@ -1508,9 +1491,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1519,7 +1499,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         companion object {
             fun fromJson(name: String?): InputRepresentation {
                 return Companion.enumFromJson<InputRepresentation>(
-                    org.safere.benchmark.DeclarativeBenchmarkPlan.InputRepresentation.entries.toTypedArray(),
+                    InputRepresentation.entries.toTypedArray(),
                     name,
                     "input representation"
                 )!!
@@ -1538,10 +1518,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         private val jsonName: String?
         private val expectedType: ResultType
 
-        init {
-            this.jsonName = jsonName
-            this.expectedType = expectedType
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1580,9 +1556,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1591,16 +1564,16 @@ internal class DeclarativeBenchmarkPlan private constructor(
         fun validate(value: JsonElement) {
             val valid =
                 when (this) {
-                    ResultType.BOOLEAN -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
-                    ResultType.INTEGER -> (value.isJsonPrimitive()
-                            && value.getAsJsonPrimitive().isNumber()
+                    BOOLEAN -> value.isJsonPrimitive && value.asJsonPrimitive.isBoolean
+                    INTEGER -> (value.isJsonPrimitive
+                            && value.asJsonPrimitive.isNumber
                             && isInteger(value))
 
-                    ResultType.STRING -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
-                    ResultType.STRING_LIST -> value.isJsonArray()
-                            && value.getAsJsonArray().asList().stream()
+                    STRING -> value.isJsonPrimitive && value.asJsonPrimitive.isString
+                    STRING_LIST -> value.isJsonArray
+                            && value.asJsonArray.asList().stream()
                         .allMatch { item: JsonElement? ->
-                            item!!.isJsonPrimitive() && item.getAsJsonPrimitive().isString()
+                            item!!.isJsonPrimitive && item.asJsonPrimitive.isString
                         }
                 }
             require(valid) { "Malformed " + jsonName + " expected result: " + value }
@@ -1609,7 +1582,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         companion object {
             private fun isInteger(value: JsonElement): Boolean {
                 try {
-                    value.getAsBigDecimal().toBigIntegerExact()
+                    value.asBigDecimal.toBigIntegerExact()
                     return true
                 } catch (exception: ArithmeticException) {
                     return false
@@ -1635,9 +1608,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1662,9 +1632,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1672,12 +1639,12 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun validate(start: Int?, end: Int?, enabled: Boolean?) {
             when (this) {
-                LifecycleStepKind.RESET -> requireAbsent(start, end, enabled)
-                LifecycleStepKind.REGION -> {
+                RESET -> requireAbsent(start, end, enabled)
+                REGION -> {
                     require(!(start == null || end == null || start < 0 || end < start || enabled != null)) { "region lifecycle step requires valid start/end and no enabled field" }
                 }
 
-                LifecycleStepKind.TRANSPARENT_BOUNDS, LifecycleStepKind.ANCHORING_BOUNDS -> {
+                TRANSPARENT_BOUNDS, ANCHORING_BOUNDS -> {
                     require(!(enabled == null || start != null || end != null)) { jsonName + " lifecycle step requires enabled and no start/end" }
                 }
             }
@@ -1707,9 +1674,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1717,18 +1681,18 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun validate(unit: TimingUnit, constraints: EnumSet<ExecutionConstraint?>) {
             when (this) {
-                MeasurementMode.AVERAGE_TIME, MeasurementMode.COMPILE_ONLY -> {
+                AVERAGE_TIME, COMPILE_ONLY -> {
                     require(unit.isTime) { jsonName + " requires a time unit" }
                 }
 
-                MeasurementMode.SINGLE_SHOT_COLD_START -> {
+                SINGLE_SHOT_COLD_START -> {
                     require(
                         !(!unit.isTime
                                 || !constraints.contains(ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION))
                     ) { jsonName + " requires a time unit and freshProcessPerInvocation" }
                 }
 
-                MeasurementMode.RETAINED_MEMORY, MeasurementMode.SUBPROCESS_MEMORY -> {
+                RETAINED_MEMORY, SUBPROCESS_MEMORY -> {
                     require(unit == TimingUnit.BYTES) { jsonName + " requires bytes timingUnit" }
                 }
             }
@@ -1759,7 +1723,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
         val isTime: Boolean
 
         init {
-            this.jsonName = jsonName
             this.isTime = time
         }
 
@@ -1787,9 +1750,6 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private val jsonName: String?
 
-        init {
-            this.jsonName = jsonName
-        }
 
         override fun jsonName(): String? {
             return jsonName
@@ -1833,43 +1793,43 @@ internal class DeclarativeBenchmarkPlan private constructor(
         }
 
         fun has(name: String?): Boolean {
-            return `object`.has(name) && !`object`.get(name).isJsonNull()
+            return `object`.has(name) && !`object`.get(name).isJsonNull
         }
 
         fun required(name: String?): JsonElement {
             val value = `object`.get(name)
-            require(!(value == null || value.isJsonNull())) { context + " requires " + name }
+            require(!(value == null || value.isJsonNull)) { context + " requires " + name }
             return value
         }
 
         fun requiredString(name: String?): String {
             val value = required(name)
             require(isString(value)) { context + " field " + name + " must be a string" }
-            return value.getAsString()
+            return value.asString
         }
 
         fun optionalString(name: String?): String? {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return null
             }
             require(isString(value)) { context + " field " + name + " must be a string" }
-            return value.getAsString()
+            return value.asString
         }
 
         fun requiredInt(name: String?): Int {
             val value = required(name)
             require(isIntegerPrimitive(value)) { context + " field " + name + " must be an integer" }
-            return value.getAsBigDecimal().intValueExact()
+            return value.asBigDecimal.intValueExact()
         }
 
         fun optionalInt(name: String?): Int? {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return null
             }
             require(isIntegerPrimitive(value)) { context + " field " + name + " must be an integer" }
-            return value.getAsBigDecimal().intValueExact()
+            return value.asBigDecimal.intValueExact()
         }
 
         fun optionalBoolean(name: String?, defaultValue: Boolean): Boolean {
@@ -1879,18 +1839,18 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun optionalBoolean(name: String?): Boolean? {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return null
             }
             require(
-                !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean())
+                !(!value.isJsonPrimitive || !value.asJsonPrimitive.isBoolean)
             ) { context + " field " + name + " must be a boolean" }
-            return value.getAsBoolean()
+            return value.asBoolean
         }
 
         fun requiredArray(name: String?): JsonArray {
             try {
-                return required(name).getAsJsonArray()
+                return required(name).asJsonArray
             } catch (exception: RuntimeException) {
                 throw IllegalArgumentException(
                     context + " field " + name + " must be an array", exception
@@ -1900,11 +1860,11 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun optionalArray(name: String?): JsonArray? {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return JsonArray()
             }
             try {
-                return value.getAsJsonArray()
+                return value.asJsonArray
             } catch (exception: RuntimeException) {
                 throw IllegalArgumentException(
                     context + " field " + name + " must be an array", exception
@@ -1914,7 +1874,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun requiredObject(name: String?): JsonObject? {
             try {
-                return required(name).getAsJsonObject()
+                return required(name).asJsonObject
             } catch (exception: RuntimeException) {
                 throw IllegalArgumentException(
                     context + " field " + name + " must be an object", exception
@@ -1924,11 +1884,11 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun optionalObject(name: String?): JsonObject? {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return null
             }
             try {
-                return value.getAsJsonObject()
+                return value.asJsonObject
             } catch (exception: RuntimeException) {
                 throw IllegalArgumentException(
                     context + " field " + name + " must be an object", exception
@@ -1943,7 +1903,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         fun optionalStringList(name: String?): MutableList<String> {
             val value = `object`.get(name)
-            if (value == null || value.isJsonNull()) {
+            if (value == null || value.isJsonNull) {
                 return mutableListOf<String?>()
             }
             return stringList(name)
@@ -1954,11 +1914,11 @@ internal class DeclarativeBenchmarkPlan private constructor(
             try {
                 val result: MutableList<String> = ArrayList<String>()
                 value
-                    .getAsJsonArray()
+                    .asJsonArray
                     .forEach(
                         Consumer { item: JsonElement? ->
-                            require(DeclarativeBenchmarkPlan.Companion.isString(item!!))
-                            result.add(item.getAsString())
+                            require(isString(item!!))
+                            result.add(item.asString)
                         })
                 return List.copyOf<String?>(result)
             } catch (exception: RuntimeException) {
@@ -1970,8 +1930,8 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         companion object {
             fun `object`(context: String?, element: JsonElement): JsonReader {
-                require(!(element == null || !element.isJsonObject())) { context + " must be an object" }
-                return JsonReader(context, element.getAsJsonObject())
+                require(!(element == null || !element.isJsonObject)) { context + " must be an object" }
+                return JsonReader(context, element.asJsonObject)
             }
         }
     }
@@ -2072,12 +2032,12 @@ internal class DeclarativeBenchmarkPlan private constructor(
         }
 
         private fun parseInputs(element: JsonElement): MutableList<InputDeclaration> {
-            val input: JsonReader = JsonReader.Companion.`object`("input", element)
+            val input: JsonReader = JsonReader.`object`("input", element)
             input.requireOnly("id", "axes", "recipe", "shared")
             val idTemplate = input.requiredString("id")
             val axes: MutableMap<String?, MutableList<ParameterValue?>> = parseAxes(input.optionalObject("axes"))
             Companion.requirePlaceholderCoverage(idTemplate, axes.keys, idTemplate)
-            val recipe: InputRecipe = Companion.parseRecipe(input.requiredObject("recipe")!!, idTemplate)
+            val recipe: InputRecipe = parseRecipe(input.requiredObject("recipe")!!, idTemplate)
             recipe.validatePlaceholders(idTemplate, axes.keys)
 
             val declarations: MutableList<InputDeclaration> = ArrayList<InputDeclaration>()
@@ -2099,7 +2059,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         private fun parseRecipe(`object`: JsonObject, inputId: String?): InputRecipe {
             val recipe = JsonReader(inputId + " recipe", `object`)
             val kindName = recipe.requiredString("kind")
-            val kind = RecipeKind.Companion.fromJson(kindName)
+            val kind = RecipeKind.fromJson(kindName)
             recipe.requireOnly(*kind.allowedFields()!!)
             val arguments: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
             for (field in kind.fields()) {
@@ -2109,14 +2069,14 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     continue
                 }
                 arguments.put(
-                    field.name, RecipeValue.Companion.parse(value, field.type!!, inputId + " recipe", field.name)
+                    field.name, RecipeValue.parse(value, field.type!!, inputId + " recipe", field.name)
                 )
             }
             return InputRecipe(kind, arguments)
         }
 
         private fun parseWorkload(element: JsonElement): WorkloadDeclaration {
-            val workload: JsonReader = JsonReader.Companion.`object`("workload", element)
+            val workload: JsonReader = JsonReader.`object`("workload", element)
             workload.requireOnly(
                 "id",
                 "operation",
@@ -2136,7 +2096,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 "trialExclusions"
             )
             val id = workload.requiredString("id")
-            val operation: Operation = Operation.Companion.fromJson(workload.requiredString("operation"))
+            val operation: Operation = Operation.fromJson(workload.requiredString("operation"))
             val patterns = workload.requiredStringList("patterns")
             val inputs = workload.optionalStringList("inputs")
             val axes: MutableMap<String?, MutableList<ParameterValue?>> = parseAxes(workload.optionalObject("axes"))
@@ -2144,13 +2104,13 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 Companion.parseOperationArguments(workload.optionalObject("arguments"), operation, id, axes.keys)
             val flags: EnumSet<Flag?> = Companion.enumSet<Flag?>(
                 workload.optionalStringList("flags"),
-                EnumParser { name: String? -> Flag.Companion.fromJson(name) },
+                EnumParser { name: String? -> Flag.fromJson(name) },
                 Flag::class.java
             )
             val requirements: EnumSet<Feature?> =
                 Companion.enumSet<Feature?>(
                     workload.optionalStringList("requirements"),
-                    EnumParser { name: String? -> Feature.Companion.fromJson(name) },
+                    EnumParser { name: String? -> Feature.fromJson(name) },
                     Feature::class.java
                 )
             val representationsDeclared = workload.has("inputRepresentations")
@@ -2159,7 +2119,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 representations =
                     Companion.enumSet<InputRepresentation?>(
                         workload.requiredStringList("inputRepresentations"),
-                        EnumParser { name: String? -> InputRepresentation.Companion.fromJson(name) },
+                        EnumParser { name: String? -> InputRepresentation.fromJson(name) },
                         InputRepresentation::class.java
                     )
             } else {
@@ -2167,15 +2127,15 @@ internal class DeclarativeBenchmarkPlan private constructor(
             }
             val inputRepresentationReason = workload.optionalString("inputRepresentationReason")
             val consumption =
-                ResultConsumption.Companion.fromJson(workload.requiredString("resultConsumption"))
+                ResultConsumption.fromJson(workload.requiredString("resultConsumption"))
             val expected: ExpectedResult? = parseExpected(workload.optionalObject("expected"), axes.keys)
             val lifecycle: MatcherLifecycle = parseLifecycle(workload.optionalObject("lifecycle"))
-            val measurement: Measurement = Companion.parseMeasurement(workload.requiredObject("measurement")!!)
+            val measurement: Measurement = parseMeasurement(workload.requiredObject("measurement")!!)
             val disabledReason = workload.optionalString("disabledReason")
             val trialExclusions: MutableList<TrialExclusion> =
-                Companion.parseTrialExclusions(workload.optionalArray("trialExclusions")!!, id, axes)
+                parseTrialExclusions(workload.optionalArray("trialExclusions")!!, id, axes)
 
-            require(!patterns.isEmpty()) { id + " requires at least one pattern" }
+            require(!patterns.isEmpty) { id + " requires at least one pattern" }
             require(!representations.isEmpty()) { id + " requires at least one input representation" }
             require(
                 !(representationsDeclared
@@ -2217,7 +2177,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
         ): MutableList<TrialExclusion> {
             val result: MutableList<TrialExclusion> = ArrayList<TrialExclusion>()
             for (element in declarations) {
-                val exclusion: JsonReader = JsonReader.Companion.`object`(workloadId + " trial exclusion", element)
+                val exclusion: JsonReader = JsonReader.`object`(workloadId + " trial exclusion", element)
                 exclusion.requireOnly("engineIds", "when", "reason")
                 val engineIds = exclusion.requiredStringList("engineIds")
                 require(!engineIds.isEmpty()) { workloadId + " trial exclusion requires at least one engine ID" }
@@ -2237,16 +2197,16 @@ internal class DeclarativeBenchmarkPlan private constructor(
                         requireNotNull(declaredValues) { workloadId + " trial exclusion references unknown axis: " + axis }
                         val values: JsonArray
                         try {
-                            values = selector.value.getAsJsonArray()
+                            values = selector.value.asJsonArray
                         } catch (exception: RuntimeException) {
                             throw IllegalArgumentException(
                                 workloadId + " trial exclusion selector must be an array: " + axis, exception
                             )
                         }
-                        require(!values.isEmpty()) { workloadId + " trial exclusion selector must not be empty: " + axis }
+                        require(!values.isEmpty) { workloadId + " trial exclusion selector must not be empty: " + axis }
                         val parsedValues: MutableSet<ParameterValue?> = LinkedHashSet<ParameterValue?>()
                         for (value in values) {
-                            val parsed = ParameterValue.Companion.parse(value, axis)
+                            val parsed = ParameterValue.parse(value, axis)
                             require(parsedValues.add(parsed)) {
                                 (workloadId
                                         + " trial exclusion has duplicate axis value: "
@@ -2288,17 +2248,17 @@ internal class DeclarativeBenchmarkPlan private constructor(
                 requireSimpleId(entry.key, "benchmark axis")
                 val values: JsonArray
                 try {
-                    values = entry.value.getAsJsonArray()
+                    values = entry.value.asJsonArray
                 } catch (exception: RuntimeException) {
                     throw IllegalArgumentException(
                         "Benchmark axis must be an array: " + entry.key, exception
                     )
                 }
-                require(!values.isEmpty()) { "Benchmark axis must not be empty: " + entry.key }
+                require(!values.isEmpty) { "Benchmark axis must not be empty: " + entry.key }
                 val parsed: MutableList<ParameterValue> = ArrayList<ParameterValue>()
                 val stableValues: MutableSet<String?> = LinkedHashSet<String?>()
                 for (value in values) {
-                    val parameter = ParameterValue.Companion.parse(value, entry.key)
+                    val parameter = ParameterValue.parse(value, entry.key)
                     require(stableValues.add(parameter.stableText)) { "Duplicate benchmark axis value: " + entry.key + "=" + parameter.stableText }
                     parsed.add(parameter)
                 }
@@ -2322,7 +2282,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
             val arguments: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
             for (field in fieldTypes.entries) {
                 val value = `object`.get(field.key)
-                if (value == null || value.isJsonNull()) {
+                if (value == null || value.isJsonNull) {
                     require(!required.contains(field.key)) {
                         (workloadId
                                 + " operation "
@@ -2333,7 +2293,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
                     continue
                 }
                 val argument =
-                    RecipeValue.Companion.parse(value, field.value!!, workloadId + " arguments", field.key)
+                    RecipeValue.parse(value, field.value!!, workloadId + " arguments", field.key)
                 val unknownAxes: MutableSet<String?> = LinkedHashSet<String?>(argument.placeholders())
                 unknownAxes.removeAll(axes)
                 require(unknownAxes.isEmpty()) {
@@ -2354,10 +2314,10 @@ internal class DeclarativeBenchmarkPlan private constructor(
             }
             val expected = JsonReader("expected result", `object`)
             expected.requireOnly("type", "value", "axis")
-            val type = ResultType.Companion.fromJson(expected.requiredString("type"))
+            val type = ResultType.fromJson(expected.requiredString("type"))
             val value = `object`.get("value")
             val axis = expected.optionalString("axis")
-            require((value == null || value.isJsonNull()) != (axis == null)) { "Expected result requires exactly one value or axis" }
+            require((value == null || value.isJsonNull) != (axis == null)) { "Expected result requires exactly one value or axis" }
             if (axis != null) {
                 require(axes.contains(axis)) { "Expected result references unknown axis: " + axis }
                 return ExpectedResult(type, null, axis)
@@ -2368,16 +2328,16 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private fun parseLifecycle(`object`: JsonObject?): MatcherLifecycle {
             if (`object` == null) {
-                return MatcherLifecycle.Companion.NONE
+                return MatcherLifecycle.NONE
             }
             val lifecycle = JsonReader("matcher lifecycle", `object`)
             lifecycle.requireOnly("matcher", "steps")
-            val matcherReuse = MatcherReuse.Companion.fromJson(lifecycle.requiredString("matcher"))
+            val matcherReuse = MatcherReuse.fromJson(lifecycle.requiredString("matcher"))
             val steps: MutableList<LifecycleStep> = ArrayList<LifecycleStep>()
             for (element in lifecycle.optionalArray("steps")!!) {
-                val step: JsonReader = JsonReader.Companion.`object`("matcher lifecycle step", element)
+                val step: JsonReader = JsonReader.`object`("matcher lifecycle step", element)
                 step.requireOnly("kind", "start", "end", "enabled")
-                val kind = LifecycleStepKind.Companion.fromJson(step.requiredString("kind"))
+                val kind = LifecycleStepKind.fromJson(step.requiredString("kind"))
                 val start = step.optionalInt("start")
                 val end = step.optionalInt("end")
                 val enabled = step.optionalBoolean("enabled")
@@ -2391,12 +2351,12 @@ internal class DeclarativeBenchmarkPlan private constructor(
         private fun parseMeasurement(`object`: JsonObject): Measurement {
             val measurement = JsonReader("measurement", `object`)
             measurement.requireOnly("mode", "timingUnit", "constraints")
-            val mode = MeasurementMode.Companion.fromJson(measurement.requiredString("mode"))
-            val timingUnit = TimingUnit.Companion.fromJson(measurement.requiredString("timingUnit"))
+            val mode = MeasurementMode.fromJson(measurement.requiredString("mode"))
+            val timingUnit = TimingUnit.fromJson(measurement.requiredString("timingUnit"))
             val constraints: EnumSet<ExecutionConstraint?> =
                 Companion.enumSet<ExecutionConstraint?>(
                     measurement.optionalStringList("constraints"),
-                    EnumParser { name: String? -> ExecutionConstraint.Companion.fromJson(name) },
+                    EnumParser { name: String? -> ExecutionConstraint.fromJson(name) },
                     ExecutionConstraint::class.java
                 )
             mode.validate(timingUnit, constraints)
@@ -2520,7 +2480,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
             require(!(id == null || id.isBlank() || !id.matches("[A-Za-z][A-Za-z0-9_.-]*".toRegex()))) { "Invalid " + kind + " ID: " + id }
         }
 
-        private fun enumNames(values: MutableSet<out JsonNamed?>): String? {
+        private fun enumNames(values: MutableSet<out JsonNamed?>): String {
             return values.stream().map<String?> { obj: JsonNamed? -> obj!!.jsonName() }.sorted().toList().toString()
         }
 
@@ -2530,7 +2490,7 @@ internal class DeclarativeBenchmarkPlan private constructor(
 
         private fun <E> enumFromJson(
             values: Array<E?>, name: String?, kind: String?
-        ): E? where E : Enum<E?>?, E : JsonNamed? {
+        ): E where E : Enum<E?>?, E : JsonNamed? {
             for (value in values) {
                 if (value!!.jsonName() == name) {
                     return value
@@ -2540,15 +2500,15 @@ internal class DeclarativeBenchmarkPlan private constructor(
         }
 
         private fun isString(value: JsonElement): Boolean {
-            return value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+            return value.isJsonPrimitive && value.asJsonPrimitive.isString
         }
 
         private fun isIntegerPrimitive(value: JsonElement): Boolean {
-            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            if (!value.isJsonPrimitive || !value.asJsonPrimitive.isNumber) {
                 return false
             }
             try {
-                value.getAsBigDecimal().intValueExact()
+                value.asBigDecimal.intValueExact()
                 return true
             } catch (exception: ArithmeticException) {
                 return false

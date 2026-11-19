@@ -21,15 +21,15 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
     private var appendPosition = 0
     private var replacementFailed = false
     private var cachedReplacement: Utf8Input? = null
-    private var cachedTemplate: Array<ReplacementSegment>
+    private lateinit var cachedTemplate: Array<ReplacementSegment>
     private var cachedTemplateNeedsCaptures = false
     private var modCount = 0
     private var appending = false
 
     init {
-        this.pattern = Objects.requireNonNull<Pattern>(pattern, "pattern")
+        this.pattern = Objects.requireNonNull(pattern, "pattern")!!
         this.input = Objects.requireNonNull<Utf8Input?>(input, "input") as ArrayUtf8Input
-        delegate = Matcher(pattern, this.input.scanner())
+        delegate = Matcher(pattern!!, this.input.scanner())
     }
 
     /**
@@ -87,9 +87,9 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
      * boundary
      */
     fun region(start: Int, end: Int): Utf8Matcher {
-        if (start < 0 || end < start || end > input.length()) {
+        if (start < 0 || end < start || end > input.length) {
             throw IndexOutOfBoundsException(
-                "start=" + start + ", end=" + end + ", length=" + input.length()
+                "start=" + start + ", end=" + end + ", length=" + input.length
             )
         }
         val scanner = input.scanner()
@@ -224,7 +224,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
     }
 
     private fun replace(sink: Utf8Sink?, replacement: Utf8Input?, all: Boolean) {
-        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        Objects.requireNonNull(sink, "sink")
         Objects.requireNonNull<Utf8Input?>(replacement, "replacement")
         reset()
         // The first find applies whole-input and anchored prefix/class rejection. This uses the
@@ -248,7 +248,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
      * @throws ConcurrentModificationException if a sink callback advances this matcher
      */
     fun appendReplacement(sink: Utf8Sink?, replacement: Utf8Input?): Utf8Matcher {
-        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        Objects.requireNonNull(sink, "sink")
         Objects.requireNonNull<Utf8Input?>(replacement, "replacement")
         check(!replacementFailed) { "Replacement failed" }
         beginAppend()
@@ -257,16 +257,16 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
             val template = replacementTemplate(replacement)
             // Group 0 bounds don't require resolving inner captures, which can be much more expensive.
             val bounds = if (cachedTemplateNeedsCaptures) captureBounds() else intArrayOf(start(), end())
-            appendRange(sink, appendPosition, bounds[0], expectedModCount)
+            appendRange(sink!!, appendPosition, bounds[0], expectedModCount)
             for (segment in template) {
                 when (segment) {
-                    -> {
-                        sink!!.append(literal.bytes(), literal.offset(), literal.length())
+                    is ReplacementSegment.Literal -> {
+                        sink!!.append(segment.bytes(), segment.offset(), segment.length)
                         checkForConcurrentModification(expectedModCount)
                     }
 
-                    -> appendGroup(sink, bounds, group, expectedModCount)
-                    -> appendGroup(sink, bounds, group, expectedModCount)
+                    is ReplacementSegment.GroupRef -> appendGroup(sink, bounds, segment.group, expectedModCount)
+                    is ReplacementSegment.NamedGroupRef -> appendGroup(sink, bounds, segment.group, expectedModCount)
                 }
             }
             appendPosition = bounds[1]
@@ -290,13 +290,13 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
      * @throws ConcurrentModificationException if a sink callback advances this matcher
      */
     fun appendTail(sink: Utf8Sink?) {
-        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        Objects.requireNonNull(sink, "sink")
         check(!replacementFailed) { "Replacement failed" }
         beginAppend()
         val expectedModCount = modCount
         try {
-            appendRange(sink, appendPosition, input.length(), expectedModCount)
-            appendPosition = input.length()
+            appendRange(sink!!, appendPosition, input.length, expectedModCount)
+            appendPosition = input.length
         } catch (e: RuntimeException) {
             replacementFailed = true
             throw e
@@ -311,18 +311,21 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
     private fun appendGroup(sink: Utf8Sink?, bounds: IntArray, group: Int, expectedModCount: Int) {
         val start = bounds[group * 2]
         if (start >= 0) {
-            appendRange(sink, start, bounds[group * 2 + 1], expectedModCount)
+            appendRange(sink!!, start, bounds[group * 2 + 1], expectedModCount)
         }
     }
 
     private fun captureBounds(): IntArray {
         val bounds = IntArray((groupCount() + 1) * 2)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (group in 0..groupCount()) {
+            bounds[group * 2] = start(group)
+            bounds[group * 2 + 1] = end(group)
+        }
         return bounds
     }
 
     private fun appendRange(sink: Utf8Sink?, start: Int, end: Int, expectedModCount: Int) {
-        input.appendRange(sink, start, end)
+        input.appendRange(sink!!, start, end)
         checkForConcurrentModification(expectedModCount)
     }
 
@@ -358,7 +361,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
                 val scanner = replacementInput.scanner()
                 cachedTemplate =
                     arrayOf<ReplacementSegment>(
-                        ReplacementSegment.Literal(scanner.bytes(), scanner.offset(), scanner.length())
+                        ReplacementSegment.Literal(scanner.bytes(), scanner.offset(), scanner.length)
                     )
                 cachedTemplateNeedsCaptures = false
                 cachedReplacement = replacement
@@ -366,13 +369,38 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
             }
             val text = replacementInput.decode()
             val groupCount = groupCount()
-            val parsed: Array<Matcher.ReplacementSegment?> =
-                Matcher.Companion.compileReplacementTemplate(text, groupCount)
-            val compiled: Array<ReplacementSegment> = arrayOfNulls<ReplacementSegment>(parsed.length)
+            val parsed = Matcher.Companion.compileReplacementTemplate(text, groupCount)
+            val compiled: Array<ReplacementSegment?> = arrayOfNulls(parsed.size)
             val namedGroups = pattern.namedGroups()
             var needsCaptures = false
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-            cachedTemplate = compiled
+            for (index in 0 until parsed.size) {
+                compiled[index] =
+                    when (val segment = parsed[index]) {
+                        is Matcher.ReplacementSegment.Literal ->
+                            ReplacementSegment.Literal(segment.text.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
+
+                        is Matcher.ReplacementSegment.GroupRef -> {
+                            val group = segment.groupNum
+                            if (group > groupCount) {
+                                throw IndexOutOfBoundsException(
+                                    "No group " + group + " (groupCount=" + groupCount + ")"
+                                )
+                            }
+                            needsCaptures = needsCaptures or (group != 0)
+                            ReplacementSegment.GroupRef(group)
+                        }
+
+                        is Matcher.ReplacementSegment.NamedGroupRef -> {
+                            val group = namedGroups[segment.name]
+                                ?: throw IllegalArgumentException("No group with name <" + segment.name + ">")
+                            needsCaptures = needsCaptures or (group != 0)
+                            ReplacementSegment.NamedGroupRef(group)
+                        }
+
+                        else -> throw IllegalStateException()
+                    }
+            }
+            cachedTemplate = compiled.requireNoNulls()
             cachedTemplateNeedsCaptures = needsCaptures
             cachedReplacement = replacement
         }
@@ -380,18 +408,12 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
     }
 
     private interface ReplacementSegment {
-        class Literal internal constructor(bytes: ByteArray?, offset: Int, length: Int) : ReplacementSegment {
-            private val bytes: ByteArray?
-            private val offset: Int
-            private val length: Int
-
-            internal constructor(bytes: ByteArray) : this(bytes, 0, bytes.length)
-
-            init {
-                this.bytes = bytes
-                this.offset = offset
-                this.length = length
-            }
+        class Literal internal constructor(
+            private val bytes: ByteArray?,
+            private val offset: Int,
+            val length: Int,
+        ) : ReplacementSegment {
+            internal constructor(bytes: ByteArray) : this(bytes, 0, bytes.size)
 
             fun bytes(): ByteArray? {
                 return bytes
@@ -400,37 +422,28 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
             fun offset(): Int {
                 return offset
             }
-
-            fun length(): Int {
-                return length
-            }
         }
 
         @JvmRecord
-        data class GroupRef(group: Int) : ReplacementSegment {
-            val group: Int
-
-            init {
-                this.group = group
-            }
-        }
+        data class GroupRef(val group: Int) : ReplacementSegment
 
         @JvmRecord
-        data class NamedGroupRef(group: Int) : ReplacementSegment {
-            val group: Int
-
-            init {
-                this.group = group
-            }
-        }
+        data class NamedGroupRef(val group: Int) : ReplacementSegment
     }
 
     companion object {
         private fun isPlainLiteralReplacement(replacement: ArrayUtf8Input): Boolean {
             val scanner = replacement.scanner()
             val bytes = scanner.bytes()
-            val end = scanner.offset() + scanner.length()
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            val end = scanner.offset() + scanner.length
+            for (index in scanner.offset() until end) {
+                val value = bytes!![index]
+                // Keep malformed, trusted non-ASCII replacements on the decoding path so their existing
+                // replacement-character behavior is preserved. ASCII is valid without a validation pass.
+                if (value == '$'.code.toByte() || value == '\\'.code.toByte() || (value < 0 && !replacement.validated())) {
+                    return false
+                }
+            }
             return true
         }
     }

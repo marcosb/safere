@@ -70,9 +70,9 @@ class RE2FfmMatcher {
         this.matched = false
         this.searchBytePos = 0
         this.regionStart = 0
-        this.regionEnd = inputString.length()
+        this.regionEnd = inputString.length
         this.regionStartByte = 0
-        this.regionEndByte = inputUtf8.length
+        this.regionEndByte = inputUtf8.size
         return this
     }
 
@@ -92,7 +92,7 @@ class RE2FfmMatcher {
      * @throws IllegalArgumentException if either bound splits a surrogate pair
      */
     fun region(start: Int, end: Int): RE2FfmMatcher {
-        if (start < 0 || end < start || end > inputString.length()) {
+        if (start < 0 || end < start || end > inputString.length) {
             throw IndexOutOfBoundsException("Invalid region: " + start + ", " + end)
         }
         checkCodePointBoundary(start)
@@ -157,12 +157,12 @@ class RE2FfmMatcher {
         }
         Arena.ofConfined().use { arena ->
             val textSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, inputUtf8)
-            val matchesSeg = arena.allocate(ValueLayout.JAVA_INT, matchByteOffsets.length)
+            val matchesSeg = arena.allocate(ValueLayout.JAVA_INT, matchByteOffsets.size)
             matched =
                 Re2Shim.match(
                     pattern.nativeHandle(),
                     textSeg,
-                    inputUtf8.length,
+                    inputUtf8.size,
                     regionStartByte,
                     regionEndByte,
                     startByte,
@@ -172,7 +172,7 @@ class RE2FfmMatcher {
                 )
             if (matched) {
                 MemorySegment.copy(
-                    matchesSeg, ValueLayout.JAVA_INT, 0, matchByteOffsets, 0, matchByteOffsets.length
+                    matchesSeg, ValueLayout.JAVA_INT, 0, matchByteOffsets, 0, matchByteOffsets.size
                 )
                 searchBytePos =
                     if (matchByteOffsets[0] == matchByteOffsets[1])
@@ -195,7 +195,7 @@ class RE2FfmMatcher {
      * @throws IllegalArgumentException if start splits a surrogate pair
      */
     fun find(start: Int): Boolean {
-        if (start < 0 || start > inputString.length()) {
+        if (start < 0 || start > inputString.length) {
             throw IndexOutOfBoundsException("Invalid start: " + start)
         }
         checkCodePointBoundary(start)
@@ -276,7 +276,7 @@ class RE2FfmMatcher {
             val result =
                 Re2Shim.replaceAll(pattern.nativeHandle(), inputUtf8, inputString, rewriteBytes).result
             this.matched = false
-            this.searchBytePos = inputUtf8.length + 1
+            this.searchBytePos = inputUtf8.size + 1
             return result
         }
         return replaceAllJava(replacement)
@@ -303,7 +303,7 @@ class RE2FfmMatcher {
 
         // Append text after the match.
         val matchEndChar = end()
-        sb.append(inputString, matchEndChar, inputString.length())
+        sb.append(inputString, matchEndChar, inputString.length)
 
         return sb.toString()
     }
@@ -313,19 +313,19 @@ class RE2FfmMatcher {
     private fun appendReplacement(sb: StringBuilder, replacement: String) {
         val maxGroup = pattern.numGroups()
         var i = 0
-        while (i < replacement.length()) {
-            val c: Char = replacement.charAt(i)
+        while (i < replacement.length) {
+            val c: Char = replacement[i]
             if (c == '\\') {
-                require(++i < replacement.length()) { "character to be escaped is missing" }
-                sb.append(replacement.charAt(i))
+                require(++i < replacement.length) { "character to be escaped is missing" }
+                sb.append(replacement[i])
             } else if (c == '$') {
-                require(!(++i >= replacement.length() || !Character.isDigit(replacement.charAt(i)))) { "Illegal group reference" }
-                var groupNum = replacement.charAt(i).code - '0'.code
+                require(!(++i >= replacement.length || !Character.isDigit(replacement[i]))) { "Illegal group reference" }
+                var groupNum = replacement[i].code - '0'.code
                 if (groupNum > maxGroup) {
                     throw IndexOutOfBoundsException("No group " + groupNum)
                 }
-                while (i + 1 < replacement.length() && Character.isDigit(replacement.charAt(i + 1))) {
-                    val candidate = groupNum * 10 + (replacement.charAt(i + 1).code - '0'.code)
+                while (i + 1 < replacement.length && Character.isDigit(replacement[i + 1])) {
+                    val candidate = groupNum * 10 + (replacement[i + 1].code - '0'.code)
                     if (candidate > maxGroup) {
                         break
                     }
@@ -353,13 +353,13 @@ class RE2FfmMatcher {
         }
         val sb = StringBuilder()
         var i = 0
-        while (i < replacement.length()) {
-            val c: Char = replacement.charAt(i)
+        while (i < replacement.length) {
+            val c: Char = replacement[i]
             if (c == '\\') {
-                if (++i >= replacement.length()) {
+                if (++i >= replacement.length) {
                     return null
                 }
-                val next: Char = replacement.charAt(i)
+                val next: Char = replacement[i]
                 if (next == '$') {
                     sb.append('$')
                 } else if (next == '\\') {
@@ -368,12 +368,12 @@ class RE2FfmMatcher {
                     sb.append(next)
                 }
             } else if (c == '$') {
-                if (++i >= replacement.length()) {
+                if (++i >= replacement.length) {
                     return null
                 }
-                val next: Char = replacement.charAt(i)
+                val next: Char = replacement[i]
                 if (next >= '0' && next <= '9') {
-                    if (i + 1 < replacement.length() && Character.isDigit(replacement.charAt(i + 1))) {
+                    if (i + 1 < replacement.length && Character.isDigit(replacement[i + 1])) {
                         return null
                     }
                     val groupIndex = next.code - '0'.code
@@ -401,7 +401,7 @@ class RE2FfmMatcher {
             appendReplacement(sb, replacement)
             lastAppend = end()
         }
-        sb.append(inputString, lastAppend, inputString.length())
+        sb.append(inputString, lastAppend, inputString.length)
         return sb.toString()
     }
 
@@ -415,10 +415,10 @@ class RE2FfmMatcher {
     }
 
     private fun buildCharToByteMap(s: String, bytes: ByteArray) {
-        if (bytes.length == s.length()) {
+        if (bytes.size == s.length) {
             var ok = true
             for (i in bytes.indices) {
-                if (bytes[i] == '?'.code.toByte() && s.charAt(i) != '?') {
+                if (bytes[i] == '?'.code.toByte() && s[i] != '?') {
                     ok = false
                     break
                 }
@@ -429,10 +429,10 @@ class RE2FfmMatcher {
             }
         }
 
-        charToByteMap = IntArray(s.length())
+        charToByteMap = IntArray(s.length)
         var byteI = 0
         var charI = 0
-        while (byteI < bytes.length) {
+        while (byteI < bytes.size) {
             val b = bytes[byteI]
             val len: Int
             if (b >= 0) {
@@ -440,11 +440,11 @@ class RE2FfmMatcher {
                 len = 1
             } else {
                 len = Integer.numberOfLeadingZeros((b.toInt() shl 24).inv())
-                if (charI < charToByteMap.length) {
+                if (charI < charToByteMap.size) {
                     charToByteMap!![charI++] = byteI
                 }
                 if (len == 4) {
-                    if (charI < charToByteMap.length) {
+                    if (charI < charToByteMap.size) {
                         charToByteMap!![charI++] = byteI + 2
                     }
                 }
@@ -460,8 +460,8 @@ class RE2FfmMatcher {
         if (byteOffset <= 0) {
             return 0
         }
-        if (byteOffset >= inputUtf8.length) {
-            return inputString.length()
+        if (byteOffset >= inputUtf8.size) {
+            return inputString.length
         }
 
         var i = Arrays.binarySearch(charToByteMap, byteOffset)
@@ -478,16 +478,16 @@ class RE2FfmMatcher {
         if (charOffset <= 0) {
             return 0
         }
-        if (charOffset >= inputString.length()) {
-            return inputUtf8.length
+        if (charOffset >= inputString.length) {
+            return inputUtf8.size
         }
         return charToByteMap!![charOffset]
     }
 
     private fun checkCodePointBoundary(offset: Int) {
         require(
-            !(offset > 0 && offset < inputString.length() && Character.isHighSurrogate(inputString.charAt(offset - 1))
-                    && Character.isLowSurrogate(inputString.charAt(offset)))
+            !(offset > 0 && offset < inputString.length && Character.isHighSurrogate(inputString[offset - 1])
+                    && Character.isLowSurrogate(inputString[offset]))
         ) { "UTF-16 offset splits a surrogate pair: " + offset }
     }
 

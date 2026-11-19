@@ -13,7 +13,6 @@ import com.ibm.icu.lang.UProperty
 import com.ibm.icu.text.UnicodeSet
 import java.io.IOException
 import java.io.PrintWriter
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -22,14 +21,10 @@ import java.util.function.Function
 import java.util.function.IntFunction
 import java.util.function.IntPredicate
 import kotlin.Array
-import kotlin.Boolean
 import kotlin.Comparator
 import kotlin.IllegalArgumentException
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Throws
+import IntArray
 import kotlin.arrayOf
-import kotlin.arrayOfNulls
 import kotlin.check
 import kotlin.code
 import kotlin.collections.ArrayList
@@ -42,12 +37,10 @@ import kotlin.collections.minus
 import kotlin.collections.sort
 import kotlin.compareTo
 import kotlin.getValue
-import kotlin.intArrayOf
 import kotlin.require
 import kotlin.sequences.minus
 import kotlin.text.StringBuilder
 import kotlin.text.indexOf
-import kotlin.text.isEmpty
 import kotlin.text.split
 import kotlin.text.startsWith
 import kotlin.text.substring
@@ -134,26 +127,26 @@ object UnicodeTableGenerator {
     }
 
     private fun buildCategoryTables(): Array<Array<IntArray?>?> {
-        val builders: Array<RangeBuilder?> = arrayOfNulls<RangeBuilder>(CATEGORY_ABBREVS.length)
+        val builders: Array<RangeBuilder?> = arrayOfNulls<RangeBuilder>(CATEGORY_ABBREVS.size)
         for (i in builders.indices) {
             builders[i] = RangeBuilder()
         }
 
         for (cp in 0..MAX_CODE_POINT) {
             val type = Character.getType(cp)
-            if (type >= 0 && type < builders.length) {
+            if (type >= 0 && type < builders.size) {
                 builders[type]!!.add(cp)
             }
         }
 
-        val tables = arrayOfNulls<Array<IntArray?>>(builders.length)
+        val tables = arrayOfNulls<Array<IntArray?>>(builders.size)
         for (i in builders.indices) {
             tables[i] = builders[i]!!.build()
         }
         return tables
     }
 
-    private fun buildScriptTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+    private fun buildScriptTables(): MutableMap<String?, Array<IntArray?>?> {
         val builders: MutableMap<Character.UnicodeScript?, RangeBuilder?> =
             EnumMap<Character.UnicodeScript?, RangeBuilder?>(Character.UnicodeScript::class.java)
         for (cp in 0..MAX_CODE_POINT) {
@@ -161,7 +154,7 @@ object UnicodeTableGenerator {
             builders.computeIfAbsent(script, Function { unused: Character.UnicodeScript? -> RangeBuilder() })!!.add(cp)
         }
 
-        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        val tables: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
         for (script in Character.UnicodeScript.values()) {
             val builder = builders.get(script)
             if (builder != null) {
@@ -171,7 +164,7 @@ object UnicodeTableGenerator {
         return tables
     }
 
-    private fun buildBlockTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+    private fun buildBlockTables(): MutableMap<String?, Array<IntArray?>?> {
         val builders: MutableMap<Character.UnicodeBlock?, RangeBuilder?> =
             LinkedHashMap<Character.UnicodeBlock?, RangeBuilder?>()
         for (cp in 0..MAX_CODE_POINT) {
@@ -182,7 +175,7 @@ object UnicodeTableGenerator {
             }
         }
 
-        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        val tables: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
         val blocks: MutableList<Character.UnicodeBlock> = ArrayList<Character.UnicodeBlock>(builders.keySet())
         blocks.sort(Comparator { a: Character.UnicodeBlock?, b: Character.UnicodeBlock? ->
             UnicodeTableGenerator.blockName(
@@ -195,8 +188,8 @@ object UnicodeTableGenerator {
         return tables
     }
 
-    private fun buildBinaryPropertyTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
-        val predicates: MutableMap<kotlin.String?, IntPredicate?> = LinkedHashMap<kotlin.String?, IntPredicate?>()
+    private fun buildBinaryPropertyTables(): MutableMap<String?, Array<IntArray?>?> {
+        val predicates: MutableMap<String?, IntPredicate?> = LinkedHashMap<String?, IntPredicate?>()
         predicates.put("Alphabetic", IntPredicate { codePoint: Int -> Character.isAlphabetic(codePoint) })
         predicates.put("Ideographic", IntPredicate { codePoint: Int -> Character.isIdeographic(codePoint) })
         predicates.put("Letter", IntPredicate { codePoint: Int -> Character.isLetter(codePoint) })
@@ -229,7 +222,7 @@ object UnicodeTableGenerator {
             IntPredicate { codePoint: Int -> Character.isEmojiModifierBase(codePoint) })
         predicates.put("Emoji_Component", IntPredicate { codePoint: Int -> Character.isEmojiComponent(codePoint) })
 
-        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        val tables: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
         for (entry in predicates.entrySet()) {
             tables.put(entry.getKey(), buildRanges(entry.getValue()))
         }
@@ -244,8 +237,8 @@ object UnicodeTableGenerator {
      * Builds the `\p{java...}` classes that can't be composed from the general categories and
      * binary properties. The rest are composed at runtime in `JavaCharacterClasses`.
      */
-    private fun buildJavaClassTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
-        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+    private fun buildJavaClassTables(): MutableMap<String?, Array<IntArray?>?> {
+        val tables: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
         // Bidi_Mirrored isn't exposed as a binary property, since java.util.regex doesn't support it.
         tables.put("javaMirrored", buildRanges(IntPredicate { codePoint: Int -> Character.isMirrored(codePoint) }))
         // Keep identifier exceptions in the generated data too: their membership can change when
@@ -276,8 +269,8 @@ object UnicodeTableGenerator {
         return tables
     }
 
-    fun buildGraphemeTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
-        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+    fun buildGraphemeTables(): MutableMap<String?, Array<IntArray?>?> {
+        val tables: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
         val control =
             UnicodeSet()
                 .applyIntPropertyValue(UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.CONTROL)
@@ -328,7 +321,7 @@ object UnicodeTableGenerator {
         for (range in set.ranges()) {
             ranges.add(intArrayOf(range.codepoint, range.codepointEnd))
         }
-        return ranges.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() })
+        return ranges.toTypedArray()
     }
 
     @Throws(IOException::class)
@@ -341,7 +334,7 @@ object UnicodeTableGenerator {
         // Licensed under the BSD 3-Clause License (see LICENSE file).
         
         """.trimIndent()
-        val declaration: kotlin.String =
+        val declaration: String =
             """
 
         // WARNING: This file is automatically generated. Do not edit by hand.
@@ -411,9 +404,9 @@ object UnicodeTableGenerator {
 
     private fun writeInlineMap(
         out: PrintWriter,
-        name: kotlin.String?,
-        tables: MutableMap<kotlin.String?, Array<IntArray?>?>,
-        prefix: kotlin.String
+        name: String?,
+        tables: MutableMap<String?, Array<IntArray?>?>,
+        prefix: String
     ) {
         out.println("  // Include explicit type arguments to ofEntries to avoid JDK-8221301")
         out.println(
@@ -421,8 +414,8 @@ object UnicodeTableGenerator {
         )
         var count = 0
         for (entry in tables.entrySet()) {
-            val key: kotlin.String = entry.getKey()
-            val entryStr: kotlin.String?
+            val key: String = entry.getKey()
+            val entryStr: String?
             if (prefix == "block") {
                 val ranges: Array<IntArray?> = entry.getValue()
                 entryStr =
@@ -437,7 +430,7 @@ object UnicodeTableGenerator {
                 entryStr = "    Map.entry(\"%s\", %s_%s())".formatted(key, prefix, safeIdentifier(key))
             }
             out.print(entryStr)
-            if (++count < tables.size()) {
+            if (++count < tables.size) {
                 out.println(",")
             } else {
                 out.println()
@@ -448,10 +441,10 @@ object UnicodeTableGenerator {
     }
 
     private fun writeTableMethods(
-        out: PrintWriter, prefix: kotlin.String?, tables: MutableMap<kotlin.String?, Array<IntArray?>?>
+        out: PrintWriter, prefix: String?, tables: MutableMap<String?, Array<IntArray?>?>
     ) {
         for (entry in tables.entrySet()) {
-            val name: kotlin.String = entry.getKey()
+            val name: String = entry.getKey()
             val ranges: Array<IntArray> = entry.getValue()
             out.println("  private static int[][] %s_%s() {".formatted(prefix, safeIdentifier(name)))
             out.println("    return new int[][] {")
@@ -464,7 +457,7 @@ object UnicodeTableGenerator {
         }
     }
 
-    private fun safeIdentifier(name: kotlin.String): kotlin.String {
+    private fun safeIdentifier(name: String): String {
         return name.replaceAll("[^a-zA-Z0-9_]", "_")
     }
 
@@ -506,32 +499,32 @@ object UnicodeTableGenerator {
                 || ((cp and 0xFFFE) == 0xFFFE && cp <= Character.MAX_CODE_POINT)
     }
 
-    private fun scriptName(script: Character.UnicodeScript): kotlin.String {
+    private fun scriptName(script: Character.UnicodeScript): String {
         if (script == Character.UnicodeScript.SIGNWRITING) {
             return "SignWriting"
         }
         return toTitleSnake(script.name())
     }
 
-    private fun blockName(block: Character.UnicodeBlock): kotlin.String {
+    private fun blockName(block: Character.UnicodeBlock): String {
         return toTitleSnake(block.toString())
     }
 
-    private fun toTitleSnake(upperSnake: kotlin.String): kotlin.String {
-        val result: StringBuilder = StringBuilder(upperSnake.length())
+    private fun toTitleSnake(upperSnake: String): String {
+        val result: StringBuilder = StringBuilder(upperSnake.length)
         for (part in upperSnake.split("_", -1)) {
             if (!result.isEmpty()) {
                 result.append('_')
             }
-            result.append(Character.toUpperCase(part.charAt(0)))
-            if (part.length() > 1) {
+            result.append(Character.toUpperCase(part[0]))
+            if (part.length > 1) {
                 result.append(part.substring(1).toLowerCase(Locale.ROOT))
             }
         }
         return result.toString()
     }
 
-    private fun javaVersion(): kotlin.String {
+    private fun javaVersion(): String {
         return Runtime.version().toString() + " (" + System.getProperty("java.vendor") + ")"
     }
 
@@ -539,9 +532,7 @@ object UnicodeTableGenerator {
     @JvmRecord
     internal data class Options(val output: Path?, val unicodeLicense: Path?) {
         companion object {
-            fun parse(vararg args: kotlin.String): Options {
-                var output: Path? = null
-                var unicodeLicense: Path? = null
+            fun parse(vararg args: String): Options {
                 for (arg in args) {
                     if (!arg.startsWith("--")) {
                         require(output == null) { USAGE }
@@ -549,7 +540,7 @@ object UnicodeTableGenerator {
                         continue
                     }
                     val equals: Int = arg.indexOf('='.code)
-                    require(!(equals < 0 || equals == arg.length() - 1)) { USAGE }
+                    require(!(equals < 0 || equals == arg.length - 1)) { USAGE }
                     val value = arg.substring(equals + 1)
                     unicodeLicense =
                         when (arg.substring(0, equals)) {
@@ -567,14 +558,14 @@ object UnicodeTableGenerator {
 
     @JvmRecord
     private data class GeneratedTables(
-        val unicodeDataVersion: kotlin.String?,
-        val unicodeLicense: MutableList<kotlin.String>?,
-        val categories: MutableMap<kotlin.String?, Array<IntArray?>?>?,
-        val scripts: MutableMap<kotlin.String?, Array<IntArray?>?>?,
-        val blocks: MutableMap<kotlin.String?, Array<IntArray?>?>?,
-        val binaryProperties: MutableMap<kotlin.String?, Array<IntArray?>?>?,
-        val graphemeProperties: MutableMap<kotlin.String?, Array<IntArray?>?>?,
-        val javaClasses: MutableMap<kotlin.String?, Array<IntArray?>?>?
+        val unicodeDataVersion: String?,
+        val unicodeLicense: MutableList<String>?,
+        val categories: MutableMap<String?, Array<IntArray?>?>?,
+        val scripts: MutableMap<String?, Array<IntArray?>?>?,
+        val blocks: MutableMap<String?, Array<IntArray?>?>?,
+        val binaryProperties: MutableMap<String?, Array<IntArray?>?>?,
+        val graphemeProperties: MutableMap<String?, Array<IntArray?>?>?,
+        val javaClasses: MutableMap<String?, Array<IntArray?>?>?
     )
 
     private class RangeBuilder {
@@ -586,7 +577,7 @@ object UnicodeTableGenerator {
 
         fun addRange(lo: Int, hi: Int) {
             if (!ranges.isEmpty()) {
-                val last = ranges.get(ranges.size() - 1)
+                val last = ranges.get(ranges.size - 1)
                 if (lo <= last[1] + 1) {
                     last[1] = Math.max(last[1], hi)
                     return

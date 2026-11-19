@@ -55,7 +55,7 @@ internal class RE2SearchTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("searchTests")
     fun testMatches(tc: SearchTestCase) {
-        if (Companion.hasRe2NonZeroNumericEscape(tc.pattern!!)) {
+        if (hasRe2NonZeroNumericEscape(tc.pattern!!)) {
             return
         }
         val p: Pattern?
@@ -74,7 +74,7 @@ internal class RE2SearchTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("searchTests")
     fun testFind(tc: SearchTestCase) {
-        if (Companion.hasRe2NonZeroNumericEscape(tc.pattern!!)) {
+        if (hasRe2NonZeroNumericEscape(tc.pattern!!)) {
             return
         }
         val p: Pattern?
@@ -111,7 +111,7 @@ internal class RE2SearchTest {
             }
             // Decode the first byteOffset bytes and count chars
             val prefix = String(utf8, 0, byteOffset, StandardCharsets.UTF_8)
-            return prefix.length
+            return prefix.size
         }
 
         /** Parse a result field like "0-5" or "0-5 0-2" or "-". Returns null for "-".  */
@@ -142,8 +142,7 @@ internal class RE2SearchTest {
             var i = 0
             while (i < s.length) {
                 if (s.get(i) == '\\' && i + 1 < s.length) {
-                    val next = s.get(i + 1)
-                    when (next) {
+                    when (val next = s.get(i + 1)) {
                         'n' -> {
                             sb.append('\n')
                             i++
@@ -284,8 +283,8 @@ internal class RE2SearchTest {
                             }
 
                             val text = strings.get(si)
-                            val fullMatch: Array<IntArray?>? = Companion.parseResultField(fields[0]!!)
-                            val findMatch: Array<IntArray?>? = Companion.parseResultField(fields[1]!!)
+                            val fullMatch: Array<IntArray?>? = parseResultField(fields[0]!!)
+                            val findMatch: Array<IntArray?>? = parseResultField(fields[1]!!)
 
                             val expectedFindText: String? = extractMatchedText(text, findMatch)
 

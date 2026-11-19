@@ -23,14 +23,14 @@ class Utf8ScannerBenchmarkAccess(bytes: ByteArray?, offset: Int, length: Int, ra
 
     /** Returns the first byte position in the configured code-point ranges.  */
     fun indexOfCodePointClass(start: Int): Int {
-        return scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, start, scanner.length())
+        return scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, start, scanner.length)
     }
 
     companion object {
         private fun asciiBitmap(ranges: IntArray, first: Int, last: Int): Long {
             var bitmap: Long = 0
             var index = 0
-            while (index < ranges.length) {
+            while (index < ranges.size) {
                 val low: Int = Math.max(first, ranges[index])
                 val high: Int = Math.min(last, ranges[index + 1])
                 for (value in low..high) {

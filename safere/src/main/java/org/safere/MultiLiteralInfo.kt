@@ -34,34 +34,22 @@ import java.util.*
 // The arrays are immutable, privately owned scanner metadata; array identity is never observed.
 @JvmRecord
 internal data class MultiLiteralInfo(
-    literals: Array<String?>?,
-    anchorChars: CharArray?,
-    anchorOffsets: IntArray?,
-    anchorRanges: IntArray?,
-    minLength: Int
-) : Serializable {
-    val literals: Array<String?>?
-    val anchorChars: CharArray?
-    val anchorOffsets: IntArray?
-    val anchorRanges: IntArray?
+    val literals: Array<String?>?,
+    val anchorChars: CharArray?,
+    val anchorOffsets: IntArray?,
+    val anchorRanges: IntArray?,
     val minLength: Int
+) : Serializable {
 
-    init {
-        this.literals = literals
-        this.anchorChars = anchorChars
-        this.anchorOffsets = anchorOffsets
-        this.anchorRanges = anchorRanges
-        this.minLength = minLength
-    }
 
     companion object {
         fun create(literals: Array<String?>?): MultiLiteralInfo? {
-            if (literals == null || literals.length < 2 || literals.length > 4) {
+            if (literals == null || literals.size < 2 || literals.size > 4) {
                 return null
             }
             var minLen = Integer.MAX_VALUE
-            val anchorChars = CharArray(literals.length)
-            val anchorOffsets = IntArray(literals.length)
+            val anchorChars = CharArray(literals.size)
+            val anchorOffsets = IntArray(literals.size)
             var seen0 = 0L
             var seen1 = 0L
             val anchorBitmap = AsciiBitmap.Builder()
@@ -71,12 +59,12 @@ internal data class MultiLiteralInfo(
                 if (lit == null || lit.isEmpty()) {
                     return null
                 }
-                for (j in 0..<lit.length()) {
-                    if (lit.charAt(j).code > 127) {
+                for (j in 0..<lit.length) {
+                    if (lit[j].code > 127) {
                         return null
                     }
                 }
-                val firstChar: Char = lit.charAt(0)
+                val firstChar: Char = lit[0]
                 val bit = 1L shl (firstChar.code and 63)
                 if (firstChar.code < 64) {
                     if ((seen0 and bit) != 0L) {
@@ -92,11 +80,11 @@ internal data class MultiLiteralInfo(
                 anchorOffsets[i] = 0
                 anchorChars[i] = firstChar
                 anchorBitmap.add(anchorChars[i].code)
-                minLen = Math.min(minLen, lit.length())
+                minLen = Math.min(minLen, lit.length)
             }
 
             return MultiLiteralInfo(
-                Arrays.copyOf<String?>(literals, literals.length),
+                Arrays.copyOf<String?>(literals, literals.size),
                 anchorChars,
                 anchorOffsets,
                 anchorBitmap.build().toRanges(),

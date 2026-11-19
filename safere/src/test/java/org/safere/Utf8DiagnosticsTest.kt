@@ -290,14 +290,14 @@ internal class Utf8DiagnosticsTest {
             for (text in inputs) {
                 Pattern.setDiagnostics(diagnostics)
                 val expected = stringFast.matcher(text).matches()
-                val stringEvent: OperationDiagnostics = operationsFor(stringFast).getLast()
+                val stringEvent: OperationDiagnostics = operationsFor(stringFast).last()
                 val utf8Matcher: Utf8Matcher = matcher(utf8Fast, text)
                 Assertions.assertThat(utf8Matcher.matches()).`as`("/%s/ on '%s'", regex, text).isEqualTo(expected)
                 if (expected) {
                     Assertions.assertThat(utf8Matcher.start()).isZero()
                     Assertions.assertThat(utf8Matcher.end()).isEqualTo(text.toByteArray(StandardCharsets.UTF_8).size)
                 }
-                Assertions.assertThat<OperationDiagnostics?>(operationsFor(utf8Fast).getLast())
+                Assertions.assertThat<OperationDiagnostics?>(operationsFor(utf8Fast).last())
                     .satisfies(
                         ThrowingConsumer { event: OperationDiagnostics? ->
                             Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy)
@@ -574,14 +574,14 @@ internal class Utf8DiagnosticsTest {
         val bitState = Pattern.compile("(?:é)+", 0, bitStateOnly)
 
         Assertions.assertThat(matcher(bitState, "xéé").find()).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(bitState).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(bitState).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.BIT_STATE)
 
         val nfaOnly: EnginePathOptions = exactEngineOptions(false)
         val nfa = Pattern.compile("(?:é)+", 0, nfaOnly)
 
         Assertions.assertThat(matcher(nfa, "xéé").find()).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(nfa).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(nfa).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.NFA)
     }
 
@@ -679,7 +679,7 @@ internal class Utf8DiagnosticsTest {
 
         Assertions.assertThat(matcher(pattern, "a\u0301").matches()).isTrue()
 
-        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).first().boundaryStrategy)
             .isEqualTo(MatchStrategy.NFA)
     }
 
@@ -846,15 +846,15 @@ internal class Utf8DiagnosticsTest {
             val utf8Pattern = Pattern.compile(tc.regex)
             val stringPattern = Pattern.compile(tc.regex)
 
-            Assertions.assertThat(Companion.matcher(utf8Pattern, tc.rejectingInput!!).matches())
+            Assertions.assertThat(matcher(utf8Pattern, tc.rejectingInput!!).matches())
                 .`as`("UTF-8 reject /%s/ on %s", tc.regex, tc.rejectingInput)
                 .isFalse()
             Assertions.assertThat(stringPattern.matcher(tc.rejectingInput).matches())
                 .`as`("String reject /%s/ on %s", tc.regex, tc.rejectingInput)
                 .isFalse()
 
-            val utf8RejectEvent: OperationDiagnostics = operationsFor(utf8Pattern).getLast()
-            val stringRejectEvent: OperationDiagnostics = operationsFor(stringPattern).getLast()
+            val utf8RejectEvent: OperationDiagnostics = operationsFor(utf8Pattern).last()
+            val stringRejectEvent: OperationDiagnostics = operationsFor(stringPattern).last()
             Assertions.assertThat<MatchOutcome?>(utf8RejectEvent.outcome).isEqualTo(MatchOutcome.NO_MATCH)
             Assertions.assertThat<MatchStrategy?>(utf8RejectEvent.boundaryStrategy).isEqualTo(tc.expectedStrategy)
             Assertions.assertThat<MatchStrategy?>(utf8RejectEvent.boundaryStrategy)
@@ -865,7 +865,7 @@ internal class Utf8DiagnosticsTest {
                 )
             Assertions.assertThat(utf8RejectEvent.forwardDfaSearchCount).isZero()
 
-            Assertions.assertThat(Companion.matcher(utf8Pattern, tc.matchingInput!!).matches())
+            Assertions.assertThat(matcher(utf8Pattern, tc.matchingInput!!).matches())
                 .`as`("UTF-8 match /%s/ on %s", tc.regex, tc.matchingInput)
                 .isTrue()
             Assertions.assertThat(stringPattern.matcher(tc.matchingInput).matches()).isTrue()

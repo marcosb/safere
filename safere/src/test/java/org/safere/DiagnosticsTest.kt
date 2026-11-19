@@ -189,7 +189,7 @@ internal class DiagnosticsTest {
             val pattern = Pattern.compile(regex)
             for (input in mutableListOf<String?>("barfoo apple", "xxxxx")) {
                 Assertions.assertThat(pattern.matcher(input).find()).isEqualTo(input == "barfoo apple")
-                val event: OperationDiagnostics = operationsFor(pattern).getLast()
+                val event: OperationDiagnostics = operationsFor(pattern).last()
                 Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).`as`(regex)
                     .isEqualTo(MatchStrategy.LITERAL_ALTERNATION)
                 Assertions.assertThat(event.forwardDfaSearchCount).isZero()
@@ -229,7 +229,7 @@ internal class DiagnosticsTest {
 
         val lookingAtPattern = Pattern.compile("(foo)")
         Assertions.assertThat(lookingAtPattern.matcher("foobar").lookingAt()).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(lookingAtPattern).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(lookingAtPattern).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.ONE_PASS)
 
         val foldedUtf8LookingAt = Pattern.compile("(?i)foo")
@@ -237,7 +237,7 @@ internal class DiagnosticsTest {
             foldedUtf8LookingAt.matcher(Utf8Input.validated("FOObar".toByteArray(StandardCharsets.UTF_8))).lookingAt()
         )
             .isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8LookingAt).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8LookingAt).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.ONE_PASS)
 
         val foldedUtf8Matches = Pattern.compile("(?i)foo")
@@ -245,7 +245,7 @@ internal class DiagnosticsTest {
             foldedUtf8Matches.matcher(Utf8Input.validated("FOO".toByteArray(StandardCharsets.UTF_8))).matches()
         )
             .isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Matches).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Matches).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.SHIFT_DFA)
 
         val foldedUtf8Find = Pattern.compile("(?i)foo")
@@ -253,7 +253,7 @@ internal class DiagnosticsTest {
             foldedUtf8Find.matcher(Utf8Input.validated("xxFOO".toByteArray(StandardCharsets.UTF_8))).find()
         )
             .isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Find).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Find).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.DFA)
     }
 
@@ -276,7 +276,7 @@ internal class DiagnosticsTest {
         }
 
         Assertions.assertThat(matched).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.ONE_PASS)
         Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
     }
@@ -296,7 +296,7 @@ internal class DiagnosticsTest {
         val bitState = Pattern.compile("a+b", 0, bitStateOnly)
 
         Assertions.assertThat(bitState.matcher("aaab").matches()).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(bitState).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(bitState).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.BIT_STATE)
 
         val nfaOnly =
@@ -312,7 +312,7 @@ internal class DiagnosticsTest {
         val nfa = Pattern.compile("a+b", 0, nfaOnly)
 
         Assertions.assertThat(nfa.matcher("aaab").matches()).isTrue()
-        Assertions.assertThat<MatchStrategy?>(operationsFor(nfa).getLast().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(nfa).last().boundaryStrategy)
             .isEqualTo(MatchStrategy.NFA)
     }
 
@@ -864,7 +864,7 @@ internal class DiagnosticsTest {
                 })
 
         Assertions.assertThat(pattern.matcher("aaaaX").find()).isTrue()
-        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).getLast())
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).last())
             .satisfies(
                 ThrowingConsumer { event: OperationDiagnostics? ->
                     Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
@@ -1035,7 +1035,7 @@ internal class DiagnosticsTest {
 
         Assertions.assertThat(pattern.matcher(inputSecret).find()).isFalse()
 
-        val event: OperationDiagnostics = operationsFor(pattern).getFirst()
+        val event: OperationDiagnostics = operationsFor(pattern).first()
         Assertions.assertThat(event.toString()).doesNotContain(regexSecret, inputSecret)
         Assertions.assertThat<RecordComponent>(OperationDiagnostics::class.java.getRecordComponents())
             .noneMatch(Predicate { component: RecordComponent? -> component!!.getType() == String::class.java })
@@ -1051,7 +1051,7 @@ internal class DiagnosticsTest {
 
         Assertions.assertThat(pattern.matcher("Info: Warning").find()).isTrue()
 
-        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).first().boundaryStrategy)
             .isEqualTo(MatchStrategy.KEYWORD)
     }
 
@@ -1071,7 +1071,7 @@ internal class DiagnosticsTest {
 
         Assertions.assertThat(pattern.matcher("a".repeat(100000) + "b").matches()).isTrue()
 
-        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).getFirst())
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).first())
             .satisfies(
                 ThrowingConsumer { event: OperationDiagnostics? ->
                     Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
@@ -1096,7 +1096,7 @@ internal class DiagnosticsTest {
         Assertions.assertThat<PatternFeature?>(pattern.analysis().features).contains(PatternFeature.GRAPHEME)
         Assertions.assertThat<PatternLimitation?>(pattern.analysis().limitations)
             .contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
-        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).first().boundaryStrategy)
             .isEqualTo(MatchStrategy.NFA)
     }
 
@@ -1158,7 +1158,7 @@ internal class DiagnosticsTest {
 
         Assertions.assertThat(matcher.matches()).isTrue()
 
-        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).first().boundaryStrategy)
             .isEqualTo(MatchStrategy.BIT_STATE)
     }
 
@@ -1302,7 +1302,7 @@ internal class DiagnosticsTest {
         val independentMatcher = independentPattern.matcher("aab")
         Assertions.assertThat(independentMatcher.find()).isTrue()
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(independentPattern)).hasSize(1)
-        val independentEvent: OperationDiagnostics = operationsFor(independentPattern).getFirst()
+        val independentEvent: OperationDiagnostics = operationsFor(independentPattern).first()
 
         val regionPattern = org.safere.Pattern.compile("(a+?)b")
         val regionMatcher = regionPattern.matcher("xaabx").region(1, 4)

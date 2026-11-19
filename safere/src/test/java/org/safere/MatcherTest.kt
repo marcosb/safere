@@ -293,7 +293,7 @@ internal class MatcherTest {
         @DisplayName("group access after lookingAt() works correctly")
         fun lookingAtUpdatesGroupInfo() {
             val p = org.safere.Pattern.compile("(\\d+)(\\w+)")
-            val m = p.matcher("123abc!!!")
+            val m = p.matcher("123abc!!")
             Assertions.assertThat(m.lookingAt()).isTrue()
             Assertions.assertThat(m.group(0)).isEqualTo("123abc")
             Assertions.assertThat(m.group(1)).isEqualTo("123")

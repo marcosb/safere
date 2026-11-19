@@ -21,9 +21,9 @@ object TeddyVectorScanStress {
         val data = ByteArray(4096)
         Arrays.fill(data, 'x'.code.toByte())
         val prefix = "a b c ".repeat(32).toByteArray(StandardCharsets.UTF_8)
-        System.arraycopy(prefix, 0, data, 0, prefix.size)
+        System.arraycopy(prefix, 0, data, 0, prefix.length)
         val suffix = "abcde cherry".toByteArray(StandardCharsets.UTF_8)
-        System.arraycopy(suffix, 0, data, data.size - suffix.size, suffix.size)
+        System.arraycopy(suffix, 0, data, data.size - suffix.length, suffix.length)
         var sum: Long = 0
         for (phase in 0..3) {
             println("phase=" + phase)

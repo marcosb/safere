@@ -24,7 +24,7 @@ interface Utf8Input {
      * 
      * @return the relative logical end position
      */
-    fun length(): Int
+    val length: Int
 
     companion object {
         /**
@@ -40,7 +40,7 @@ interface Utf8Input {
          */
         fun trusted(bytes: ByteArray?): Utf8Input {
             Objects.requireNonNull<ByteArray?>(bytes, "bytes")
-            return trusted(bytes, 0, bytes.length)
+            return trusted(bytes!!, 0, bytes!!.size)
         }
 
         /**
@@ -54,7 +54,8 @@ interface Utf8Input {
          * @throws IndexOutOfBoundsException if the window is outside `bytes`
          */
         fun trusted(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
-            return ArrayUtf8Input(bytes, offset, length, false)
+            Objects.requireNonNull(bytes, "bytes")
+            return ArrayUtf8Input(bytes!!, offset, length, false)
         }
 
         /**
@@ -67,7 +68,7 @@ interface Utf8Input {
          */
         fun validated(bytes: ByteArray?): Utf8Input {
             Objects.requireNonNull<ByteArray?>(bytes, "bytes")
-            return validated(bytes, 0, bytes.length)
+            return validated(bytes!!, 0, bytes!!.size)
         }
 
         /**
@@ -82,8 +83,9 @@ interface Utf8Input {
          * @throws IllegalArgumentException if malformed UTF-8 occurs, with a relative byte offset
          */
         fun validated(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
-            Utf8InputScanner.Companion.validate(bytes, offset, length)
-            return ArrayUtf8Input(bytes, offset, length, true)
+            Objects.requireNonNull(bytes, "bytes")
+            Utf8InputScanner.validate(bytes!!, offset, length)
+            return ArrayUtf8Input(bytes!!, offset, length, true)
         }
     }
 }

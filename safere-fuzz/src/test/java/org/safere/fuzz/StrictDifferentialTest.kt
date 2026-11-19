@@ -12,6 +12,9 @@ import java.util.List
 import java.util.function.IntUnaryOperator
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.mutableListOf
 
 internal class StrictDifferentialTest {
     @Test
@@ -19,8 +22,8 @@ internal class StrictDifferentialTest {
         val random = Random(872)
         for (index in 0..499) {
             val sample = StrictDomain.generate(IntUnaryOperator { bound: Int -> random.nextInt(bound) })
-            Assertions.assertThat(sample.regex.length).isLessThan(256)
-            Assertions.assertThat(sample.witness.length).isLessThanOrEqualTo(StrictDomain.MAX_INPUT)
+            Assertions.assertThat(sample.regex.size).isLessThan(256)
+            Assertions.assertThat(sample.witness.size).isLessThanOrEqualTo(StrictDomain.MAX_INPUT)
             val expected = Pattern.compile(sample.regex).matcher(sample.witness)
             Assertions.assertThat(expected.groupCount()).isZero()
             Assertions.assertThat(expected.matches()).`as`(sample.regex).isTrue()

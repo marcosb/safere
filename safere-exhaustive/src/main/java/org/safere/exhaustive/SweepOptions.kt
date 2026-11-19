@@ -45,7 +45,7 @@ internal data class SweepOptions(
     }
 
     private fun rangeDescription(): String {
-        val end = if (rangeEndExclusive == Long.Companion.MAX_VALUE) "" else rangeEndExclusive.toString()
+        val end = if (rangeEndExclusive == Long.MAX_VALUE) "" else rangeEndExclusive.toString()
         return rangeStartInclusive.toString() + ":" + end
     }
 
@@ -53,12 +53,10 @@ internal data class SweepOptions(
         fun parse(
             args: Array<String>, defaultOutputDir: Path?, jsonlFileName: String?, defaultProgressInterval: Long
         ): SweepOptions {
-            var rangeStartInclusive: Long = 0
-            var rangeEndExclusive = Long.Companion.MAX_VALUE
+            var rangeEndExclusive = Long.MAX_VALUE
             var outputDir = defaultOutputDir
             var progressInterval = defaultProgressInterval
             var threads = Runtime.getRuntime().availableProcessors()
-            var replayFile: Path? = null
             for (arg in args) {
                 if (arg.startsWith("--range=")) {
                     val value = arg.substring("--range=".length)
@@ -67,7 +65,7 @@ internal data class SweepOptions(
                     val start = value.substring(0, colon)
                     val end = value.substring(colon + 1)
                     rangeStartInclusive = if (start.isEmpty()) 0 else start.toLong()
-                    rangeEndExclusive = if (end.isEmpty()) Long.Companion.MAX_VALUE else end.toLong()
+                    rangeEndExclusive = if (end.isEmpty()) Long.MAX_VALUE else end.toLong()
                 } else if (arg.startsWith("--output-dir=")) {
                     outputDir = Path.of(arg.substring("--output-dir=".length))
                 } else if (arg.startsWith("--progress-interval=")) {

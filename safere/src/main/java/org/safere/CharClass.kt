@@ -6,13 +6,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.String
 import java.util.*
-import kotlin.Boolean
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.div
-import kotlin.text.StringBuilder
 
 /**
  * An immutable character class, represented as a sorted, non-overlapping list of Unicode code point
@@ -30,7 +24,7 @@ internal class CharClass(// Flat array: [lo0, hi0, lo1, hi1, ...]. Always sorted
 ) {
     /** Returns the number of ranges in this character class.  */
     fun numRanges(): Int {
-        return ranges.length / 2
+        return ranges.size / 2
     }
 
     /** Returns the total number of code points matched by this character class.  */
@@ -38,9 +32,7 @@ internal class CharClass(// Flat array: [lo0, hi0, lo1, hi1, ...]. Always sorted
         return nrunes
     }
 
-    val isEmpty: Boolean
-        /** Returns true if this character class contains no ranges.  */
-        get() = ranges.length == 0
+    fun isEmpty(): Boolean = ranges.size == 0
 
     /** Returns the lo value of the i-th range.  */
     fun lo(i: Int): Int {

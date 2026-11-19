@@ -18,8 +18,8 @@ import kotlin.math.max
 internal class Utf8LinearTimeTest {
     @Test
     fun forwardAndReverseDecodingScaleLinearlyForValidAndMalformedInput() {
-        assertFourXInputStaysNearLinear(Consumer { size: Int? -> scanBothDirections(Companion.validInput(size!!)) })
-        assertFourXInputStaysNearLinear(Consumer { size: Int? -> scanBothDirections(Companion.malformedInput(size!!)) })
+        assertFourXInputStaysNearLinear(Consumer { size: Int? -> scanBothDirections(validInput(size!!)) })
+        assertFourXInputStaysNearLinear(Consumer { size: Int? -> scanBothDirections(malformedInput(size!!)) })
     }
 
     @Test
@@ -75,7 +75,7 @@ internal class Utf8LinearTimeTest {
                 )
             )
         })
-        assertLargeFourXInputStaysNearLinear(Consumer { size: Int? -> findAll(".", Companion.malformedInput(size!!)) })
+        assertLargeFourXInputStaysNearLinear(Consumer { size: Int? -> findAll(".", malformedInput(size!!)) })
     }
 
     @Test
@@ -88,7 +88,7 @@ internal class Utf8LinearTimeTest {
             WorkCounter.countForTesting(
                 Runnable { Assertions.assertThat(scanner.indexOfAsciiClass(asciiClass, 0)).isEqualTo(-1) })
 
-        Assertions.assertThat(work).isEqualTo(input.size.toLong())
+        Assertions.assertThat(work).isEqualTo(input.length.toLong())
     }
 
     @Test
@@ -143,10 +143,10 @@ internal class Utf8LinearTimeTest {
         private fun scanBothDirections(bytes: ByteArray?) {
             val scanner = Utf8InputScanner(bytes)
             var position = 0
-            while (position < scanner.length()) {
+            while (position < scanner.length) {
                 position = InputScanner.position(scanner.decodeForward(position))
             }
-            Assertions.assertThat(position).isEqualTo(scanner.length())
+            Assertions.assertThat(position).isEqualTo(scanner.length)
 
             while (position > 0) {
                 position = InputScanner.position(scanner.decodeBackward(position))

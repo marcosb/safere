@@ -51,7 +51,7 @@ internal class DiagnosticsLengthTest {
         Assertions.assertThat(pattern.matcher(text).lookingAt()).isFalse()
 
         Assertions.assertThat<OperationDiagnostics?>(events).hasSize(7)
-            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> Companion.assertLengthRejection(event!!) })
+            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> assertLengthRejection(event!!) })
     }
 
     @ParameterizedTest
@@ -89,7 +89,7 @@ internal class DiagnosticsLengthTest {
         Assertions.assertThat(matcher.matches()).isFalse()
         Assertions.assertThat(matcher.lookingAt()).isFalse()
         Assertions.assertThat<OperationDiagnostics?>(events).hasSize(4)
-            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> Companion.assertLengthRejection(event!!) })
+            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> assertLengthRejection(event!!) })
 
         matcher.reset()
         Assertions.assertThat(matcher.find()).isTrue()
@@ -133,8 +133,8 @@ internal class DiagnosticsLengthTest {
         // Replacement aggregates an engine match and a terminal minimum-length rejection.
         Assertions.assertThat(pattern.matcher("aaaaX").replaceAll("done")).isEqualTo("done")
 
-        Companion.assertLengthRejection(events.get(0)!!)
-        Companion.assertLengthRejection(events.get(1)!!)
+        assertLengthRejection(events.get(0)!!)
+        assertLengthRejection(events.get(1)!!)
         Assertions.assertThat<OperationDiagnostics?>(events)
             .hasSize(4)
             .anySatisfy(ThrowingConsumer { event: OperationDiagnostics? ->

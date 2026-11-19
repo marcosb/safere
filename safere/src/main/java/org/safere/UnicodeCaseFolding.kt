@@ -51,7 +51,7 @@ internal object UnicodeCaseFolding {
     private fun lookupCaseFold(r: Int): Int {
         val cf = UnicodeTables.CASE_FOLD
         var lo = 0
-        var hi: Int = cf.length - 1
+        var hi: Int = cf.size - 1
         while (lo <= hi) {
             val mid = (lo + hi) ushr 1
             if (cf[mid]!![0] <= r && r <= cf[mid]!![1]) {
@@ -63,7 +63,7 @@ internal object UnicodeCaseFolding {
                 lo = mid + 1
             }
         }
-        return if (lo < cf.length) -(lo + 1) else CASE_FOLD_NOT_FOUND
+        return if (lo < cf.size) -(lo + 1) else CASE_FOLD_NOT_FOUND
     }
 
     private fun applyFold(entry: IntArray, r: Int): Int {
@@ -90,7 +90,7 @@ internal object UnicodeCaseFolding {
 
         fun addSourcesForTargetsInRange(ccb: CharClassBuilder, lo: Int, hi: Int) {
             var index: Int = lowerBoundTarget(lo)
-            while (index < TARGET_TO_SOURCE.length) {
+            while (index < TARGET_TO_SOURCE.size) {
                 val pair: Long = TARGET_TO_SOURCE[index]
                 val target: Int = target(pair)
                 if (target > hi) {
@@ -104,7 +104,7 @@ internal object UnicodeCaseFolding {
         fun lowerBoundTarget(target: Int): Int {
             val key: Long = pack(target, 0)
             var lo = 0
-            var hi: Int = TARGET_TO_SOURCE.length
+            var hi: Int = TARGET_TO_SOURCE.size
             while (lo < hi) {
                 val mid = (lo + hi) ushr 1
                 if (TARGET_TO_SOURCE[mid] < key) {
@@ -120,10 +120,18 @@ internal object UnicodeCaseFolding {
             // Gather only nontrivial single-code-point casing and simple-fold links. Most Unicode
             // code points have no links and need no entry in the component arrays.
             val links = LongArrayBuilder()
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (cp in 0..Utils.MAX_RUNE) {
+                addLink(links, cp, Character.toUpperCase(cp))
+                addLink(links, cp, Character.toLowerCase(cp))
+                addLink(links, cp, Character.toTitleCase(cp))
+                addLink(links, cp, cycleFoldRune(cp))
+            }
             val edges = links.toArray()
-            val codePoints = IntArray(edges.length * 2)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            val codePoints = IntArray(edges.size * 2)
+            for (i in 0 until edges.size) {
+                codePoints[2 * i] = target(edges[i])
+                codePoints[2 * i + 1] = source(edges[i])
+            }
             Arrays.sort(codePoints)
             var count = 0
             for (cp in codePoints) {
@@ -137,16 +145,36 @@ internal object UnicodeCaseFolding {
             val parent = IntArray(count)
             val next = IntArray(count)
             Arrays.fill(next, -1)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until count) {
+                parent[i] = i
+            }
             for (edge in edges) {
                 val first = Arrays.binarySearch(codePoints, 0, count, target(edge))
                 val second = Arrays.binarySearch(codePoints, 0, count, source(edge))
                 union(parent, first, second)
             }
             // Each component is a linked list starting at its least code point.
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until count) {
+                val root = find(parent, i)
+                if (root != i) {
+                    next[i] = next[root]
+                    next[root] = i
+                }
+            }
             val pairs = LongArrayBuilder()
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (targetIndex in 0 until count) {
+                val root = find(parent, targetIndex)
+                if (next[root] == -1) {
+                    continue
+                }
+                var sourceIndex = root
+                while (sourceIndex != -1) {
+                    if (sourceIndex != targetIndex) {
+                        pairs.add(pack(codePoints[targetIndex], codePoints[sourceIndex]))
+                    }
+                    sourceIndex = next[sourceIndex]
+                }
+            }
             // Every member indexes every other member exactly once. One range lookup therefore
             // gives the complete symmetric/transitive closure, with no iterative parser expansion.
             val sorted = pairs.toArray()
@@ -193,8 +221,8 @@ internal object UnicodeCaseFolding {
         private var size = 0
 
         fun add(value: Long) {
-            if (size == values.length) {
-                values = Arrays.copyOf(values, values.length * 2)
+            if (size == values.size) {
+                values = Arrays.copyOf(values, values.size * 2)
             }
             values[size++] = value
         }

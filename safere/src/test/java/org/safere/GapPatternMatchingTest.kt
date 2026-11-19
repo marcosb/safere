@@ -202,7 +202,7 @@ internal class GapPatternMatchingTest {
         val matcher = pattern.matcher(haystack)
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.group(0)).isEqualTo("A123B")
-        Assertions.assertThat(matcher.start()).isEqualTo(haystack.length - 5)
+        Assertions.assertThat(matcher.start()).isEqualTo(haystack.size - 5)
     }
 
     @Test
@@ -561,7 +561,7 @@ internal class GapPatternMatchingTest {
             arrayOf<String?>("(?i:(?-i:abc)X|abcY)", "ABCX"),
             arrayOf<String?>("(?:(?i:abc)X|abcY)[0-9]RAREST_TOKEN", "ABCX1RAREST_TOKEN")
         )) {
-            Companion.assertFirstMatchEqualsJdk(testCase!![0]!!, testCase[1]!!)
+            assertFirstMatchEqualsJdk(testCase!![0]!!, testCase[1]!!)
         }
     }
 

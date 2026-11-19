@@ -27,7 +27,7 @@ internal class DeferredAssertionFullMatchTest {
                         // The consuming alternative covers the entire input, regardless of assertion priority.
                         Assertions.assertThat(pattern.matcher(input).matches()).`as`("%s, size=%s", regex, size)
                             .isTrue()
-                        Assertions.assertThat(pattern.matcher("x" + input + "x").region(1, 1 + input.length).matches())
+                        Assertions.assertThat(pattern.matcher("x" + input + "x").region(1, 1 + input.size).matches())
                             .`as`("region: %s, size=%s", regex, size)
                             .isTrue()
                         val actual = pattern.matcher(input)

@@ -52,7 +52,7 @@ internal class GraphemeRuleInteractionTest {
     @Test
     fun explicitBoundaryAfterScalarDoesNotInventBreaksInsideClusters() {
         for (cluster in mutableListOf<String?>("\r\n", "a\u0300", "a\u0903", "\u0600a")) {
-            val lastScalar = Character.toString(cluster!!.codePointBefore(cluster.length))
+            val lastScalar = Character.toString(cluster!!.codePointBefore(cluster.size))
             for (prefix in mutableListOf<String?>("", "xy", "\u0000\u0000")) {
                 val input = prefix + cluster
                 val matcher = Pattern.compile("(?s).\\b{g}").matcher(input)

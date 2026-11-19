@@ -74,14 +74,7 @@ internal class PrefilterQuadrantWorkTest {
         /** An upper bound on the work per input unit of scanning for the start literal.  */
         val startScanCost: Int
 
-        init {
-            this.regex = regex
-            this.start = start
-            this.required = required
-            this.match = match
-            this.startFirst = startFirst
-            this.startScanCost = startScanCost
-        }
+
     }
 
     @JvmRecord

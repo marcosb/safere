@@ -21,15 +21,10 @@ package org.safere
  * Supported operations are [Matcher.matches], [Matcher.lookingAt], [ ][Matcher.find], the [Matcher] replacement operations, the corresponding matching
  * operations on [Utf8Matcher], and [Pattern.find].
  */
-open class SafeReMatchDiagnostics private constructor(enabled: Boolean) {
-    private val enabled: Boolean
-
+open class SafeReMatchDiagnostics protected constructor(private val enabled: Boolean) {
     /** Creates an enabled diagnostics listener.  */
     protected constructor() : this(true)
 
-    init {
-        this.enabled = enabled
-    }
 
     /**
      * Called after a pattern is compiled while this listener is installed.
@@ -57,7 +52,7 @@ open class SafeReMatchDiagnostics private constructor(enabled: Boolean) {
      * 
      * @param divergence the path exercised
      */
-    open fun onIntentionalDivergence(divergence: IntentionalDivergence?) {}
+    internal open fun onIntentionalDivergence(divergence: IntentionalDivergence?) {}
 
     companion object {
         /** Listener used when match diagnostics are disabled.  */

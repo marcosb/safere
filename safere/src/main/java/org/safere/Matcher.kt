@@ -10,7 +10,6 @@ import java.util.Spliterators.AbstractSpliterator
 import java.util.function.Consumer
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
 import java.util.stream.Stream
 import java.util.stream.StreamSupport
 import kotlin.concurrent.Volatile
@@ -44,18 +43,18 @@ class Matcher : MatchResult {
         FAILED
     }
 
-    private var parentPattern: Pattern
+    private lateinit var parentPattern: Pattern
     private var inputSequence: CharSequence? = null
     private var text: String? = null
-    private var textScanner: InputScanner?
+    private var textScanner: InputScanner? = null
 
     // Reuse the independent region input across successive searches and repeated region resets.
     private var cachedRegionScanner: InputScanner? = null
     private var regionClassSearch: RegionClassSearch? = null
     private var cachedRegionStart = 0
     private var cachedRegionEnd = 0
-    private var groups: IntArray?
-    private var matchOffsets: IntArray?
+    private lateinit var groups: IntArray
+    private var matchOffsets: IntArray? = null
     private var hasMatch = false
     private var resultStatus = ResultStatus.RESET_NO_ATTEMPT
     private var searchFrom = 0
@@ -66,7 +65,7 @@ class Matcher : MatchResult {
     private var transparentBounds = false
     private var anchoringBounds = true
     private var regionStart = 0
-    private var regionEnd: Int
+    private var regionEnd: Int = 0
     private var fullTextRegionContext = false
     private var findExhaustedAfterTerminalEmptyMatch = false
     private var modCount = 0
@@ -75,7 +74,7 @@ class Matcher : MatchResult {
 
     @JvmRecord
     private data class DiagnosticOperation(
-        val listener: SafeReMatchDiagnostics?,
+        val listener: SafeReMatchDiagnostics,
         val operation: MatchOperation?,
         val accumulator: DiagnosticAccumulator
     )
@@ -84,8 +83,8 @@ class Matcher : MatchResult {
         if (diagnosticOperation != null) {
             return null
         }
-        val listener: SafeReMatchDiagnostics = Pattern.Companion.diagnostics()
-        if (!SafeReMatchDiagnostics.Companion.isEnabled(listener)) {
+        val listener: SafeReMatchDiagnostics = Pattern.diagnostics()
+        if (!SafeReMatchDiagnostics.isEnabled(listener)) {
             return null
         }
         val started =
@@ -123,7 +122,7 @@ class Matcher : MatchResult {
             )
         diagnosticOperation = null
         accumulator.reportIntentionalDivergences(operation.listener)
-        operation.listener!!.onOperationCompleted(event)
+        operation.listener.onOperationCompleted(event)
     }
 
     private fun diagnosticsAccumulator(): DiagnosticAccumulator? {
@@ -137,14 +136,14 @@ class Matcher : MatchResult {
         }
     }
 
-    private fun diagnosticBoundary(strategy: MatchStrategy?) {
+    private fun diagnosticBoundary(strategy: MatchStrategy) {
         val accumulator = diagnosticsAccumulator()
         if (accumulator != null) {
             accumulator.boundary(strategy)
         }
     }
 
-    private fun diagnosticExact(strategy: MatchStrategy?, resolvedCaptures: Boolean) {
+    private fun diagnosticExact(strategy: MatchStrategy, resolvedCaptures: Boolean) {
         val accumulator = diagnosticsAccumulator()
         if (accumulator != null) {
             if (diagnosticCaptureSearch) {
@@ -158,14 +157,14 @@ class Matcher : MatchResult {
         }
     }
 
-    private fun diagnosticCapture(strategy: MatchStrategy?) {
+    private fun diagnosticCapture(strategy: MatchStrategy) {
         val accumulator = diagnosticsAccumulator()
         if (accumulator != null) {
             accumulator.capture(strategy)
         }
     }
 
-    private fun diagnosticParticipation(strategy: MatchStrategy?, role: StrategyRole?) {
+    private fun diagnosticParticipation(strategy: MatchStrategy, role: StrategyRole) {
         val accumulator = diagnosticsAccumulator()
         if (accumulator != null) {
             accumulator.participate(strategy, role)
@@ -173,7 +172,7 @@ class Matcher : MatchResult {
     }
 
     private fun diagnosticDecision(
-        strategy: MatchStrategy?, disposition: StrategyDisposition?, reason: StrategyReason?
+        strategy: MatchStrategy, disposition: StrategyDisposition, reason: StrategyReason
     ) {
         val accumulator = diagnosticsAccumulator()
         if (accumulator != null) {
@@ -186,7 +185,7 @@ class Matcher : MatchResult {
         text: String?,
         scanner: InputScanner?,
         searchFrom: Int,
-        options: EnginePathOptions?
+        options: EnginePathOptions
     ): Boolean {
         return reportRejection(rejectPrefilter.rejectionStrategy(text, scanner, searchFrom, options))
     }
@@ -201,14 +200,14 @@ class Matcher : MatchResult {
     }
 
     private fun searchForwardDfa(
-        dfa: Dfa, scanner: InputScanner?, anchored: Boolean, longest: Boolean
+        dfa: Dfa, scanner: InputScanner, anchored: Boolean, longest: Boolean
     ): Dfa.SearchResult? {
         return searchForwardDfa(dfa, scanner, 0, anchored, longest)
     }
 
     private fun searchForwardDfa(
         dfa: Dfa,
-        scanner: InputScanner?,
+        scanner: InputScanner,
         startPos: Int,
         anchored: Boolean,
         longest: Boolean,
@@ -227,7 +226,7 @@ class Matcher : MatchResult {
     /** Runs a forward DFA search that continues from, and updates, [.startBackoff].  */
     private fun forwardDfaSearch(
         dfa: Dfa,
-        scanner: InputScanner?,
+        scanner: InputScanner,
         startPos: Int,
         anchored: Boolean,
         longest: Boolean,
@@ -261,7 +260,7 @@ class Matcher : MatchResult {
      * Like [.rejectFindFrom], for the tail after a short input's first start candidate (see
      * [RejectPrefilter.canRejectTail]).
      */
-    private fun rejectTailFrom(scanner: InputScanner?, fromIndex: Int, options: EnginePathOptions?): Boolean {
+    private fun rejectTailFrom(scanner: InputScanner?, fromIndex: Int, options: EnginePathOptions): Boolean {
         val rejectPrefilter =
             if (scanner is Utf8InputScanner)
                 parentPattern.utf8FindRejectPrefilter()
@@ -276,7 +275,7 @@ class Matcher : MatchResult {
             reportRejection(rejectPrefilter.tailRejectionStrategy(text, scanner, fromIndex, options))
     }
 
-    private fun rejectFindFrom(scanner: InputScanner?, fromIndex: Int, options: EnginePathOptions?): Boolean {
+    private fun rejectFindFrom(scanner: InputScanner?, fromIndex: Int, options: EnginePathOptions): Boolean {
         val rejectPrefilter =
             if (scanner is Utf8InputScanner)
                 parentPattern.utf8FindRejectPrefilter()
@@ -316,7 +315,7 @@ class Matcher : MatchResult {
 
     private fun searchReverseDfa(
         dfa: Dfa,
-        scanner: InputScanner?,
+        scanner: InputScanner,
         endPos: Int,
         startLimit: Int,
         anchored: Boolean,
@@ -357,18 +356,15 @@ class Matcher : MatchResult {
      * lifetime.
      */
     private var cachedBitState: BitState? = null
-
     private var bitStateBorrowed = false
-    private var bitStateResult: IntArray?
-
+    private var bitStateResult: IntArray? = null
     private var consecutiveWindowFailures = 0
     private var windowRetryDelay = 0
     private var windowSearchesUntilRetry = 0
-    private var onePassScratchCap: IntArray?
+    private var onePassScratchCap: IntArray? = null
 
     /** Cached Nfa instance borrowed from the parent Pattern's thread-local cache.  */
     private var cachedNfa: Nfa? = null
-
     private var nfaBorrowed = false
 
     /**
@@ -394,7 +390,6 @@ class Matcher : MatchResult {
 
     /** Opaque input view retained only until the current region match is consumed or discarded.  */
     private var deferredRegionScanner: InputScanner? = null
-
     private var deferredRegionOffset = 0
 
     /**
@@ -414,9 +409,7 @@ class Matcher : MatchResult {
      * skip the [ThreadLocal] and [java.lang.ref.SoftReference] dereferences.
      */
     private var threadCache: ThreadCache? = null
-
     private var cachedForwardLongestMatchDfa: Dfa? = null
-
     private var cachedReverseDfa: Dfa? = null
     private var reverseDfaLookedUp = false
 
@@ -446,14 +439,14 @@ class Matcher : MatchResult {
         this.inputSequence = input
         this.text = charSequenceToString(input)
         this.textScanner = null
-        this.regionEnd = text.length()
+        this.regionEnd = text!!.length
         this.groups = IntArray(2 * pattern.prog().numCaptures())
     }
 
     internal constructor(pattern: Pattern, input: Utf8InputScanner) {
         this.parentPattern = pattern
         this.textScanner = input
-        this.regionEnd = input.length()
+        this.regionEnd = input.length
         this.groups = IntArray(2 * pattern.prog().numCaptures())
     }
 
@@ -468,7 +461,7 @@ class Matcher : MatchResult {
         findExhaustedAfterTerminalEmptyMatch = false
         hasMatch = resultGroups != null
         if (hasMatch && resultGroups != this.groups) {
-            System.arraycopy(resultGroups, 0, this.groups, 0, resultGroups.length)
+            System.arraycopy(resultGroups, 0, this.groups, 0, resultGroups!!.size)
         }
         resultStatus = if (hasMatch) ResultStatus.MATCHED else ResultStatus.FAILED
         clearDeferredCaptureState()
@@ -479,8 +472,8 @@ class Matcher : MatchResult {
         findExhaustedAfterTerminalEmptyMatch = false
         groups!![0] = start
         groups!![1] = end
-        if (groups.length > 2) {
-            Arrays.fill(groups, 2, groups.length, -1)
+        if (groups.size > 2) {
+            Arrays.fill(groups, 2, groups.size, -1)
         }
         deferredMatchStart = start
         deferredMatchEnd = end
@@ -576,7 +569,7 @@ class Matcher : MatchResult {
                 graphemeContextInput = null
                 graphemeContext = null
             }
-            text = Companion.charSequenceToString(inputSequence!!)
+            text = charSequenceToString(inputSequence!!)
         }
         regionStart = 0
         regionEnd = this.textLength
@@ -644,6 +637,10 @@ class Matcher : MatchResult {
         return false
     }
 
+    internal fun onePassTextLimit(): Int {
+        return onePassTextLimit(parentPattern.numGroups() > 0)
+    }
+
     private fun enginePathOptions(): EnginePathOptions {
         return parentPattern.enginePathOptions()
     }
@@ -654,15 +651,15 @@ class Matcher : MatchResult {
 
     private fun shouldPreferCaptureEngine(prog: Prog, scanner: InputScanner): Boolean {
         return parentPattern.innerCapturesObserved()
-                && scanner.length() <= CAPTURE_DEMAND_TEXT_LIMIT && enginePathOptions().bitState
-                && !fullTextRegionContext && !prog.hasGraphemeSemantics() && BitState.Companion.maxTextSize(prog) >= scanner.length()
+                && scanner.length <= CAPTURE_DEMAND_TEXT_LIMIT && enginePathOptions().bitState
+                && !fullTextRegionContext && !prog.hasGraphemeSemantics() && BitState.maxTextSize(prog) >= scanner.length
     }
 
     private fun threadCache(): ThreadCache {
         releaseEnginesOwnedByOtherThread()
         var cache = threadCache
         if (cache == null) {
-            cache = parentPattern.getOrCreateThreadCache()
+            cache = parentPattern.orCreateThreadCache
             threadCache = cache
         }
         return cache
@@ -734,7 +731,7 @@ class Matcher : MatchResult {
         val b1 = matchInfo.bitmap1
         val allowEmpty = matchInfo.allowEmpty
 
-        val len: Int = text.length()
+        val len: Int = text!!.length
         if (len == 0) {
             if (allowEmpty) {
                 return applyFullMatchResult(intArrayOf(0, 0))
@@ -742,12 +739,12 @@ class Matcher : MatchResult {
             return applyFailedMatchResult()
         }
 
-        val ranges = matchInfo.ranges
+        val ranges = matchInfo.ranges!!
         // Scan every code point.
         var i = 0
         while (i < len) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             val cp = text!!.codePointAt(i)
             if (cp < 64) {
@@ -759,7 +756,7 @@ class Matcher : MatchResult {
                     return applyFailedMatchResult()
                 }
             } else {
-                if (!binarySearchRanges(ranges, cp)) {
+                if (!binarySearchRanges(ranges!!, cp)) {
                     return applyFailedMatchResult()
                 }
             }
@@ -776,7 +773,7 @@ class Matcher : MatchResult {
     private fun charClassMatchUtf8FastPath(
         utf8: Utf8InputScanner, matchInfo: CharClassMatchInfo
     ): Boolean {
-        val len = utf8.length()
+        val len = utf8.length
         if (len == 0) {
             return if (matchInfo.allowEmpty)
                 applyFullMatchResult(intArrayOf(0, 0))
@@ -786,14 +783,14 @@ class Matcher : MatchResult {
 
         val b0 = matchInfo.bitmap0
         val b1 = matchInfo.bitmap1
-        val ranges = matchInfo.ranges
-        val asciiOnly = ranges[ranges.length - 1] < 0x80
+        val ranges = matchInfo.ranges!!
+        val asciiOnly = ranges[ranges.size - 1] < 0x80
         var i = 0
         while (i < len) {
             val ascii = utf8.asciiAt(i)
             if (ascii >= 0) {
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 if (ascii < 64) {
                     if ((b0 and (1L shl ascii)) == 0L) {
@@ -807,15 +804,15 @@ class Matcher : MatchResult {
                 i++
             } else if (asciiOnly) {
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 return applyFailedMatchResult()
             } else {
                 val decoded = utf8.decodeForward(i)
-                if (!binarySearchRanges(ranges, InputScanner.Companion.codePoint(decoded))) {
+                if (!binarySearchRanges(ranges!!, InputScanner.codePoint(decoded))) {
                     return applyFailedMatchResult()
                 }
-                i = InputScanner.Companion.position(decoded)
+                i = InputScanner.position(decoded)
             }
         }
 
@@ -827,7 +824,7 @@ class Matcher : MatchResult {
      * directly and returns the first matching code point as group 0.
      */
     private fun singleCharClassFindFastPath(scanInfo: CharClassScanInfo, fromIndex: Int): Boolean {
-        if (scanInfo.isAscii()) {
+        if (scanInfo.isAscii) {
             val idx = activeScanner().indexOfCharClass(scanInfo, fromIndex)
             if (idx >= 0) {
                 return applyFullMatchResult(intArrayOf(idx, idx + 1))
@@ -837,18 +834,18 @@ class Matcher : MatchResult {
         val idx =
             activeScanner()
                 .indexOfCodePointClass(
-                    scanInfo.ranges(),
-                    scanInfo.bitmap0(),
-                    scanInfo.bitmap1(),
+                    scanInfo.ranges,
+                    scanInfo.bitmap0,
+                    scanInfo.bitmap1,
                     fromIndex,
-                    activeScanner().length()
+                    activeScanner().length
                 )
         if (idx >= 0) {
             val end =
                 if (text != null)
                     idx + Character.charCount(text!!.codePointAt(idx))
                 else
-                    InputScanner.Companion.position(activeScanner().decodeForward(idx))
+                    InputScanner.position(activeScanner().decodeForward(idx))
             return applyFullMatchResult(intArrayOf(idx, end))
         }
         return applyFailedMatchResult()
@@ -858,7 +855,7 @@ class Matcher : MatchResult {
     private fun repeatedCharClassFindUtf8FastPath(
         scanner: Utf8InputScanner, matchInfo: CharClassMatchInfo, fromIndex: Int
     ): Boolean {
-        val length = scanner.length()
+        val length = scanner.length
         if (fromIndex > length) {
             return applyFailedMatchResult()
         }
@@ -866,7 +863,7 @@ class Matcher : MatchResult {
         if (!matchInfo.allowEmpty) {
             start =
                 scanner.indexOfCodePointClass(
-                    matchInfo.ranges, matchInfo.bitmap0, matchInfo.bitmap1, fromIndex, length
+                    matchInfo.ranges!!, matchInfo.bitmap0, matchInfo.bitmap1, fromIndex, length
                 )
             if (start < 0) {
                 return applyFailedMatchResult()
@@ -875,15 +872,15 @@ class Matcher : MatchResult {
         var end = start
         while (end < length) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             val ascii = scanner.asciiAt(end)
             val decoded = if (ascii < 0) scanner.decodeForward(end) else 0
-            val cp = if (ascii < 0) InputScanner.Companion.codePoint(decoded) else ascii
-            if (!charClassContains(matchInfo.ranges, matchInfo.bitmap0, matchInfo.bitmap1, cp)) {
+            val cp = if (ascii < 0) InputScanner.codePoint(decoded) else ascii
+            if (!charClassContains(matchInfo.ranges!!, matchInfo.bitmap0, matchInfo.bitmap1, cp)) {
                 break
             }
-            end = if (ascii < 0) InputScanner.Companion.position(decoded) else end + 1
+            end = if (ascii < 0) InputScanner.position(decoded) else end + 1
         }
         return applyGroupZeroMatchResult(start, end)
     }
@@ -893,8 +890,8 @@ class Matcher : MatchResult {
      * shorter than it, meaning more input could potentially result in a match.
      */
     private fun isPartialLiteralMatch(literal: String, offset: Int): Boolean {
-        val remainingLen: Int = text.length() - offset
-        if (remainingLen >= literal.length()) {
+        val remainingLen: Int = text!!.length - offset
+        if (remainingLen >= literal.length) {
             return false
         }
         return literalRegionMatches(literal, offset, remainingLen)
@@ -902,9 +899,9 @@ class Matcher : MatchResult {
 
     private fun literalRegionMatches(literal: String, offset: Int, length: Int): Boolean {
         if (parentPattern.literalFoldCase() || parentPattern.prefixFoldCase()) {
-            return Ascii.regionMatchesIgnoreCase(text, offset, literal, length)
+            return Ascii.regionMatchesIgnoreCase(text!!, offset, literal, length)
         }
-        return text!!.regionMatches(false, offset, literal, 0, length)
+        return text!!.regionMatches(offset, literal, 0, length, false)
     }
 
     // ---------------------------------------------------------------------------
@@ -945,8 +942,9 @@ class Matcher : MatchResult {
         }
         for (seg in template) {
             when (seg) {
-                -> sb.append(t)
-                -> {
+                is ReplacementSegment.Literal -> sb.append(seg.text)
+                is ReplacementSegment.GroupRef -> {
+                    val g = seg.groupNum
                     checkGroup(g)
                     val start = groups!![2 * g]
                     val end = groups!![2 * g + 1]
@@ -955,8 +953,8 @@ class Matcher : MatchResult {
                     }
                 }
 
-                -> {
-                    val g: String? = group(name)
+                is ReplacementSegment.NamedGroupRef -> {
+                    val g: String? = group(seg.name)
                     if (g != null) {
                         sb.append(g)
                     }
@@ -1013,7 +1011,7 @@ class Matcher : MatchResult {
                 useRegionInput(savedTextScanner!!)
                 regionSubstituted = true
             }
-            return parentPattern.preparedMatchRunner(regionActive).matches(this)
+            return parentPattern.preparedMatchRunner(regionActive)!!.matches(this)
         } finally {
             if (regionSubstituted) {
                 resolveCapturesBeforeRestoringRegion()
@@ -1034,40 +1032,43 @@ class Matcher : MatchResult {
     private fun prefixOrCharClassCannotMatch(searchFrom: Int): Boolean {
         if (parentPattern.prefix() != null && !parentPattern.prefixFoldCase()) {
             if (text != null) {
-                if (!text!!.startsWith(parentPattern.prefix(), searchFrom)) {
+                if (!text!!.startsWith(parentPattern.prefix()!!, searchFrom)) {
                     if (WorkCounterConfig.ENABLED) {
-                        WorkCounter.record(parentPattern.prefix().length().toLong())
+                        WorkCounter.record(parentPattern.prefix()!!.length.toLong())
                     }
                     return true
                 }
             } else if (textScanner is StringRegionInputScanner) {
-                if (!textScanner.startsWith(parentPattern.prefix(), searchFrom, false)) {
+                val regionScanner = textScanner as StringRegionInputScanner
+                if (!regionScanner.startsWith(parentPattern.prefix()!!, searchFrom, false)) {
                     return true
                 }
             } else if (textScanner is Utf8InputScanner) {
-                if (!textScanner.startsWith(parentPattern.prefixUtf8(), searchFrom)) {
+                val utf8Scanner = textScanner as Utf8InputScanner
+                if (!utf8Scanner.startsWith(parentPattern.prefixUtf8()!!, searchFrom)) {
                     return true
                 }
             }
         } else if (parentPattern.charClassPrefix() != null) {
             val cc = parentPattern.charClassPrefix()
             if (text != null) {
-                if (searchFrom >= text.length()) {
+                if (searchFrom >= text!!.length) {
                     return true
                 }
                 val cp = text!!.codePointAt(searchFrom)
-                if (!cc.contains(cp)) {
+                if (!cc!!.contains(cp)) {
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record(1)
                     }
                     return true
                 }
             } else if (textScanner is Utf8InputScanner) {
-                if (searchFrom >= textScanner.length()) {
+                val utf8Scanner = textScanner as Utf8InputScanner
+                if (searchFrom >= utf8Scanner.length) {
                     return true
                 }
-                val cp = textScanner!!.codePointAt(searchFrom)
-                if (!cc.contains(cp)) {
+                val cp = utf8Scanner.codePointAt(searchFrom)
+                if (!cc!!.contains(cp)) {
                     return true
                 }
             }
@@ -1078,40 +1079,43 @@ class Matcher : MatchResult {
     private fun anchoredPrefixOrCharClassCannotMatch(searchFrom: Int): Boolean {
         if (parentPattern.anchoredPrefix() != null) {
             if (text != null) {
-                if (!text!!.startsWith(parentPattern.anchoredPrefix(), searchFrom)) {
+                if (!text!!.startsWith(parentPattern.anchoredPrefix()!!, searchFrom)) {
                     if (WorkCounterConfig.ENABLED) {
-                        WorkCounter.record(parentPattern.anchoredPrefix().length().toLong())
+                        WorkCounter.record(parentPattern.anchoredPrefix()!!.length.toLong())
                     }
                     return true
                 }
             } else if (textScanner is StringRegionInputScanner) {
-                if (!textScanner.startsWith(parentPattern.anchoredPrefix(), searchFrom, false)) {
+                val regionScanner = textScanner as StringRegionInputScanner
+                if (!regionScanner.startsWith(parentPattern.anchoredPrefix()!!, searchFrom, false)) {
                     return true
                 }
             } else if (textScanner is Utf8InputScanner) {
-                if (!textScanner.startsWith(parentPattern.anchoredPrefixUtf8(), searchFrom)) {
+                val utf8Scanner = textScanner as Utf8InputScanner
+                if (!utf8Scanner.startsWith(parentPattern.anchoredPrefixUtf8()!!, searchFrom)) {
                     return true
                 }
             }
         } else if (parentPattern.anchoredCharClassPrefix() != null) {
             val cc = parentPattern.anchoredCharClassPrefix()
             if (text != null) {
-                if (searchFrom >= text.length()) {
+                if (searchFrom >= text!!.length) {
                     return true
                 }
                 val cp = text!!.codePointAt(searchFrom)
-                if (!cc.contains(cp)) {
+                if (!cc!!.contains(cp)) {
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record(1)
                     }
                     return true
                 }
             } else if (textScanner is Utf8InputScanner) {
-                if (searchFrom >= textScanner.length()) {
+                val utf8Scanner = textScanner as Utf8InputScanner
+                if (searchFrom >= utf8Scanner.length) {
                     return true
                 }
-                val cp = textScanner!!.codePointAt(searchFrom)
-                if (!cc.contains(cp)) {
+                val cp = utf8Scanner.codePointAt(searchFrom)
+                if (!cc!!.contains(cp)) {
                     return true
                 }
             }
@@ -1165,7 +1169,7 @@ class Matcher : MatchResult {
                 diagnosticBoundary(MatchStrategy.DFA)
                 return applyFailedMatchResult()
             }
-            if (dfaResult != null && dfaResult.pos != scanner.length()) {
+            if (dfaResult != null && dfaResult.pos != scanner.length) {
                 diagnosticBoundary(MatchStrategy.DFA)
                 return applyFailedMatchResult()
             }
@@ -1176,7 +1180,7 @@ class Matcher : MatchResult {
                 // Here the whole region fixes group zero; the guarded program resolves captures on demand.
                 // Prefix/search matching still needs exact progress semantics to choose its match bounds.
                 diagnosticBoundary(MatchStrategy.DFA)
-                return applyDeferredMatchResult(0, scanner.length(), prog.numCaptures(), true, true)
+                return applyDeferredMatchResult(0, scanner.length, prog.numCaptures(), true, true)
             }
             if (dfaResult == null) {
                 diagnosticDecision(
@@ -1191,8 +1195,8 @@ class Matcher : MatchResult {
                 prog,
                 scanner,
                 0,
-                scanner.length(),
-                scanner.length(),
+                scanner.length,
+                scanner.length,
                 true,
                 false,
                 true,
@@ -1252,7 +1256,7 @@ class Matcher : MatchResult {
                 useRegionInput(savedTextScanner!!)
                 regionSubstituted = true
             }
-            return parentPattern.preparedMatchRunner(regionActive).lookingAt(this)
+            return parentPattern.preparedMatchRunner(regionActive)!!.lookingAt(this)
         } finally {
             if (regionSubstituted) {
                 resolveCapturesBeforeRestoringRegion()
@@ -1320,8 +1324,8 @@ class Matcher : MatchResult {
                 prog,
                 scanner,
                 0,
-                scanner.length(),
-                scanner.length(),
+                scanner.length,
+                scanner.length,
                 true,
                 false,
                 false,
@@ -1385,7 +1389,7 @@ class Matcher : MatchResult {
                 return false
             }
             if (text == null) {
-                searchFrom = InputScanner.Companion.position(activeScanner().decodeForward(searchFrom))
+                searchFrom = InputScanner.position(activeScanner().decodeForward(searchFrom))
             } else {
                 searchFrom++
             }
@@ -1409,16 +1413,16 @@ class Matcher : MatchResult {
     private fun graphemeContext(scanner: InputScanner): GraphemeSupport.Context? {
         val bounded = fullTextRegionContext && !transparentBounds
         val start = if (bounded) regionStart else 0
-        val end = if (bounded) regionEnd else scanner.length()
+        val end = if (bounded) regionEnd else scanner.length
         if (graphemeContext == null || graphemeContextInput !== scanner || graphemeContextStart != start || graphemeContextEnd != end) {
             graphemeContextInput = scanner
             graphemeContextStart = start
             graphemeContextEnd = end
             graphemeContext =
                 if (bounded)
-                    GraphemeSupport.Context.Companion.createRegion(scanner, start, end)
+                    GraphemeSupport.Context.createRegion(scanner, start, end)
                 else
-                    GraphemeSupport.Context.Companion.create(
+                    GraphemeSupport.Context.create(
                         scanner, parentPattern.prog().hasGraphemeSemantics()
                     )
         }
@@ -1430,7 +1434,7 @@ class Matcher : MatchResult {
     }
 
     private val textLength: Int
-        get() = if (text != null) text.length() else textScanner!!.length()
+        get() = if (text != null) text!!.length else textScanner!!.length
 
     private fun canUseForwardDfa(): Boolean {
         return enginePathOptions().dfa && parentPattern.forwardDfaSupported()
@@ -1544,7 +1548,7 @@ class Matcher : MatchResult {
                 return applyFailedMatchResult()
             }
         }
-        return parentPattern.preparedMatchRunner(false).find(this, false)
+        return parentPattern.preparedMatchRunner(false)!!.find(this, false)
     }
 
     private fun doFindRegion(regionActive: Boolean): Boolean {
@@ -1569,7 +1573,7 @@ class Matcher : MatchResult {
                 searchFrom = Math.max(0, savedSearchFrom - regionStart)
                 regionSubstituted = true
             }
-            return parentPattern.preparedMatchRunner(regionActive).find(this, regionActive)
+            return parentPattern.preparedMatchRunner(regionActive)!!.find(this, regionActive)
         } finally {
             if (regionSubstituted) {
                 if (hasMatch && !capturesResolved) {
@@ -1608,7 +1612,7 @@ class Matcher : MatchResult {
         if (cachedRegionScanner == null || cachedRegionStart != regionStart || cachedRegionEnd != regionEnd) {
             cachedRegionScanner =
                 if (text != null)
-                    StringRegionInputScanner(text, regionStart, regionEnd)
+                    StringRegionInputScanner(text!!, regionStart, regionEnd)
                 else
                     (savedScanner as Utf8InputScanner).slice(regionStart, regionEnd)
             cachedRegionStart = regionStart
@@ -1708,7 +1712,7 @@ class Matcher : MatchResult {
                 }
                 val strategy =
                     rejection.regionCharClassRejectionStrategy(
-                        activeScanner(), searchFrom, regionEnd, regionClassSearch
+                        activeScanner(), searchFrom, regionEnd, regionClassSearch!!
                     )
                 if (strategy != null) {
                     diagnosticParticipation(strategy, StrategyRole.REJECT_PREFILTER)
@@ -1723,9 +1727,9 @@ class Matcher : MatchResult {
             ) {
                 diagnosticParticipation(MatchStrategy.CHARACTER_CLASS, StrategyRole.START_ACCELERATION)
                 val region =
-                    StringRegionInputScanner(text, regionStart, regionEnd)
+                    StringRegionInputScanner(text!!, regionStart, regionEnd)
                 val candidate: Int =
-                    StringStartAccelerator.Companion.findNextCandidate(
+                    StringStartAccelerator.findNextCandidate(
                         accelerator, region, searchFrom - regionStart, prog.lineStartUnixLines()
                     )
                 if (candidate < 0) {
@@ -1733,7 +1737,7 @@ class Matcher : MatchResult {
                     return applyFailedMatchResult()
                 }
                 chargeStartAcceleration(
-                    searchFrom - regionStart, candidate, region.length(), accelerator.policy(), false
+                    searchFrom - regionStart, candidate, region.length, accelerator.policy(), false
                 )
                 effectiveStart = regionStart + candidate
             }
@@ -1759,7 +1763,7 @@ class Matcher : MatchResult {
         val prog = parentPattern.prog()
         val exact =
             searchWithBitStateOrNfa(
-                prog, scanner, start, start, scanner.length(), true, false, false, 1
+                prog, scanner, start, start, scanner.length, true, false, false, 1
             )
         return exact != null
                 && applyDeferredMatchResult(start, exact[1], prog.numCaptures(), true, false)
@@ -1772,7 +1776,7 @@ class Matcher : MatchResult {
     private fun doFindCore(regionActive: Boolean): Boolean {
         val scanner = activeScanner()
         val independentRegion = regionActive && scanner is StringRegionInputScanner
-        if (searchFrom > scanner.length()) {
+        if (searchFrom > scanner.length) {
             return applyFailedMatchResult()
         }
 
@@ -1807,7 +1811,7 @@ class Matcher : MatchResult {
         if (!regionActive || independentRegion) {
             val endAnchoredStart =
                 parentPattern.endAnchoredSearchStart(scanner, searchFrom, true, diagnosticsAccumulator())
-            endAnchoredDeferred = endAnchoredStart == Pattern.Companion.END_ANCHORED_SEARCH_DEFERRED
+            endAnchoredDeferred = endAnchoredStart == Pattern.END_ANCHORED_SEARCH_DEFERRED
             if (endAnchoredStart == -1) {
                 return applyFailedMatchResult()
             }
@@ -1818,7 +1822,7 @@ class Matcher : MatchResult {
 
         val literalStartFirst =
             options.startAcceleration
-                    && !prog.anchorStart() && scanner.length() - searchFrom < Pattern.Companion.MAX_LITERAL_START_FIRST_LENGTH && hasLiteralStartAccelerator(
+                    && !prog.anchorStart() && scanner.length - searchFrom < Pattern.MAX_LITERAL_START_FIRST_LENGTH && hasLiteralStartAccelerator(
                 scanner
             )
         // A wide-class leading expansion's literal search below fails exactly when this would reject.
@@ -1868,7 +1872,7 @@ class Matcher : MatchResult {
         }
         if (literalStartFirst
             && startPositionPreselected
-            && scanner.length() - effectiveStart >= Pattern.Companion.MIN_REJECT_AFTER_START_REMAINING && rejectTailFrom(
+            && scanner.length - effectiveStart >= Pattern.MIN_REJECT_AFTER_START_REMAINING && rejectTailFrom(
                 scanner,
                 effectiveStart,
                 options
@@ -1906,8 +1910,8 @@ class Matcher : MatchResult {
                     prog,
                     scanner,
                     effectiveStart,
-                    scanner.length(),
-                    scanner.length(),
+                    scanner.length,
+                    scanner.length,
                     false,
                     false,
                     false,
@@ -2029,7 +2033,7 @@ class Matcher : MatchResult {
                             // trailing line terminator. The reverse DFA from textLen only finds starts for
                             // matches ending AT textLen, potentially missing an earlier-starting match that
                             // ends before the trailing line terminator. Check all dollar positions.
-                            if (prog.dollarAnchorEnd() && earlyEnd == scanner.length()) {
+                            if (prog.dollarAnchorEnd() && earlyEnd == scanner.length) {
                                 val trailingStart =
                                     scanner.trailingLineTerminatorStart(prog.dollarAnchorUnixLines(), earlyEnd)
                                 if (trailingStart >= effectiveStart) {
@@ -2112,8 +2116,8 @@ class Matcher : MatchResult {
                 prog,
                 scanner,
                 effectiveStart,
-                scanner.length(),
-                scanner.length(),
+                scanner.length,
+                scanner.length,
                 false,
                 false,
                 false,
@@ -2153,7 +2157,7 @@ class Matcher : MatchResult {
                 }
                 return -1
             }
-            chargeStartAcceleration(fromIndex, innerMatch, scanner.length(), policy, false)
+            chargeStartAcceleration(fromIndex, innerMatch, scanner.length, policy, false)
             // As in findNextStringStartCandidate, an unanchored rejection at the inner candidate rules
             // out every expanded start.
             diagnosticParticipation(MatchStrategy.DFA, StrategyRole.CANDIDATE_VERIFICATION)
@@ -2165,7 +2169,7 @@ class Matcher : MatchResult {
             }
             return accelerator.expandBackward(scanner, innerMatch, fromIndex)
         }
-        val candidate: Int = Utf8StartAccelerator.Companion.findNextCandidate(accelerator, scanner, fromIndex)
+        val candidate: Int = Utf8StartAccelerator.findNextCandidate(accelerator, scanner, fromIndex)
         if (candidate < 0) {
             if (strategy != null) {
                 diagnosticBoundary(strategy)
@@ -2174,7 +2178,7 @@ class Matcher : MatchResult {
             chargeStartAcceleration(
                 fromIndex,
                 candidate,
-                scanner.length(),
+                scanner.length,
                 policy,
                 accelerator is Utf8StartAccelerator.LeadingExpansion && accelerator.wideLeadingClass
             )
@@ -2208,7 +2212,7 @@ class Matcher : MatchResult {
                 }
                 return -1
             }
-            chargeStartAcceleration(fromIndex, innerMatch, scanner.length(), policy, false)
+            chargeStartAcceleration(fromIndex, innerMatch, scanner.length, policy, false)
             // Zero repetitions are legal and there are no leading assertions. Every match from an
             // expanded start therefore has a suffix matching from an inner candidate. An unanchored
             // rejection here rules out all later starts without traversing the leading run backward.
@@ -2221,10 +2225,10 @@ class Matcher : MatchResult {
             }
             // A successful probe only proves existence; callers still need authoritative bounds and
             // captures. A DFA budget bailout also resumes from the conservatively expanded start.
-            return accelerator.expandBackward(startText, innerMatch, fromIndex)
+            return accelerator.expandBackward(startText!!, innerMatch, fromIndex)
         }
         var candidate: Int =
-            StringStartAccelerator.Companion.findNextCandidate(
+            StringStartAccelerator.findNextCandidate(
                 accelerator, startText, fromIndex, prog.lineStartUnixLines()
             )
         if (!prog.hasGraphemeClusterInstruction()) {
@@ -2233,7 +2237,7 @@ class Matcher : MatchResult {
             // Each rejected candidate advances the scan, so filtering remains linear in input length.
             while (candidate > fromIndex && !activeScanner().isCodePointBoundary(candidate)) {
                 candidate =
-                    StringStartAccelerator.Companion.findNextCandidate(
+                    StringStartAccelerator.findNextCandidate(
                         accelerator, startText, candidate + 1, prog.lineStartUnixLines()
                     )
             }
@@ -2246,7 +2250,7 @@ class Matcher : MatchResult {
             chargeStartAcceleration(
                 fromIndex,
                 candidate,
-                scanner.length(),
+                scanner.length,
                 policy,
                 accelerator is StringStartAccelerator.LeadingExpansion
                         && accelerator.wideLeadingClass
@@ -2259,19 +2263,19 @@ class Matcher : MatchResult {
         keywordAlternation: KeywordAlternation, pos: Int, ncap: Int
     ): Boolean {
         val scanner = activeScanner()
-        if (pos >= scanner.length()) {
+        if (pos >= scanner.length) {
             return applyFailedMatchResult()
         }
         val match = keywordAlternation.matchAt(scanner, pos)
         if (match < 0) {
             return applyFailedMatchResult()
         }
-        val keywordStart: Int = KeywordAlternation.Companion.matchStart(match)
-        val keywordEnd: Int = KeywordAlternation.Companion.matchEnd(match)
+        val keywordStart: Int = KeywordAlternation.matchStart(match)
+        val keywordEnd: Int = KeywordAlternation.matchEnd(match)
         val keywordGroups = IntArray(2 * ncap)
         Arrays.fill(keywordGroups, -1)
         keywordGroups[0] = if (keywordAlternation.greedyWholeInput) pos else keywordStart
-        keywordGroups[1] = if (keywordAlternation.greedyWholeInput) scanner.length() else keywordEnd
+        keywordGroups[1] = if (keywordAlternation.greedyWholeInput) scanner.length else keywordEnd
         if (keywordAlternation.captureGroup > 0) {
             val group = keywordAlternation.captureGroup
             keywordGroups[2 * group] = keywordStart
@@ -2283,25 +2287,25 @@ class Matcher : MatchResult {
     private fun matchKeywordAlternationAt(
         keywordAlternation: KeywordAlternation, pos: Int, ncap: Int
     ): Boolean {
-        if (pos >= text.length()) {
+        if (pos >= text!!.length) {
             return applyFailedMatchResult()
         }
         if (WorkCounterConfig.ENABLED) {
-            record()
+            WorkCounter.record()
         }
-        val ch: Char = text.charAt(pos)
+        val ch: Char = text!![pos]
         if (ch.code < 128 && keywordAlternation.firstAsciiTable[Ascii.toLowerCase(ch).code]
             && isWordBoundaryAt(pos, keywordAlternation.unicodeWordBoundary)
         ) {
             for (keyword in keywordAlternation.keywords) {
-                val end: Int = pos + keyword.length()
-                if (end <= text.length() && Ascii.regionMatchesIgnoreCase(text, pos, keyword, keyword.length())
+                val end: Int = pos + keyword.length
+                if (end <= text!!.length && Ascii.regionMatchesIgnoreCase(text!!, pos, keyword, keyword.length)
                     && isWordBoundaryAt(end, keywordAlternation.unicodeWordBoundary)
                 ) {
                     val keywordGroups = IntArray(2 * ncap)
                     Arrays.fill(keywordGroups, -1)
                     keywordGroups[0] = pos
-                    keywordGroups[1] = if (keywordAlternation.greedyWholeInput) text.length() else end
+                    keywordGroups[1] = if (keywordAlternation.greedyWholeInput) text!!.length else end
                     if (keywordAlternation.captureGroup > 0) {
                         val group = keywordAlternation.captureGroup
                         keywordGroups[2 * group] = pos
@@ -2323,12 +2327,12 @@ class Matcher : MatchResult {
         if (match < 0) {
             return applyFailedMatchResult()
         }
-        val keywordStart: Int = KeywordAlternation.Companion.matchStart(match)
-        val keywordEnd: Int = KeywordAlternation.Companion.matchEnd(match)
+        val keywordStart: Int = KeywordAlternation.matchStart(match)
+        val keywordEnd: Int = KeywordAlternation.matchEnd(match)
         val keywordGroups = IntArray(2 * ncap)
         Arrays.fill(keywordGroups, -1)
         keywordGroups[0] = if (keywordAlternation.greedyWholeInput) matchStart else keywordStart
-        keywordGroups[1] = if (keywordAlternation.greedyWholeInput) scanner.length() else keywordEnd
+        keywordGroups[1] = if (keywordAlternation.greedyWholeInput) scanner.length else keywordEnd
         if (keywordAlternation.captureGroup > 0) {
             val group = keywordAlternation.captureGroup
             keywordGroups[2 * group] = keywordStart
@@ -2366,17 +2370,17 @@ class Matcher : MatchResult {
         keywordAlternation: KeywordAlternation, startPos: Int
     ): Long {
         var i = Math.max(0, startPos)
-        while (i < text.length()) {
+        while (i < text!!.length) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val ch: Char = text.charAt(i)
+            val ch: Char = text!![i]
             if (ch.code < 128 && keywordAlternation.firstAsciiTable[Ascii.toLowerCase(ch).code]
                 && isWordBoundaryAt(i, keywordAlternation.unicodeWordBoundary)
             ) {
                 for (keyword in keywordAlternation.keywords) {
-                    val end: Int = i + keyword.length()
-                    if (end <= text.length() && Ascii.regionMatchesIgnoreCase(text, i, keyword, keyword.length())
+                    val end: Int = i + keyword.length
+                    if (end <= text!!.length && Ascii.regionMatchesIgnoreCase(text!!, i, keyword, keyword.length)
                         && isWordBoundaryAt(end, keywordAlternation.unicodeWordBoundary)
                     ) {
                         return packPositions(i, end)
@@ -2394,23 +2398,23 @@ class Matcher : MatchResult {
         keywordAlternation: KeywordAlternation, startPos: Int, ncap: Int
     ): Boolean {
         val matchStart = Math.max(0, startPos)
-        for (i in text.length() - 1 downTo matchStart) {
+        for (i in text!!.length - 1 downTo matchStart) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val ch: Char = text.charAt(i)
+            val ch: Char = text!![i]
             if (ch.code < 128 && keywordAlternation.firstAsciiTable[Ascii.toLowerCase(ch).code]
                 && isWordBoundaryAt(i, keywordAlternation.unicodeWordBoundary)
             ) {
                 for (keyword in keywordAlternation.keywords) {
-                    val end: Int = i + keyword.length()
-                    if (end <= text.length() && Ascii.regionMatchesIgnoreCase(text, i, keyword, keyword.length())
+                    val end: Int = i + keyword.length
+                    if (end <= text!!.length && Ascii.regionMatchesIgnoreCase(text!!, i, keyword, keyword.length)
                         && isWordBoundaryAt(end, keywordAlternation.unicodeWordBoundary)
                     ) {
                         val keywordGroups = IntArray(2 * ncap)
                         Arrays.fill(keywordGroups, -1)
                         keywordGroups[0] = matchStart
-                        keywordGroups[1] = text.length()
+                        keywordGroups[1] = text!!.length
                         if (keywordAlternation.captureGroup > 0) {
                             val group = keywordAlternation.captureGroup
                             keywordGroups[2 * group] = i
@@ -2428,7 +2432,7 @@ class Matcher : MatchResult {
         val prevWord =
             pos > 0 && isBoundaryWordChar(text!!.codePointBefore(pos), unicodeWordBoundary)
         val nextWord =
-            pos < text.length() && isBoundaryWordChar(text!!.codePointAt(pos), unicodeWordBoundary)
+            pos < text!!.length && isBoundaryWordChar(text!!.codePointAt(pos), unicodeWordBoundary)
         return prevWord != nextWord
     }
 
@@ -2447,7 +2451,7 @@ class Matcher : MatchResult {
     ): IntArray? {
         return searchWithBitStateOrNfa(
             prog,
-            StringInputScanner(text),
+            StringInputScanner(text!!),
             startPos,
             searchLimit,
             endPos,
@@ -2467,8 +2471,8 @@ class Matcher : MatchResult {
      * @param prog the compiled program
      * @param text the full input scanner
      * @param startPos the input index at which to begin searching
-     * @param searchLimit upper bound on positions where new candidate starts are tried. Use `text.length()` for unbounded search.
-     * @param endPos logical match end and ordinary-atom consumption limit. Use `text.length()`
+     * @param searchLimit upper bound on positions where new candidate starts are tried. Use `text.length` for unbounded search.
+     * @param endPos logical match end and ordinary-atom consumption limit. Use `text.length`
      * for unbounded search.
      * @param anchored whether the search is anchored at `startPos`
      * @param longest whether to find the longest match
@@ -2536,15 +2540,15 @@ class Matcher : MatchResult {
         // retries.
         // Two consecutive failures start an exponentially increasing, capped retry delay. Count only
         // eligible searches; a successful window or a reset/pattern/region change clears the delay.
-        val maxBitStateLen: Int = BitState.Companion.maxTextSize(prog)
+        val maxBitStateLen: Int = BitState.maxTextSize(prog)
         val canUseBitState =
             enginePathOptions().bitState
                     && !fullTextRegionContext && !(prog.hasGraphemeSemantics() && !anchored) && !prog.hasGraphemeSemantics()
         val searchRange = endPos - startPos
         val windowEligible =
             canUseBitState
-                    && maxBitStateLen >= BitState.Companion.SPECULATIVE_WINDOW_SIZE && searchRange > maxBitStateLen && prog.numLoopRegs() > 0 && !longest && !endMatch && !prog.anchorEnd() && !preserveOuterEmptyContext // Keep interior region ends on the established bounded-range engine path.
-                    && endPos == text.length()
+                    && maxBitStateLen >= BitState.SPECULATIVE_WINDOW_SIZE && searchRange > maxBitStateLen && prog.numLoopRegs() > 0 && !longest && !endMatch && !prog.anchorEnd() && !preserveOuterEmptyContext // Keep interior region ends on the established bounded-range engine path.
+                    && endPos == text.length
         var speculate = false
         if (windowEligible) {
             if (windowSearchesUntilRetry == 0) {
@@ -2560,13 +2564,13 @@ class Matcher : MatchResult {
             // Borrow from Pattern's thread-local cache on first use.
             releaseEnginesOwnedByOtherThread()
             if (cachedBitState == null && !bitStateBorrowed) {
-                cachedBitState = Pattern.Companion.borrowBitState(threadCache())
+                cachedBitState = Pattern.borrowBitState(threadCache())
                 bitStateBorrowed = true
             }
             // One bounded attempt per search. Never retry with successively larger windows.
-            var windowSize: Int = BitState.Companion.SPECULATIVE_WINDOW_SIZE
+            var windowSize: Int = BitState.SPECULATIVE_WINDOW_SIZE
             val hintedLength = if (matchEndHint > startPos) matchEndHint - startPos else 0
-            if (speculate && hintedLength <= Math.min(maxBitStateLen, BitState.Companion.MAX_HINTED_WINDOW_SIZE)) {
+            if (speculate && hintedLength <= Math.min(maxBitStateLen, BitState.MAX_HINTED_WINDOW_SIZE)) {
                 // A DFA end is only a sizing hint: nullable progress can change the preferred match.
                 // Keep a fresh matcher's worst-case speculative work bounded even when the bitmap
                 // would allow a much larger window. Oversized hints keep the default window.
@@ -2574,12 +2578,12 @@ class Matcher : MatchResult {
             }
             val bitStateEnd = if (speculate) startPos + windowSize else endPos
             val bs: BitState =
-                BitState.Companion.getOrCreate(
+                BitState.getOrCreate(
                     cachedBitState, prog, text, startPos, bitStateEnd, ncap, longest, endMatchEffective
                 )
             var destBuf =
-                if (reuseGroups != null && reuseGroups.length >= ncap) reuseGroups else bitStateResult
-            if (destBuf == null || destBuf.length < ncap) {
+                if (reuseGroups != null && reuseGroups.size >= ncap) reuseGroups else bitStateResult
+            if (destBuf == null || destBuf.size < ncap) {
                 destBuf = IntArray(ncap)
             }
             if (destBuf != reuseGroups) {
@@ -2592,7 +2596,7 @@ class Matcher : MatchResult {
                     bs.doSearch(startPos, searchLimit, anchoredEffective, destBuf)
             cachedBitState = bs
             // Return to Pattern's cache for reuse by future Matchers.
-            Pattern.Companion.returnBitState(threadCache(), bs)
+            Pattern.returnBitState(threadCache(), bs)
             if (!bs.budgetExceeded() && (!speculate || result != null)) {
                 if (speculate) {
                     // Reset fully so a run of short matches can use every window immediately. Alternating
@@ -2707,23 +2711,23 @@ class Matcher : MatchResult {
         // Independent input views carry their complete assertion context in scanner coordinates.
         // Only full-text region operations use the matcher's original region bounds.
         val assertionRegionStart = if (fullTextRegionContext) regionStart else 0
-        val assertionRegionEnd = if (fullTextRegionContext) regionEnd else scanner.length()
+        val assertionRegionEnd = if (fullTextRegionContext) regionEnd else scanner.length
         val useOuterEmptyContext = fullTextRegionContext || preserveOuterEmptyContext
         val emptyContextEnd = if (preserveOuterEmptyContext) assertionRegionEnd else endPos
         val boundaryRegionStart = if (useOuterEmptyContext && !transparentBounds) assertionRegionStart else 0
         val boundaryEndPos =
-            if (useOuterEmptyContext && !transparentBounds) emptyContextEnd else scanner.length()
+            if (useOuterEmptyContext && !transparentBounds) emptyContextEnd else scanner.length
         val anchorEndPos =
             if (useOuterEmptyContext && !anchoringBounds && prog.anchorEnd())
-                scanner.length()
+                scanner.length
             else
                 emptyContextEnd
         val emptyAnchorStartPos = if (useOuterEmptyContext && anchoringBounds) assertionRegionStart else 0
         val emptyAnchorEndPos =
-            if (useOuterEmptyContext && !anchoringBounds) scanner.length() else emptyContextEnd
+            if (useOuterEmptyContext && !anchoringBounds) scanner.length else emptyContextEnd
 
         val context: EngineContext =
-            EngineContext.Companion.create(
+            EngineContext.create(
                 prog,
                 scanner,
                 startPos,
@@ -2740,14 +2744,14 @@ class Matcher : MatchResult {
 
         releaseEnginesOwnedByOtherThread()
         if (cachedNfa == null && !nfaBorrowed) {
-            cachedNfa = Pattern.Companion.borrowNfa(threadCache())
+            cachedNfa = Pattern.borrowNfa(threadCache())
             nfaBorrowed = true
         }
 
-        val nfa: Nfa = Nfa.Companion.getOrCreate(cachedNfa, prog, context, ncapture, longestMode, endmatch)
+        val nfa: Nfa = Nfa.getOrCreate(cachedNfa, prog, context, ncapture, longestMode, endmatch)
         val result = nfa.runSearch(anchored, nfaKind, nsubmatch, endPos, reuseGroups)
         cachedNfa = nfa
-        Pattern.Companion.returnNfa(threadCache(), nfa)
+        Pattern.returnNfa(threadCache(), nfa)
 
         return result
     }
@@ -2807,7 +2811,7 @@ class Matcher : MatchResult {
      */
     override fun group(name: String?): String? {
         Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups().get(name)!!
+        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
         requireNotNull(idx) { "No group with name <" + name + ">" }
         return group(idx)
     }
@@ -2887,7 +2891,7 @@ class Matcher : MatchResult {
      */
     override fun start(name: String?): Int {
         Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups().get(name)!!
+        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
         requireNotNull(idx) { "No group with name <" + name + ">" }
         return start(idx)
     }
@@ -2914,7 +2918,7 @@ class Matcher : MatchResult {
      */
     override fun end(name: String?): Int {
         Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups().get(name)!!
+        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
         requireNotNull(idx) { "No group with name <" + name + ">" }
         return end(idx)
     }
@@ -3035,7 +3039,7 @@ class Matcher : MatchResult {
             return text
         }
         diagnosticIncrementMatchCount()
-        val sb: StringBuilder = StringBuilder(text.length())
+        val sb: StringBuilder = StringBuilder(text!!.length)
         if (limit == 1) {
             appendReplacement(sb, replacement)
             appendTail(sb)
@@ -3078,7 +3082,7 @@ class Matcher : MatchResult {
 
     /** Callers must first check [.isFullyAnchoredOnePassPattern].  */
     private fun replaceAnchoredOnePass(replacement: String?, replaceAll: Boolean): String? {
-        val regionActive = (regionStart != 0 || regionEnd != text.length())
+        val regionActive = (regionStart != 0 || regionEnd != text!!.length)
         if (regionActive || searchFrom != 0) {
             return null
         }
@@ -3088,12 +3092,12 @@ class Matcher : MatchResult {
         }
         val template = LazyTemplate(replacement, groupCount())
         val requiresCaptures = template.needsCaptures()
-        if (text.length() > onePassTextLimit(requiresCaptures)) {
+        if (text!!.length > onePassTextLimit(requiresCaptures)) {
             return null
         }
 
         val numCaptures = parentPattern.prog().numCaptures()
-        if (groups == null || groups.length < 2 * numCaptures) {
+        if (groups == null || groups.size < 2 * numCaptures) {
             groups = IntArray(2 * numCaptures)
         }
         Arrays.fill(groups, -1)
@@ -3102,7 +3106,7 @@ class Matcher : MatchResult {
 
         val scanner = activeScanner()
         val result =
-            parentPattern.onePass().search(scanner, 0, text.length(), false, numCaptures, groups)
+            parentPattern.onePass()!!.search(scanner, 0, text!!.length, false, numCaptures, groups)
 
         if (result == null) {
             diagnosticBoundary(MatchStrategy.ONE_PASS)
@@ -3119,10 +3123,10 @@ class Matcher : MatchResult {
         val matchEnd = result[1]
         applyFullMatchResult(result)
 
-        val sb: StringBuilder = StringBuilder(text.length())
+        val sb: StringBuilder = StringBuilder(text!!.length)
         sb.append(text, 0, matchStart)
         applyReplacementTemplate(sb, template.get())
-        sb.append(text, matchEnd, text.length())
+        sb.append(text, matchEnd, text!!.length)
         appendPos = matchEnd
         if (replaceAll) {
             applyFailedMatchResult()
@@ -3140,7 +3144,7 @@ class Matcher : MatchResult {
     }
 
     private fun replaceDfaOptimized(replacement: String?, limit: Int): String? {
-        val regionActive = (regionStart != 0 || regionEnd != text.length())
+        val regionActive = (regionStart != 0 || regionEnd != text!!.length)
         if (!canUseForwardDfa() || !parentPattern.dfaGroupZeroReliable() // End-anchored patterns that are not start-anchored match at most once and benefit from
             // find()'s reverse-first DFA rejection.
             || (parentPattern.prog().anchorEnd() && !parentPattern.prog().anchorStart())
@@ -3181,7 +3185,7 @@ class Matcher : MatchResult {
 
         val prog = parentPattern.prog()
         val numCaptures = prog.numCaptures()
-        if (groups == null || groups.length < 2 * numCaptures) {
+        if (groups == null || groups.size < 2 * numCaptures) {
             groups = IntArray(2 * numCaptures)
         }
         applyDeferredMatchResult(matchOffsets!![0], matchOffsets!![1], numCaptures, true, false)
@@ -3195,7 +3199,7 @@ class Matcher : MatchResult {
         }
         val useOnePass = needsCaptures && parentPattern.canOnePassSubmatch()
 
-        val textLen: Int = text.length()
+        val textLen: Int = text!!.length
         val sb = StringBuilder(textLen)
         var builderAppendPos = searchFrom
         var firstMatchStart = -1
@@ -3213,13 +3217,13 @@ class Matcher : MatchResult {
             groups!![0] = matchStart
             groups!![1] = matchEnd
             if (needsCaptures) {
-                Arrays.fill(groups, 2, groups.length, -1)
+                Arrays.fill(groups, 2, groups.size, -1)
                 var resultGroups: IntArray?
                 if (useOnePass) {
                     diagnosticCapture(MatchStrategy.ONE_PASS)
                     resultGroups =
                         parentPattern
-                            .onePass()
+                            .onePass()!!
                             .search(text, matchStart, matchEnd, false, numCaptures, groups)
                 } else {
                     val savedCaptureSearch = diagnosticCaptureSearch
@@ -3244,7 +3248,7 @@ class Matcher : MatchResult {
                     }
                 }
                 if (resultGroups != null) {
-                    System.arraycopy(resultGroups, 0, groups, 0, groups.length)
+                    System.arraycopy(resultGroups, 0, groups, 0, groups.size)
                 }
                 capturesResolved = true
                 groupZeroResolved = true
@@ -3304,7 +3308,7 @@ class Matcher : MatchResult {
         cursor: DfaMatchCursor
     ): Int {
         val scanner = activeScanner()
-        val textLen = scanner.length()
+        val textLen = scanner.length
         var pos = cursor.pos
 
         while (pos <= textLen) {
@@ -3333,7 +3337,7 @@ class Matcher : MatchResult {
                 // Literal prefixes never contain surrogate code units (MultiAnchorCompiler drops literals
                 // with surrogate runes), so a prefix match always starts on a code point boundary.
                 val idx =
-                    if (foldCase) Companion.indexOfIgnoreCase(text!!, prefix, pos) else text!!.indexOf(prefix, pos)
+                    if (foldCase) indexOfIgnoreCase(text!!, prefix, pos) else text!!.indexOf(prefix, pos)
                 if (idx < 0) {
                     diagnosticBoundary(MatchStrategy.LITERAL)
                     break
@@ -3471,7 +3475,7 @@ class Matcher : MatchResult {
             return text
         }
         diagnosticIncrementMatchCount()
-        val sb: StringBuilder = StringBuilder(text.length())
+        val sb: StringBuilder = StringBuilder(text!!.length)
         val expectedModCount = modCount
         val replacement = Objects.requireNonNull<String>(replacer!!.apply(toMatchResult()))
         checkConcurrentModification(expectedModCount)
@@ -3548,7 +3552,7 @@ class Matcher : MatchResult {
             return text
         }
         diagnosticIncrementMatchCount()
-        val sb: StringBuilder = StringBuilder(text.length())
+        val sb: StringBuilder = StringBuilder(text!!.length)
         do {
             val expectedModCount = modCount
             val replacement = Objects.requireNonNull<String>(replacer!!.apply(toMatchResult()))
@@ -3587,7 +3591,7 @@ class Matcher : MatchResult {
 
         val isStartAnchored = parentPattern.prog().anchorStart()
         if (isStartAnchored) {
-            if (searchFrom > 0 || !literalRegionMatches(literal, 0, literal.length())) {
+            if (searchFrom > 0 || !literalRegionMatches(literal, 0, literal.length)) {
                 if (accumulator != null) {
                     accumulator.boundary(MatchStrategy.LITERAL)
                 }
@@ -3595,8 +3599,8 @@ class Matcher : MatchResult {
                 return text
             }
             val matchStart = 0
-            val matchEnd: Int = literal.length()
-            val sb: StringBuilder = StringBuilder(text.length())
+            val matchEnd: Int = literal.length
+            val sb: StringBuilder = StringBuilder(text!!.length)
             if (!simpleReplacement) {
                 applyGroupZeroMatchResult(matchStart, matchEnd)
                 val compiledTemplate = template!!.get()
@@ -3608,7 +3612,7 @@ class Matcher : MatchResult {
             }
             val appendPosition = matchEnd
             this.appendPos = appendPosition
-            sb.append(text, appendPosition, text.length())
+            sb.append(text, appendPosition, text!!.length)
             if (limit == 1) {
                 if (groupCount() == 0) {
                     applyGroupZeroMatchResult(matchStart, matchEnd)
@@ -3642,14 +3646,14 @@ class Matcher : MatchResult {
                 anchorHigh = runner.anchorHigh()
                 classHashChain = runner.classHashChain()
             } else {
-                val literalLen: Int = literal.length()
+                val literalLen: Int = literal.length
                 if (literalLen == 1) {
-                    val anchor: Char = literal.charAt(0)
+                    val anchor: Char = literal[0]
                     anchorLow = Ascii.toLowerCase(anchor)
                     anchorHigh = Ascii.toUpperCase(anchor)
                 } else if (literalLen > 1) {
                     anchorOffset = RarityOracle.rarestAsciiOffset(literal, literalLen, true)
-                    val anchor: Char = literal.charAt(anchorOffset)
+                    val anchor: Char = literal[anchorOffset]
                     anchorLow = Ascii.toLowerCase(anchor)
                     anchorHigh = Ascii.toUpperCase(anchor)
                 }
@@ -3663,7 +3667,7 @@ class Matcher : MatchResult {
         var searchFrom = 0
         var matchStart =
             if (foldCase)
-                Companion.indexOfIgnoreCase(
+                indexOfIgnoreCase(
                     text!!, literal, anchorOffset, anchorLow, anchorHigh, classHashChain, searchFrom
                 )
             else
@@ -3681,16 +3685,15 @@ class Matcher : MatchResult {
         var firstMatchEnd = -1
 
         var compiledTemplate: Array<ReplacementSegment>? = null
-
         do {
             if (sb == null) {
-                sb = StringBuilder(text.length())
+                sb = StringBuilder(text!!.length)
             }
             sb!!.append(text, appendPosition, matchStart)
 
             if (matchesFound == 0) {
                 firstMatchStart = matchStart
-                firstMatchEnd = matchStart + literal.length()
+                firstMatchEnd = matchStart + literal.length
                 if (!simpleReplacement) {
                     applyDeferredMatchResult(
                         firstMatchStart, firstMatchEnd, parentPattern.prog().numCaptures(), true, false
@@ -3698,7 +3701,7 @@ class Matcher : MatchResult {
                     if (template == null) {
                         template = LazyTemplate(replacement, groupCount())
                     }
-                    compiledTemplate = template.get()
+                    compiledTemplate = template!!.get()
                 }
             }
 
@@ -3706,11 +3709,11 @@ class Matcher : MatchResult {
                 sb.append(replacement)
             } else {
                 groups!![0] = matchStart
-                groups!![1] = matchStart + literal.length()
+                groups!![1] = matchStart + literal.length
                 applyReplacementTemplate(sb, compiledTemplate!!)
             }
 
-            appendPosition = matchStart + literal.length()
+            appendPosition = matchStart + literal.length
             searchFrom = appendPosition
             matchesFound++
             if (matchesFound >= limit) {
@@ -3718,7 +3721,7 @@ class Matcher : MatchResult {
             }
             matchStart =
                 if (foldCase)
-                    Companion.indexOfIgnoreCase(
+                    indexOfIgnoreCase(
                         text!!, literal, anchorOffset, anchorLow, anchorHigh, classHashChain, searchFrom
                     )
                 else
@@ -3734,7 +3737,7 @@ class Matcher : MatchResult {
         }
 
         this.appendPos = appendPosition
-        sb.append(text, appendPosition, text.length())
+        sb.append(text, appendPosition, text!!.length)
 
         if (limit == 1) {
             if (groupCount() == 0) {
@@ -3760,7 +3763,7 @@ class Matcher : MatchResult {
     private fun indexOfReplacementLiteral(literal: String, fromIndex: Int): Int {
         val matchStart = text!!.indexOf(literal, fromIndex)
         if (WorkCounterConfig.ENABLED) {
-            val examinedEnd: Int = if (matchStart >= 0) matchStart + literal.length() else text.length()
+            val examinedEnd: Int = if (matchStart >= 0) matchStart + literal.length else text!!.length
             WorkCounter.record(Math.max(0, examinedEnd - fromIndex).toLong())
         }
         return matchStart
@@ -3791,17 +3794,15 @@ class Matcher : MatchResult {
             )
         }
         var repText: String? = null
-
-        val textLen: Int = text.length()
+        val textLen: Int = text!!.length
         var pos = searchFrom
         var appendPos = searchFrom
         var matchesFound = 0
         var sb: StringBuilder? = null
-
-        val ranges = if (ccMatch != null) ccMatch.ranges else single!!.ranges()
-        val b0 = if (ccMatch != null) ccMatch.bitmap0 else single!!.bitmap0()
-        val b1 = if (ccMatch != null) ccMatch.bitmap1 else single!!.bitmap1()
-        val asciiScanner = if (single != null && single.isAscii()) activeScanner() else null
+        val ranges = if (ccMatch != null) ccMatch.ranges else single!!.ranges
+        val b0 = if (ccMatch != null) ccMatch.bitmap0 else single!!.bitmap0
+        val b1 = if (ccMatch != null) ccMatch.bitmap1 else single!!.bitmap1
+        val asciiScanner = if (single != null && single.isAscii) activeScanner() else null
 
         var firstMatchStart = -1
         var firstMatchEnd = -1
@@ -3814,7 +3815,7 @@ class Matcher : MatchResult {
             } else {
                 while (pos < textLen) {
                     val cp = text!!.codePointAt(pos)
-                    if (charClassContains(ranges, b0, b1, cp)) {
+                    if (charClassContains(ranges!!, b0, b1, cp)) {
                         matchStart = pos
                         break
                     }
@@ -3829,7 +3830,7 @@ class Matcher : MatchResult {
             pos += Character.charCount(text!!.codePointAt(pos))
             while (single == null && pos < textLen) {
                 val cp = text!!.codePointAt(pos)
-                if (!charClassContains(ranges, b0, b1, cp)) {
+                if (!charClassContains(ranges!!, b0, b1, cp)) {
                     break
                 }
                 pos += Character.charCount(cp)
@@ -3847,14 +3848,14 @@ class Matcher : MatchResult {
                     applyFullMatchResult(intArrayOf(firstMatchStart, firstMatchEnd))
                     throw e
                 }
-                if (compiledTemplate.length != 1
+                if (compiledTemplate.size != 1
                     || compiledTemplate[0] !is ReplacementSegment.Literal
                 ) {
                     clearCurrentResult()
                     return null
                 }
                 applyFullMatchResult(intArrayOf(firstMatchStart, firstMatchEnd))
-                repText = literalSeg.text
+                repText = (compiledTemplate[0] as ReplacementSegment.Literal).text
             }
 
             if (sb == null) {
@@ -3898,11 +3899,11 @@ class Matcher : MatchResult {
         val ranges = ccMatch.ranges
         val b0 = ccMatch.bitmap0
         val b1 = ccMatch.bitmap1
-        val textLen: Int = text.length()
+        val textLen: Int = text!!.length
         var firstMatchEnd = 0
         while (firstMatchEnd < textLen) {
             val cp = text!!.codePointAt(firstMatchEnd)
-            if (!charClassContains(ranges, b0, b1, cp)) {
+            if (!charClassContains(ranges!!, b0, b1, cp)) {
                 break
             }
             firstMatchEnd += Character.charCount(cp)
@@ -3910,28 +3911,28 @@ class Matcher : MatchResult {
 
         applyFullMatchResult(intArrayOf(0, firstMatchEnd))
         val compiledTemplate = template.get()
-        if (compiledTemplate.length != 1
+        if (compiledTemplate.size != 1
             || compiledTemplate[0] !is ReplacementSegment.Literal
         ) {
             clearCurrentResult()
             return null
         }
-        val replacement: String = literalSeg.text
+        val replacement: String = (compiledTemplate[0] as ReplacementSegment.Literal).text
         if (limit == 1) {
-            val result: StringBuilder = StringBuilder(textLen + replacement.length())
+            val result: StringBuilder = StringBuilder(textLen + replacement.length)
             result.append(replacement)
             result.append(text, firstMatchEnd, textLen)
             appendPos = firstMatchEnd
             return result.toString()
         }
 
-        val result: StringBuilder = StringBuilder(textLen + replacement.length())
+        val result: StringBuilder = StringBuilder(textLen + replacement.length)
         var pos = 0
         while (pos < textLen) {
             var runEnd = pos
             while (runEnd < textLen) {
                 val cp = text!!.codePointAt(runEnd)
-                if (!charClassContains(ranges, b0, b1, cp)) {
+                if (!charClassContains(ranges!!, b0, b1, cp)) {
                     break
                 }
                 runEnd += Character.charCount(cp)
@@ -3942,7 +3943,7 @@ class Matcher : MatchResult {
             } else {
                 // Matcher.find() advances a terminal empty match by one UTF-16 position, matching the JDK
                 // Matcher contract even when that position lies between surrogate halves.
-                result.append(text.charAt(pos))
+                result.append(text!![pos])
                 pos++
             }
         }
@@ -3988,7 +3989,7 @@ class Matcher : MatchResult {
      * @return the string builder
      */
     fun appendTail(sb: StringBuilder): StringBuilder {
-        sb.append(text, appendPos, text.length())
+        sb.append(text, appendPos, text!!.length)
         return sb
     }
 
@@ -4022,7 +4023,7 @@ class Matcher : MatchResult {
      * @return the string buffer
      */
     fun appendTail(sb: StringBuffer): StringBuffer {
-        sb.append(text, appendPos, text.length())
+        sb.append(text, appendPos, text!!.length)
         return sb
     }
 
@@ -4109,8 +4110,13 @@ class Matcher : MatchResult {
      * 
      * @return an unmodifiable map from group names to group numbers
      */
-    override fun namedGroups(): MutableMap<String?, Int>? {
-        return parentPattern.namedGroups()
+    override fun namedGroups(): MutableMap<String?, Int?> {
+        val groups = parentPattern.namedGroups()
+        val out = LinkedHashMap<String?, Int?>(groups.size)
+        for ((name, index) in groups) {
+            out[name] = index
+        }
+        return out
     }
 
     /**
@@ -4175,7 +4181,7 @@ class Matcher : MatchResult {
         invalidatePatternCaches()
         replacementNeedsCaptures = false
         if (preservedGroupZero) {
-            Pattern.Companion.diagnostics().onIntentionalDivergence(IntentionalDivergence.USE_PATTERN_GROUP_ZERO)
+            Pattern.diagnostics().onIntentionalDivergence(IntentionalDivergence.USE_PATTERN_GROUP_ZERO)
         }
         return this
     }
@@ -4242,10 +4248,10 @@ class Matcher : MatchResult {
             resolveCaptures()
         }
         return SnapshotMatchResult(
-            (if (hasMatch) groups!!.clone() else null)!!,
-            text!!,
+            if (hasMatch) groups.clone() else null,
+            text,
             groupCount(),
-            parentPattern.namedGroups(),
+            namedGroups()!!,
             hasMatch
         )
     }
@@ -4299,12 +4305,12 @@ class Matcher : MatchResult {
         if (parentPattern.canOnePassSubmatch()) {
             diagnosticCapture(MatchStrategy.ONE_PASS)
             val ncap = 2 * Math.max(prog.numCaptures(), 1)
-            if (onePassScratchCap == null || onePassScratchCap.length < ncap) {
+            if (onePassScratchCap == null || onePassScratchCap!!.size < ncap) {
                 onePassScratchCap = IntArray(ncap)
             }
             result =
                 parentPattern
-                    .onePass()
+                    .onePass()!!
                     .search(
                         scanner,
                         deferredMatchStart,
@@ -4352,7 +4358,7 @@ class Matcher : MatchResult {
             val savedRegionStart = regionStart
             val savedRegionEnd = regionEnd
             regionStart = 0
-            regionEnd = activeScanner().length()
+            regionEnd = activeScanner().length
             try {
                 resolveCaptures()
             } finally {
@@ -4364,7 +4370,7 @@ class Matcher : MatchResult {
 
     private fun activeScanner(): InputScanner {
         if (textScanner == null) {
-            textScanner = StringInputScanner(text)
+            textScanner = StringInputScanner(text!!)
         }
         return textScanner!!
     }
@@ -4396,27 +4402,27 @@ class Matcher : MatchResult {
             return
         }
         var i = 0
-        while (i < replacement.length()) {
-            val c: Char = replacement.charAt(i)
+        while (i < replacement.length) {
+            val c: Char = replacement[i]
             if (c == '\\') {
                 i++
-                require(i < replacement.length()) { "Trailing backslash in replacement string" }
-                sb.append(replacement.charAt(i))
+                require(i < replacement.length) { "Trailing backslash in replacement string" }
+                sb.append(replacement[i])
                 i++
             } else if (c == '$') {
                 i++
-                require(i < replacement.length()) { "Trailing dollar sign in replacement string" }
-                if (replacement.charAt(i) == '{') {
+                require(i < replacement.length) { "Trailing dollar sign in replacement string" }
+                if (replacement[i] == '{') {
                     // Named group reference: ${name}
                     i++
                     val nameStart = i
-                    while (i < replacement.length() && replacement.charAt(i) != '}') {
+                    while (i < replacement.length && replacement[i] != '}') {
                         i++
                     }
-                    require(i < replacement.length()) { "Missing closing '}' in replacement string" }
+                    require(i < replacement.length) { "Missing closing '}' in replacement string" }
                     val name = replacement.substring(nameStart, i)
                     i++ // skip '}'
-                    val idx: Int = parentPattern.namedGroups().get(name)!!
+                    val idx: Int = parentPattern.namedGroups()!!.get(name)!!
                     requireNotNull(idx) { "No group with name <" + name + ">" }
                     val g = idx
                     val start = start(g)
@@ -4424,7 +4430,7 @@ class Matcher : MatchResult {
                     if (start >= 0 && end >= 0) {
                         sb.append(text, start, end)
                     }
-                } else if (isAsciiDigit(replacement.charAt(i))) {
+                } else if (isAsciiDigit(replacement[i])) {
                     // Numeric group reference: $0, $1, $12, etc.
                     val groupRef: NumericGroupReference = parseNumericGroupReference(replacement, i, groupCount())
                     val groupIdx = groupRef.groupNum
@@ -4446,13 +4452,13 @@ class Matcher : MatchResult {
 
     /** A snapshot of a match result, independent of the matcher that created it.  */
     private class SnapshotMatchResult(
-        private val groups: IntArray,
-        private val text: String,
+        private val groups: IntArray?,
+        private val text: String?,
         private val groupCount: Int,
         namedGroups: MutableMap<String?, Int?>,
         private val hasMatch: Boolean
     ) : MatchResult {
-        private val namedGroups: MutableMap<String?, Int>
+        private val namedGroups: MutableMap<String?, Int?>
 
         init {
             this.namedGroups = Collections.unmodifiableMap<String?, Int?>(namedGroups)
@@ -4469,7 +4475,7 @@ class Matcher : MatchResult {
         override fun start(group: Int): Int {
             checkMatch()
             validateGroup(group)
-            return groups[2 * group]
+            return groups!![2 * group]
         }
 
         override fun start(name: String?): Int {
@@ -4483,7 +4489,7 @@ class Matcher : MatchResult {
         override fun end(group: Int): Int {
             checkMatch()
             validateGroup(group)
-            return groups[2 * group + 1]
+            return groups!![2 * group + 1]
         }
 
         override fun end(name: String?): Int {
@@ -4501,7 +4507,7 @@ class Matcher : MatchResult {
             if (s == -1) {
                 return null
             }
-            return text.substring(s, e)
+            return text!!.substring(s, e)
         }
 
         override fun group(name: String?): String? {
@@ -4512,13 +4518,13 @@ class Matcher : MatchResult {
             return groupCount
         }
 
-        override fun namedGroups(): MutableMap<String?, Int> {
+        override fun namedGroups(): MutableMap<String?, Int?> {
             return namedGroups
         }
 
         fun groupIndex(name: String?): Int {
             Objects.requireNonNull<String?>(name, "Group name")
-            val idx: Int = namedGroups.get(name)!!
+            val idx: Int? = namedGroups[name]
             requireNotNull(idx) { "No group with name <" + name + ">" }
             return idx
         }
@@ -4537,9 +4543,8 @@ class Matcher : MatchResult {
     }
 
     private class LazyTemplate(private val replacement: String?, private val maxGroup: Int) {
-        private var value: Array<ReplacementSegment>?
+        private var value: Array<ReplacementSegment>? = null
         private var needsCaptures: Boolean? = null
-
         fun needsCaptures(): Boolean {
             if (needsCaptures == null) {
                 needsCaptures = computeNeedsCaptures()
@@ -4551,10 +4556,10 @@ class Matcher : MatchResult {
             if (replacement == null) {
                 return false
             }
-            val len: Int = replacement.length()
+            val len: Int = replacement.length
             var i = 0
             while (i < len) {
-                val c: Char = replacement.charAt(i)
+                val c: Char = replacement[i]
                 if (c == '\\') {
                     i += 2
                 } else if (c == '$') {
@@ -4562,7 +4567,7 @@ class Matcher : MatchResult {
                     if (i >= len) {
                         continue
                     }
-                    val next: Char = replacement.charAt(i)
+                    val next: Char = replacement[i]
                     if (next == '{') {
                         return true
                     } else if (isAsciiDigit(next)) {
@@ -4583,14 +4588,14 @@ class Matcher : MatchResult {
 
         fun get(): Array<ReplacementSegment> {
             if (value == null) {
-                value = Companion.compileReplacementTemplate(replacement!!, maxGroup)
+                value = compileReplacementTemplate(replacement!!, maxGroup)
             }
             return value!!
         }
     }
 
-    private class DfaMatchCursor(private var pos: Int) {
-        private var revDfa: Dfa? = null
+    private class DfaMatchCursor(var pos: Int) {
+        var revDfa: Dfa? = null
     }
 
     internal class SplitBuffer {
@@ -4598,17 +4603,16 @@ class Matcher : MatchResult {
         var array: IntArray = IntArray(32)
 
         var size: Int = 0
-
         fun add(start: Int, end: Int) {
-            if (size + 2 > array.length) {
-                array = Arrays.copyOf(array, array.length * 2)
+            if (size + 2 > array.size) {
+                array = Arrays.copyOf(array, array.size * 2)
             }
             array[size++] = start
             array[size++] = end
         }
     }
 
-    fun findSplitPositions(limit: Int, buffer: SplitBuffer): Int {
+    internal fun findSplitPositions(limit: Int, buffer: SplitBuffer): Int {
         // The first search reuses this end-anchored probe instead of repeating it.
         var firstEndAnchoredStart: Int = END_ANCHORED_START_UNKNOWN
         if (!parentPattern.prog().anchorStart()) {
@@ -4627,7 +4631,7 @@ class Matcher : MatchResult {
         }
         var last = 0
         var searchFrom = 0
-        val textLen: Int = text.length()
+        val textLen: Int = text!!.length
         // This loop has its own search position, so it starts and leaves the backoff state neutral.
         startBackoff = AdaptiveBackoff.NEUTRAL
 
@@ -4673,7 +4677,7 @@ class Matcher : MatchResult {
     private fun findNextMatchPacked(fromIndex: Int, endAnchoredStart: Int): Long {
         var endAnchoredStart = endAnchoredStart
         val scanner = activeScanner()
-        if (fromIndex > scanner.length()) {
+        if (fromIndex > scanner.length) {
             return -1L
         }
         val prog = parentPattern.prog()
@@ -4688,11 +4692,11 @@ class Matcher : MatchResult {
             val idx: Int
             if (prog.anchorStart()) {
                 // The unchecked folded comparison requires the entire literal to fit in the input.
-                if (literal.length() > text.length()) {
+                if (literal.length > text!!.length) {
                     return -1L
                 }
                 if (parentPattern.literalFoldCase()) {
-                    idx = if (Ascii.regionMatchesIgnoreCase(text, 0, literal, literal.length())) 0 else -1
+                    idx = if (Ascii.regionMatchesIgnoreCase(text!!, 0, literal, literal.length)) 0 else -1
                 } else {
                     idx = if (text!!.startsWith(literal)) 0 else -1
                 }
@@ -4708,14 +4712,14 @@ class Matcher : MatchResult {
                     anchorHigh = runner.anchorHigh()
                     classHashChain = runner.classHashChain()
                 } else {
-                    val literalLen: Int = literal.length()
+                    val literalLen: Int = literal.length
                     if (literalLen == 1) {
-                        val anchor: Char = literal.charAt(0)
+                        val anchor: Char = literal[0]
                         anchorLow = Ascii.toLowerCase(anchor)
                         anchorHigh = Ascii.toUpperCase(anchor)
                     } else if (literalLen > 1) {
                         anchorOffset = RarityOracle.rarestAsciiOffset(literal, literalLen, true)
-                        val anchor: Char = literal.charAt(anchorOffset)
+                        val anchor: Char = literal[anchorOffset]
                         anchorLow = Ascii.toLowerCase(anchor)
                         anchorHigh = Ascii.toUpperCase(anchor)
                     }
@@ -4723,7 +4727,7 @@ class Matcher : MatchResult {
                     classHashChain = if (descriptor != null) descriptor.classHashChain else null
                 }
                 idx =
-                    Companion.indexOfIgnoreCase(
+                    indexOfIgnoreCase(
                         text!!, literal, anchorOffset, anchorLow, anchorHigh, classHashChain, fromIndex
                     )
             } else {
@@ -4732,7 +4736,7 @@ class Matcher : MatchResult {
             if (idx < 0) {
                 return -1L
             }
-            return packPositions(idx, idx + literal.length())
+            return packPositions(idx, idx + literal.length)
         }
 
         // Char class fast path
@@ -4742,7 +4746,7 @@ class Matcher : MatchResult {
                 return -1L
             }
             if (prog.anchorStart()) {
-                if (scanner.length() == 0) {
+                if (scanner.length == 0) {
                     return -1L
                 }
                 val cp = scanner.codePointAt(0)
@@ -4751,7 +4755,7 @@ class Matcher : MatchResult {
                 }
                 return -1L
             }
-            if (singleCharClass.isAscii()) {
+            if (singleCharClass.isAscii) {
                 val idx = scanner.indexOfCharClass(singleCharClass, fromIndex)
                 if (idx < 0) {
                     return -1L
@@ -4760,11 +4764,11 @@ class Matcher : MatchResult {
             }
             val idx =
                 scanner.indexOfCodePointClass(
-                    singleCharClass.ranges(),
-                    singleCharClass.bitmap0(),
-                    singleCharClass.bitmap1(),
+                    singleCharClass.ranges,
+                    singleCharClass.bitmap0,
+                    singleCharClass.bitmap1,
                     fromIndex,
-                    scanner.length()
+                    scanner.length
                 )
             if (idx < 0) {
                 return -1L
@@ -4789,7 +4793,7 @@ class Matcher : MatchResult {
             if (endAnchoredStart == END_ANCHORED_START_UNKNOWN) {
                 endAnchoredStart = parentPattern.endAnchoredSearchStart(scanner, fromIndex, true, null)
             }
-            endAnchoredDeferred = endAnchoredStart == Pattern.Companion.END_ANCHORED_SEARCH_DEFERRED
+            endAnchoredDeferred = endAnchoredStart == Pattern.END_ANCHORED_SEARCH_DEFERRED
             val endAnchoredMatch = endAnchoredSplitMatch(scanner, endAnchoredStart)
             if (endAnchoredMatch != END_ANCHORED_UNRESOLVED) {
                 return endAnchoredMatch
@@ -4871,8 +4875,8 @@ class Matcher : MatchResult {
                 prog,
                 scanner,
                 effectiveStart,
-                scanner.length(),
-                scanner.length(),
+                scanner.length,
+                scanner.length,
                 false,
                 false,
                 false,
@@ -4900,7 +4904,7 @@ class Matcher : MatchResult {
                     scanner,
                     endAnchoredStart,
                     endAnchoredStart,
-                    scanner.length(),
+                    scanner.length,
                     true,
                     false,
                     false,
@@ -4917,11 +4921,11 @@ class Matcher : MatchResult {
     // Prepared Match Runner (Fast Path Dispatch & Setup Elimination)
     // ---------------------------------------------------------------------------
     internal interface PreparedMatchRunner {
-        fun find(matcher: Matcher?, regionActive: Boolean): Boolean
+        fun find(matcher: Matcher, regionActive: Boolean): Boolean
 
-        fun matches(matcher: Matcher?): Boolean
+        fun matches(matcher: Matcher): Boolean
 
-        fun lookingAt(matcher: Matcher?): Boolean
+        fun lookingAt(matcher: Matcher): Boolean
     }
 
     internal class LiteralAlternationPreparedRunner(
@@ -4930,30 +4934,32 @@ class Matcher : MatchResult {
     ) : PreparedMatchRunner {
         override fun find(matcher: Matcher, regionActive: Boolean): Boolean {
             val result: Long
-            if (matcher.text != null) {
-                result = alternation.find(matcher.text, matcher.searchFrom)
-            } else if (matcher.textScanner is StringRegionInputScanner) {
-                result = alternation.find(textScanner, matcher.searchFrom)
-            } else if (matcher.textScanner is Utf8InputScanner) {
-                result = alternation.find(textScanner, matcher.searchFrom)
+            val matcherText = matcher.text
+            val matcherScanner = matcher.textScanner
+            if (matcherText != null) {
+                result = alternation.find(matcherText, matcher.searchFrom)
+            } else if (matcherScanner is StringRegionInputScanner) {
+                result = alternation.find(matcherScanner, matcher.searchFrom)
+            } else if (matcherScanner is Utf8InputScanner) {
+                result = alternation.find(matcherScanner, matcher.searchFrom)
             } else {
                 return fallback.find(matcher, regionActive)
             }
-            if (result == LiteralAlternation.Companion.FALLBACK) {
+            if (result == LiteralAlternation.FALLBACK) {
                 return fallback.find(matcher, regionActive)
             }
             matcher.diagnosticBoundary(MatchStrategy.LITERAL_ALTERNATION)
-            return if (result == LiteralAlternation.Companion.NO_MATCH)
+            return if (result == LiteralAlternation.NO_MATCH)
                 matcher.applyFailedMatchResult()
             else
                 matcher.applyGroupZeroMatchResult((result ushr 32).toInt(), result.toInt())
         }
 
-        override fun matches(matcher: Matcher?): Boolean {
+        override fun matches(matcher: Matcher): Boolean {
             return fallback.matches(matcher)
         }
 
-        override fun lookingAt(matcher: Matcher?): Boolean {
+        override fun lookingAt(matcher: Matcher): Boolean {
             return fallback.lookingAt(matcher)
         }
     }
@@ -4984,19 +4990,19 @@ class Matcher : MatchResult {
                     classHashChain
                 else
                     (if (foldCase && literal != null)
-                        ClassHashChain.Companion.compileCaseInsensitive(literal)
+                        ClassHashChain.compileCaseInsensitive(literal)
                     else
                         null)
-            val literalLen = if (literal != null) literal.length() else 0
+            val literalLen = if (literal != null) literal.length else 0
             if (foldCase && literalLen > 0) {
                 if (literalLen == 1) {
                     this.anchorOffset = 0
-                    val c: Char = literal.charAt(0)
+                    val c: Char = literal!![0]
                     this.anchorLow = Ascii.toLowerCase(c)
                     this.anchorHigh = Ascii.toUpperCase(c)
                 } else {
-                    this.anchorOffset = RarityOracle.rarestAsciiOffset(literal, literalLen, true)
-                    val c: Char = literal.charAt(this.anchorOffset)
+                    this.anchorOffset = RarityOracle.rarestAsciiOffset(literal!!, literalLen, true)
+                    val c: Char = literal[this.anchorOffset]
                     this.anchorLow = Ascii.toLowerCase(c)
                     this.anchorHigh = Ascii.toUpperCase(c)
                 }
@@ -5006,7 +5012,7 @@ class Matcher : MatchResult {
                 this.anchorHigh = 0.toChar()
             }
             this.matchLengthChars = literalLen
-            this.matchLengthBytes = if (literalUtf8 != null) literalUtf8.length else 0
+            this.matchLengthBytes = if (literalUtf8 != null) literalUtf8.size else 0
             this.isStartAnchored = isStartAnchored
             this.fallback = fallback
         }
@@ -5042,19 +5048,21 @@ class Matcher : MatchResult {
             matcher.diagnosticBoundary(MatchStrategy.LITERAL)
             val idx: Int
             val matchLength: Int
-            if (matcher.textScanner is StringRegionInputScanner) {
+            val matcherText = matcher.text
+            val matcherScanner = matcher.textScanner
+            if (matcherScanner is StringRegionInputScanner) {
                 idx =
                     if (foldCase)
-                        textScanner.indexOfIgnoreCase(
-                            literal, anchorOffset, anchorLow, anchorHigh, matcher.searchFrom
+                        matcherScanner.indexOfIgnoreCase(
+                            literal!!, anchorOffset, anchorLow, anchorHigh, matcher.searchFrom
                         )
                     else
-                        textScanner.indexOf(literal, matcher.searchFrom, textScanner!!.length())
+                        matcherScanner.indexOf(literal!!, matcher.searchFrom, matcherScanner.length)
                 matchLength = matchLengthChars
             } else if (foldCase) {
                 idx =
-                    Companion.indexOfIgnoreCase(
-                        matcher.text!!,
+                    indexOfIgnoreCase(
+                        matcherText!!,
                         literal!!,
                         anchorOffset,
                         anchorLow,
@@ -5064,19 +5072,20 @@ class Matcher : MatchResult {
                     )
                 matchLength = matchLengthChars
             } else if (matcher.activeScanner() is Utf8InputScanner) {
+                val utf8Scanner = matcher.activeScanner() as Utf8InputScanner
                 idx =
                     if (rareByteOffset >= 0)
                         utf8Scanner.indexOf(
-                            literalUtf8, failure, shifts, matcher.searchFrom, rareByteOffset
+                            literalUtf8!!, failure!!, shifts, matcher.searchFrom, rareByteOffset
                         )
                     else
-                        utf8Scanner.indexOf(literalUtf8, failure, shifts, matcher.searchFrom)
+                        utf8Scanner.indexOf(literalUtf8!!, failure!!, shifts, matcher.searchFrom)
                 matchLength = matchLengthBytes
-            } else if (matcher.text != null) {
+            } else if (matcherText != null) {
                 if (WorkCounterConfig.ENABLED) {
-                    WorkCounter.record(Math.max(0, matcher.text.length() - matcher.searchFrom).toLong())
+                    WorkCounter.record(Math.max(0, matcherText.length - matcher.searchFrom).toLong())
                 }
-                idx = matcher.text!!.indexOf(literal!!, matcher.searchFrom)
+                idx = matcherText.indexOf(literal!!, matcher.searchFrom)
                 matchLength = matchLengthChars
             } else {
                 return matcher.doFindCore(regionActive)
@@ -5103,31 +5112,33 @@ class Matcher : MatchResult {
                 return if (fullMatch) fallback.matches(matcher) else fallback.lookingAt(matcher)
             }
             matcher.capturesResolved = true
-            if (matcher.textScanner is StringRegionInputScanner) {
+            val matcherScanner = matcher.textScanner
+            val matcherText = matcher.text
+            if (matcherScanner is StringRegionInputScanner) {
                 matcher.diagnosticBoundary(MatchStrategy.LITERAL)
                 val matched =
-                    (!fullMatch || textScanner!!.length() == matchLengthChars)
-                            && textScanner.startsWith(literal, 0, foldCase)
+                    (!fullMatch || matcherScanner.length == matchLengthChars)
+                            && matcherScanner.startsWith(literal!!, 0, foldCase)
                 return if (matched)
                     matcher.applyGroupZeroMatchResult(0, matchLengthChars)
                 else
                     matcher.applyFailedMatchResult()
-            } else if (matcher.text != null) {
+            } else if (matcherText != null) {
                 matcher.diagnosticBoundary(MatchStrategy.LITERAL)
                 val matched: Boolean
                 if (foldCase) {
                     matched =
                         (if (fullMatch)
-                            matcher.text.length() == matchLengthChars
+                            matcherText.length == matchLengthChars
                         else
-                            matcher.text.length() >= matchLengthChars)
+                            matcherText.length >= matchLengthChars)
                                 && matcher.literalRegionMatches(literal!!, 0, matchLengthChars)
                 } else {
-                    matched = if (fullMatch) (matcher.text == literal) else matcher.text!!.startsWith(literal!!)
+                    matched = if (fullMatch) (matcherText == literal) else matcherText.startsWith(literal!!)
                 }
                 if (matched) {
                     matcher.applyFullMatchResult(
-                        intArrayOf(0, if (fullMatch) matcher.text.length() else matchLengthChars)
+                        intArrayOf(0, if (fullMatch) matcherText.length else matchLengthChars)
                     )
                 } else {
                     if (matcher.isPartialLiteralMatch(literal!!, 0)) {
@@ -5136,21 +5147,22 @@ class Matcher : MatchResult {
                 }
                 return matcher.hasMatch
             } else if (matcher.activeScanner() is Utf8InputScanner) {
+                val utf8Scanner = matcher.activeScanner() as Utf8InputScanner
                 matcher.diagnosticBoundary(MatchStrategy.LITERAL)
                 val matched: Boolean
                 if (literalUtf8 != null) {
                     matched =
                         (if (fullMatch)
-                            utf8Scanner.length() == matchLengthBytes
+                            utf8Scanner.length == matchLengthBytes
                         else
-                            utf8Scanner.length() >= matchLengthBytes)
+                            utf8Scanner.length >= matchLengthBytes)
                                 && utf8Scanner.startsWith(literalUtf8, 0)
                 } else {
-                    matched = literal!!.isEmpty() && (!fullMatch || utf8Scanner.length() == 0)
+                    matched = literal!!.isEmpty() && (!fullMatch || utf8Scanner.length == 0)
                 }
                 if (matched) {
                     matcher.applyFullMatchResult(
-                        intArrayOf(0, if (fullMatch) utf8Scanner.length() else matchLengthBytes)
+                        intArrayOf(0, if (fullMatch) utf8Scanner.length else matchLengthBytes)
                     )
                 } else {
                     matcher.applyFailedMatchResult()
@@ -5175,6 +5187,7 @@ class Matcher : MatchResult {
                 if (charClassMatch != null && greedy
                     && !regionActive && matcher.activeScanner() is Utf8InputScanner
                 ) {
+                    val scanner = matcher.activeScanner() as Utf8InputScanner
                     matcher.diagnosticBoundary(MatchStrategy.CHARACTER_CLASS)
                     return matcher.repeatedCharClassFindUtf8FastPath(
                         scanner, charClassMatch, matcher.searchFrom
@@ -5204,26 +5217,28 @@ class Matcher : MatchResult {
                     matcher.diagnosticBoundary(MatchStrategy.CHARACTER_CLASS)
                     return matcher.charClassMatchFastPath(charClassMatch)
                 }
-                if (matcher.textScanner is StringRegionInputScanner) {
+                val regionScanner = matcher.textScanner
+                if (regionScanner is StringRegionInputScanner) {
                     matcher.diagnosticBoundary(MatchStrategy.CHARACTER_CLASS)
-                    return if (textScanner.matchesCharClass(charClassMatch))
-                        matcher.applyGroupZeroMatchResult(0, textScanner!!.length())
+                    return if (regionScanner.matchesCharClass(charClassMatch))
+                        matcher.applyGroupZeroMatchResult(0, regionScanner.length)
                     else
                         matcher.applyFailedMatchResult()
                 }
-                if (matcher.textScanner is Utf8InputScanner) {
+                if (regionScanner is Utf8InputScanner) {
                     matcher.diagnosticBoundary(MatchStrategy.CHARACTER_CLASS)
-                    return matcher.charClassMatchUtf8FastPath(textScanner, charClassMatch)
+                    return matcher.charClassMatchUtf8FastPath(regionScanner, charClassMatch)
                 }
             }
             if (singleCharClass != null) {
                 matcher.diagnosticBoundary(MatchStrategy.CHARACTER_CLASS)
-                if (matcher.text != null) {
-                    val len: Int = matcher.text.length()
+                val matcherText = matcher.text
+                if (matcherText != null) {
+                    val len: Int = matcherText.length
                     if (len >= 1) {
-                        val c0: Char = matcher.text.charAt(0)
-                        if (len >= 2 && Character.isSurrogatePair(c0, matcher.text.charAt(1))) {
-                            val cp = matcher.text!!.codePointAt(0)
+                        val c0: Char = matcherText[0]
+                        if (len >= 2 && Character.isSurrogatePair(c0, matcherText[1])) {
+                            val cp = matcherText.codePointAt(0)
                             if ((!fullMatch || len == 2) && singleCharClass.contains(cp)) {
                                 return matcher.applyFullMatchResult(intArrayOf(0, 2))
                             }
@@ -5237,11 +5252,11 @@ class Matcher : MatchResult {
                     return matcher.applyFailedMatchResult()
                 } else {
                     val scanner = matcher.activeScanner()
-                    val len = scanner.length()
+                    val len = scanner.length
                     if (len > 0) {
                         val decoded = scanner.decodeForward(0)
-                        val cp: Int = InputScanner.Companion.codePoint(decoded)
-                        val nextPos: Int = InputScanner.Companion.position(decoded)
+                        val cp: Int = InputScanner.codePoint(decoded)
+                        val nextPos: Int = InputScanner.position(decoded)
                         if ((!fullMatch || len == nextPos) && singleCharClass.contains(cp)) {
                             return matcher.applyFullMatchResult(intArrayOf(0, nextPos))
                         }
@@ -5308,14 +5323,13 @@ class Matcher : MatchResult {
         // duplicate resolution is harmless. Volatile makes the cross-thread publication explicit.
         @Volatile
         private var resolved: PreparedMatchRunner? = null
-
-        override fun find(matcher: Matcher?, regionActive: Boolean): Boolean {
+        override fun find(matcher: Matcher, regionActive: Boolean): Boolean {
             return fallback.find(matcher, regionActive)
         }
 
         override fun matches(matcher: Matcher): Boolean {
             if (matcher.regionStart != 0 || matcher.regionEnd != matcher.activeScanner()
-                    .length() || matcher.transparentBounds
+                    .length || matcher.transparentBounds
                 || !matcher.anchoringBounds
             ) {
                 return matcher.matchesCore()
@@ -5330,20 +5344,20 @@ class Matcher : MatchResult {
             return runner.matches(matcher)
         }
 
-        override fun lookingAt(matcher: Matcher?): Boolean {
+        override fun lookingAt(matcher: Matcher): Boolean {
             return fallback.lookingAt(matcher)
         }
     }
 
     internal class ShiftDfaPreparedRunner(private val shiftDfa: ShiftDfa, private val fallback: PreparedMatchRunner) :
         PreparedMatchRunner {
-        override fun find(matcher: Matcher?, regionActive: Boolean): Boolean {
+        override fun find(matcher: Matcher, regionActive: Boolean): Boolean {
             return fallback.find(matcher, regionActive)
         }
 
         override fun matches(matcher: Matcher): Boolean {
             val scanner = matcher.activeScanner()
-            val len = scanner.length()
+            val len = scanner.length
             if (matcher.regionStart != 0 || matcher.regionEnd != len || matcher.transparentBounds
                 || !matcher.anchoringBounds
             ) {
@@ -5352,7 +5366,7 @@ class Matcher : MatchResult {
             matcher.capturesResolved = true
             val matched: Boolean
             if (matcher.text != null) {
-                matched = shiftDfa.matches(matcher.text, 0, len)
+                matched = shiftDfa.matches(matcher.text!!, 0, len)
             } else if (scanner is Utf8InputScanner) {
                 matched = shiftDfa.matches(scanner, 0, len)
             } else {
@@ -5365,7 +5379,7 @@ class Matcher : MatchResult {
             return matcher.applyFailedMatchResult()
         }
 
-        override fun lookingAt(matcher: Matcher?): Boolean {
+        override fun lookingAt(matcher: Matcher): Boolean {
             return fallback.lookingAt(matcher)
         }
     }
@@ -5373,7 +5387,7 @@ class Matcher : MatchResult {
     internal class OnePassAnchoredPreparedRunner(private val numCaptures: Int) : PreparedMatchRunner {
         override fun find(matcher: Matcher, regionActive: Boolean): Boolean {
             if (!matcher.parentPattern.canOnePassFind()
-                || matcher.activeScanner().length() > matcher.onePassTextLimit()
+                || matcher.activeScanner().length > matcher.onePassTextLimit()
             ) {
                 return matcher.doFindCore(regionActive)
             }
@@ -5386,11 +5400,11 @@ class Matcher : MatchResult {
             val result =
                 matcher
                     .parentPattern
-                    .onePass()
+                    .onePass()!!
                     .search(
                         matcher.activeScanner(),
                         0,
-                        matcher.activeScanner().length(),
+                        matcher.activeScanner().length,
                         false,
                         numCaptures,
                         matcher.groups
@@ -5402,7 +5416,7 @@ class Matcher : MatchResult {
         }
 
         override fun matches(matcher: Matcher): Boolean {
-            if (matcher.activeScanner().length() > matcher.onePassTextLimit()) {
+            if (matcher.activeScanner().length > matcher.onePassTextLimit()) {
                 return matcher.matchesCore()
             }
             matcher.capturesResolved = true
@@ -5415,9 +5429,9 @@ class Matcher : MatchResult {
                 matcher.diagnosticBoundary(MatchStrategy.ONE_PASS)
                 val result =
                     if (matcher.text != null)
-                        onePass.search(matcher.text, true, numCaptures, matcher.groups)
+                        onePass!!.search(matcher.text!!, true, numCaptures, matcher.groups)
                     else
-                        onePass.search(matcher.activeScanner(), true, numCaptures, matcher.groups)
+                        onePass!!.search(matcher.activeScanner(), true, numCaptures, matcher.groups)
                 if (result != null && pattern.numGroups() > 0) {
                     matcher.diagnosticCapture(MatchStrategy.ONE_PASS)
                 }
@@ -5427,7 +5441,7 @@ class Matcher : MatchResult {
         }
 
         override fun lookingAt(matcher: Matcher): Boolean {
-            if (matcher.activeScanner().length() > matcher.onePassTextLimit()) {
+            if (matcher.activeScanner().length > matcher.onePassTextLimit()) {
                 return matcher.lookingAtCore()
             }
             matcher.capturesResolved = true
@@ -5440,9 +5454,9 @@ class Matcher : MatchResult {
                 val onePass = pattern.onePass()
                 val result =
                     if (matcher.text != null)
-                        onePass.search(matcher.text, false, numCaptures, matcher.groups)
+                        onePass!!.search(matcher.text!!, false, numCaptures, matcher.groups)
                     else
-                        onePass.search(matcher.activeScanner(), false, numCaptures, matcher.groups)
+                        onePass!!.search(matcher.activeScanner(), false, numCaptures, matcher.groups)
                 if (result != null && pattern.numGroups() > 0) {
                     matcher.diagnosticCapture(MatchStrategy.ONE_PASS)
                 }
@@ -5505,8 +5519,7 @@ class Matcher : MatchResult {
          * Returns the OnePass text limit for standard Matcher operations based on whether the pattern
          * declares capturing groups.
          */
-        @JvmOverloads
-        fun onePassTextLimit(requiresInnerCaptures: Boolean = parentPattern.numGroups() > 0): Int {
+        fun onePassTextLimit(requiresInnerCaptures: Boolean): Int {
             return if (requiresInnerCaptures)
                 ONEPASS_TEXT_LIMIT_WITH_CAPTURES
             else
@@ -5542,10 +5555,10 @@ class Matcher : MatchResult {
             if (cs is String) {
                 return cs
             }
-            val len: Int = cs.length()
+            val len: Int = cs.length
             val chars = CharArray(len)
             for (i in 0..<len) {
-                chars[i] = cs.charAt(i)
+                chars[i] = cs[i]
             }
             return String(chars)
         }
@@ -5563,7 +5576,7 @@ class Matcher : MatchResult {
         /** Binary search through sorted [lo, hi] ranges to check if `cp` is in any range.  */
         fun binarySearchRanges(ranges: IntArray, cp: Int): Boolean {
             var lo = 0
-            var hi: Int = ranges.length / 2 - 1
+            var hi: Int = ranges.size / 2 - 1
             while (lo <= hi) {
                 val mid = (lo + hi) ushr 1
                 val rangeLo = ranges[mid * 2]
@@ -5585,8 +5598,8 @@ class Matcher : MatchResult {
          * the replacement string directly without per-character scanning.
          */
         private fun isSimpleReplacement(replacement: String): Boolean {
-            for (i in 0..<replacement.length()) {
-                val c: Char = replacement.charAt(i)
+            for (i in 0..<replacement.length) {
+                val c: Char = replacement[i]
                 if (c == '$' || c == '\\') {
                     return false
                 }
@@ -5604,22 +5617,22 @@ class Matcher : MatchResult {
          * @return an array of segments representing the compiled template
          * @throws IllegalArgumentException if the replacement string is malformed
          */
-        fun compileReplacementTemplate(replacement: String, maxGroup: Int): Array<ReplacementSegment> {
+        internal fun compileReplacementTemplate(replacement: String, maxGroup: Int): Array<ReplacementSegment> {
             // Fast path: no special characters → single literal segment.
             if (isSimpleReplacement(replacement)) {
                 return arrayOf<ReplacementSegment>(ReplacementSegment.Literal(replacement))
             }
 
-            val segments: MutableList<ReplacementSegment?> = ArrayList<ReplacementSegment?>()
+            val segments: MutableList<ReplacementSegment> = ArrayList<ReplacementSegment>()
             val literal = StringBuilder()
             var i = 0
 
-            while (i < replacement.length()) {
-                val c: Char = replacement.charAt(i)
+            while (i < replacement.length) {
+                val c: Char = replacement[i]
                 if (c == '\\') {
                     i++
-                    require(i < replacement.length()) { "Trailing backslash in replacement string" }
-                    literal.append(replacement.charAt(i))
+                    require(i < replacement.length) { "Trailing backslash in replacement string" }
+                    literal.append(replacement[i])
                     i++
                 } else if (c == '$') {
                     // Flush accumulated literal text.
@@ -5628,18 +5641,18 @@ class Matcher : MatchResult {
                         literal.setLength(0)
                     }
                     i++
-                    require(i < replacement.length()) { "Trailing dollar sign in replacement string" }
-                    if (replacement.charAt(i) == '{') {
+                    require(i < replacement.length) { "Trailing dollar sign in replacement string" }
+                    if (replacement[i] == '{') {
                         // Named group reference: ${name}
                         i++
                         val nameStart = i
-                        while (i < replacement.length() && replacement.charAt(i) != '}') {
+                        while (i < replacement.length && replacement[i] != '}') {
                             i++
                         }
-                        require(i < replacement.length()) { "Missing closing '}' in replacement string" }
+                        require(i < replacement.length) { "Missing closing '}' in replacement string" }
                         segments.add(ReplacementSegment.NamedGroupRef(replacement.substring(nameStart, i)))
                         i++ // skip '}'
-                    } else if (isAsciiDigit(replacement.charAt(i))) {
+                    } else if (isAsciiDigit(replacement[i])) {
                         // Numeric group reference: $0, $1, $12, etc.
                         val groupRef: NumericGroupReference = parseNumericGroupReference(replacement, i, maxGroup)
                         segments.add(ReplacementSegment.GroupRef(groupRef.groupNum))
@@ -5656,7 +5669,7 @@ class Matcher : MatchResult {
             if (!literal.isEmpty()) {
                 segments.add(ReplacementSegment.Literal(literal.toString()))
             }
-            return segments.toArray<ReplacementSegment?>(arrayOfNulls<ReplacementSegment>(0))
+            return segments.toTypedArray()
         }
 
         /**
@@ -5671,10 +5684,10 @@ class Matcher : MatchResult {
         private fun parseNumericGroupReference(
             replacement: String, digitStart: Int, maxGroup: Int
         ): NumericGroupReference {
-            var groupNum = replacement.charAt(digitStart).code - '0'.code
+            var groupNum = replacement[digitStart].code - '0'.code
             var i = digitStart + 1
-            while (i < replacement.length() && isAsciiDigit(replacement.charAt(i))) {
-                val nextGroupNum = groupNum * 10 + (replacement.charAt(i).code - '0'.code)
+            while (i < replacement.length && isAsciiDigit(replacement[i])) {
+                val nextGroupNum = groupNum * 10 + (replacement[i].code - '0'.code)
                 if (nextGroupNum > maxGroup) {
                     break
                 }
@@ -5721,23 +5734,23 @@ class Matcher : MatchResult {
         }
 
         private fun isBoundaryWordChar(cp: Int, unicodeWordBoundary: Boolean): Boolean {
-            return if (unicodeWordBoundary) Nfa.Companion.isUnicodeWordChar(cp) else Nfa.Companion.isWordChar(cp)
+            return if (unicodeWordBoundary) Nfa.isUnicodeWordChar(cp) else Nfa.isWordChar(cp)
         }
 
         /** ASCII case-insensitive indexOf for Java's default CASE_INSENSITIVE semantics.  */
         fun indexOfIgnoreCase(text: String, prefix: String, fromIndex: Int): Int {
-            val prefixLen: Int = prefix.length()
+            val prefixLen: Int = prefix.length
             if (prefixLen == 0) {
-                return Math.min(Math.max(0, fromIndex), text.length())
+                return Math.min(Math.max(0, fromIndex), text.length)
             }
             if (prefixLen == 1) {
                 return if (Ascii.isAscii(prefix))
-                    Ascii.indexOfIgnoreCase(text, prefix.charAt(0), fromIndex)
+                    Ascii.indexOfIgnoreCase(text, prefix[0], fromIndex)
                 else
                     Utf16.indexOfUnicodeIgnoreCase(text, prefix, fromIndex)
             }
             val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, prefixLen, true)
-            val anchor: Char = prefix.charAt(anchorOffset)
+            val anchor: Char = prefix[anchorOffset]
             val low = Ascii.toLowerCase(anchor)
             val high = Ascii.toUpperCase(anchor)
             return indexOfIgnoreCase(text, prefix, anchorOffset, low, high, fromIndex)
@@ -5747,11 +5760,11 @@ class Matcher : MatchResult {
             text: String, prefix: String, anchorOffset: Int, low: Char, high: Char, fromIndex: Int
         ): Int {
             val classHashChain: ClassHashChain? =
-                if (prefix.length() >= 4) ClassHashChain.Companion.compileCaseInsensitive(prefix) else null
+                if (prefix.length >= 4) ClassHashChain.compileCaseInsensitive(prefix) else null
             return indexOfIgnoreCase(text, prefix, anchorOffset, low, high, classHashChain, fromIndex)
         }
 
-        fun indexOfIgnoreCase(
+        internal fun indexOfIgnoreCase(
             text: String,
             prefix: String,
             anchorOffset: Int,
@@ -5760,10 +5773,10 @@ class Matcher : MatchResult {
             classHashChain: ClassHashChain?,
             fromIndex: Int
         ): Int {
-            val prefixLen: Int = prefix.length()
+            val prefixLen: Int = prefix.length
             when (prefixLen) {
                 0 -> {
-                    return Math.min(Math.max(0, fromIndex), text.length())
+                    return Math.min(Math.max(0, fromIndex), text.length)
                 }
 
                 1 -> {
@@ -5775,7 +5788,7 @@ class Matcher : MatchResult {
 
                 else -> {}
             }
-            val length: Int = text.length()
+            val length: Int = text.length
             var pos = Math.max(0, fromIndex)
             val isAsciiPrefix = Ascii.isAscii(prefix)
             if (!isAsciiPrefix) {
@@ -5800,9 +5813,9 @@ class Matcher : MatchResult {
                 val scalarLimit = Math.min(length - prefixLen + 1, pos + 32)
                 while (pos < scalarLimit) {
                     if (WorkCounterConfig.ENABLED) {
-                        record()
+                        WorkCounter.record()
                     }
-                    val c: Char = text.charAt(pos + anchorOffset)
+                    val c: Char = text[pos + anchorOffset]
                     if (if (hasHigh) (c.code or 0x20) == low.code else c == low) {
                         if (classHashChain != null) {
                             val shift = classHashChain.shiftAt(text, pos)
@@ -5853,7 +5866,7 @@ class Matcher : MatchResult {
                     nextHigh = -1
                 }
                 if (hasLow && nextLow < 0) {
-                    nextLow = text.indexOf(low.code, searchFrom)
+                    nextLow = text.indexOf(low, searchFrom)
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record((if (nextLow < 0) length - searchFrom else nextLow - searchFrom + 1).toLong())
                     }
@@ -5863,7 +5876,7 @@ class Matcher : MatchResult {
                 }
 
                 if (hasHigh && nextHigh < 0 && nextLow != searchFrom) {
-                    nextHigh = text.indexOf(high.code, searchFrom)
+                    nextHigh = text.indexOf(high, searchFrom)
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record((if (nextHigh < 0) length - searchFrom else nextHigh - searchFrom + 1).toLong())
                     }
@@ -5928,8 +5941,9 @@ class Matcher : MatchResult {
          * @param s the string to be literalized
          * @return a literal string replacement
          */
-        fun quoteReplacement(s: String): String? {
-            return Matcher.quoteReplacement(s)
+        @JvmStatic
+        fun quoteReplacement(s: String): String {
+            return java.util.regex.Matcher.quoteReplacement(s)
         }
 
         /** Marks that [.findNextMatchPacked] has not yet probed from the input end.  */

@@ -37,7 +37,7 @@ internal class FuzzFindingTest {
             Files.list(directory).use { files ->
                 val paths = files.toList()
                 Assertions.assertThat<Path>(paths).hasSize(1)
-                Assertions.assertThat(Files.readString(paths.getFirst()))
+                Assertions.assertThat(Files.readString(paths.first()))
                     .contains("\"history\":\"reset,find\"", "\"jdk\":\"false\"")
             }
         } finally {

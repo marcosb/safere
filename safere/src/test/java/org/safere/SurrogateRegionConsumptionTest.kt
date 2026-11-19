@@ -20,7 +20,7 @@ internal class SurrogateRegionConsumptionTest {
         val start: Int,
         val end: Int,
         val expected: Boolean
-    ) {
+    )      {
         override fun toString(): String {
             return regex + " on " + input!!.length + " code units, region [" + start + "," + end + ")"
         }

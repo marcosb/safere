@@ -13,10 +13,7 @@ import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.EnumSource
 import org.openjdk.jmh.infra.Blackhole
 import org.safere.benchmark.DeclarativeBenchmarkPlan.*
-import org.safere.benchmark.RegexEngineVariant.CompiledRegex
-import org.safere.benchmark.RegexEngineVariant.MatchCursor
-import org.safere.benchmark.RegexEngineVariant.RegexInput
-import org.safere.benchmark.RegexEngineVariant.StringRegexInput
+import org.safere.benchmark.RegexEngineVariant.*
 import java.nio.charset.StandardCharsets
 import java.util.List
 
@@ -25,8 +22,8 @@ internal class BenchmarkOperationTest {
     fun utf8CaptureTextDecodesNativeBoundsIncludingBorrowedViewOffsets() {
         val storage = "!!é😀 tail??".toByteArray(StandardCharsets.UTF_8)
         val input: RegexInput =
-            RegexEngineVariant.Companion.utf8Input(storage, 2, storage.size - 4)
-        RegexEngineVariant.SAFERE_UTF8.compile("(é)(😀)(x)?()").use { pattern ->
+            RegexEngineVariant.utf8Input(storage, 2, storage.size - 4)
+        SAFERE_UTF8.compile("(é)(😀)(x)?()").use { pattern ->
             val cursor = pattern.matcher(input)
             Assertions.assertThatThrownBy(ThrowingCallable { cursor.group(1) })
                 .isInstanceOf(IllegalStateException::class.java)
@@ -50,7 +47,7 @@ internal class BenchmarkOperationTest {
     @EnumSource(value = RegexEngineVariant::class, names = ["SAFERE_STRING", "SAFERE_UTF8", "JDK_STRING"])
     fun tokenizerAdvancesInNativeCoordinatesAndCanReuseItsMatcher(variant: RegexEngineVariant) {
         val input: RegexInput =
-            if (variant === RegexEngineVariant.SAFERE_UTF8)
+            if (variant === SAFERE_UTF8)
                 utf8Input(
                     "é 12 é ".toByteArray(StandardCharsets.UTF_8)
                 )
@@ -164,14 +161,14 @@ internal class BenchmarkOperationTest {
                 )
         val task =
             operation.bind(
-                RegexEngineVariant.SAFERE_STRING,
+                SAFERE_STRING,
                 mutableListOf<String?>("needle"),
                 List.of<CompiledRegex?>(pattern),
                 List.of<RegexInput?>(input),
                 IntArray(0),
                 null,
                 0,
-                DeclarativeBenchmarkPlan.MatcherLifecycle(reuse, List.of<LifecycleStep?>(step)),
+                MatcherLifecycle(reuse, List.of<LifecycleStep?>(step)),
                 null,
                 0,
                 0,

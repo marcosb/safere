@@ -6,18 +6,16 @@ package org.safere
 
 import java.nio.charset.StandardCharsets
 
-internal class ArrayUtf8Input(bytes: ByteArray?, offset: Int, length: Int, validated: Boolean) : Utf8Input {
-    private val scanner: Utf8InputScanner
-    private val validated: Boolean
+internal class ArrayUtf8Input(
+    bytes: ByteArray,
+    offset: Int,
+    length: Int,
+    private val validated: Boolean,
+) : Utf8Input {
+    private val scanner: Utf8InputScanner = Utf8InputScanner(bytes, offset, length)
 
-    init {
-        scanner = Utf8InputScanner(bytes, offset, length)
-        this.validated = validated
-    }
-
-    override fun length(): Int {
-        return scanner.length()
-    }
+    override val length: Int
+        get() = scanner.length
 
     fun scanner(): Utf8InputScanner {
         return scanner
@@ -28,13 +26,13 @@ internal class ArrayUtf8Input(bytes: ByteArray?, offset: Int, length: Int, valid
     }
 
     fun decode(): String {
-        return String(scanner.bytes(), scanner.offset(), scanner.length(), StandardCharsets.UTF_8)
+        return String(scanner.bytes()!!, scanner.offset(), scanner.length, StandardCharsets.UTF_8)
     }
 
     fun appendRange(sink: Utf8Sink, start: Int, end: Int) {
-        if (start < 0 || end < start || end > length()) {
+        if (start < 0 || end < start || end > length) {
             throw IndexOutOfBoundsException("start=" + start + ", end=" + end)
         }
-        sink.append(scanner.bytes(), scanner.offset() + start, end - start)
+        sink.append(scanner.bytes()!!, scanner.offset() + start, end - start)
     }
 }

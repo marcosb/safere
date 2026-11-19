@@ -71,7 +71,7 @@ internal class FixedOffsetClassAccelerationTest {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat<StringStartAccelerator?>(pattern.stringStartAccelerator()).`as`(regex).isNull()
             Assertions.assertThat<Utf8StartAccelerator?>(pattern.utf8StartAccelerator()).`as`(regex).isNull()
-            Companion.assertFindSequence(regex!!, " 1234 5678 ".repeat(200), false)
+            assertFindSequence(regex!!, " 1234 5678 ".repeat(200), false)
         }
     }
 
@@ -82,7 +82,7 @@ internal class FixedOffsetClassAccelerationTest {
         for (prefix in mutableListOf<String?>(" [é😀]", " [aé]", " [a-zé]", " [é😀]{2}", " (?:[aé]{2})")) {
             val regex = prefix + "([0-9]+)"
             for (input in mutableListOf<String?>(" 😀1234 é5678", " aa1234 éé5678", " 😀😀1234 a😀5678")) {
-                Companion.assertFindSequence(regex, input!!, false)
+                assertFindSequence(regex, input!!, false)
                 assertFindSequence(regex, "noise é😀".repeat(100) + input, true)
             }
             Assertions.assertThat<StartPlan?>(Pattern.compile(regex).startPlan())
@@ -96,7 +96,7 @@ internal class FixedOffsetClassAccelerationTest {
         for (prefix in mutableListOf<String?>(" .", " .{2}", " \\X")) {
             val regex = prefix + "([0-9]+)"
             for (input in mutableListOf<String?>(" x1234", " 😀1234", " aé1234", " 😀😀1234", " 👩‍🔬1234")) {
-                Companion.assertFindSequence(regex, input!!, false)
+                assertFindSequence(regex, input!!, false)
             }
             Assertions.assertThat<StartPlan?>(Pattern.compile(regex).startPlan())
                 .`as`(regex)
@@ -130,7 +130,7 @@ internal class FixedOffsetClassAccelerationTest {
                 )) {
                     val input = noise + suffix
                     for (region in mutableListOf<Boolean?>(false, true)) {
-                        Companion.assertFindSequence(regex!!, input, region!!)
+                        assertFindSequence(regex!!, input, region!!)
                     }
                 }
             }
@@ -141,7 +141,7 @@ internal class FixedOffsetClassAccelerationTest {
     fun denseFalseCandidatesAndFailedSuffixesPreserveTheLeftmostMatch() {
         for (regex in mutableListOf<String?>(" ([0-9]{4,})", "[a-z]{2}([0-9]+)Z")) {
             for (unit in mutableListOf<String?>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
-                Companion.assertFindSequence(regex!!, unit!!.repeat(2000) + " aa1234Z 56789", false)
+                assertFindSequence(regex!!, unit!!.repeat(2000) + " aa1234Z 56789", false)
             }
         }
     }
@@ -156,8 +156,8 @@ internal class FixedOffsetClassAccelerationTest {
         )) {
             val digits = "1234567890".repeat(2000)
             for (tail in List.of<String?>("", " x", " aa1234Z", "   A1234Z", " ".repeat(32) + "12345")) {
-                Companion.assertFindSequence(regex!!, digits + tail, false)
-                Companion.assertFindSequence(regex, "é😀" + digits + tail, true)
+                assertFindSequence(regex!!, digits + tail, false)
+                assertFindSequence(regex, "é😀" + digits + tail, true)
             }
         }
     }

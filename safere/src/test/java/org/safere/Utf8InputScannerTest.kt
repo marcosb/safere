@@ -13,18 +13,9 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
-import kotlin.Any
-import kotlin.ByteArray
 import kotlin.IllegalArgumentException
 import kotlin.IndexOutOfBoundsException
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Long
-import kotlin.String
 import kotlin.arrayOf
-import kotlin.byteArrayOf
-import kotlin.code
-import kotlin.intArrayOf
 import kotlin.math.max
 import kotlin.math.min
 
@@ -112,11 +103,11 @@ internal class Utf8InputScannerTest {
         storage[storage.size - 1] = 0x80.toByte()
         val scanner = Utf8InputScanner(storage, 2, logical.size)
 
-        Assertions.assertThat(scanner.length()).isEqualTo(logical.size)
+        Assertions.assertThat(scanner.length).isEqualTo(logical.size)
         Assertions.assertThat<Int?>(traceForward(scanner)).containsExactly('a'.code, 'é'.code, 0x1F600, 'z'.code)
         Assertions.assertThat<Int?>(traceBackward(scanner)).containsExactly('z'.code, 0x1F600, 'é'.code, 'a'.code)
-        Assertions.assertThat(scanner.decodeForward(scanner.length()))
-            .isEqualTo(InputScanner.decoded(-1, scanner.length()))
+        Assertions.assertThat(scanner.decodeForward(scanner.length))
+            .isEqualTo(InputScanner.decoded(-1, scanner.length))
         Assertions.assertThat(scanner.decodeBackward(0)).isEqualTo(InputScanner.decoded(-1, 0))
     }
 
@@ -157,7 +148,7 @@ internal class Utf8InputScannerTest {
                     storage[offset + expected] = matchingByte.toByte()
                     val scanner = Utf8InputScanner(storage, offset, 40)
 
-                    Assertions.assertThat(scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, 0, scanner.length()))
+                    Assertions.assertThat(scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, 0, scanner.length))
                         .`as`("ranges %s, offset %s, position %s", ranges.contentToString(), offset, expected)
                         .isEqualTo(expected)
                 }
@@ -199,12 +190,12 @@ internal class Utf8InputScannerTest {
                     storage[offset + expected] = ranges[ranges.size - 1].toByte()
                     val scanner = Utf8InputScanner(storage, offset, length)
 
-                    Assertions.assertThat(scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, 0, scanner.length()))
+                    Assertions.assertThat(scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, 0, scanner.length))
                         .`as`("ranges %s, offset %s, position %s", ranges.contentToString(), offset, expected)
                         .isEqualTo(expected)
                     Assertions.assertThat(
                         scanner.indexOfCodePointClass(
-                            ranges, bitmap0, bitmap1, expected + 1, scanner.length()
+                            ranges, bitmap0, bitmap1, expected + 1, scanner.length
                         )
                     )
                         .`as`("absent tail for ranges %s, offset %s", ranges.contentToString(), offset)
@@ -266,11 +257,11 @@ internal class Utf8InputScannerTest {
 
         val scanner = Utf8InputScanner(bytes)
 
-        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, -4, scanner.length()))
+        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, -4, scanner.length))
             .isEqualTo(0)
-        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, 1, scanner.length()))
+        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, 1, scanner.length))
             .isEqualTo(bytes.size - 1)
-        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, bytes.size, scanner.length()))
+        Assertions.assertThat(scanner.indexOfCodePointClass(digits, bitmap0, 0, bytes.size, scanner.length))
             .isEqualTo(-1)
     }
 
@@ -295,7 +286,7 @@ internal class Utf8InputScannerTest {
 
                         Assertions.assertThat(
                             scanner.indexOfCodePointClass(
-                                ranges, bitmap0, bitmap1, start, scanner.length()
+                                ranges, bitmap0, bitmap1, start, scanner.length
                             )
                         )
                             .`as`("offset %s, range [%s, %s], start %s", offset, low, high, start)
@@ -351,7 +342,7 @@ internal class Utf8InputScannerTest {
             Assertions.assertThat(matcher.find()).`as`("%s in %s", literal, text).isEqualTo(expected >= 0)
             if (expected >= 0) {
                 Assertions.assertThat(matcher.start()).isEqualTo(expected)
-                Assertions.assertThat(matcher.end()).isEqualTo(expected + literal.length)
+                Assertions.assertThat(matcher.end()).isEqualTo(expected + literal.size)
             }
         }
     }
@@ -698,13 +689,13 @@ internal class Utf8InputScannerTest {
 
         // A window that starts after the first sequence's lead byte does not see that sequence.
         val straddlesStart = Utf8InputScanner(bytes, 1, bytes.size - 1)
-        Assertions.assertThat(straddlesStart.indexOfUtf8Sequence(sequence, 0, straddlesStart.length()))
+        Assertions.assertThat(straddlesStart.indexOfUtf8Sequence(sequence, 0, straddlesStart.length))
             .isEqualTo(4)
 
         // A window that ends inside the last sequence does not see that sequence.
         val straddlesEnd = Utf8InputScanner(bytes, 3, bytes.size - 4)
-        Assertions.assertThat(straddlesEnd.indexOfUtf8Sequence(sequence, 0, straddlesEnd.length())).isEqualTo(2)
-        Assertions.assertThat(straddlesEnd.indexOfUtf8Sequence(sequence, 3, straddlesEnd.length())).isEqualTo(-1)
+        Assertions.assertThat(straddlesEnd.indexOfUtf8Sequence(sequence, 0, straddlesEnd.length)).isEqualTo(2)
+        Assertions.assertThat(straddlesEnd.indexOfUtf8Sequence(sequence, 3, straddlesEnd.length)).isEqualTo(-1)
 
         // The limit excludes a sequence that would end past it.
         val whole = Utf8InputScanner(bytes, 0, bytes.size)
@@ -730,7 +721,7 @@ internal class Utf8InputScannerTest {
         // Slice bounds: a sequence starting before start or ending past limit is ignored.
         val bytes = "\uFF3Dab\uFF3Dcd]".toByteArray(StandardCharsets.UTF_8)
         val straddlesStart = Utf8InputScanner(bytes, 1, bytes.size - 1)
-        Assertions.assertThat(straddlesStart.indexOfMixedPair(']'.code, sequence, 0, straddlesStart.length()))
+        Assertions.assertThat(straddlesStart.indexOfMixedPair(']'.code, sequence, 0, straddlesStart.length))
             .isEqualTo(4)
         val whole = Utf8InputScanner(bytes, 0, bytes.size)
         Assertions.assertThat(whole.indexOfMixedPair(']'.code, sequence, 1, 7)).isEqualTo(-1)
@@ -857,7 +848,7 @@ internal class Utf8InputScannerTest {
         private fun traceForward(scanner: Utf8InputScanner): MutableList<Int?> {
             val result = ArrayList<Int?>()
             var position = 0
-            while (position < scanner.length()) {
+            while (position < scanner.length) {
                 val decoded = scanner.decodeForward(position)
                 result.add(InputScanner.codePoint(decoded))
                 position = InputScanner.position(decoded)
@@ -867,7 +858,7 @@ internal class Utf8InputScannerTest {
 
         private fun traceBackward(scanner: Utf8InputScanner): MutableList<Int?> {
             val result = ArrayList<Int?>()
-            var position = scanner.length()
+            var position = scanner.length
             while (position > 0) {
                 val decoded = scanner.decodeBackward(position)
                 result.add(InputScanner.codePoint(decoded))

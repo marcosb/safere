@@ -6,7 +6,7 @@ package org.safere
 
 /** Experimental scan operations implemented with the incubating Vector API.  */
 internal class IncubatorVectorScanProvider : VectorScanProvider {
-    override fun minimumWindowLength(kind: ScanKind): Int {
+    override fun minimumWindowLength(kind: ScanKind?): Int {
         return when (kind) {
             ScanKind.BYTE -> MINIMUM_BYTE_WINDOW_LENGTH
             ScanKind.PAIR -> MINIMUM_PAIR_WINDOW_LENGTH
@@ -15,6 +15,8 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
             ScanKind.IGNORE_CASE -> MINIMUM_IGNORE_CASE_WINDOW_LENGTH
             ScanKind.TEDDY -> MINIMUM_TEDDY_WINDOW_LENGTH
             ScanKind.MULTI_LITERAL -> MINIMUM_MULTI_LITERAL_WINDOW_LENGTH
+            null -> 0
+            else -> 0
         }
     }
 
@@ -25,32 +27,32 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
     }
 
     override fun indexOfByte(bytes: ByteArray?, offset: Int, length: Int, target: Byte, start: Int): Int {
-        return ByteVectorScan.indexOfByte(bytes, offset, length, target, start)
+        return ByteVectorScan.indexOfByte(bytes!!, offset, length, target, start)
     }
 
     override fun indexOfAsciiClass(bytes: ByteArray?, offset: Int, length: Int, ranges: IntArray?, start: Int): Int {
-        return ByteVectorScan.indexOfAsciiClass(bytes, offset, length, ranges, start)
+        return ByteVectorScan.indexOfAsciiClass(bytes!!, offset, length, ranges!!, start)
     }
 
     override fun indexOfBytePair(bytes: ByteArray?, offset: Int, length: Int, b0: Byte, b1: Byte, start: Int): Int {
-        return ByteVectorScan.indexOfBytePair(bytes, offset, length, b0, b1, start)
+        return ByteVectorScan.indexOfBytePair(bytes!!, offset, length, b0, b1, start)
     }
 
     override fun indexOfByteTriple(
         bytes: ByteArray?, offset: Int, length: Int, b0: Byte, b1: Byte, b2: Byte, start: Int
     ): Int {
-        return ByteVectorScan.indexOfByteTriple(bytes, offset, length, b0, b1, b2, start)
+        return ByteVectorScan.indexOfByteTriple(bytes!!, offset, length, b0, b1, b2, start)
     }
 
-    override fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: TeddyModel, start: Int): Int {
-        return TeddyVectorScan.indexOfTeddyUtf8(bytes, offset, length, model, start)
+    override fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: TeddyModel?, start: Int): Int {
+        return TeddyVectorScan.indexOfTeddyUtf8(bytes!!, offset, length, model!!, start)
     }
 
     override fun indexOfMultiLiteral(
         bytes: ByteArray?,
         offset: Int,
         length: Int,
-        literals: Array<String?>,
+        literals: Array<String?>?,
         anchorChars: CharArray?,
         anchorOffsets: IntArray?,
         anchorRanges: IntArray?,
@@ -59,13 +61,13 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
         start: Int
     ): Int {
         return ByteVectorScan.indexOfMultiLiteral(
-            bytes,
+            bytes!!,
             offset,
             length,
-            literals,
-            anchorChars,
-            anchorOffsets,
-            anchorRanges,
+            literals!!.requireNoNulls(),
+            anchorChars!!,
+            anchorOffsets!!,
+            anchorRanges!!,
             minLength,
             teddyModel,
             start

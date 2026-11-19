@@ -15,27 +15,15 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.List
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
-import kotlin.ByteArray
-import kotlin.Char
-import kotlin.CharSequence
-import kotlin.IllegalArgumentException
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.UnsupportedOperationException
-import kotlin.arrayOf
-import kotlin.collections.ArrayList
-import kotlin.collections.MutableList
-import kotlin.collections.isEmpty
+
+()
 import kotlin.collections.mutableListOf
-import kotlin.intArrayOf
-import kotlin.text.StringBuilder
-import kotlin.text.isEmpty
+()
 import kotlin.text.repeat
 import kotlin.text.toByteArray
 import kotlin.text.trim
@@ -468,7 +456,7 @@ internal class PatternTest {
         @Test
         fun splitWithDelimitersLargePositiveLimit() {
             val p = org.safere.Pattern.compile(",")
-            val parts = p.splitWithDelimiters("a,b", Int.Companion.MAX_VALUE)
+            val parts = p.splitWithDelimiters("a,b", Int.MAX_VALUE)
             Assertions.assertThat<String?>(parts).containsExactly("a", ",", "b")
         }
 
@@ -739,17 +727,17 @@ internal class PatternTest {
             val safeMatcher = safePattern.matcher(text)
             val jdkMatcher = jdkPattern.matcher(text)
 
-            val safeMatches: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+            val safeMatches: MutableList<String?> = ArrayList<String?>()
             while (safeMatcher.find()) {
                 safeMatches.add("[" + safeMatcher.start() + "," + safeMatcher.end() + ")")
             }
 
-            val jdkMatches: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+            val jdkMatches: MutableList<String?> = ArrayList<String?>()
             while (jdkMatcher.find()) {
                 jdkMatches.add("[" + jdkMatcher.start() + "," + jdkMatcher.end() + ")")
             }
 
-            Assertions.assertThat<kotlin.String?>(safeMatches).isEqualTo(jdkMatches).containsExactly("[0,0)", "[1,2)")
+            Assertions.assertThat<String?>(safeMatches).isEqualTo(jdkMatches).containsExactly("[0,0)", "[1,2)")
         }
 
         @Test
@@ -918,14 +906,14 @@ internal class PatternTest {
             strings = ["", ".", "^.$", "a", "a*", "a+", "a?", "a|b", "a*|b*", "(a*|b)(c*|d)", "[a-z]", "[a-abc-c\\-\\]\\[]", "[a-z]+", "[abc]", "[^1234]", "[^\n]", "..|.#|..", "\\!\\\\", "abc]", "a??"
             ]
         )
-        fun validPatternsCompile(pattern: kotlin.String?) {
+        fun validPatternsCompile(pattern: String?) {
             org.safere.Pattern.compile(pattern) // should not throw
         }
 
         /** Patterns that must fail to compile.  */
         @ParameterizedTest(name = "compile(\"{0}\") throws")
         @ValueSource(strings = ["*", "+", "?", "(abc", "x[a-z", "[z-a]", "abc\\"])
-        fun invalidPatternsThrow(pattern: kotlin.String?) {
+        fun invalidPatternsThrow(pattern: String?) {
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(pattern) }).isInstanceOf(
                 PatternSyntaxException::class.java
             )
@@ -944,7 +932,7 @@ internal class PatternTest {
     internal inner class QuoteRoundTrip {
         @ParameterizedTest(name = "quote(\"{0}\") replaceAll round-trip")
         @MethodSource("quoteMetaCases")
-        fun quoteAndReplace(metachar: kotlin.String, source: kotlin.String?, expected: kotlin.String?) {
+        fun quoteAndReplace(metachar: String, source: String?, expected: String?) {
             val quoted = org.safere.Pattern.quote(metachar)
             val p = org.safere.Pattern.compile(quoted)
             val replaced = p.matcher(source).replaceAll("xyz")
@@ -1059,7 +1047,7 @@ internal class PatternTest {
         @ParameterizedTest
         @ValueSource(strings = ["\\400", "\\777", "\\2222*", "3*\\2222*"])
         @DisplayName("non-zero numeric escapes are rejected as backreferences")
-        fun nonZeroNumericEscapesRejectedAsBackreferences(regex: kotlin.String?) {
+        fun nonZeroNumericEscapesRejectedAsBackreferences(regex: String?) {
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) }).isInstanceOf(
                 PatternSyntaxException::class.java
             )
@@ -1166,7 +1154,7 @@ internal class PatternTest {
         @Test
         @DisplayName("case-insensitive end-anchored suffix rejects mismatched inputs")
         fun caseInsensitiveEndAnchoredSuffixRejectsMismatchedInputs() {
-            for (regex in mutableListOf<kotlin.String?>("(?i).*\\.json$", ".*(?i:\\.json)$", "(?i).*\\.json\\z")) {
+            for (regex in mutableListOf<String?>("(?i).*\\.json$", ".*(?i:\\.json)$", "(?i).*\\.json\\z")) {
                 val p = org.safere.Pattern.compile(regex)
 
                 Assertions.assertThat(p.matcher("config.json").matches()).isTrue()
@@ -1187,9 +1175,9 @@ internal class PatternTest {
         @Test
         @DisplayName("dollar and \\Z anchors match all supported trailing line terminators")
         fun dollarAndZAnchorsMatchAllTrailingLineTerminators() {
-            for (regex in mutableListOf<kotlin.String?>(".*\\.json$", ".*\\.json\\Z")) {
+            for (regex in mutableListOf<String?>(".*\\.json$", ".*\\.json\\Z")) {
                 val p = org.safere.Pattern.compile(regex)
-                val terminators = arrayOf<kotlin.String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
+                val terminators = arrayOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
                 for (term in terminators) {
                     val input = "config.json" + term
                     Assertions.assertThat(p.matcher(input).find()).isTrue()
@@ -1211,7 +1199,7 @@ internal class PatternTest {
             Assertions.assertThat(p.matcher("config.json").matches()).isTrue()
             Assertions.assertThat(p.find(Utf8Input.trusted("config.json".toByteArray(StandardCharsets.UTF_8)))).isTrue()
 
-            val terminators = arrayOf<kotlin.String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
+            val terminators = arrayOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
             for (term in terminators) {
                 val input = "config.json" + term
                 Assertions.assertThat(p.matcher(input).find()).isFalse()
@@ -1230,7 +1218,7 @@ internal class PatternTest {
             Assertions.assertThat(p.find(Utf8Input.trusted("config.json\n".toByteArray(StandardCharsets.UTF_8))))
                 .isTrue()
 
-            val nonUnixTerminators = arrayOf<kotlin.String?>("\r", "\r\n", "\u0085", "\u2028", "\u2029")
+            val nonUnixTerminators = arrayOf<String?>("\r", "\r\n", "\u0085", "\u2028", "\u2029")
             for (term in nonUnixTerminators) {
                 val input = "config.json" + term
                 Assertions.assertThat(p.matcher(input).find()).isFalse()
@@ -1242,11 +1230,11 @@ internal class PatternTest {
         @ParameterizedTest
         @ValueSource(strings = ["\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029"])
         @DisplayName("end anchors recognize every final line terminator")
-        fun endAnchorsRecognizeEveryFinalLineTerminator(terminator: kotlin.String) {
+        fun endAnchorsRecognizeEveryFinalLineTerminator(terminator: String) {
             val input = "config.json" + terminator
             val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
 
-            for (anchor in mutableListOf<kotlin.String?>("$", "\\Z")) {
+            for (anchor in mutableListOf<String?>("$", "\\Z")) {
                 val suffix = org.safere.Pattern.compile(".*\\.json" + anchor)
                 val characterClass = org.safere.Pattern.compile(".*[0-9]" + anchor)
 
@@ -1269,11 +1257,11 @@ internal class PatternTest {
         @ParameterizedTest
         @ValueSource(strings = ["\r", "\r\n", "\u0085", "\u2028", "\u2029"])
         @DisplayName("UNIX_LINES restricts final line terminators to newline")
-        fun unixLinesRestrictsFinalLineTerminatorsToNewline(terminator: kotlin.String) {
+        fun unixLinesRestrictsFinalLineTerminatorsToNewline(terminator: String) {
             val input = "config.json" + terminator
             val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
 
-            for (anchor in mutableListOf<kotlin.String?>("$", "\\Z")) {
+            for (anchor in mutableListOf<String?>("$", "\\Z")) {
                 val suffix = org.safere.Pattern.compile(".*\\.json" + anchor, org.safere.Pattern.UNIX_LINES)
 
                 Assertions.assertThat(suffix.matcher(input).find()).isFalse()
@@ -1284,13 +1272,13 @@ internal class PatternTest {
         @Test
         @DisplayName("end-anchored character class rejects inputs not ending with class")
         fun endAnchoredCharClassRejectsMismatchedInputs() {
-            for (regex in mutableListOf<kotlin.String?>(".*[0-9]$", ".*[0-9]\\Z")) {
+            for (regex in mutableListOf<String?>(".*[0-9]$", ".*[0-9]\\Z")) {
                 val p = org.safere.Pattern.compile(regex)
 
                 Assertions.assertThat(p.matcher("item123").find()).isTrue()
                 Assertions.assertThat(p.matcher("item123").matches()).isTrue()
 
-                val terminators = arrayOf<kotlin.String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
+                val terminators = arrayOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
                 for (term in terminators) {
                     val input = "item123" + term
                     Assertions.assertThat(p.matcher(input).find()).isTrue()
@@ -1335,7 +1323,7 @@ internal class PatternTest {
         @ParameterizedTest
         @ValueSource(strings = ["^target", "\\Atarget"])
         @DisplayName("start-anchored literal rejects a later UTF-8 occurrence")
-        fun startAnchoredLiteralRejectsLaterUtf8Occurrence(regex: kotlin.String?) {
+        fun startAnchoredLiteralRejectsLaterUtf8Occurrence(regex: String?) {
             val pattern = org.safere.Pattern.compile(regex)
 
             Assertions.assertThat(pattern.find(Utf8Input.trusted("prefix target".toByteArray(StandardCharsets.UTF_8))))
@@ -1411,7 +1399,7 @@ internal class PatternTest {
     @DisplayName("find(Utf8Input) agrees with the JDK for patterns its forward DFA can't answer")
     fun utf8FindWithoutForwardDfaAgreesWithJdk() {
         val prose = "fine food offer ".repeat(200)
-        for (regex in mutableListOf<kotlin.String?>( // End anchors.
+        for (regex in mutableListOf<String?>( // End anchors.
             "(foo|fax)$",
             "(?i)\\s*(foo|fax)$",
             "\\s*(foo|fax)\\z",
@@ -1421,7 +1409,7 @@ internal class PatternTest {
             "(a?)+fax",  // Grapheme semantics.
             "\\X(foo|fax)"
         )) {
-            for (text in List.of<kotlin.String>(
+            for (text in List.of<String>(
                 "",
                 "foo",
                 prose,

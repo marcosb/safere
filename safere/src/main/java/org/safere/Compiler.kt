@@ -37,7 +37,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         this.prog = Prog()
         // Instruction 0 is always the fail instruction (sentinel for PatchList).
         val fail = prog.allocInst()
-        prog.mutableInst(fail).initFail()
+        prog.mutableInst(fail)!!.initFail()
     }
 
     /**
@@ -48,14 +48,14 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
      * patch lists, and loop registers belong to each individual compilation. Pattern construction
      * releases this preparation after building the programs needed at construction time.
      */
-    internal class Prepared private constructor(
-        private val root: Regexp?,
-        private val simplifiedSource: Regexp?,
-        private val numCaptures: Int,
-        private val anchorStart: Boolean,
-        private val anchorEnd: Boolean,
-        private val dollarEnd: Boolean,
-        private val dollarUnixLines: Boolean
+    internal class Prepared internal constructor(
+        val root: Regexp?,
+        val simplifiedSource: Regexp?,
+        val numCaptures: Int,
+        val anchorStart: Boolean,
+        val anchorEnd: Boolean,
+        val dollarEnd: Boolean,
+        val dollarUnixLines: Boolean
     ) {
         /** Returns `Simplifier.simplify(source)`, before anchor stripping.  */
         fun simplifiedSource(): Regexp? {
@@ -93,7 +93,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         fun patch(prog: Prog, l: Long, target: Int) {
             var current: Int = head(l)
             while (current != 0) {
-                val ip = prog.mutableInst(current shr 1)
+                val ip = prog.mutableInst(current shr 1)!!
                 if ((current and 1) != 0) {
                     current = ip.out1
                     ip.out1 = target
@@ -114,7 +114,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
                 return l1
             }
             val t1: Int = tail(l1)
-            val ip = prog.mutableInst(t1 shr 1)
+            val ip = prog.mutableInst(t1 shr 1)!!
             if ((t1 and 1) != 0) {
                 ip.out1 = h2
             } else {
@@ -143,7 +143,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
     // Fragment combinators
     // ---------------------------------------------------------------------------
     private fun allocInst(): Int {
-        if (failed || prog.size() >= maxInst) {
+        if (failed || prog.size >= maxInst) {
             failed = true
             return -1
         }
@@ -156,7 +156,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         }
 
         // Elide no-op.
-        val begin = prog.mutableInst(a.begin)
+        val begin = prog.mutableInst(a.begin)!!
         if (begin.op == InstOp.NOP && PatchList.head(a.end) == (a.begin shl 1) && begin.out == 0) {
             PatchList.patch(prog, a.end, b.begin)
             return b
@@ -184,7 +184,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             return Frag.Companion.NO_MATCH
         }
 
-        prog.mutableInst(id).initAlt(a.begin, b.begin)
+        prog.mutableInst(id)!!.initAlt(a.begin, b.begin)
         return Frag(id, PatchList.append(prog, a.end, b.end), a.nullable || b.nullable)
     }
 
@@ -207,8 +207,8 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
                 return Frag.Companion.NO_MATCH
             }
             val loopReg = nextLoopReg++
-            prog.mutableInst(entryId).initLoopEnter(loopReg, pcId)
-            prog.mutableInst(pcId).initProgressCheck(loopReg, a.begin, 0, nongreedy)
+            prog.mutableInst(entryId)!!.initLoopEnter(loopReg, pcId)
+            prog.mutableInst(pcId)!!.initProgressCheck(loopReg, a.begin, 0, nongreedy)
             val pl: Long = PatchList.mk((pcId shl 1) or 1) // patch out1 (exit)
 
             // Patch the body end to loop back to pcId.
@@ -222,10 +222,10 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         }
         val pl: Long
         if (nongreedy) {
-            prog.mutableInst(id).initAlt(0, a.begin)
+            prog.mutableInst(id)!!.initAlt(0, a.begin)
             pl = PatchList.mk(id shl 1)
         } else {
-            prog.mutableInst(id).initAlt(a.begin, 0)
+            prog.mutableInst(id)!!.initAlt(a.begin, 0)
             pl = PatchList.mk((id shl 1) or 1)
         }
         PatchList.patch(prog, a.end, id)
@@ -243,10 +243,10 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         }
         val pl: Long
         if (nongreedy) {
-            prog.mutableInst(id).initAlt(0, a.begin)
+            prog.mutableInst(id)!!.initAlt(0, a.begin)
             pl = PatchList.mk(id shl 1)
         } else {
-            prog.mutableInst(id).initAlt(a.begin, 0)
+            prog.mutableInst(id)!!.initAlt(a.begin, 0)
             pl = PatchList.mk((id shl 1) or 1)
         }
         PatchList.patch(prog, a.end, id)
@@ -263,10 +263,10 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         }
         val pl: Long
         if (nongreedy) {
-            prog.mutableInst(id).initAlt(0, a.begin)
+            prog.mutableInst(id)!!.initAlt(0, a.begin)
             pl = PatchList.mk(id shl 1)
         } else {
-            prog.mutableInst(id).initAlt(a.begin, 0)
+            prog.mutableInst(id)!!.initAlt(a.begin, 0)
             pl = PatchList.mk((id shl 1) or 1)
         }
         return Frag(id, PatchList.append(prog, pl, a.end), true)
@@ -274,7 +274,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
 
     /** Compiles the copies of a nullable finite repetition as one minimum-respecting invocation.  */
     private fun finiteRepeat(copies: MutableList<Frag>, minimum: Int, nongreedy: Boolean): Frag {
-        val maximum: Int = copies.size()
+        val maximum: Int = copies.size
         if (forDfa) {
             // Unguarded copies preserve full-match existence, but not ordered paths or captures.
             // matches() can fix group zero to the whole region and defer guarded capture extraction;
@@ -291,26 +291,26 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
 
         val first = Math.max(0, minimum - 1)
         val loopReg = nextLoopReg++
-        var exits = copies.get(maximum - 1).end
+        var exits = copies.get(maximum - 1)!!.end
         var firstCheck = 0
         for (i in first..<maximum) {
             val check = allocInst()
             if (check < 0) {
                 return Frag.Companion.NO_MATCH
             }
-            prog.mutableInst(check).initProgressCheck(loopReg, copies.get(i).begin, 0, nongreedy)
+            prog.mutableInst(check)!!.initProgressCheck(loopReg, copies.get(i)!!.begin, 0, nongreedy)
             exits = PatchList.append(prog, exits, PatchList.mk((check shl 1) or 1))
             if (i == first) {
                 firstCheck = check
             } else {
-                PatchList.patch(prog, copies.get(i - 1).end, check)
+                PatchList.patch(prog, copies.get(i - 1)!!.end, check)
             }
         }
         val entry = allocInst()
         if (entry < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(entry).initLoopEnter(loopReg, firstCheck)
+        prog.mutableInst(entry)!!.initLoopEnter(loopReg, firstCheck)
         var suffix = Frag(entry, exits, true)
         if (minimum == 0) {
             return quest(suffix, nongreedy)
@@ -326,7 +326,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initCharRange(lo, hi, foldCase, 0)
+        prog.mutableInst(id)!!.initCharRange(lo, hi, foldCase, 0)
         return Frag(id, PatchList.mk(id shl 1), false)
     }
 
@@ -335,7 +335,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initGraphemeCluster(0)
+        prog.mutableInst(id)!!.initGraphemeCluster(0)
         return Frag(id, PatchList.mk(id shl 1), false)
     }
 
@@ -344,7 +344,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initNop(0)
+        prog.mutableInst(id)!!.initNop(0)
         return Frag(id, PatchList.mk(id shl 1), true)
     }
 
@@ -353,7 +353,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initMatch(matchId)
+        prog.mutableInst(id)!!.initMatch(matchId)
         return Frag(id, PatchList.EMPTY, false)
     }
 
@@ -362,7 +362,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initEmptyWidth(emptyFlags, 0)
+        prog.mutableInst(id)!!.initEmptyWidth(emptyFlags, 0)
         return Frag(id, PatchList.mk(id shl 1), true)
     }
 
@@ -379,8 +379,8 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id2 < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initCapture(2 * cap, a.begin)
-        prog.mutableInst(id2).initCapture(2 * cap + 1, 0)
+        prog.mutableInst(id)!!.initCapture(2 * cap, a.begin)
+        prog.mutableInst(id2)!!.initCapture(2 * cap + 1, 0)
         PatchList.patch(prog, a.end, id2)
         return Frag(id, PatchList.mk(id2 shl 1), a.nullable)
     }
@@ -406,15 +406,15 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initCharClass(0, intArrayOf(upper, upper, lower, lower))
+        prog.mutableInst(id)!!.initCharClass(0, intArrayOf(upper, upper, lower, lower))
         return Frag(id, PatchList.mk(id shl 1), false)
     }
 
     private fun literalString(runes: IntArray?, flags: Int): Frag {
-        if (runes == null || runes.length == 0) {
+        if (runes == null || runes.size == 0) {
             return nop()
         }
-        if (runes.length == 1) {
+        if (runes.size == 1) {
             return literal(runes[0], flags)
         }
         val first = literal(runes[0], flags)
@@ -422,7 +422,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             return Frag.Companion.NO_MATCH
         }
         var current = first
-        for (i in 1..<runes.length) {
+        for (i in 1..<runes.size) {
             val next = literal(runes[i], flags)
             if (isNoMatch(next)) {
                 return Frag.Companion.NO_MATCH
@@ -448,47 +448,48 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
     // ---------------------------------------------------------------------------
     // Walker overrides
     // ---------------------------------------------------------------------------
-    override fun repeatVisits(re: Regexp): Int {
-        return re.max
+    override fun repeatVisits(re: Regexp?): Int {
+        return re!!.max
     }
 
-    override fun preVisit(re: Regexp?, parentArg: Frag?, stop: BooleanArray): Frag {
+    override fun preVisit(re: Regexp, parentArg: Frag?, stop: BooleanArray): Frag? {
         if (failed) {
-            stop[0] = true
+            stop!![0] = true
         }
         return Frag.Companion.NO_MATCH
     }
 
     override fun postVisit(re: Regexp, parentArg: Frag?, preArg: Frag?, childArgs: MutableList<Frag>): Frag? {
-        if (failed) {
+        if (failed || re == null) {
             return Frag.Companion.NO_MATCH
         }
+        val kids = childArgs ?: mutableListOf()
 
         return when (re.op) {
-            RegexpOp.REPEAT -> finiteRepeat(childArgs, re.min, re.nonGreedy())
+            RegexpOp.REPEAT -> finiteRepeat(kids, re.min, re.nonGreedy())
             RegexpOp.NO_MATCH -> Frag.Companion.NO_MATCH
             RegexpOp.EMPTY_MATCH -> nop()
             RegexpOp.HAVE_MATCH -> match(re.matchId)
             RegexpOp.CONCAT -> {
-                var f = childArgs.get(0)
-                for (i in 1..<childArgs.size()) {
-                    f = cat(f, childArgs.get(i))
+                var f = kids.get(0)
+                for (i in 1..<kids.size) {
+                    f = cat(f, kids.get(i))
                 }
                 f
             }
 
             RegexpOp.ALTERNATE -> {
-                var f = childArgs.get(0)
-                for (i in 1..<childArgs.size()) {
-                    f = alt(f, childArgs.get(i))
+                var f = kids.get(0)
+                for (i in 1..<kids.size) {
+                    f = alt(f, kids.get(i))
                 }
                 f
             }
 
-            RegexpOp.NON_CAPTURE -> childArgs.get(0)
-            RegexpOp.STAR -> star(childArgs.get(0), re.nonGreedy())
-            RegexpOp.PLUS -> plus(childArgs.get(0), re.nonGreedy())
-            RegexpOp.QUEST -> quest(childArgs.get(0), re.nonGreedy())
+            RegexpOp.NON_CAPTURE -> kids.get(0)
+            RegexpOp.STAR -> star(kids.get(0), re.nonGreedy())
+            RegexpOp.PLUS -> plus(kids.get(0), re.nonGreedy())
+            RegexpOp.QUEST -> quest(kids.get(0), re.nonGreedy())
             RegexpOp.LITERAL -> literal(re.rune, re.flags)
             RegexpOp.LITERAL_STRING -> literalString(re.runes, re.flags)
             RegexpOp.ANY_CHAR -> anyCodePoint()
@@ -496,9 +497,9 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             RegexpOp.CHAR_CLASS -> compileCharClass(re)
             RegexpOp.CAPTURE -> {
                 if (re.cap < 0) {
-                    childArgs.get(0)
+                    kids.get(0)
                 }
-                capture(childArgs.get(0), re.cap)
+                capture(kids.get(0), re.cap)
             }
 
             RegexpOp.BEGIN_LINE -> emptyWidth(
@@ -551,7 +552,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         }
     }
 
-    override fun shortVisit(re: Regexp?, parentArg: Frag?): Frag {
+    override fun shortVisit(re: Regexp, parentArg: Frag?): Frag {
         failed = true
         return Frag.Companion.NO_MATCH
     }
@@ -560,7 +561,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
     // Character class compilation
     // ---------------------------------------------------------------------------
     private fun compileCharClass(re: Regexp): Frag? {
-        val cc = re.charClass
+        val cc = re.charClass!!
         if (cc == null || cc.isEmpty()) {
             return Frag.Companion.NO_MATCH
         }
@@ -582,7 +583,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         if (id < 0) {
             return Frag.Companion.NO_MATCH
         }
-        prog.mutableInst(id).initCharClass(0, ranges)
+        prog.mutableInst(id)!!.initCharClass(0, ranges)
         return Frag(id, PatchList.mk(id shl 1), false)
     }
 
@@ -665,7 +666,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
 
             // Append Match(0).
             c.reversed = false
-            all = c.cat(all, c.match(0))
+            all = c.cat(all!!, c.match(0))
             if (c.failed) {
                 return null
             }
@@ -708,7 +709,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
                     max = node.cap
                 }
                 if (node.subs != null) {
-                    for (sub in node.subs) {
+                    for (sub in node.subs!!) {
                         stack.push(sub)
                     }
                 }
@@ -729,7 +730,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             }
             return when (re.op) {
                 RegexpOp.BEGIN_TEXT -> true
-                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1)
+                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorStartImpl(re.subs!!.first(), depth + 1)
                 RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isAnchorStartImpl(re.sub(), depth + 1)
                 else -> false
             }
@@ -746,9 +747,9 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             return when (re.op) {
                 RegexpOp.BEGIN_TEXT -> Regexp.Companion.emptyMatch(re.flags)
                 RegexpOp.CONCAT -> {
-                    if (re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1)) {
-                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs)
-                        newSubs.set(0, stripAnchorStartImpl(re.subs.getFirst(), depth + 1))
+                    if (re.nsub() > 0 && isAnchorStartImpl(re.subs!!.first(), depth + 1)) {
+                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs!!)
+                        newSubs.set(0, stripAnchorStartImpl(re.subs!!.first(), depth + 1))
                         Regexp.Companion.concat(newSubs, re.flags)
                     }
                     re
@@ -796,7 +797,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
                         return (re.flags and ParseFlags.UNIX_LINES) != 0
                     }
 
-                    RegexpOp.CONCAT -> re = if (re.nsub() == 0) null else re.subs.getLast()
+                    RegexpOp.CONCAT -> re = if (re.nsub() == 0) null else re.subs!!.last()
                     RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> re = re.sub()
                     else -> {
                         return false
@@ -813,7 +814,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             }
             return when (re.op) {
                 RegexpOp.END_TEXT -> (re.flags and ParseFlags.WAS_DOLLAR) != 0
-                RegexpOp.CONCAT -> re.nsub() > 0 && isDollarAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)
+                RegexpOp.CONCAT -> re.nsub() > 0 && isDollarAnchorEndImpl(re.subs!!.get(re.nsub() - 1), depth + 1)
                 RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isDollarAnchorEndImpl(re.sub(), depth + 1)
                 else -> false
             }
@@ -825,7 +826,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             }
             return when (re.op) {
                 RegexpOp.END_TEXT -> true
-                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)
+                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorEndImpl(re.subs!!.get(re.nsub() - 1), depth + 1)
                 RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isAnchorEndImpl(re.sub(), depth + 1)
                 else -> false
             }
@@ -842,10 +843,10 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             return when (re.op) {
                 RegexpOp.END_TEXT -> Regexp.Companion.emptyMatch(re.flags)
                 RegexpOp.CONCAT -> {
-                    if (re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)) {
-                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs)
+                    if (re.nsub() > 0 && isAnchorEndImpl(re.subs!!.get(re.nsub() - 1), depth + 1)) {
+                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs!!)
                         val last = re.nsub() - 1
-                        newSubs.set(last, stripAnchorEndImpl(re.subs.get(last), depth + 1))
+                        newSubs.set(last, stripAnchorEndImpl(re.subs!!.get(last), depth + 1))
                         Regexp.Companion.concat(newSubs, re.flags)
                     }
                     re

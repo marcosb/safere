@@ -83,8 +83,8 @@ internal class InputScannerTest {
         Assertions.assertThat(scanner.singleUnitCodePointAt(0)).isEqualTo('A'.code)
         Assertions.assertThat(scanner.singleUnitCodePointAt(1)).isEqualTo(-1)
         Assertions.assertThat(scanner.singleUnitCodePointAt(3)).isEqualTo(-1)
-        Assertions.assertThat(scanner.singleUnitCodePointBefore(scanner.length())).isEqualTo('Z'.code)
-        Assertions.assertThat(scanner.singleUnitCodePointBefore(scanner.length() - 1)).isEqualTo(-1)
+        Assertions.assertThat(scanner.singleUnitCodePointBefore(scanner.length)).isEqualTo('Z'.code)
+        Assertions.assertThat(scanner.singleUnitCodePointBefore(scanner.length - 1)).isEqualTo(-1)
     }
 
     @Test
@@ -95,21 +95,21 @@ internal class InputScannerTest {
         val stringScanner = StringInputScanner(text)
         val utf8Scanner = Utf8InputScanner(text.toByteArray(StandardCharsets.UTF_8))
 
-        Assertions.assertThat(stringScanner.indexOfCodePointClass(cjk, 0, 0, 0, stringScanner.length()))
+        Assertions.assertThat(stringScanner.indexOfCodePointClass(cjk, 0, 0, 0, stringScanner.length))
             .isEqualTo(4)
-        Assertions.assertThat(stringScanner.indexOfCodePointClass(supplementary, 0, 0, 0, stringScanner.length()))
+        Assertions.assertThat(stringScanner.indexOfCodePointClass(supplementary, 0, 0, 0, stringScanner.length))
             .isEqualTo(2)
-        Assertions.assertThat(stringScanner.indexOfCodePointClass(cjk, 0, 0, 5, stringScanner.length()))
+        Assertions.assertThat(stringScanner.indexOfCodePointClass(cjk, 0, 0, 5, stringScanner.length))
             .isEqualTo(-1)
-        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(cjk, 0, 0, 0, utf8Scanner.length())).isEqualTo(7)
-        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(supplementary, 0, 0, 0, utf8Scanner.length()))
+        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(cjk, 0, 0, 0, utf8Scanner.length)).isEqualTo(7)
+        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(supplementary, 0, 0, 0, utf8Scanner.length))
             .isEqualTo(3)
-        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(cjk, 0, 0, 10, utf8Scanner.length()))
+        Assertions.assertThat(utf8Scanner.indexOfCodePointClass(cjk, 0, 0, 10, utf8Scanner.length))
             .isEqualTo(-1)
 
         val paddedUtf8Scanner =
             Utf8InputScanner(("a".repeat(24) + "中").toByteArray(StandardCharsets.UTF_8))
-        Assertions.assertThat(paddedUtf8Scanner.indexOfCodePointClass(cjk, 0, 0, 0, paddedUtf8Scanner.length()))
+        Assertions.assertThat(paddedUtf8Scanner.indexOfCodePointClass(cjk, 0, 0, 0, paddedUtf8Scanner.length))
             .isEqualTo(24)
     }
 }

@@ -29,7 +29,7 @@ internal class ProgTest {
             val lazy = prog.lazyRuneLoops()
             Assertions.assertThat<Inst?>(greedy).isNotEmpty()
             Assertions.assertThat<LazyRuneLoop?>(lazy).isNotEmpty()
-            for (id in 0..<prog.size()) {
+            for (id in 0..<prog.size) {
                 if (greedy!![id] != null) {
                     Assertions.assertThat<LazyRuneLoop?>(lazy!![id]).isNull()
                 }
@@ -156,7 +156,7 @@ internal class ProgTest {
     @Test
     fun emptyProgram() {
         val prog = Prog()
-        Assertions.assertThat(prog.size()).isEqualTo(0)
+        Assertions.assertThat(prog.size).isEqualTo(0)
     }
 
     @Test
@@ -168,7 +168,7 @@ internal class ProgTest {
         Assertions.assertThat(i0).isEqualTo(0)
         Assertions.assertThat(i1).isEqualTo(1)
         Assertions.assertThat(i2).isEqualTo(2)
-        Assertions.assertThat(prog.size()).isEqualTo(3)
+        Assertions.assertThat(prog.size).isEqualTo(3)
     }
 
     @Test

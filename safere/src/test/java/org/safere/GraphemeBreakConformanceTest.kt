@@ -133,7 +133,7 @@ internal class GraphemeBreakConformanceTest {
                 val jdkCount: Int = collectEnds(JDK_GRAPHEME.matcher(text), jdkEnds)
                 if (safereCount != jdkCount || !prefixEquals(safereEnds, jdkEnds, safereCount)) {
                     Assertions.assertThat<Int?>(slice(safereEnds, safereCount))
-                        .`as`("U+%04X in [%s _ %s]", cp, Companion.hex(ctx[0]!!), Companion.hex(ctx[1]!!))
+                        .`as`("U+%04X in [%s _ %s]", cp, hex(ctx[0]!!), hex(ctx[1]!!))
                         .isEqualTo(slice(jdkEnds, jdkCount))
                 }
             }
@@ -209,7 +209,7 @@ internal class GraphemeBreakConformanceTest {
             return list
         }
 
-        private fun hex(s: String): String? {
+        private fun hex(s: String): String {
             return s.codePoints().mapToObj<String?>(IntFunction { cp: Int -> String.format("%04X", cp) }).toList()
                 .toString()
         }

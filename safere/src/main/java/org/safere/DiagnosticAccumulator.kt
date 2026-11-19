@@ -17,11 +17,11 @@ internal class DiagnosticAccumulator {
     private var forwardDfaSearchCount = 0
     private var reverseDfaSearchCount = 0
     private var matchCount = 0
-    private var intentionalDivergences: EnumSet<IntentionalDivergence?>? = null
+    private var intentionalDivergences: EnumSet<IntentionalDivergence>? = null
 
     fun intentionalDivergence(divergence: IntentionalDivergence?) {
         if (intentionalDivergences == null) {
-            intentionalDivergences = EnumSet.noneOf<IntentionalDivergence?>(IntentionalDivergence::class.java)
+            intentionalDivergences = EnumSet.noneOf(IntentionalDivergence::class.java)
         }
         intentionalDivergences!!.add(divergence)
     }
@@ -174,10 +174,10 @@ internal class DiagnosticAccumulator {
             StrategyReason.SPECULATIVE_WINDOW_EXCEEDED,
             StrategyReason.SPECULATIVE_BACKOFF
         )
-        private val STRATEGY_COUNT: Int = STRATEGIES.length
-        private val ROLE_COUNT: Int = ROLES.length
-        private val DISPOSITION_COUNT: Int = DISPOSITIONS.length
-        private val REASON_COUNT: Int = REASONS.length
+        private val STRATEGY_COUNT: Int = STRATEGIES.size
+        private val ROLE_COUNT: Int = ROLES.size
+        private val DISPOSITION_COUNT: Int = DISPOSITIONS.size
+        private val REASON_COUNT: Int = REASONS.size
         private val PARTICIPATION_COUNT: Int = STRATEGY_COUNT * ROLE_COUNT
         private val DECISION_COUNT: Int = STRATEGY_COUNT * DISPOSITION_COUNT * REASON_COUNT
 

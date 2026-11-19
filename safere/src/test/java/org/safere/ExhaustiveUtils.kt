@@ -39,7 +39,7 @@ internal object ExhaustiveUtils {
      */
     fun run(config: Config): Int {
         val allRegexps: MutableList<String?> = ArrayList<String?>()
-        ExhaustiveUtils.generateRegexps(
+        generateRegexps(
             config.maxAtoms,
             config.maxOps,
             config.atoms!!,
@@ -47,7 +47,7 @@ internal object ExhaustiveUtils {
             config.wrapper!!,
             Consumer { e: String? -> allRegexps.add(e) })
 
-        val strings = ExhaustiveUtils.generateStrings(config.maxStrLen, config.strAlphabet!!)
+        val strings = generateStrings(config.maxStrLen, config.strAlphabet!!)
         val failures: MutableList<TestResult?> = Collections.synchronizedList<TestResult?>(ArrayList<TestResult?>())
         val testCount = AtomicInteger()
 
@@ -55,12 +55,12 @@ internal object ExhaustiveUtils {
             .forEach { regexp: String? ->
                 val localFailures: MutableList<TestResult?> = ArrayList<TestResult?>()
                 for (text in strings) {
-                    testCount.addAndGet(ExhaustiveUtils.testPair(regexp!!, text, config.flags, localFailures))
+                    testCount.addAndGet(testPair(regexp!!, text, config.flags, localFailures))
 
                     if (config.testLongText) {
                         testCount.addAndGet(
-                            ExhaustiveUtils.testPair(
-                                regexp, Config.Companion.LONG_TEXT_PREFIX + text, config.flags, localFailures
+                            testPair(
+                                regexp, Config.LONG_TEXT_PREFIX + text, config.flags, localFailures
                             )
                         )
                     }
@@ -123,7 +123,7 @@ internal object ExhaustiveUtils {
             return 0
         }
 
-        val utf8Coordinates: Utf8Coordinates = Utf8Coordinates.Companion.forText(text)
+        val utf8Coordinates: Utf8Coordinates = Utf8Coordinates.forText(text)
         val utf8 = text.toByteArray(StandardCharsets.UTF_8)
 
         // Compare matches()
@@ -494,7 +494,7 @@ internal object ExhaustiveUtils {
         for (ch in alphabet) {
             current.append(ch)
             generateStringsRecursive(result, current, maxLen, alphabet)
-            current.delete(current.length - ch.length, current.length)
+            current.delete(current.length - ch.size, current.length)
         }
     }
 
@@ -546,7 +546,7 @@ internal object ExhaustiveUtils {
         override fun toString(): String {
             return String.format(
                 "%s(\"%s\", \"%s\", flags=%d): safere=%s, jdk=%s",
-                method, ExhaustiveUtils.escape(regexp!!), ExhaustiveUtils.escape(text!!), flags, safereResult, jdkResult
+                method, escape(regexp!!), escape(text!!), flags, safereResult, jdkResult
             )
         }
     }

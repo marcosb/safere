@@ -124,13 +124,13 @@ internal object ByteVectorScan {
 
     private fun matches(values: ByteVector, ranges: IntArray): VectorMask<Byte?> {
         var matches = matches(values, ranges[0], ranges[1])
-        if (ranges.length >= 4) {
+        if (ranges.size >= 4) {
             matches = matches.or(matches(values, ranges[2], ranges[3]))
         }
-        if (ranges.length >= 6) {
+        if (ranges.size >= 6) {
             matches = matches.or(matches(values, ranges[4], ranges[5]))
         }
-        if (ranges.length == 8) {
+        if (ranges.size == 8) {
             matches = matches.or(matches(values, ranges[6], ranges[7]))
         }
         return matches
@@ -150,7 +150,7 @@ internal object ByteVectorScan {
 
     private fun matches(value: Byte, ranges: IntArray): Boolean {
         var index = 0
-        while (index < ranges.length) {
+        while (index < ranges.size) {
             if (value >= ranges[index].toByte() && value <= ranges[index + 1].toByte()) {
                 return true
             }
@@ -163,7 +163,7 @@ internal object ByteVectorScan {
         bytes: ByteArray,
         offset: Int,
         length: Int,
-        prefix: String?,
+        prefix: String,
         prefixLen: Int,
         anchorOffset: Int,
         low: Byte,
@@ -180,7 +180,7 @@ internal object ByteVectorScan {
         bytes: ByteArray,
         offset: Int,
         length: Int,
-        prefix: String?,
+        prefix: String,
         prefixLen: Int,
         anchorOffset: Int,
         low: Byte,
@@ -283,7 +283,7 @@ internal object ByteVectorScan {
         bytes: ByteArray,
         offset: Int,
         length: Int,
-        prefix: String?,
+        prefix: String,
         prefixLen: Int,
         offset1: Int,
         low1: Byte,
@@ -482,7 +482,7 @@ internal object ByteVectorScan {
         teddyModel: TeddyModel?,
         start: Int
     ): Int {
-        val numLits: Int = literals.length
+        val numLits: Int = literals.size
         if (numLits == 0 || length < minLength) {
             return -1
         }
@@ -514,14 +514,14 @@ internal object ByteVectorScan {
                     for (i in 0..<numLits) {
                         val candidatePos = matchIndex - anchorOffsets[i]
                         val lit = literals[i]
-                        if (candidatePos >= start && candidatePos + lit.length() <= length && (bytes[offset + matchIndex].toInt() and 0xFF) == (anchorChars[i].code and 0xFF)) {
+                        if (candidatePos >= start && candidatePos + lit.length <= length && (bytes[offset + matchIndex].toInt() and 0xFF) == (anchorChars[i].code and 0xFF)) {
                             if (WorkCounterConfig.ENABLED) {
-                                WorkCounter.record(lit.length().toLong())
+                                WorkCounter.record(lit.length.toLong())
                             }
-                            if (Ascii.regionMatches(bytes, offset + candidatePos, lit, lit.length())) {
+                            if (Ascii.regionMatches(bytes, offset + candidatePos, lit, lit.length)) {
                                 return candidatePos
                             }
-                            verificationWork += lit.length().toLong()
+                            verificationWork += lit.length.toLong()
                             if (WorkLimit.isExhausted(verificationWork, workLimit)) {
                                 return VectorScanProvider.Companion.UNSUPPORTED
                             }
@@ -538,11 +538,11 @@ internal object ByteVectorScan {
             val value = bytes[offset + pos].toInt() and 0xFF
             for (i in 0..<numLits) {
                 val lit = literals[i]
-                if (value == anchorChars[i].code && pos + lit.length() <= length) {
+                if (value == anchorChars[i].code && pos + lit.length <= length) {
                     if (WorkCounterConfig.ENABLED) {
-                        WorkCounter.record(lit.length().toLong())
+                        WorkCounter.record(lit.length.toLong())
                     }
-                    if (Ascii.regionMatches(bytes, offset + pos, lit, lit.length())) {
+                    if (Ascii.regionMatches(bytes, offset + pos, lit, lit.length)) {
                         return pos
                     }
                 }

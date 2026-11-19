@@ -9,7 +9,6 @@ import org.junit.jupiter.api.condition.EnabledForJreRange
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.lang.String
 import java.util.List
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -28,11 +27,11 @@ internal class EmojiZwjGraphemeJdkCompatibilityTest {
     @MethodSource("gb11Cases")
     fun graphemeClustersMatchJdk(expected: MutableList<String?>, description: String?) {
         val input = String.join("", expected)
-        Assertions.assertThat<kotlin.String?>(clusters(Pattern.compile("\\X").matcher(input))).isEqualTo(expected)
-        Assertions.assertThat<kotlin.String?>(jdkClusters(Pattern.compile("\\X").matcher(input)))
+        Assertions.assertThat<String?>(clusters(Pattern.compile("\\X").matcher(input))).isEqualTo(expected)
+        Assertions.assertThat<String?>(jdkClusters(Pattern.compile("\\X").matcher(input)))
             .`as`("JDK \\X clusters")
             .isEqualTo(expected)
-        Assertions.assertThat<kotlin.String?>(org.safere.Pattern.compile("\\b{g}").split(input))
+        Assertions.assertThat<String?>(org.safere.Pattern.compile("\\b{g}").split(input))
             .containsExactlyElementsOf(expected)
             .containsExactly(*Pattern.compile("\\b{g}").split(input))
     }
@@ -50,42 +49,42 @@ internal class EmojiZwjGraphemeJdkCompatibilityTest {
         fun gb11Cases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(
-                    List.of<kotlin.String?>(THUMBS_UP + DEVANAGARI_VISARGA + ZWJ, THUMBS_UP), "SpacingMark interrupts"
+                    List.of<String?>(THUMBS_UP + DEVANAGARI_VISARGA + ZWJ, THUMBS_UP), "SpacingMark interrupts"
                 ),
-                Arguments.of(List.of<kotlin.String?>(THUMBS_UP + ZWJ + ZWJ, THUMBS_UP), "second ZWJ interrupts"),
+                Arguments.of(List.of<String?>(THUMBS_UP + ZWJ + ZWJ, THUMBS_UP), "second ZWJ interrupts"),
                 Arguments.of(
-                    List.of<kotlin.String?>(THUMBS_UP + ZWJ + ACUTE, THUMBS_UP),
+                    List.of<String?>(THUMBS_UP + ZWJ + ACUTE, THUMBS_UP),
                     "Extend after ZWJ interrupts"
                 ),
-                Arguments.of(List.of<kotlin.String?>(THUMBS_UP + ACUTE + ZWJ + THUMBS_UP), "Extend before ZWJ joins"),
+                Arguments.of(List.of<String?>(THUMBS_UP + ACUTE + ZWJ + THUMBS_UP), "Extend before ZWJ joins"),
                 Arguments.of(
-                    List.of<kotlin.String?>(MAN + ZWJ + MEDIUM_DARK_SKIN_TONE + ZWJ, WOMAN),
+                    List.of<String?>(MAN + ZWJ + MEDIUM_DARK_SKIN_TONE + ZWJ, WOMAN),
                     "modifier after ZWJ is not a pictograph"
                 ),
                 Arguments.of(
-                    List.of<kotlin.String?>(ARABIC_NUMBER_SIGN + WOMAN + ZWJ + WOMAN), "Prepend before pictograph joins"
+                    List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ZWJ + WOMAN), "Prepend before pictograph joins"
                 ),
                 Arguments.of(
-                    List.of<kotlin.String?>(ARABIC_NUMBER_SIGN + WOMAN + ACUTE + ZWJ + WOMAN + ZWJ + WOMAN),
+                    List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ACUTE + ZWJ + WOMAN + ZWJ + WOMAN),
                     "Prepend before a longer chain joins"
                 ),
                 Arguments.of(
-                    List.of<kotlin.String?>(WOMAN, ARABIC_NUMBER_SIGN + ZWJ, WOMAN),
+                    List.of<String?>(WOMAN, ARABIC_NUMBER_SIGN + ZWJ, WOMAN),
                     "Prepend inside the prefix interrupts"
                 )
             )
         }
 
-        private fun clusters(matcher: Matcher): MutableList<kotlin.String?> {
-            val clusters: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+        private fun clusters(matcher: Matcher): MutableList<String?> {
+            val clusters: MutableList<String?> = ArrayList<String?>()
             while (matcher.find()) {
                 clusters.add(matcher.group())
             }
             return clusters
         }
 
-        private fun jdkClusters(matcher: Matcher): MutableList<kotlin.String?> {
-            val clusters: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+        private fun jdkClusters(matcher: Matcher): MutableList<String?> {
+            val clusters: MutableList<String?> = ArrayList<String?>()
             while (matcher.find()) {
                 clusters.add(matcher.group())
             }

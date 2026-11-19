@@ -79,7 +79,7 @@ internal object StrictOracle {
         }
     }
 
-    internal object Unavailable : RuntimeException() {
+    internal class Unavailable : RuntimeException() {
         private const val serialVersionUID = 1L
     }
 }

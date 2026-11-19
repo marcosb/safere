@@ -28,6 +28,8 @@ import java.util.function.Consumer
 import java.util.function.Predicate
 import java.util.regex.Pattern
 import java.util.stream.Stream
+import kotlin.collections.MutableList
+import kotlin.collections.mutableListOf
 import kotlin.math.max
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
@@ -311,7 +313,7 @@ internal class MultiAnchorCompilerTest {
 
     @Test
     fun overflowingSuffixDoesNotWrapFixedOffsets() {
-        val large = Regexp.repeat(Regexp.literal('x'.code, 0), 0, Int.Companion.MAX_VALUE, Int.Companion.MAX_VALUE)
+        val large = Regexp.repeat(Regexp.literal('x'.code, 0), 0, Int.MAX_VALUE, Int.MAX_VALUE)
         val ast =
             Regexp.concat(
                 List.of<Regexp?>(
@@ -324,8 +326,8 @@ internal class MultiAnchorCompilerTest {
         // The literal run starts at a valid offset, but consuming it would overflow the next offset.
         val literal =
             MultiAnchorCompiler.extractFixedOffsetLiteral(ast)
-        Assertions.assertThat(literal.minOffset).isEqualTo(Int.Companion.MAX_VALUE)
-        Assertions.assertThat(literal.maxOffset).isEqualTo(Int.Companion.MAX_VALUE)
+        Assertions.assertThat(literal.minOffset).isEqualTo(Int.MAX_VALUE)
+        Assertions.assertThat(literal.maxOffset).isEqualTo(Int.MAX_VALUE)
         Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(literal)
@@ -574,7 +576,7 @@ internal class MultiAnchorCompilerTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffsetClass?>(
                 StartPlan.FixedOffsetClass::class.java,
                 Consumer { plan: StartPlan.FixedOffsetClass? ->
-                    Assertions.assertThat(plan!!.leadingClass.isSelective()).isFalse()
+                    Assertions.assertThat(plan!!.leadingClass.isSelective).isFalse()
                     Assertions.assertThat(plan.offset).isEqualTo(1)
                 })
         Assertions.assertThat<StringStartAccelerator?>(spaceClassPattern.stringStartAccelerator()).isNotNull()
@@ -765,7 +767,7 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat<RejectPlan?>(citation.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
         val citationReject =
             citation.rejectPlan() as RequiredCharClass
-        Assertions.assertThat(citationReject.scanInfo.ranges()).containsExactly(']'.code, ']'.code, 0xFF3D, 0xFF3D)
+        Assertions.assertThat(citationReject.scanInfo.ranges).containsExactly(']'.code, ']'.code, 0xFF3D, 0xFF3D)
 
         // Purely non-ASCII classes fall back to rune count rather than claiming to be rarer than ASCII.
         val nonAsciiPairVsSingleAscii = org.safere.Pattern.compile("[\uFF3B\uFF3D]+(?:a|aa)+")
@@ -773,7 +775,7 @@ internal class MultiAnchorCompilerTest {
             .isInstanceOf(RequiredCharClass::class.java)
         val singleAsciiReject =
             nonAsciiPairVsSingleAscii.rejectPlan() as RequiredCharClass
-        Assertions.assertThat(singleAsciiReject.scanInfo.ranges()).containsExactly('a'.code, 'a'.code)
+        Assertions.assertThat(singleAsciiReject.scanInfo.ranges).containsExactly('a'.code, 'a'.code)
 
         // A 1-rune non-ASCII class still beats a 10-rune ASCII digit class by rune count.
         val singleNonAsciiVsDigits = org.safere.Pattern.compile(".*[\uFF3B]+\\d+")
@@ -781,7 +783,7 @@ internal class MultiAnchorCompilerTest {
             .isInstanceOf(RequiredCharClass::class.java)
         val singleNonAsciiReject =
             singleNonAsciiVsDigits.rejectPlan() as RequiredCharClass
-        Assertions.assertThat(singleNonAsciiReject.scanInfo.ranges()).containsExactly(0xFF3B, 0xFF3B)
+        Assertions.assertThat(singleNonAsciiReject.scanInfo.ranges).containsExactly(0xFF3B, 0xFF3B)
 
         // A mixed class with a large non-ASCII range is not scored by its ASCII member, so it does not
         // claim to be rarer than a digit on text in the language it covers.
@@ -789,7 +791,7 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat<RejectPlan?>(digitsThenCjk.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
         val digitsReject =
             digitsThenCjk.rejectPlan() as RequiredCharClass
-        Assertions.assertThat(digitsReject.scanInfo.ranges()).containsExactly('0'.code, '9'.code)
+        Assertions.assertThat(digitsReject.scanInfo.ranges).containsExactly('0'.code, '9'.code)
     }
 
     @Test
@@ -915,7 +917,7 @@ internal class MultiAnchorCompilerTest {
                 Arguments.of(2, 2),
                 Arguments.of(1, 8),
                 Arguments.of(17, 25),
-                Arguments.of(Int.Companion.MAX_VALUE - 2, Int.Companion.MAX_VALUE)
+                Arguments.of(Int.MAX_VALUE - 2, Int.MAX_VALUE)
             )
         }
 

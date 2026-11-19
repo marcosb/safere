@@ -791,7 +791,7 @@ internal class LinebreakGraphemeTest {
 
                 Assertions.assertThat<IntArray?>(safeMatches)
                     .`as`("find() positions for /%s/ on %s region [%s,%s]", regex, input, start, end)
-                    .containsExactly(*jdkMatches.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                    .containsExactly(*jdkMatches.toTypedArray())
             }
 
             private fun assertSafeReFindBounds(
@@ -845,7 +845,7 @@ internal class LinebreakGraphemeTest {
                         "transparent find() positions for /%s/ on %s region [%s,%s]",
                         regex, input, start, end
                     )
-                    .containsExactly(*jdkMatches.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                    .containsExactly(*jdkMatches.toTypedArray())
             }
 
             private fun allocatedForImmediateTwoClusterFind(
@@ -881,7 +881,7 @@ internal class LinebreakGraphemeTest {
                         allocationBeanClass.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
 
                     Assumptions.assumeTrue((supportedMethod.invoke(threadBean) as Boolean?)!!)
-                    if (!enabledMethod.invoke(threadBean) as Boolean?) {
+                    if ((enabledMethod.invoke(threadBean) as Boolean?) != true) {
                         setEnabledMethod.invoke(threadBean, true)
                     }
                     return AllocationTracker(threadBean, allocatedBytesMethod)

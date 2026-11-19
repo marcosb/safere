@@ -16,7 +16,7 @@ object VectorProviderSmoke {
         if (pattern.find(Utf8Input.trusted(bytes))) {
             throw AssertionError("Unexpected match in absent input")
         }
-        bytes[bytes.length - 1] = 'x'.code.toByte()
+        bytes[bytes.size - 1] = 'x'.code.toByte()
         if (!pattern.find(Utf8Input.trusted(bytes))) {
             throw AssertionError("Missing late match")
         }

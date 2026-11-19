@@ -9,7 +9,6 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import org.safere.benchmark.DeclarativeBenchmarkPlan.*
 import java.io.IOException
-import java.lang.String
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -17,40 +16,13 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.util.*
-import kotlin.Array
-import kotlin.AssertionError
-import kotlin.Boolean
-import kotlin.ByteArray
-import kotlin.CharArray
-import kotlin.Exception
-import kotlin.IllegalArgumentException
-import kotlin.IllegalStateException
-import kotlin.Int
-import kotlin.Throws
-import kotlin.check
-import kotlin.collections.LinkedHashMap
-import kotlin.collections.LinkedHashSet
-import kotlin.collections.MutableList
-import kotlin.collections.MutableMap
-import kotlin.collections.MutableSet
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.contains
-import kotlin.collections.containsKey
-import kotlin.collections.forEach
-import kotlin.collections.get
-import kotlin.collections.remove
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.require
-import kotlin.requireNotNull
-import kotlin.text.CharacterCodingException
-import kotlin.text.StringBuilder
-import kotlin.text.isEmpty
+
+()
 import kotlin.text.repeat
 import kotlin.text.substring
 import kotlin.text.toByteArray
-import kotlin.use
 
 /**
  * Materializes resolved benchmark configuration and deterministic UTF-8 input files.
@@ -67,25 +39,25 @@ class BenchmarkInputMaterializer private constructor(
     private val data: JsonObject
     private val benchmarkDataSha256: String?
     private val benchmarkDirectory: Path
-    private val declarations: MutableMap<String?, DeclarativeBenchmarkPlan.InputDeclaration>
+    private val declarations: MutableMap<String?, InputDeclaration>
     private val inputs: MutableMap<String?, ByteArray?> = LinkedHashMap<String?, ByteArray?>()
 
     init {
         BenchmarkDataSchema.validate(data)
-        this.data = PatternProfiles.Companion.normalizeInline(data)
+        this.data = PatternProfiles.normalizeInline(data)
         this.benchmarkDataSha256 = benchmarkDataSha256
         this.benchmarkDirectory = benchmarkDirectory.toAbsolutePath().normalize()
         require(
             !(!this.data.has("schemaVersion")
-                    || this.data.get("schemaVersion").getAsInt() != DeclarativeBenchmarkPlan.Companion.SCHEMA_VERSION)
-        ) { "benchmark-data.json requires schemaVersion " + DeclarativeBenchmarkPlan.Companion.SCHEMA_VERSION }
+                    || this.data.get("schemaVersion").asInt != DeclarativeBenchmarkPlan.SCHEMA_VERSION)
+        ) { "benchmark-data.json requires schemaVersion " + DeclarativeBenchmarkPlan.SCHEMA_VERSION }
         require(
-            !(!this.data.has("inputs") || !this.data.get("inputs").isJsonArray())
+            !(!this.data.has("inputs") || !this.data.get("inputs").isJsonArray)
         ) { "benchmark-data.json requires declarative inputs" }
-        PatternProfiles.Companion.parse(this.data.get("patternProfiles"))
-        PatternProfiles.Companion.parse(this.data.get("replacementProfiles"))
+        PatternProfiles.parse(this.data.get("patternProfiles"))
+        PatternProfiles.parse(this.data.get("replacementProfiles"))
         declarations =
-            DeclarativeBenchmarkPlan.Companion.parseInputDeclarations(this.data.getAsJsonArray("inputs"))
+            DeclarativeBenchmarkPlan.parseInputDeclarations(this.data.getAsJsonArray("inputs"))
     }
 
     private fun generate() {
@@ -105,7 +77,7 @@ class BenchmarkInputMaterializer private constructor(
                 activeRecipes.remove(frame.inputId)
                 continue
             }
-            val declaration: DeclarativeBenchmarkPlan.InputDeclaration = declarations.get(frame.inputId)!!
+            val declaration: InputDeclaration = declarations.get(frame.inputId)!!
             requireNotNull(declaration) { "Input recipe references unknown materialized input: " + frame.inputId }
             if (frame.dependenciesResolved) {
                 val bytes = evaluateBytes(declaration.recipe)
@@ -125,7 +97,7 @@ class BenchmarkInputMaterializer private constructor(
                         + frame.inputId)
             }
             pending.push(MaterializationFrame(frame.inputId, true))
-            val dependency: kotlin.String? = inputDependency(declaration.recipe)
+            val dependency: String? = inputDependency(declaration.recipe)
             if (dependency != null && !inputs.containsKey(dependency)) {
                 require(!activeRecipes.contains(dependency)) {
                     ("Cyclic materialized input recipe dependency: "
@@ -139,7 +111,7 @@ class BenchmarkInputMaterializer private constructor(
         return inputs.get(inputId)
     }
 
-    private fun evaluate(recipe: InputRecipe): kotlin.String? {
+    private fun evaluate(recipe: InputRecipe): String {
         val arguments = recipe.arguments
         return when (recipe.kind) {
             RecipeKind.LITERAL -> string(arguments, "text")
@@ -158,7 +130,7 @@ class BenchmarkInputMaterializer private constructor(
                 integer(arguments, "seed")
             )
 
-            RecipeKind.APPEND_INPUT -> (kotlin.text.String(
+            RecipeKind.APPEND_INPUT -> (String(
                 inputs.get(string(arguments, "input"))!!,
                 StandardCharsets.UTF_8
             ) + string(arguments, "suffix"))
@@ -169,7 +141,7 @@ class BenchmarkInputMaterializer private constructor(
                 integer(arguments, "seed")
             )
 
-            RecipeKind.RANDOM_CODE_POINTS -> Companion.randomCodePoints(
+            RecipeKind.RANDOM_CODE_POINTS -> randomCodePoints(
                 integers(arguments, "codePoints")!!,
                 integer(arguments, "minimumCodeUnits"),
                 integer(arguments, "seed")
@@ -245,12 +217,12 @@ class BenchmarkInputMaterializer private constructor(
         return evaluate(recipe)!!.toByteArray(StandardCharsets.UTF_8)
     }
 
-    private fun readFile(arguments: MutableMap<kotlin.String?, RecipeValue?>): ByteArray? {
-        val declaredPath: kotlin.String = string(arguments, "path")
+    private fun readFile(arguments: MutableMap<String?, RecipeValue?>): ByteArray? {
+        val declaredPath: String = string(arguments, "path")
         val relativePath = Path.of(declaredPath)
         require(
-            !(relativePath.isAbsolute()
-                    || !relativePath.startsWith("data") || relativePath.getNameCount() < 2 || (relativePath != relativePath.normalize()))
+            !(relativePath.isAbsolute
+                    || !relativePath.startsWith("data") || relativePath.nameCount < 2 || (relativePath != relativePath.normalize()))
         ) { "File recipe path must stay within data: " + declaredPath }
 
         val bytes: ByteArray?
@@ -268,7 +240,7 @@ class BenchmarkInputMaterializer private constructor(
             throw IllegalArgumentException("Cannot read file recipe: " + declaredPath, exception)
         }
 
-        val expectedSha256: kotlin.String = string(arguments, "sha256")
+        val expectedSha256: String = string(arguments, "sha256")
         require(sha256(bytes) == expectedSha256) { "File recipe SHA-256 mismatch: " + declaredPath }
         try {
             StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes))
@@ -281,7 +253,7 @@ class BenchmarkInputMaterializer private constructor(
     }
 
     @JvmRecord
-    private data class MaterializationFrame(val inputId: kotlin.String?, val dependenciesResolved: Boolean)
+    private data class MaterializationFrame(val inputId: String?, val dependenciesResolved: Boolean)
 
     @Throws(IOException::class)
     private fun write(corpusDirectory: Path) {
@@ -303,9 +275,9 @@ class BenchmarkInputMaterializer private constructor(
                     .getAsJsonObject("inputs")
                     .getAsJsonObject(input.key)
                     .get("file")
-                    .getAsString()
+                    .asString
             val output = corpusDirectory.resolve(relativePath)
-            Files.createDirectories(output.getParent())
+            Files.createDirectories(output.parent)
             Files.write(output, input.value)
         }
         Files.writeString(
@@ -329,13 +301,13 @@ class BenchmarkInputMaterializer private constructor(
         for (input in inputs.entries) {
             val bytes: ByteArray = input.value!!
             val text = String(bytes, StandardCharsets.UTF_8)
-            val declaration: DeclarativeBenchmarkPlan.InputDeclaration = declarations.get(input.key)!!
+            val declaration: InputDeclaration = declarations.get(input.key)!!
             val entry = JsonObject()
             entry.addProperty("file", input.key!!.replace('.', '/') + ".txt")
             entry.addProperty("shared", declaration.shared)
             entry.addProperty("utf8Bytes", bytes.size)
-            entry.addProperty("utf16CodeUnits", text.length)
-            entry.addProperty("unicodeScalars", text.codePointCount(0, text.length))
+            entry.addProperty("utf16CodeUnits", text.size)
+            entry.addProperty("unicodeScalars", text.codePointCount(0, text.size))
             entry.addProperty("sha256", sha256(bytes))
             entries.add(input.key, entry)
         }
@@ -355,7 +327,7 @@ class BenchmarkInputMaterializer private constructor(
          */
         @Throws(Exception::class)
         @JvmStatic
-        fun main(args: Array<kotlin.String>) {
+        fun main(args: Array<String>) {
             require(args.size <= 2) {
                 ("Usage: BenchmarkInputMaterializer "
                         + "[safere-benchmarks-directory] [output-directory]")
@@ -385,25 +357,25 @@ class BenchmarkInputMaterializer private constructor(
         fun materialize(
             data: JsonObject,
             benchmarkDirectory: Path = Path.of(".")
-        ): MutableMap<kotlin.String?, ByteArray?> {
+        ): MutableMap<String?, ByteArray?> {
             val materializer =
                 BenchmarkInputMaterializer(
                     data, sha256(GSON.toJson(data).toByteArray(StandardCharsets.UTF_8)), benchmarkDirectory
                 )
             materializer.generate()
-            val result: MutableMap<kotlin.String?, ByteArray?> = LinkedHashMap<kotlin.String?, ByteArray?>()
-            materializer.inputs.forEach { (id: kotlin.String?, bytes: ByteArray?) -> result.put(id, bytes!!.clone()) }
+            val result: MutableMap<String?, ByteArray?> = LinkedHashMap<String?, ByteArray?>()
+            materializer.inputs.forEach { (id: String?, bytes: ByteArray?) -> result.put(id, bytes!!.clone()) }
             return result
         }
 
-        private fun inputDependency(recipe: InputRecipe): kotlin.String? {
+        private fun inputDependency(recipe: InputRecipe): String? {
             if (recipe.kind != RecipeKind.APPEND_INPUT) {
                 return null
             }
             return string(recipe.arguments, "input")
         }
 
-        private fun randomChars(alphabet: kotlin.String, size: Int, seed: Int): kotlin.String {
+        private fun randomChars(alphabet: String, size: Int, seed: Int): String {
             val random = Random(seed.toLong())
             val characters = CharArray(size)
             for (index in 0..<size) {
@@ -412,7 +384,7 @@ class BenchmarkInputMaterializer private constructor(
             return String(characters)
         }
 
-        private fun randomCodePoints(codePoints: MutableList<Int?>, minimumSize: Int, seed: Int): kotlin.String {
+        private fun randomCodePoints(codePoints: MutableList<Int?>, minimumSize: Int, seed: Int): String {
             val random = Random(seed.toLong())
             val result = StringBuilder(minimumSize)
             while (result.length < minimumSize) {
@@ -421,7 +393,7 @@ class BenchmarkInputMaterializer private constructor(
             return result.toString()
         }
 
-        private fun repeatAtLeastSize(unit: kotlin.String, minimumSize: Int): kotlin.String {
+        private fun repeatAtLeastSize(unit: String, minimumSize: Int): String {
             if (minimumSize == 0) {
                 return ""
             }
@@ -432,7 +404,7 @@ class BenchmarkInputMaterializer private constructor(
             return result.toString()
         }
 
-        fun repeatToSize(unit: kotlin.String, size: Int): kotlin.String {
+        fun repeatToSize(unit: String, size: Int): String {
             if (size == 0) {
                 return ""
             }
@@ -445,11 +417,11 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun repeatedInput(
-            template: kotlin.String,
+            template: String,
             size: Int,
-            alphabet: kotlin.String,
+            alphabet: String,
             seed: Int
-        ): kotlin.String {
+        ): String {
             if (template.length >= size) {
                 return template.substring(0, size)
             }
@@ -466,8 +438,8 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun prefixedInput(
-            prefix: kotlin.String, template: kotlin.String, size: Int, alphabet: kotlin.String, seed: Int
-        ): kotlin.String {
+            prefix: String, template: String, size: Int, alphabet: String, seed: Int
+        ): String {
             if (prefix.length >= size) {
                 return prefix.substring(0, size)
             }
@@ -475,13 +447,13 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun sparseInput(
-            match: kotlin.String?,
-            nonMatch: kotlin.String?,
+            match: String?,
+            nonMatch: String?,
             size: Int,
             seed: Int,
             nonMatchRepeats: Int,
-            alphabet: kotlin.String
-        ): kotlin.String {
+            alphabet: String
+        ): String {
             val result = StringBuilder(size)
             var delimiterIndex = seed
             while (result.length < size) {
@@ -502,8 +474,8 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun scaledSurroundWithSpaces(
-            bodyPrefix: kotlin.String, bodySuffix: kotlin.String, bodyFill: kotlin.String, scalePercent: Int, size: Int
-        ): kotlin.String {
+            bodyPrefix: String, bodySuffix: String, bodyFill: String, scalePercent: Int, size: Int
+        ): String {
             val fixedLength = bodyPrefix.length + bodySuffix.length
             var targetLength = max(fixedLength, size * scalePercent / 100)
             targetLength = min(targetLength, size)
@@ -512,7 +484,7 @@ class BenchmarkInputMaterializer private constructor(
             return surroundWithSpaces(body, size)
         }
 
-        private fun surroundWithSpaces(body: kotlin.String, size: Int): kotlin.String {
+        private fun surroundWithSpaces(body: String, size: Int): String {
             if (body.length >= size) {
                 return body.substring(0, size)
             }
@@ -522,25 +494,25 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun surroundToSize(
-            prefix: kotlin.String,
-            unit: kotlin.String,
-            suffix: kotlin.String,
+            prefix: String,
+            unit: String,
+            suffix: String,
             size: Int
-        ): kotlin.String {
+        ): String {
             val bodySize = max(0, size - prefix.length - suffix.length)
             return prefix + repeatToSize(unit, bodySize) + suffix
         }
 
-        private fun suffixMatchToSize(prefixUnit: kotlin.String, match: kotlin.String, size: Int): kotlin.String {
+        private fun suffixMatchToSize(prefixUnit: String, match: String, size: Int): String {
             return repeatToSize(prefixUnit, max(0, size - match.length)) + match
         }
 
         private fun lazyAltInput(
-            prefixUnit: kotlin.String,
-            match: kotlin.String,
-            suffixUnit: kotlin.String?,
+            prefixUnit: String,
+            match: String,
+            suffixUnit: String?,
             size: Int
-        ): kotlin.String {
+        ): String {
             val result = StringBuilder(size + match.length + prefixUnit.length)
             val halfSize = size / 2
             while (result.length < halfSize) {
@@ -554,8 +526,8 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun altCaptureInput(
-            hitUnit: kotlin.String, missUnit: kotlin.String, hitInterval: Int, size: Int
-        ): kotlin.String {
+            hitUnit: String, missUnit: String, hitInterval: Int, size: Int
+        ): String {
             val result = StringBuilder(size + max(hitUnit.length, missUnit.length))
             var counter = 0
             while (result.length < size) {
@@ -566,24 +538,24 @@ class BenchmarkInputMaterializer private constructor(
         }
 
         private fun string(
-            arguments: MutableMap<kotlin.String?, RecipeValue?>, name: kotlin.String?
-        ): kotlin.String {
+            arguments: MutableMap<String?, RecipeValue?>, name: String?
+        ): String {
             return (arguments.get(name) as RecipeString).value
         }
 
         private fun integer(
-            arguments: MutableMap<kotlin.String?, RecipeValue?>, name: kotlin.String?
+            arguments: MutableMap<String?, RecipeValue?>, name: String?
         ): Int {
             return (arguments.get(name) as RecipeInteger).value
         }
 
         private fun integers(
-            arguments: MutableMap<kotlin.String?, RecipeValue?>, name: kotlin.String?
-        ): MutableList<Int?>? {
+            arguments: MutableMap<String?, RecipeValue?>, name: String?
+        ): MutableList<Int?> {
             return (arguments.get(name) as RecipeIntegerList).values
         }
 
-        private fun sha256(bytes: ByteArray?): kotlin.String? {
+        private fun sha256(bytes: ByteArray?): String? {
             try {
                 return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
             } catch (exception: NoSuchAlgorithmException) {

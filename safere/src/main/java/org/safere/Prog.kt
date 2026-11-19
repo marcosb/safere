@@ -6,13 +6,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.String
 import java.util.*
-import kotlin.Array
-import kotlin.Boolean
 import kotlin.BooleanArray
-import kotlin.Int
-import kotlin.IntArray
 import kotlin.arrayOfNulls
 import kotlin.collections.ArrayList
 import kotlin.collections.MutableList
@@ -23,7 +18,6 @@ import kotlin.concurrent.Volatile
 import kotlin.plus
 import kotlin.sequences.minus
 import kotlin.sequences.plus
-import kotlin.text.StringBuilder
 import kotlin.times
 
 /**
@@ -37,7 +31,7 @@ import kotlin.times
 internal class Prog {
     val instructions: MutableList<Inst> = ArrayList<Inst>()
     private var didFlatten = false
-    private var instArray: Array<Inst>?
+    private var instArray: Array<Inst?>? = null
     private var start = 0
     private var startUnanchored = 0
     private var numCaptures = 0
@@ -100,11 +94,11 @@ internal class Prog {
 
     /** Returns the instruction at the given index. Must be called after [.freeze].  */
     fun inst(index: Int): Inst {
-        return instArray!![index]
+        return instArray!![index]!!
     }
 
     /** Returns the frozen instruction array. Callers must not modify it or its instructions.  */
-    fun frozenInstructions(): Array<Inst>? {
+    fun frozenInstructions(): Array<Inst?>? {
         return instArray
     }
 
@@ -117,8 +111,9 @@ internal class Prog {
     }
 
     /** Returns the total number of instructions.  */
-    fun size(): Int {
-        return if (instArray != null) instArray.length else instructions.size()
+    val size: Int
+        get() {
+        return if (instArray != null) instArray!!.size else instructions.size
     }
 
     /** Returns true if the program has been flattened.  */
@@ -133,7 +128,7 @@ internal class Prog {
      * @return the index of the newly allocated instruction
      */
     fun allocInst(): Int {
-        val index: Int = instructions.size()
+        val index: Int = instructions.size
         instructions.add(Inst())
         return index
     }
@@ -144,14 +139,14 @@ internal class Prog {
      * After freezing, [.inst] reads directly from the array, avoiding ArrayList overhead.
      */
     fun freeze() {
-        instArray = instructions.toArray<Inst?>(arrayOfNulls<Inst>(0))
+        instArray = Array(instructions.size) { instructions[it] }
         hasGraphemeSemantics = computeHasGraphemeSemantics()
         hasGraphemeClusterInstruction = computeHasGraphemeClusterInstruction()
         hasWordBoundary = computeHasWordBoundary()
         hasTextAnchor = computeHasTextAnchor()
         lineStartUnixLines = true
         for (inst in instArray!!) {
-            if (inst.op == InstOp.EMPTY_WIDTH && (inst.arg and EmptyOp.BEGIN_LINE) != 0) {
+            if (inst!!.op == InstOp.EMPTY_WIDTH && (inst!!.arg and EmptyOp.BEGIN_LINE) != 0) {
                 lineStartUnixLines = false
                 break
             }
@@ -290,7 +285,7 @@ internal class Prog {
                     or EmptyOp.NON_WORD_BOUNDARY
                     or EmptyOp.UNICODE_WORD_BOUNDARY
                     or EmptyOp.UNICODE_NON_WORD_BOUNDARY)
-        val n = size()
+        val n = size
         for (i in 0..<n) {
             val ip = inst(i)
             if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg and mask) != 0) {
@@ -313,7 +308,7 @@ internal class Prog {
                     or EmptyOp.UNIX_DOLLAR_END
                     or EmptyOp.UNIX_BEGIN_LINE
                     or EmptyOp.UNIX_END_LINE)
-        val n = size()
+        val n = size
         for (i in 0..<n) {
             val ip = inst(i)
             if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg and mask) != 0) {
@@ -334,9 +329,10 @@ internal class Prog {
     }
 
     private fun computeHasGraphemeSemantics(): Boolean {
-        val n: Int = instArray.length
+        val arr = instArray ?: return false
+        val n: Int = arr.size
         for (i in 0..<n) {
-            val ip = instArray!![i]
+            val ip = arr[i] ?: continue
             if (ip.op == InstOp.GRAPHEME_CLUSTER
                 || (ip.op == InstOp.EMPTY_WIDTH
                         && ((ip.arg
@@ -351,9 +347,10 @@ internal class Prog {
     }
 
     private fun computeHasGraphemeClusterInstruction(): Boolean {
-        val n: Int = instArray.length
+        val arr = instArray ?: return false
+        val n: Int = arr.size
         for (i in 0..<n) {
-            if (instArray!![i].op == InstOp.GRAPHEME_CLUSTER) {
+            if (arr[i]?.op == InstOp.GRAPHEME_CLUSTER) {
                 return true
             }
         }
@@ -372,7 +369,7 @@ internal class Prog {
     </pre> * 
      */
     fun dump(): String {
-        val n = size()
+        val n = size
         val sb = StringBuilder()
         for (i in 0..<n) {
             if (i == start) {
@@ -389,11 +386,11 @@ internal class Prog {
         return sb.toString()
     }
 
-    override fun toString(): kotlin.String {
+    override fun toString(): String {
         return String.format(
             Locale.ROOT,
             "Prog{size=%d, start=%d, startUnanchored=%d, captures=%d}",
-            size(),
+            size,
             start,
             startUnanchored,
             numCaptures
@@ -408,7 +405,6 @@ internal class Prog {
     // must be published through a volatile field so that readers see its arrays' elements.
     @Volatile
     private var bitStateAnalysis: BitStateAnalysis? = null
-
     private class BitStateAnalysis(
         epsilonCycleAlts: BooleanArray?,
         captureRunes: Array<CaptureRune?>?,
@@ -423,7 +419,6 @@ internal class Prog {
         val captureProgressChecks: Array<Inst?>?
         val greedyRunes: Array<Inst?>?
         val lazyRuneLoops: Array<LazyRuneLoop?>?
-
         init {
             this.epsilonCycleAlts = epsilonCycleAlts
             this.captureRunes = captureRunes
@@ -473,7 +468,7 @@ internal class Prog {
 
     private fun computeGreedyRunes(reachable: BooleanArray): Array<Inst?>? {
         var runes: Array<Inst?>? = null
-        for (i in 0..<size()) {
+        for (i in 0..<size) {
             val alt = inst(i)
             if (reachable[i] && (alt.opCode == InstOp.Companion.OP_ALT || alt.opCode == InstOp.Companion.OP_ALT_MATCH)) {
                 val rune = inst(alt.out)
@@ -481,7 +476,7 @@ internal class Prog {
                     && rune.out == i
                 ) {
                     if (runes == null) {
-                        runes = arrayOfNulls<Inst>(size())
+                        runes = arrayOfNulls<Inst>(size)
                     }
                     runes[i] = rune
                 }
@@ -497,7 +492,7 @@ internal class Prog {
 
     private fun computeLazyRuneLoops(reachable: BooleanArray): Array<LazyRuneLoop?>? {
         var loops: Array<LazyRuneLoop?>? = null
-        for (i in 0..<size()) {
+        for (i in 0..<size) {
             val alt = inst(i)
             if (!reachable[i] || alt.op != InstOp.ALT) {
                 continue
@@ -507,7 +502,7 @@ internal class Prog {
                 continue
             }
             var exit = alt.out
-            for (steps in 0..<size()) {
+            for (steps in 0..<size) {
                 val next = inst(exit)
                 if (next.op == InstOp.CAPTURE || next.op == InstOp.NOP) {
                     exit = next.out
@@ -515,7 +510,7 @@ internal class Prog {
                 }
                 if (next.op == InstOp.CHAR_RANGE && next.lo == next.hi && next.lo < 128 && !next.foldCase) {
                     if (loops == null) {
-                        loops = arrayOfNulls<LazyRuneLoop>(size())
+                        loops = arrayOfNulls<LazyRuneLoop>(size)
                     }
                     loops[i] = LazyRuneLoop(rune, next.lo, alt.out)
                 }
@@ -545,7 +540,7 @@ internal class Prog {
     }
 
     private fun computeEpsilonCycleAlts(reachable: BooleanArray): BooleanArray {
-        val n = size()
+        val n = size
         val inCycle = BooleanArray(n)
 
         for (i in 0..<n) {
@@ -562,7 +557,7 @@ internal class Prog {
 
     private fun computeCaptureRunes(reachable: BooleanArray): Array<CaptureRune?>? {
         var fused: Array<CaptureRune?>? = null
-        for (i in 0..<size()) {
+        for (i in 0..<size) {
             val instruction = inst(i)
             // Discarded fragments may retain unresolved patch-list links instead of successor IDs.
             if (reachable[i] && instruction.opCode == InstOp.Companion.OP_CAPTURE) {
@@ -571,7 +566,7 @@ internal class Prog {
                     val end = inst(rune.out)
                     if (end.opCode == InstOp.Companion.OP_CAPTURE) {
                         if (fused == null) {
-                            fused = arrayOfNulls<CaptureRune>(size())
+                            fused = arrayOfNulls<CaptureRune>(size)
                         }
                         fused[i] = CaptureRune(rune, end.arg, end.out)
                     }
@@ -583,13 +578,13 @@ internal class Prog {
 
     private fun computeLoopEntries(reachable: BooleanArray, captures: Array<CaptureRune?>?): Array<LoopEntry?>? {
         var entries: Array<LoopEntry?>? = null
-        for (i in 0..<size()) {
+        for (i in 0..<size) {
             val entry = inst(i)
             if (reachable[i] && entry.opCode == InstOp.Companion.OP_LOOP_ENTER) {
                 val check = inst(entry.out)
                 if (check.opCode == InstOp.Companion.OP_PROGRESS_CHECK && check.arg == entry.arg && check.out != 0) {
                     if (entries == null) {
-                        entries = arrayOfNulls<LoopEntry>(size())
+                        entries = arrayOfNulls<LoopEntry>(size)
                     }
                     val body = inst(check.out)
                     // Retain the existing capture/consumer/capture fusion when it can do more work.
@@ -608,13 +603,13 @@ internal class Prog {
 
     private fun computeCaptureProgressChecks(reachable: BooleanArray): Array<Inst?>? {
         var checks: Array<Inst?>? = null
-        for (i in 0..<size()) {
+        for (i in 0..<size) {
             val capture = inst(i)
             if (reachable[i] && capture.opCode == InstOp.Companion.OP_CAPTURE) {
                 val next = inst(capture.out)
                 if (next.opCode == InstOp.Companion.OP_PROGRESS_CHECK) {
                     if (checks == null) {
-                        checks = arrayOfNulls<Inst>(size())
+                        checks = arrayOfNulls<Inst>(size)
                     }
                     checks[i] = next
                 }
@@ -629,14 +624,14 @@ internal class Prog {
      * Grapheme consumption reaches its successor here, but breaks paths in the epsilon-cycle walk.
      */
     private fun computeReachableInstructions(): BooleanArray {
-        val n = size()
+        val n = size
         val reachable = BooleanArray(n)
         val stack = ArrayDeque<Int?>()
         addSuccessor(start, reachable, stack)
         addSuccessor(startUnanchored, reachable, stack)
 
         while (!stack.isEmpty()) {
-            val id: Int = stack.pop()
+            val id: Int = stack.pop()!!
             val inst = inst(id)
             when (inst.op) {
                 InstOp.ALT, InstOp.ALT_MATCH, InstOp.PROGRESS_CHECK -> {
@@ -662,7 +657,7 @@ internal class Prog {
      * consume input or terminate, so they break any epsilon path.
      */
     private fun canReachSelfViaEpsilon(target: Int, reachable: BooleanArray): Boolean {
-        val n = size()
+        val n = size
         val visited = BooleanArray(n)
         val stack = ArrayDeque<Int?>()
 
@@ -670,7 +665,7 @@ internal class Prog {
         addEpsilonSuccessors(target, reachable, visited, stack)
 
         while (!stack.isEmpty()) {
-            val id: Int = stack.pop()
+            val id: Int = stack.pop()!!
             if (id == target) {
                 return true
             }
@@ -702,7 +697,6 @@ internal class Prog {
         var nextEdge: IntArray
         var predInst: IntArray
         var edgeCount: Int = 0
-
         init {
             head = IntArray(ninst)
             Arrays.fill(head, -1)
@@ -711,11 +705,11 @@ internal class Prog {
         }
 
         fun addPredecessor(to: Int, from: Int) {
-            if (to < 0 || to >= head.length) {
+            if (to < 0 || to >= head.size) {
                 return
             }
-            if (edgeCount == nextEdge.length) {
-                val newCap: Int = nextEdge.length * 2
+            if (edgeCount == nextEdge.size) {
+                val newCap: Int = nextEdge.size * 2
                 nextEdge = Arrays.copyOf(nextEdge, newCap)
                 predInst = Arrays.copyOf(predInst, newCap)
             }
@@ -743,7 +737,7 @@ internal class Prog {
             return
         }
 
-        val ninst: Int = instructions.size()
+        val ninst: Int = instructions.size
         val rootmap = IntArray(ninst)
         Arrays.fill(rootmap, -1)
         val roots = IntArrayList(ninst)
@@ -765,14 +759,14 @@ internal class Prog {
         }
 
         // Pass 3: Emit lists. Remap outs to root-ids.
-        val flatmap = IntArray(roots.size())
+        val flatmap = IntArray(roots.size)
         val flat: MutableList<Inst> = ArrayList<Inst>(ninst)
 
-        for (r in 0..<roots.size()) {
+        for (r in 0..<roots.size) {
             val root = roots.get(r)
-            flatmap[r] = flat.size()
+            flatmap[r] = flat.size
             emitList(root, rootmap, flat, reachable, reachableList, stack)
-            flat.get(flat.size() - 1).last = true
+            flat.get(flat.size - 1)!!.last = true
         }
 
         // Pass 4: Remap outs from root-ids to flat-ids.
@@ -812,16 +806,16 @@ internal class Prog {
     ) {
         // Mark the kInstFail instruction.
 
-        rootmap[0] = roots.size()
+        rootmap[0] = roots.size
         roots.add(0)
 
         // Mark the startUnanchored and start instructions.
         if (rootmap[startUnanchored] == -1) {
-            rootmap[startUnanchored] = roots.size()
+            rootmap[startUnanchored] = roots.size
             roots.add(startUnanchored)
         }
         if (rootmap[start] == -1) {
-            rootmap[start] = roots.size()
+            rootmap[start] = roots.size
             roots.add(start)
         }
 
@@ -858,7 +852,7 @@ internal class Prog {
                 InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.GRAPHEME_CLUSTER -> {
                     val out = inst.out
                     if (rootmap[out] == -1) {
-                        rootmap[out] = roots.size()
+                        rootmap[out] = roots.size
                         roots.add(out)
                     }
                     nextId = out
@@ -868,11 +862,11 @@ internal class Prog {
                     val out = inst.out
                     val out1 = inst.out1
                     if (rootmap[out] == -1) {
-                        rootmap[out] = roots.size()
+                        rootmap[out] = roots.size
                         roots.add(out)
                     }
                     if (rootmap[out1] == -1) {
-                        rootmap[out1] = roots.size()
+                        rootmap[out1] = roots.size
                         roots.add(out1)
                     }
                     stack.add(out1)
@@ -886,10 +880,11 @@ internal class Prog {
                 InstOp.MATCH, InstOp.FAIL -> {
                     // terminates
                 }
+                else -> {}
             }
         }
 
-        for (i in 0..<reachableList.size()) {
+        for (i in 0..<reachableList.size) {
             reachable[reachableList.get(i)] = false
         }
     }
@@ -940,17 +935,18 @@ internal class Prog {
                 InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.GRAPHEME_CLUSTER, InstOp.PROGRESS_CHECK, InstOp.MATCH, InstOp.FAIL -> {
                     // Leaf/non-epsilon
                 }
+                else -> {}
             }
         }
 
-        for (idx in 0..<reachableList.size()) {
+        for (idx in 0..<reachableList.size) {
             val i = reachableList.get(idx)
             var edge = predecessors.head[i]
             while (edge != -1) {
                 val pred = predecessors.predInst[edge]
                 if (!reachable[pred]) {
                     if (rootmap[i] == -1) {
-                        rootmap[i] = roots.size()
+                        rootmap[i] = roots.size
                         roots.add(i)
                     }
                 }
@@ -958,7 +954,7 @@ internal class Prog {
             }
         }
 
-        for (idx in 0..<reachableList.size()) {
+        for (idx in 0..<reachableList.size) {
             reachable[reachableList.get(idx)] = false
         }
     }
@@ -1008,8 +1004,8 @@ internal class Prog {
                     val flatAltMatch = Inst()
                     flatAltMatch.op = InstOp.ALT_MATCH
                     flatAltMatch.opCode = InstOp.Companion.OP_ALT_MATCH
-                    flatAltMatch.out = flat.size()
-                    flatAltMatch.out1 = flat.size() + 1
+                    flatAltMatch.out = flat.size
+                    flatAltMatch.out1 = flat.size + 1
                     flat.add(flatAltMatch)
 
                     stack.add(inst.out1)
@@ -1037,10 +1033,11 @@ internal class Prog {
                     val newInst = Inst(inst)
                     flat.add(newInst)
                 }
+                else -> {}
             }
         }
 
-        for (idx in 0..<reachableList.size()) {
+        for (idx in 0..<reachableList.size) {
             reachable[reachableList.get(idx)] = false
         }
     }
@@ -1049,14 +1046,14 @@ internal class Prog {
         private fun addEpsilonSuccessor(
             id: Int, reachable: BooleanArray, visited: BooleanArray, stack: ArrayDeque<Int?>
         ) {
-            if (id > 0 && id < reachable.length && reachable[id] && !visited[id]) {
+            if (id > 0 && id < reachable.size && reachable[id] && !visited[id]) {
                 visited[id] = true
                 stack.push(id)
             }
         }
 
         private fun addSuccessor(id: Int, reachable: BooleanArray, stack: ArrayDeque<Int?>) {
-            if (id > 0 && id < reachable.length && !reachable[id]) {
+            if (id > 0 && id < reachable.size && !reachable[id]) {
                 reachable[id] = true
                 stack.push(id)
             }

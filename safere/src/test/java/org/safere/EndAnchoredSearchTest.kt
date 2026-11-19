@@ -142,7 +142,7 @@ internal class EndAnchoredSearchTest {
                         Assertions.assertThat(pattern.find(utf8))
                             .`as`(
                                 "existence /%s/ with prefix length %s and tail %s",
-                                regex, prefix.length, tail
+                                regex, prefix.size, tail
                             )
                             .isEqualTo(jdkPattern.matcher(input).find())
                         assertFindSequence(pattern, jdkPattern, input, utf8)
@@ -188,7 +188,7 @@ internal class EndAnchoredSearchTest {
                                 Assertions.assertThat(pattern.find(utf8))
                                     .`as`(
                                         "existence /%s/ with gap %s and prefix length %s",
-                                        regex, gap, prefix.length
+                                        regex, gap, prefix.size
                                     )
                                     .isEqualTo(jdkPattern.matcher(input).find())
                                 assertFindSequence(pattern, jdkPattern, input, utf8)

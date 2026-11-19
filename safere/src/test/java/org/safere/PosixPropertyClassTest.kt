@@ -20,10 +20,10 @@ import java.util.stream.Stream
 @DisplayName("POSIX \\p{...} property classes")
 internal class PosixPropertyClassTest {
     @JvmRecord
-    internal data class TestCase(val className: String, val input: String?, val expectedMatch: Boolean) {
+    internal data class TestCase(val className: String, val input: String?, val expectedMatch: Boolean)      {
         override fun toString(): String {
             val displayInput =
-                (if (input.length == 1 && input.get(0).code < 0x20) kotlin.String.format(
+                (if (input.length == 1 && input.get(0).code < 0x20) String.format(
                     "\\x%02X",
                     input.get(0).code
                 ) else

@@ -7,23 +7,10 @@ package org.safere
 import org.safere.CharClassScanInfo.UnicodeSmallSet
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.Utf8StartAccelerator.LeadingExpansion.ExcludedSet
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.function.IntFunction
 import java.util.function.IntPredicate
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.Byte
-import kotlin.ByteArray
-import kotlin.Char
-import kotlin.CharArray
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Long
-import kotlin.code
-import kotlin.compareTo
-import kotlin.text.toLong
 
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
@@ -32,7 +19,7 @@ import kotlin.text.toLong
 internal interface Utf8StartAccelerator {
     /** A search-local cursor for accelerators that scan multiple folded byte variants.  */
     interface SearchCursor {
-        fun findCandidate(scanner: Utf8InputScanner?, fromIndex: Int): Int
+        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int
     }
 
     /** Returns the tuning and diagnostic policy for this accelerator.  */
@@ -43,39 +30,25 @@ internal interface Utf8StartAccelerator {
     // The arrays are immutable search metadata owned by this internal accelerator.
     @JvmRecord
     data class Literal(
-        prefixUtf8: ByteArray?,
-        prefixUtf8Failure: IntArray?,
-        prefixUtf8Shifts: IntArray?,
-        rareByteOffset: Int
-    ) : Utf8StartAccelerator {
+        val prefixUtf8: ByteArray,
+        val prefixUtf8Failure: IntArray,
+        val prefixUtf8Shifts: IntArray?,
+        val rareByteOffset: Int) : Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.LITERAL
         }
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            if (prefixUtf8 != null) {
-                return scanner.indexOf(
-                    prefixUtf8, prefixUtf8Failure, prefixUtf8Shifts, fromIndex, rareByteOffset
-                )
-            }
-            return fromIndex
+            return scanner.indexOf(
+                prefixUtf8, prefixUtf8Failure, prefixUtf8Shifts, fromIndex, rareByteOffset
+            )
         }
 
-        val prefixUtf8: ByteArray?
-        val prefixUtf8Failure: IntArray?
-        val prefixUtf8Shifts: IntArray?
-        val rareByteOffset: Int
 
-        init {
-            this.prefixUtf8 = prefixUtf8
-            this.prefixUtf8Failure = prefixUtf8Failure
-            this.prefixUtf8Shifts = prefixUtf8Shifts
-            this.rareByteOffset = rareByteOffset
-        }
 
         companion object {
             fun create(prefix: String): Literal {
-                val utf8: ByteArray = prefix.getBytes(StandardCharsets.UTF_8)
+                val utf8: ByteArray = prefix.toByteArray(StandardCharsets.UTF_8)
                 return Literal(
                     utf8,
                     Pattern.Companion.literalFailure(utf8),
@@ -88,15 +61,14 @@ internal interface Utf8StartAccelerator {
 
     @JvmRecord
     data class CaseInsensitiveLiteral(
-        prefix: String?,
-        failure: IntArray?,
-        anchorOffset: Int,
-        anchorLow: Byte,
-        anchorHigh: Byte,
-        anchorOffset2: Int,
-        anchorLow2: Byte,
-        anchorHigh2: Byte
-    ) : Utf8StartAccelerator {
+        val prefix: String,
+        val failure: IntArray,
+        val anchorOffset: Int,
+        val anchorLow: Byte,
+        val anchorHigh: Byte,
+        val anchorOffset2: Int,
+        val anchorLow2: Byte,
+        val anchorHigh2: Byte) : Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.LITERAL
         }
@@ -120,30 +92,16 @@ internal interface Utf8StartAccelerator {
             )
         }
 
-        val prefix: String?
-        val failure: IntArray?
-        val anchorOffset: Int
-        val anchorLow: Byte
-        val anchorHigh: Byte
-        val anchorOffset2: Int
-        val anchorLow2: Byte
-        val anchorHigh2: Byte
 
-        init {
-            this.prefix = prefix
-            this.failure = failure
-            this.anchorOffset = anchorOffset
-            this.anchorLow = anchorLow
-            this.anchorHigh = anchorHigh
-            this.anchorOffset2 = anchorOffset2
-            this.anchorLow2 = anchorLow2
-            this.anchorHigh2 = anchorHigh2
-        }
 
         companion object {
             fun create(prefix: String): Utf8StartAccelerator? {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-                val len: Int = prefix.length()
+                for (i in 0..<prefix.length) {
+                    if (prefix[i] > 127.toChar()) {
+                        return null
+                    }
+                }
+                val len: Int = prefix.length
                 if (len >= 2) {
                     val pair = RarityOracle.rarestAsciiPairIgnoreCase(prefix, len)
                     if (pair != null) {
@@ -160,7 +118,7 @@ internal interface Utf8StartAccelerator {
                     }
                 }
                 val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, len, true)
-                val anchor: Char = prefix.charAt(anchorOffset)
+                val anchor: Char = prefix[anchorOffset]
                 val low = Ascii.toLowerCase(anchor).code.toByte()
                 val high = Ascii.toUpperCase(anchor).code.toByte()
                 return CaseInsensitiveLiteral(
@@ -172,19 +130,10 @@ internal interface Utf8StartAccelerator {
 
     /** A bounded byte filter for Unicode-folded literal prefixes on UTF-8 input.  */
     class UnicodeCaseInsensitiveLiteral private constructor(
-        prefixFoldVariants: MutableList<IntArray>,
-        anchorByteOffset: Int,
-        anchorVariants: MutableList<EncodedFold>
+        private val prefixFoldVariants: MutableList<IntArray>,
+        private val anchorByteOffset: Int,
+        private val anchorVariants: MutableList<EncodedFold>,
     ) : Utf8StartAccelerator {
-        private val prefixFoldVariants: MutableList<IntArray>
-        private val anchorByteOffset: Int
-        private val anchorVariants: MutableList<EncodedFold>
-
-        init {
-            this.prefixFoldVariants = prefixFoldVariants
-            this.anchorByteOffset = anchorByteOffset
-            this.anchorVariants = anchorVariants
-        }
 
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.LITERAL
@@ -205,21 +154,21 @@ internal interface Utf8StartAccelerator {
                 if (exhausted) {
                     return start
                 }
-                if (anchorByteOffset > scanner.length() - start) {
+                if (anchorByteOffset > scanner.length - start) {
                     return -1
                 }
                 if (workLimit < 0) {
-                    workLimit = WorkLimit.forRemaining(scanner.length() - start)
+                    workLimit = WorkLimit.forRemaining(scanner.length - start)
                 }
                 var searchFrom = start + anchorByteOffset
-                while (searchFrom < scanner.length()) {
+                while (searchFrom < scanner.length) {
                     val windowEnd =
-                        searchFrom + Math.min(ANCHOR_SCAN_WINDOW, scanner.length() - searchFrom) - 1
+                        searchFrom + Math.min(ANCHOR_SCAN_WINDOW, scanner.length - searchFrom) - 1
                     var nextHit = Integer.MAX_VALUE
                     for (variant in anchorVariants) {
                         val hit =
                             scanner.indexOfWithin(
-                                variant.bytes, variant.failure, searchFrom, Math.min(windowEnd, nextHit - 1)
+                                variant.bytes, variant.failure!!, searchFrom, Math.min(windowEnd, nextHit - 1)
                             )
                         if (hit >= 0) {
                             nextHit = hit
@@ -238,7 +187,7 @@ internal interface Utf8StartAccelerator {
                     ) {
                         return candidate
                     }
-                    verificationWork += prefixFoldVariants.size().toLong()
+                    verificationWork += prefixFoldVariants.size.toLong()
                     if (WorkLimit.isExhausted(verificationWork, workLimit)) {
                         // A search can call this cursor again at every subsequent byte. Keep the fallback
                         // sticky so candidate verification cannot restart from scratch.
@@ -254,11 +203,11 @@ internal interface Utf8StartAccelerator {
         private fun matchesPrefix(scanner: Utf8InputScanner, candidate: Int): Boolean {
             var position = candidate
             for (foldVariants in prefixFoldVariants) {
-                if (position >= scanner.length()) {
+                if (position >= scanner.length) {
                     return false
                 }
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 val decoded = scanner.decodeForward(position)
                 val actual: Int = InputScanner.Companion.codePoint(decoded)
@@ -277,15 +226,7 @@ internal interface Utf8StartAccelerator {
             return true
         }
 
-        private class EncodedFold(bytes: ByteArray, failure: IntArray?) {
-            private val bytes: ByteArray
-            private val failure: IntArray?
-
-            init {
-                this.bytes = bytes
-                this.failure = failure
-            }
-        }
+        private class EncodedFold(val bytes: ByteArray, val failure: IntArray?)
 
         companion object {
             private const val MAX_FOLD_VARIANTS = 4
@@ -297,7 +238,7 @@ internal interface Utf8StartAccelerator {
                 var bestRarity = -1
                 var bestOffset = 0
                 var bestVariants: MutableList<EncodedFold>? = null
-                val prefixFoldVariants: MutableList<IntArray> = ArrayList<IntArray>(codePoints.length)
+                val prefixFoldVariants: MutableList<IntArray> = ArrayList<IntArray>(codePoints.size)
                 var stablePrefixWidth = true
                 for (codePoint in codePoints) {
                     if (codePoint >= Character.MIN_SURROGATE.code && codePoint <= Character.MAX_SURROGATE.code) {
@@ -313,7 +254,7 @@ internal interface Utf8StartAccelerator {
                     }
                     val variants: MutableList<EncodedFold> = encodedFoldVariants(foldVariants)
                     var rarity = 255
-                    val width: Int = variants.getFirst().bytes.length
+                    val width: Int = variants.first().bytes.size
                     var stableWidth = true
                     for (variant in variants) {
                         var variantRarity = 0
@@ -322,7 +263,7 @@ internal interface Utf8StartAccelerator {
                                 Math.max(variantRarity, RarityOracle.exactByteRarity(value.toInt() and 0xFF))
                         }
                         rarity = Math.min(rarity, variantRarity)
-                        stableWidth = stableWidth and (variant.bytes.length == width)
+                        stableWidth = stableWidth and (variant.bytes.size == width)
                     }
                     if (rarity > bestRarity) {
                         bestRarity = rarity
@@ -351,14 +292,18 @@ internal interface Utf8StartAccelerator {
                 }
                 val variants = IntArray(closure.numRunes())
                 var count = 0
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in 0..<closure.numRanges()) {
+                    for (cp in closure.lo(i)..closure.hi(i)) {
+                        variants[count++] = cp
+                    }
+                }
                 return variants
             }
 
             private fun encodedFoldVariants(foldVariants: IntArray): MutableList<EncodedFold> {
                 val variants: MutableList<EncodedFold> = ArrayList<EncodedFold>()
                 for (folded in foldVariants) {
-                    val bytes: ByteArray = String(Character.toChars(folded)).getBytes(StandardCharsets.UTF_8)
+                    val bytes: ByteArray = String(Character.toChars(folded)).toByteArray(StandardCharsets.UTF_8)
                     variants.add(EncodedFold(bytes, Pattern.Companion.literalFailure(bytes)))
                 }
                 return variants
@@ -367,7 +312,7 @@ internal interface Utf8StartAccelerator {
     }
 
     @JvmRecord
-    data class FixedOffset(fixedOffset: Pattern.FixedOffsetLiteral?, charClassPrefix: CharClassScanInfo?) :
+    data class FixedOffset(val fixedOffset: Pattern.FixedOffsetLiteral?, val charClassPrefix: CharClassScanInfo?) :
         Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.LITERAL
@@ -377,13 +322,7 @@ internal interface Utf8StartAccelerator {
             return Companion.nextFixedOffsetCandidate(scanner, fixedOffset!!, charClassPrefix, fromIndex)
         }
 
-        val fixedOffset: Pattern.FixedOffsetLiteral?
-        val charClassPrefix: CharClassScanInfo?
 
-        init {
-            this.fixedOffset = fixedOffset
-            this.charClassPrefix = charClassPrefix
-        }
 
         companion object {
             private fun nextFixedOffsetCandidate(
@@ -394,7 +333,7 @@ internal interface Utf8StartAccelerator {
             ): Int {
                 var literalFrom = searchFrom + fixedOffsetLiteral.minOffset()
                 val discreteOffsets = fixedOffsetLiteral.discreteOffsets()
-                while (literalFrom <= scanner.length()) {
+                while (literalFrom <= scanner.length) {
                     val literalStart =
                         scanner.indexOf(
                             fixedOffsetLiteral.utf8(),
@@ -406,11 +345,11 @@ internal interface Utf8StartAccelerator {
                         return -1
                     }
                     if (charClassPrefix != null) {
-                        if (discreteOffsets != null && discreteOffsets.length == 1) {
+                        if (discreteOffsets != null && discreteOffsets.size == 1) {
                             val candidateStart = literalStart - discreteOffsets[0]
                             if (candidateStart >= searchFrom) {
                                 val first =
-                                    if (candidateStart < scanner.length()) scanner.codePointAt(candidateStart) else -1
+                                    if (candidateStart < scanner.length) scanner.codePointAt(candidateStart) else -1
                                 if (first >= 0 && charClassPrefix.contains(first)) {
                                     return candidateStart
                                 }
@@ -475,7 +414,17 @@ internal interface Utf8StartAccelerator {
                 literalStart: Int,
                 searchFrom: Int
             ): Int {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in discreteOffsets.size - 1 downTo 0) {
+                    val start = literalStart - discreteOffsets[i]
+                    if (start >= searchFrom
+                        && start < scanner.length
+                        && charClassPrefix.contains(scanner.codePointAt(start))
+                    ) {
+                        return Math.max(
+                            searchFrom, Math.min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
+                        )
+                    }
+                }
                 return -1
             }
 
@@ -493,7 +442,7 @@ internal interface Utf8StartAccelerator {
                 val candidateStart =
                     scanner.retreatByCodePoints(literalStart, fixedOffsetLiteral.maxOffset())
                 if (candidateStart >= searchFrom) {
-                    val first = if (candidateStart < scanner.length()) scanner.codePointAt(candidateStart) else -1
+                    val first = if (candidateStart < scanner.length) scanner.codePointAt(candidateStart) else -1
                     if (first >= 0 && charClassPrefix.contains(first)) {
                         return candidateStart
                     }
@@ -505,7 +454,7 @@ internal interface Utf8StartAccelerator {
 
     // nonAsciiUtf8 is an internal precomputed UTF-8 byte sequence, never mutated or exposed.
     @JvmRecord
-    data class CharClass(scanInfo: CharClassScanInfo?, nonAsciiUtf8: ByteArray?) : Utf8StartAccelerator {
+    data class CharClass(val scanInfo: CharClassScanInfo?, val nonAsciiUtf8: ByteArray?) : Utf8StartAccelerator {
         internal constructor(scanInfo: CharClassScanInfo?) : this(scanInfo, nonAsciiUtf8(scanInfo))
 
         override fun policy(): AcceleratorPolicy {
@@ -517,66 +466,62 @@ internal interface Utf8StartAccelerator {
                 return fromIndex
             }
             return when (scanInfo) {
-                -> {
-                    val chars: CharArray = smallSet.chars
-                    val length = scanner.length()
-                    if (chars.length == 1) {
+                is UnicodeSmallSet if nonAsciiUtf8 != null -> {
+                    val chars: CharArray = scanInfo.chars!!
+                    val length = scanner.length
+                    if (chars.size == 1) {
                         scanner.indexOfUtf8Sequence(nonAsciiUtf8, fromIndex, length)
+                    } else {
+                        val ascii = chars[0].code
+                        val first = scanner.indexOfAsciiOrNonAscii(ascii, fromIndex, length)
+                        if (first < 0 || scanner.asciiAt(first) == ascii) {
+                            first
+                        } else {
+                            scanner.indexOfMixedPair(ascii, nonAsciiUtf8, first, length)
+                        }
                     }
-                    val ascii = chars[0].code
-                    val first = scanner.indexOfAsciiOrNonAscii(ascii, fromIndex, length)
-                    if (first < 0 || scanner.asciiAt(first) == ascii) {
-                        first
-                    }
-                    scanner.indexOfMixedPair(ascii, nonAsciiUtf8, first, length)
                 }
 
-                -> {
-                    val chars: CharArray = smallSet.chars
-                    when (chars.length) {
-                        1 -> scanner.indexOfAscii(chars[0].code, fromIndex, scanner.length())
-                        2 -> scanner.indexOfAsciiPair(chars[0].code, chars[1].code, fromIndex, scanner.length())
+                is CharClassScanInfo.AsciiSmallSet -> {
+                    val chars: CharArray = scanInfo.chars!!
+                    when (chars.size) {
+                        1 -> scanner.indexOfAscii(chars[0].code, fromIndex, scanner.length)
+                        2 -> scanner.indexOfAsciiPair(chars[0].code, chars[1].code, fromIndex, scanner.length)
                         3 -> scanner.indexOfCodePointClass(
-                            smallSet.ranges,
-                            smallSet.bitmap0,
-                            smallSet.bitmap1,
+                            scanInfo.ranges,
+                            scanInfo.bitmap0,
+                            scanInfo.bitmap1,
                             fromIndex,
-                            scanner.length()
+                            scanner.length
                         )
 
                         else -> scanner.indexOfCodePointClass(
-                            smallSet.ranges,
-                            smallSet.bitmap0,
-                            smallSet.bitmap1,
+                            scanInfo.ranges,
+                            scanInfo.bitmap0,
+                            scanInfo.bitmap1,
                             fromIndex,
-                            scanner.length()
+                            scanner.length
                         )
                     }
                 }
 
-                -> scanner.indexOfCodePointClass(
-                    other.ranges(), other.bitmap0(), other.bitmap1(), fromIndex, scanner.length()
+                else -> scanner.indexOfCodePointClass(
+                    scanInfo.ranges, scanInfo.bitmap0, scanInfo.bitmap1, fromIndex, scanner.length
                 )
             }
         }
 
-        val scanInfo: CharClassScanInfo?
-        val nonAsciiUtf8: ByteArray?
 
-        init {
-            this.scanInfo = scanInfo
-            this.nonAsciiUtf8 = nonAsciiUtf8
-        }
 
         companion object {
             private fun nonAsciiUtf8(scanInfo: CharClassScanInfo?): ByteArray? {
                 if (scanInfo is UnicodeSmallSet) {
                     val chars = scanInfo.chars
-                    if (chars.length == 1) {
-                        return String.valueOf(chars[0]).getBytes(StandardCharsets.UTF_8)
+                    if (chars.size == 1) {
+                        return chars[0].toString().toByteArray(StandardCharsets.UTF_8)
                     }
-                    if (chars.length == 2 && chars[0].code < 0x80 && chars[1].code >= 0x80) {
-                        return String.valueOf(chars[1]).getBytes(StandardCharsets.UTF_8)
+                    if (chars.size == 2 && chars[0].code < 0x80 && chars[1].code >= 0x80) {
+                        return chars[1].toString().toByteArray(StandardCharsets.UTF_8)
                     }
                 }
                 return null
@@ -585,13 +530,13 @@ internal interface Utf8StartAccelerator {
     }
 
     @JvmRecord
-    data class Teddy(model: TeddyModel?) : Utf8StartAccelerator {
+    data class Teddy(val model: TeddyModel?) : Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.VECTOR_MULTI_LITERAL
         }
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            val window = scanner.length() - fromIndex
+            val window = scanner.length - fromIndex
             val provider = VectorScanProviders.providerFor(ScanKind.TEDDY, window)
             if (provider == null) {
                 ScanAudit.record(ScanKind.TEDDY, ScanDirection.FORWARD, window, ScanPath.DECLINED)
@@ -599,26 +544,31 @@ internal interface Utf8StartAccelerator {
             }
             val idx =
                 provider.indexOfTeddy(
-                    scanner.bytes(), scanner.offset(), scanner.length(), model, fromIndex
+                    scanner.bytes(), scanner.offset(), scanner.length, model, fromIndex
                 )
             if (idx != VectorScanProvider.Companion.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.TEDDY, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                 return idx
             }
             ScanAudit.record(ScanKind.TEDDY, ScanDirection.FORWARD, window, ScanPath.SCALAR)
-            val len = scanner.length()
+            val len = scanner.length
             val minLen = model!!.minLength()
             val bytes = scanner.bytes()
             val offset = scanner.offset()
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in fromIndex..len - minLen) {
+                for (rawLit in model.literals()!!) {
+                    val lit = rawLit!!
+                    if (i + lit.length <= len
+                        && Ascii.regionMatches(bytes!!, offset + i, lit, lit.length)
+                    ) {
+                        return i
+                    }
+                }
+            }
             return -1
         }
 
-        val model: TeddyModel?
 
-        init {
-            this.model = model
-        }
     }
 
     /**
@@ -631,7 +581,7 @@ internal interface Utf8StartAccelerator {
      * leading hits exclude continuation-byte starts.
      */
     @JvmRecord
-    data class FixedOffsetClass(scanInfo: CharClassScanInfo?, offset: Int, leadingClass: CharClassScanInfo?) :
+    data class FixedOffsetClass(val scanInfo: CharClassScanInfo?, val offset: Int, val leadingClass: CharClassScanInfo?) :
         Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.CHAR_CLASS
@@ -639,26 +589,26 @@ internal interface Utf8StartAccelerator {
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
             val start = Math.max(0, fromIndex)
-            if (offset >= scanner.length() - start) {
+            if (offset >= scanner.length - start) {
                 return -1
             }
             var position = start + offset
             var cheapRejections = 0
-            while (position < scanner.length()) {
+            while (position < scanner.length) {
                 val hit =
                     scanner.indexOfCodePointClass(
-                        scanInfo!!.ranges(),
-                        scanInfo.bitmap0(),
-                        scanInfo.bitmap1(),
+                        scanInfo!!.ranges,
+                        scanInfo.bitmap0,
+                        scanInfo.bitmap1,
                         position,
-                        scanner.length()
+                        scanner.length
                     )
                 if (hit < 0) {
                     return -1
                 }
                 val candidate = hit - offset
                 if (WorkCounterConfig.ENABLED) {
-                    record()
+                    WorkCounter.record()
                 }
                 if (leadingClass!!.contains(scanner.asciiAt(candidate))) {
                     return candidate
@@ -668,14 +618,14 @@ internal interface Utf8StartAccelerator {
                     position = hit + 1
                     continue
                 }
-                val leadingRanges = leadingClass.ranges()
+                val leadingRanges = leadingClass.ranges
                 // A singleton leading class can reuse the dedicated byte scanner.
                 val nextLeading =
-                    if (leadingRanges.length == 2 && leadingRanges[0] == leadingRanges[1])
-                        scanner.indexOfAscii(leadingRanges[0], candidate + 1, scanner.length())
+                    if (leadingRanges.size == 2 && leadingRanges[0] == leadingRanges[1])
+                        scanner.indexOfAscii(leadingRanges[0], candidate + 1, scanner.length)
                     else
                         scanner.indexOfCharClass(leadingClass, candidate + 1)
-                if (nextLeading < 0 || offset >= scanner.length() - nextLeading) {
+                if (nextLeading < 0 || offset >= scanner.length - nextLeading) {
                     return -1
                 }
                 position = nextLeading + offset
@@ -683,42 +633,33 @@ internal interface Utf8StartAccelerator {
             return -1
         }
 
-        val scanInfo: CharClassScanInfo?
-        val offset: Int
-        val leadingClass: CharClassScanInfo?
 
-        init {
-            this.scanInfo = scanInfo
-            this.offset = offset
-            this.leadingClass = leadingClass
-        }
     }
 
     @JvmRecord
     data class LeadingExpansion(
-        leadingClass: CharClassScanInfo?,
-        minRepetition: Int,
-        maxRepetition: Int,
-        hasLeadingAssertions: Boolean,
-        wideLeadingClass: Boolean,
-        excludedSet: ExcludedSet?,
-        inner: Utf8StartAccelerator?
-    ) : Utf8StartAccelerator {
+        val leadingClass: CharClassScanInfo?,
+        val minRepetition: Int,
+        val maxRepetition: Int,
+        val hasLeadingAssertions: Boolean,
+        val wideLeadingClass: Boolean,
+        val excludedSet: ExcludedSet?,
+        val inner: Utf8StartAccelerator?) : Utf8StartAccelerator {
         /**
          * The code points a wide leading class excludes, split into ASCII members and the UTF-8
          * encodings of the others. Surrogates never occur in valid UTF-8 and are left out.
          */
         // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
         @JvmRecord
-        internal data class ExcludedSet(ascii: IntArray?, nonAscii: Array<ByteArray>?) {
+        internal data class ExcludedSet(val ascii: IntArray?, val nonAscii: Array<ByteArray>?) {
             /**
              * Returns false only when `[from, to)` holds no excluded code point. With non-ASCII
              * members and up to three ASCII members, any non-ASCII byte also counts as a possible hit.
              */
             fun mayContain(scanner: Utf8InputScanner, from: Int, to: Int): Boolean {
-                val anyNonAscii = nonAscii.length > 0
+                val anyNonAscii = nonAscii != null && nonAscii.size > 0
                 val hit =
-                    when (ascii.length) {
+                    when (ascii!!.size) {
                         1 -> if (anyNonAscii)
                             scanner.indexOfAsciiOrNonAscii(ascii!![0], from, to)
                         else
@@ -755,13 +696,7 @@ internal interface Utf8StartAccelerator {
                 return -1
             }
 
-            val ascii: IntArray?
-            val nonAscii: Array<ByteArray>?
 
-            init {
-                this.ascii = ascii
-                this.nonAscii = nonAscii
-            }
 
             companion object {
                 /**
@@ -769,7 +704,7 @@ internal interface Utf8StartAccelerator {
                  * the repetition must be unbounded with at most one required repetition. Otherwise null.
                  */
                 fun of(le: StartPlan.LeadingExpansion): ExcludedSet? {
-                    val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass)
+                    val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
                     if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Integer.MAX_VALUE) {
                         return null
                     }
@@ -782,9 +717,9 @@ internal interface Utf8StartAccelerator {
                                             && (cp > Character.MAX_VALUE.code || !Character.isSurrogate(cp.toChar()))
                                 })
                             .mapToObj<ByteArray?>(IntFunction { cp: Int ->
-                                Character.toString(cp).getBytes(StandardCharsets.UTF_8)
+                                Character.toString(cp).toByteArray(StandardCharsets.UTF_8)
                             })
-                            .toArray<ByteArray?>(IntFunction { _Dummy_.__Array__() })
+                            .toArray(IntFunction { size: Int -> arrayOfNulls<ByteArray>(size) })
                     )
                 }
             }
@@ -809,7 +744,7 @@ internal interface Utf8StartAccelerator {
             if (wideLeadingClass && inner is Literal && inner.prefixUtf8 != null) {
                 // Search the way the UTF-8 reject prefilter does, since find() skips that prefilter when
                 // this search subsumes it (see Pattern.startSubsumesFindReject).
-                return scanner.indexOfInTail(inner.prefixUtf8, inner.prefixUtf8Failure, searchPos)
+                return scanner.indexOfInTail(inner.prefixUtf8!!, inner.prefixUtf8Failure!!, searchPos)
             }
             return Companion.findNextCandidate(inner!!, scanner, searchPos)
         }
@@ -841,7 +776,7 @@ internal interface Utf8StartAccelerator {
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
             var searchPos = Math.max(0, fromIndex)
-            val textLen = scanner.length()
+            val textLen = scanner.length
             // A wide class's walk covers the rest of the line, so a skip shorter than
             // MIN_WIDE_LEADING_SKIP saves less than the literal scan and the walk cost. Such searches
             // start at the search start, as they would with no start plan.
@@ -897,40 +832,24 @@ internal interface Utf8StartAccelerator {
             return -1
         }
 
-        val leadingClass: CharClassScanInfo?
-        val minRepetition: Int
-        val maxRepetition: Int
-        val hasLeadingAssertions: Boolean
-        val wideLeadingClass: Boolean
-        val excludedSet: ExcludedSet?
-        val inner: Utf8StartAccelerator?
 
-        init {
-            this.leadingClass = leadingClass
-            this.minRepetition = minRepetition
-            this.maxRepetition = maxRepetition
-            this.hasLeadingAssertions = hasLeadingAssertions
-            this.wideLeadingClass = wideLeadingClass
-            this.excludedSet = excludedSet
-            this.inner = inner
-        }
     }
 
     @JvmRecord
-    data class MultiLiteral(info: MultiLiteralInfo?, teddyModel: TeddyModel?) : Utf8StartAccelerator {
+    data class MultiLiteral(val info: MultiLiteralInfo?, val teddyModel: TeddyModel?) : Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.VECTOR_MULTI_LITERAL
         }
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            val window = scanner.length() - fromIndex
+            val window = scanner.length - fromIndex
             val provider = VectorScanProviders.providerFor(ScanKind.MULTI_LITERAL, window)
             if (provider != null) {
                 val idx =
                     provider.indexOfMultiLiteral(
                         scanner.bytes(),
                         scanner.offset(),
-                        scanner.length(),
+                        scanner.length,
                         info!!.literals,
                         info.anchorChars,
                         info.anchorOffsets,
@@ -951,27 +870,42 @@ internal interface Utf8StartAccelerator {
         }
 
         private fun findScalar(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            val len = scanner.length()
-            val minLen = info!!.minLength
-            val literals = info.literals
-            val anchorChars = info.anchorChars
-            val anchorOffsets = info.anchorOffsets
-            val bytes = scanner.bytes()
+            val len = scanner.length
+            val infoNonNull = info!!
+            val minLen = infoNonNull.minLength
+            val literals = infoNonNull.literals!!
+            val anchorChars = infoNonNull.anchorChars!!
+            val anchorOffsets = infoNonNull.anchorOffsets!!
+            val bytes = scanner.bytes()!!
             val offset = scanner.offset()
             var verificationWork: Long = 0
             val workLimit = WorkLimit.forRemaining(len - fromIndex)
 
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in fromIndex..len - minLen) {
+                val value = bytes[offset + i].toInt() and 0xFF
+                for (k in literals.indices) {
+                    if (value == (anchorChars[k].code and 0xFF)) {
+                        val lit = literals[k]!!
+                        val start = i - anchorOffsets[k]
+                        if (start >= fromIndex && start + lit.length <= len) {
+                            if (WorkCounterConfig.ENABLED) {
+                                WorkCounter.record(lit.length.toLong())
+                            }
+                            if (Ascii.regionMatches(bytes, offset + start, lit, lit.length)) {
+                                return start
+                            }
+                            verificationWork += lit.length.toLong()
+                            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                                return fromIndex
+                            }
+                        }
+                    }
+                }
+            }
             return -1
         }
 
-        val info: MultiLiteralInfo?
-        val teddyModel: TeddyModel?
 
-        init {
-            this.info = info
-            this.teddyModel = teddyModel
-        }
     }
 
     companion object {
@@ -993,71 +927,73 @@ internal interface Utf8StartAccelerator {
                 return null
             }
             return when (plan) {
-                -> null
-                -> if (lit.foldCase)
-                    (if (Ascii.isAscii(lit.prefix))
-                        CaseInsensitiveLiteral.Companion.create(lit.prefix)
+                is StartPlan.None -> null
+                is StartPlan.Literal -> if (plan.foldCase)
+                    (if (Ascii.isAscii(plan.prefix))
+                        CaseInsensitiveLiteral.create(plan.prefix!!)
                     else
-                        UnicodeCaseInsensitiveLiteral.Companion.create(lit.prefix))
+                        UnicodeCaseInsensitiveLiteral.create(plan.prefix!!))
                 else
-                    Literal.Companion.create(lit.prefix)
+                    Literal.create(plan.prefix!!)
 
-                -> if (hasWordBoundary || !cc.scanInfo.isSelective()) null else CharClass(cc.scanInfo)
-                -> FixedOffset(fo.fol, fo.leadingClass)
-                -> FixedOffsetClass(fc.scanInfo, fc.offset, fc.leadingClass)
-                -> {
+                is StartPlan.CharClass ->
+                    if (hasWordBoundary || plan.scanInfo == null || !plan.scanInfo.isSelective) null else CharClass(plan.scanInfo)
+                is StartPlan.FixedOffset -> FixedOffset(plan.fol, plan.leadingClass)
+                is StartPlan.FixedOffsetClass -> FixedOffsetClass(plan.scanInfo, plan.offset, plan.leadingClass)
+                is StartPlan.MultiLiteral -> {
                     if (hasWordBoundary) {
-                        null
+                        return null
                     }
                     if (VectorScanProviders.vectorProviderAvailable()) {
-                        val info: MultiLiteralInfo? = MultiLiteralInfo.Companion.create(ml.literals)
+                        val info: MultiLiteralInfo? = MultiLiteralInfo.create(plan.literals)
                         if (info != null) {
                             val teddy: TeddyModel? =
                                 if (VectorScanProviders.vectorProviderAvailable())
-                                    TeddyModel.Companion.compileForSelectedProvider(ml.literals)
+                                    TeddyModel.compileForSelectedProvider(plan.literals)
                                 else
                                     null
-                            MultiLiteral(info, teddy)
+                            return MultiLiteral(info, teddy)
                         }
                     }
                     if (VectorScanProviders.vectorProviderAvailable()) {
-                        val model: TeddyModel? = TeddyModel.Companion.compileForSelectedProvider(ml.literals)
+                        val model: TeddyModel? = TeddyModel.compileForSelectedProvider(plan.literals)
                         if (model != null) {
-                            Teddy(model)
+                            return Teddy(model)
                         }
                     }
-                    if (ml.fallbackClass != null && ml.fallbackClass.isSelective()) {
-                        CharClass(ml.fallbackClass)
+                    if (plan.fallbackClass != null && plan.fallbackClass.isSelective) {
+                        return CharClass(plan.fallbackClass!!)
                     }
                     null
                 }
 
-                -> {
-                    val inner: Utf8StartAccelerator? = Companion.create(le.innerPlan, hasWordBoundary)
+                is StartPlan.LeadingExpansion -> {
+                    val inner: Utf8StartAccelerator? = create(plan.innerPlan, hasWordBoundary)
                     // This wrapper does not retain the folded filter's per-search scan cursor, and an optional
                     // single-character leading class before a non-ASCII inner class is faster in the UTF-8
                     // byte DFA than running an un-memoized scalar UTF-8 code-point scan plus inner DFA check.
                     if (inner is UnicodeCaseInsensitiveLiteral
-                        || (le.maxRepetition == 1 && inner is CharClass
-                                && !inner.scanInfo!!.isAscii())
+                        || (plan.maxRepetition == 1 && inner is CharClass
+                                && !inner.scanInfo!!.isAscii)
                     ) {
-                        null
+                        return null
                     }
                     if (inner != null)
                         LeadingExpansion(
-                            le.leadingClass,
-                            le.minRepetition,
-                            le.maxRepetition,
-                            le.hasLeadingAssertions,
-                            MultiAnchorCompiler.isWideLeadingClass(le.leadingClass),
-                            ExcludedSet.Companion.of(le),
+                            plan.leadingClass,
+                            plan.minRepetition,
+                            plan.maxRepetition,
+                            plan.hasLeadingAssertions,
+                            MultiAnchorCompiler.isWideLeadingClass(plan.leadingClass!!),
+                            ExcludedSet.of(plan),
                             inner
                         )
                     else
                         null
                 }
 
-                -> null
+                is StartPlan.LineAnchor -> null
+                else -> null
             }
         }
 
@@ -1075,15 +1011,16 @@ internal interface Utf8StartAccelerator {
             accelerator: Utf8StartAccelerator, scanner: Utf8InputScanner, pos: Int
         ): Int {
             return when (accelerator) {
-                -> lit.findCandidate(scanner, pos)
-                -> cil.findCandidate(scanner, pos)
-                -> unicode.findCandidate(scanner, pos)
-                -> fo.findCandidate(scanner, pos)
-                -> fc.findCandidate(scanner, pos)
-                -> cc.findCandidate(scanner, pos)
-                -> t.findCandidate(scanner, pos)
-                -> ml.findCandidate(scanner, pos)
-                -> le.findCandidate(scanner, pos)
+                is Literal -> accelerator.findCandidate(scanner, pos)
+                is CaseInsensitiveLiteral -> accelerator.findCandidate(scanner, pos)
+                is UnicodeCaseInsensitiveLiteral -> accelerator.findCandidate(scanner, pos)
+                is FixedOffset -> accelerator.findCandidate(scanner, pos)
+                is FixedOffsetClass -> accelerator.findCandidate(scanner, pos)
+                is CharClass -> accelerator.findCandidate(scanner, pos)
+                is Teddy -> accelerator.findCandidate(scanner, pos)
+                is MultiLiteral -> accelerator.findCandidate(scanner, pos)
+                is LeadingExpansion -> accelerator.findCandidate(scanner, pos)
+                else -> error("unknown accelerator")
             }
         }
 

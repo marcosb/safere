@@ -74,7 +74,7 @@ internal class EngineEquivalenceFuzzerTest {
     @Test
     fun surrogateInteriorFindAndUnicodePathsAgree() {
         for (input in arrayOf<String>("\udb7d\udf02A", "\ud800A", "é😀中a", "\udc00a")) {
-            for (start in 0..input.length) EngineEquivalenceFuzzer.Companion.check(".|", input, start)
+            for (start in 0..input.size) EngineEquivalenceFuzzer.Companion.check(".|", input, start)
         }
     }
 
@@ -84,9 +84,9 @@ internal class EngineEquivalenceFuzzerTest {
             for (quantifier in arrayOf<String>("*", "*?", "+", "+?")) {
                 val regex = "(" + scalar + quantifier + ")([ab])(\\b{g})"
                 for (input in arrayOf<String>("\uD83D\uDC4Da\uD83D\uDC4Db", "\uDC4Da\uDC4Db")) {
-                    for (start in 0..input.length) {
+                    for (start in 0..input.size) {
                         EngineEquivalenceFuzzer.Companion.check(regex, input, start)
-                        for (end in start..input.length) {
+                        for (end in start..input.size) {
                             for (transparent in booleanArrayOf(false, true)) {
                                 for (anchoring in booleanArrayOf(false, true)) {
                                     EngineEquivalenceFuzzer.Companion.checkRegion(
@@ -124,9 +124,9 @@ internal class EngineEquivalenceFuzzerTest {
     fun scalarPrefixesAndGraphemeBoundariesAgreeAcrossSearchPaths() {
         for (regex in arrayOf<String>("\\p{Cs}\\b{g}", "(\\uDC4D)(\\b{g})", "\\p{So}\\b{g}", "\\b{g}([^a])")) {
             for (input in arrayOf<String>("\uD83D\uDC4D", "a\uD83D\uDC4D\uDC4Da")) {
-                for (start in 0..input.length) {
+                for (start in 0..input.size) {
                     EngineEquivalenceFuzzer.Companion.check(regex, input, start)
-                    for (end in start..input.length) {
+                    for (end in start..input.size) {
                         for (transparent in booleanArrayOf(false, true)) {
                             for (anchoring in booleanArrayOf(false, true)) {
                                 EngineEquivalenceFuzzer.Companion.checkRegion(

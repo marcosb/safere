@@ -18,7 +18,7 @@ internal object RegexSweep {
             val pattern = Pattern.compile(regex, flags)
             return Outcome(true, operationTrace(pattern, inputs, findLimit), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: StackOverflowError) {
             return Outcome(false, "", "StackOverflowError")
         } catch (e: RuntimeException) {
@@ -31,7 +31,7 @@ internal object RegexSweep {
             val pattern = org.safere.Pattern.compile(regex, flags)
             return Outcome(true, operationTrace(pattern, inputs, findLimit), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: StackOverflowError) {
             return Outcome(false, "", "StackOverflowError")
         } catch (e: RuntimeException) {
@@ -291,8 +291,7 @@ internal object RegexSweep {
     private fun escape(value: String): String {
         val result = StringBuilder()
         for (i in 0..<value.length) {
-            val c = value.get(i)
-            when (c) {
+            when (val c = value.get(i)) {
                 '\\' -> result.append("\\\\")
                 '\n' -> result.append("\\n")
                 '\r' -> result.append("\\r")

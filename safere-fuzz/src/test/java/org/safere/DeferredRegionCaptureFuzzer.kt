@@ -41,7 +41,7 @@ class DeferredRegionCaptureFuzzer {
             for (content in arrayOf<String>(body, "", "!", body + "!", body)) {
                 val input = prefix + content + suffix
                 val start = prefix.length
-                val end = start + content.length
+                val end = start + content.size
                 for (operation in 0..2) {
                     actual
                         .reset(input)
@@ -99,7 +99,7 @@ class DeferredRegionCaptureFuzzer {
 
     companion object {
         private fun pick(data: FuzzedDataProvider, vararg values: String): String {
-            return values[data.consumeInt(0, values.size - 1)]
+            return values[data.consumeInt(0, values.length - 1)]
         }
     }
 }

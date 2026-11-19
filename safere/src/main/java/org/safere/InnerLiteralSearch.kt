@@ -9,7 +9,7 @@ import java.util.*
 /** A required suffix and a guarded gap can exclude a prefix of candidate match starts.  */
 internal class InnerLiteralSearch private constructor(
     private val suffix: RejectPrefilter.Literal,
-    private val gap: CharClassScanInfo,
+    private var gap: CharClassScanInfo,
     private val prefixCodePoints: Int
 ) {
     /**
@@ -33,14 +33,14 @@ internal class InnerLiteralSearch private constructor(
         }
         val inner: Int
         if (scanner is Utf8InputScanner) {
-            inner = scanner.indexOf(suffix.utf8, suffix.failure, suffix.shifts, from)
+            inner = scanner.indexOf(suffix.utf8!!, suffix.failure!!, suffix.shifts!!, from)
         } else if (scanner is StringRegionInputScanner) {
-            inner = scanner.indexOf(suffix.literal, from, scanner.length())
+            inner = scanner.indexOf(suffix.literal!!, from, scanner.length)
         } else {
-            val text = (scanner as StringInputScanner).text()
+            val text = (scanner as StringInputScanner).text()!!
             inner =
                 StringLiteralSearch.indexOf(
-                    text, suffix.literal, suffix.anchorOffset, suffix.anchor, from
+                    text, suffix.literal!!, suffix.anchorOffset, suffix.anchor, from
                 )
         }
         if (inner < 0) {
@@ -50,14 +50,14 @@ internal class InnerLiteralSearch private constructor(
         var count = 0
         while (count < MAX_BACKWARD_CODE_POINTS && position > from) {
             val decoded = scanner.decodeBackward(position)
-            val previous: Int = InputScanner.Companion.position(decoded)
+            val previous: Int = InputScanner.position(decoded)
             if (previous < from) {
                 break
             }
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            if (!gap.contains(InputScanner.Companion.codePoint(decoded))) {
+            if (!gap!!.contains(InputScanner.codePoint(decoded))) {
                 return Math.max(from, scanner.retreatByCodePoints(position, prefixCodePoints))
             }
             position = previous
@@ -76,7 +76,7 @@ internal class InnerLiteralSearch private constructor(
 
         fun compile(ast: Regexp?, rejectPrefilter: RejectPrefilter?): InnerLiteralSearch? {
             val pending: Deque<Regexp> = ArrayDeque<Regexp>()
-            pending.push(ast)
+            pending.push(ast!!)
             val prefix = StringBuilder()
             val suffix = StringBuilder()
             var gap: CharClassScanInfo? = null
@@ -84,8 +84,8 @@ internal class InnerLiteralSearch private constructor(
                 val node = pending.pop()
                 when (node.op) {
                     RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE, RegexpOp.CONCAT -> {
-                        for (i in node.subs.indices.reversed()) {
-                            pending.push(node.subs.get(i))
+                        for (i in node.subs!!.indices.reversed()) {
+                            pending.push(node.subs!!.get(i))
                         }
                     }
 
@@ -115,14 +115,14 @@ internal class InnerLiteralSearch private constructor(
                         if (gap != null || prefix.isEmpty()) {
                             return null
                         }
-                        var operand: Regexp = node.subs.getFirst()
+                        var operand: Regexp = node.subs!!.first()!!
                         while (operand.op == RegexpOp.CAPTURE || operand.op == RegexpOp.NON_CAPTURE) {
-                            operand = operand.subs.getFirst()
+                            operand = operand.subs!!.first()!!
                         }
-                        if (operand.op != RegexpOp.CHAR_CLASS || operand.charClass.isEmpty()) {
+                        if (operand.op != RegexpOp.CHAR_CLASS || operand.charClass!!.isEmpty()) {
                             return null
                         }
-                        gap = CharClassScanInfo.Companion.fromCharClass(operand.charClass)
+                        gap = CharClassScanInfo.fromCharClass(operand.charClass!!)
                     }
 
                     else -> {
@@ -140,8 +140,8 @@ internal class InnerLiteralSearch private constructor(
                 )
                     rejectPrefilter
                 else
-                    RejectPrefilter.Literal.Companion.create(literal)
-            return InnerLiteralSearch(filter, gap, prefix.codePointCount(0, prefix.length()))
+                    RejectPrefilter.Literal.create(literal)
+            return InnerLiteralSearch(filter, gap!!, prefix.codePointCount(0, prefix.length))
         }
 
         private fun appendScalar(target: StringBuilder, rune: Int): Boolean {

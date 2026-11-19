@@ -57,9 +57,6 @@ class AdaptiveCaptureSharedBenchmark {
         val reader: AdaptiveCaptureCase.Task?
         val booleanConsumer: AdaptiveCaptureCase.Task?
 
-        init {
-            this.reader = reader
-            this.booleanConsumer = booleanConsumer
-        }
+
     }
 }

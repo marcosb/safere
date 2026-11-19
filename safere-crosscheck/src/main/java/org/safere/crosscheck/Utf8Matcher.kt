@@ -26,7 +26,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
         delegate = pattern!!.saferePattern().matcher(input!!.delegate())
         if (input.validated()) {
             val decoded = input.decoded()
-            val coordinates: Utf8Coordinates? = Utf8Coordinates.Companion.create(decoded)
+            val coordinates: Utf8Coordinates? = Utf8Coordinates.create(decoded)
             checkNotNull(coordinates) { "validated UTF-8 decoded to malformed UTF-16" }
             oracles =
                 Oracles(
@@ -77,8 +77,8 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
         if (oracles == null) {
             return actual
         }
-        val stringResult: Boolean = Companion.findNextScalarAligned(oracles!!.safereString!!, oracles!!.coordinates!!)
-        val jdkResult: Boolean = Companion.findNextScalarAligned(oracles!!.jdk!!, oracles!!.coordinates!!)
+        val stringResult: Boolean = findNextScalarAligned(oracles!!.safereString!!, oracles!!.coordinates!!)
+        val jdkResult: Boolean = findNextScalarAligned(oracles!!.jdk!!, oracles!!.coordinates!!)
         compare("find", "", "SafeRE UTF-8", actual, "SafeRE String", stringResult)
         compare("find", "", "SafeRE String", stringResult, "JDK", jdkResult)
         if (actual) {
@@ -214,14 +214,14 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
             (matcher as java.util.regex.Matcher).reset()
         }
         val output = StringBuilder()
-        if (Companion.findNextScalarAligned(matcher, oracles!!.coordinates!!)) {
+        if (findNextScalarAligned(matcher, oracles!!.coordinates!!)) {
             do {
                 if (matcher is Matcher) {
                     matcher.appendReplacement(output, replacement)
                 } else {
                     (matcher as java.util.regex.Matcher).appendReplacement(output, replacement)
                 }
-            } while (all && Companion.findNextScalarAligned(matcher, oracles!!.coordinates!!))
+            } while (all && findNextScalarAligned(matcher, oracles!!.coordinates!!))
         }
         if (matcher is Matcher) {
             matcher.appendTail(output)
@@ -410,9 +410,9 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
         if (first.failure == null && second.failure == null) {
             return
         }
-        val firstResult: Any? =
+        val firstResult: Any =
             if (first.failure == null) first.value else "throws " + first.failure.javaClass.getName()
-        val secondResult: Any? =
+        val secondResult: Any =
             if (second.failure == null)
                 second.value
             else
@@ -444,9 +444,9 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
     }
 
     private fun context(): String {
-        val shownLength = min(input.length(), 256)
+        val shownLength = min(input.length, 256)
         val shown = Arrays.copyOfRange(input.bytes(), input.offset(), input.offset() + shownLength)
-        val suffix = if (shownLength == input.length()) "" else " ..."
+        val suffix = if (shownLength == input.length) "" else " ..."
         return ("pattern: /"
                 + pattern.pattern()
                 + "/\n"
@@ -456,7 +456,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
                 + "logical byte window: offset="
                 + input.offset()
                 + ", length="
-                + input.length()
+                + input.length
                 + "\n"
                 + "logical bytes: "
                 + shown.contentToString() + suffix
@@ -485,7 +485,6 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
                 return
             }
             val decoded = input.decoded()
-            val coordinates: Utf8Coordinates? = Utf8Coordinates.Companion.create(decoded)
             checkNotNull(coordinates) { "validated UTF-8 decoded to malformed UTF-16" }
             val stringResult: Boolean =
                 findNextScalarAligned(pattern.saferePattern().matcher(decoded), coordinates)
@@ -541,7 +540,7 @@ class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
                         + "\nlogical byte window: offset="
                         + input.offset()
                         + ", length="
-                        + input.length()
+                        + input.length
                         + "\nUTF-16->UTF-8 boundaries: "
                         + coordinates.describe())
             )

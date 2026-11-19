@@ -41,7 +41,7 @@ class RobustnessFuzzer {
             var previousEnd = -1
             var attempts = 0
             while (matcher.find()) {
-                if (matcher.start() < 0 || matcher.end() < matcher.start() || matcher.end() > input.length || matcher.end() < previousEnd || ++attempts > input.length + 1) {
+                if (matcher.start() < 0 || matcher.end() < matcher.start() || matcher.end() > input.size || matcher.end() < previousEnd || ++attempts > input.size + 1) {
                     throw AssertionError("invalid String match bounds or find progress")
                 }
                 previousEnd = matcher.end()

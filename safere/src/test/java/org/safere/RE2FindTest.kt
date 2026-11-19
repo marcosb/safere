@@ -77,8 +77,8 @@ internal class RE2FindTest {
         while (g < numGroups && g <= m.groupCount()) {
             val expectedStartByte = tc.matches[0][2 * g]
             val expectedEndByte = tc.matches[0][2 * g + 1]
-            val expectedStartChar: Int = Companion.utf8ByteOffsetToCharOffset(tc.text!!, expectedStartByte)
-            val expectedEndChar: Int = Companion.utf8ByteOffsetToCharOffset(tc.text, expectedEndByte)
+            val expectedStartChar: Int = utf8ByteOffsetToCharOffset(tc.text!!, expectedStartByte)
+            val expectedEndChar: Int = utf8ByteOffsetToCharOffset(tc.text, expectedEndByte)
 
             Assertions.assertThat(m.start(g))
                 .`as`("start(%d) for pattern \"%s\"", g, tc.pattern)
@@ -112,7 +112,7 @@ internal class RE2FindTest {
     companion object {
         /**
          * Build a FindTestCase. `n` is the number of matches. `x` is a flat array of (start,
-         * end) pairs in UTF-8 byte offsets. Each match has `x.length / n` values (group 0 start,
+         * end) pairs in UTF-8 byte offsets. Each match has `x.size / n` values (group 0 start,
          * group 0 end, group 1 start, group 1 end, ...).
          */
         private fun tc(pat: String?, text: String?, n: Int, vararg x: Int): FindTestCase {
@@ -158,8 +158,8 @@ internal class RE2FindTest {
             if (startByte < 0 || endByte < 0) {
                 return null // group did not participate
             }
-            val startChar: Int = Companion.utf8ByteOffsetToCharOffset(tc.text!!, startByte)
-            val endChar: Int = Companion.utf8ByteOffsetToCharOffset(tc.text, endByte)
+            val startChar: Int = utf8ByteOffsetToCharOffset(tc.text!!, startByte)
+            val endChar: Int = utf8ByteOffsetToCharOffset(tc.text, endByte)
             return tc.text.substring(startChar, endChar)
         }
 

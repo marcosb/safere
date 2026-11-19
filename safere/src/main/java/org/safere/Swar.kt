@@ -14,19 +14,33 @@ internal object Swar {
 
     /** Returns whether the ranges can be matched one UTF-16 code unit at a time.  */
     fun supportsBmpCodeUnitRanges(ranges: IntArray, maximumRanges: Int): Boolean {
-        if (ranges.length < 2 || ranges.length > maximumRanges * 2 || (ranges.length and 1) != 0) {
+        if (ranges.size < 2 || ranges.size > maximumRanges * 2 || (ranges.size and 1) != 0) {
             return false
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until ranges.size step 2) {
+            val low = ranges[i]
+            val high = ranges[i + 1]
+            if (low < 0
+                || high > Character.MAX_VALUE.code
+                || low > high
+                || (low <= Character.MAX_SURROGATE.code && high >= Character.MIN_SURROGATE.code)
+            ) {
+                return false
+            }
+        }
         return true
     }
 
     /** Returns whether the ranges can be matched by an ASCII byte kernel.  */
     fun supportsAsciiRanges(ranges: IntArray, maximumRanges: Int): Boolean {
-        if (ranges.length < 2 || ranges.length > maximumRanges * 2 || (ranges.length and 1) != 0) {
+        if (ranges.size < 2 || ranges.size > maximumRanges * 2 || (ranges.size and 1) != 0) {
             return false
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until ranges.size step 2) {
+            if (ranges[i] < 0 || ranges[i] > ranges[i + 1] || ranges[i + 1] > 0x7F) {
+                return false
+            }
+        }
         return true
     }
 

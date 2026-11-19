@@ -11,6 +11,25 @@ import java.util.List
 import java.util.function.Function
 import java.util.function.Predicate
 import java.util.stream.Collectors
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.IllegalArgumentException
+import kotlin.String
+import kotlin.check
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashMap
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.filter
+import kotlin.collections.toList
+import kotlin.plus
+import kotlin.require
+import kotlin.requireNotNull
+import kotlin.sequences.filter
+import kotlin.sequences.toList
+import kotlin.text.filter
+import kotlin.text.toList
+import kotlin.toList
 
 /** Resolves data-declared workloads that use specialized measurement machinery.  */
 internal class SpecializedBenchmarkPlan private constructor(
@@ -82,7 +101,7 @@ internal class SpecializedBenchmarkPlan private constructor(
             val trials: MutableMap<String?, Trial?> = LinkedHashMap<String?, Trial?>()
             val exclusions: MutableList<MaterializedExecutionPlan.Entry?> =
                 ArrayList<MaterializedExecutionPlan.Entry?>()
-            for (entry in MaterializedExecutionPlan.Companion.load().entriesForRunner("java")) {
+            for (entry in MaterializedExecutionPlan.load().entriesForRunner("java")) {
                 if (!isSpecialized(entry.operation, entry.measurement)) {
                     continue
                 }
@@ -90,7 +109,7 @@ internal class SpecializedBenchmarkPlan private constructor(
                     exclusions.add(entry)
                     continue
                 }
-                val converted = Trial(entry.workload, RegexEngineVariant.Companion.fromId(entry.engineId))
+                val converted = Trial(entry.workload, RegexEngineVariant.fromId(entry.engineId))
                 require(
                     trials.put(
                         converted.id(),
@@ -114,7 +133,7 @@ internal class SpecializedBenchmarkPlan private constructor(
 
         @JvmStatic
         fun main(args: Array<String>) {
-            require(args.length == 1) { "Usage: SpecializedBenchmarkPlan <average-time|pattern-set|retained-memory>" }
+            require(args.size == 1) { "Usage: SpecializedBenchmarkPlan <average-time|pattern-set|retained-memory>" }
             val plan: SpecializedBenchmarkPlan = load()
             val selected =
                 when (args[0]) {

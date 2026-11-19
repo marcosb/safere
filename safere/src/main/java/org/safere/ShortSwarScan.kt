@@ -17,7 +17,7 @@ internal object ShortSwarScan {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 2)) {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
-        val numRanges: Int = ranges.length / 2
+        val numRanges: Int = ranges.size / 2
         if (requiresScalarRangeComparison(ranges)) {
             return scalarIndexOfCharClass(chars, offset, length, ranges, start)
         }
@@ -36,7 +36,12 @@ internal object ShortSwarScan {
                 val matches = Swar.exactShortRangeMask(word, low0, high0)
                 if (matches != 0L) {
                     val limit = pos + 4
-                    /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                    for (i in pos until limit) {
+                        val ch: Char = chars[offset + i]
+                        if (ch.code >= ranges[0] && ch.code <= ranges[1]) {
+                            return i
+                        }
+                    }
                 }
                 pos += 4
             }
@@ -47,13 +52,26 @@ internal object ShortSwarScan {
                     Swar.exactShortRangeMask(word, low0, high0) or Swar.exactShortRangeMask(word, low1, high1)
                 if (matches != 0L) {
                     val limit = pos + 4
-                    /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                    for (i in pos until limit) {
+                        val ch: Char = chars[offset + i]
+                        if ((ch.code >= ranges[0] && ch.code <= ranges[1]) || (ch.code >= ranges[2] && ch.code <= ranges[3])) {
+                            return i
+                        }
+                    }
                 }
                 pos += 4
             }
         }
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos < length) {
+            val ch: Char = chars[offset + pos]
+            for (r in 0 until numRanges) {
+                if (ch.code >= ranges[r * 2] && ch.code <= ranges[r * 2 + 1]) {
+                    return pos
+                }
+            }
+            pos++
+        }
         return -1
     }
 
@@ -61,7 +79,7 @@ internal object ShortSwarScan {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 2) || ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
-        val numRanges: Int = ranges.length / 2
+        val numRanges: Int = ranges.size / 2
         if (requiresScalarRangeComparison(ranges)) {
             return scalarIndexOfCharClassUtf16(bytes, offset, length, ranges, start)
         }
@@ -80,7 +98,14 @@ internal object ShortSwarScan {
                 val matches = Swar.exactShortRangeMask(word, low0, high0)
                 if (matches != 0L) {
                     val limit = pos + 4
-                    /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                    for (i in pos until limit) {
+                        val ch =
+                            ((bytes[offset + (i shl 1)].toInt() and 0xFF)
+                                    or ((bytes[offset + (i shl 1) + 1].toInt() and 0xFF) shl 8))
+                        if (ch >= ranges[0] && ch <= ranges[1]) {
+                            return i
+                        }
+                    }
                 }
                 pos += 4
             }
@@ -91,22 +116,43 @@ internal object ShortSwarScan {
                     Swar.exactShortRangeMask(word, low0, high0) or Swar.exactShortRangeMask(word, low1, high1)
                 if (matches != 0L) {
                     val limit = pos + 4
-                    /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                    for (i in pos until limit) {
+                        val ch =
+                            ((bytes[offset + (i shl 1)].toInt() and 0xFF)
+                                    or ((bytes[offset + (i shl 1) + 1].toInt() and 0xFF) shl 8))
+                        if ((ch >= ranges[0] && ch <= ranges[1]) || (ch >= ranges[2] && ch <= ranges[3])) {
+                            return i
+                        }
+                    }
                 }
                 pos += 4
             }
         }
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos < length) {
+            val ch =
+                ((bytes[offset + (pos shl 1)].toInt() and 0xFF)
+                        or ((bytes[offset + (pos shl 1) + 1].toInt() and 0xFF) shl 8))
+            for (r in 0 until numRanges) {
+                if (ch >= ranges[r * 2] && ch <= ranges[r * 2 + 1]) {
+                    return pos
+                }
+            }
+            pos++
+        }
         return -1
     }
 
     fun indexOfIgnoreCase(chars: CharArray, offset: Int, length: Int, prefix: String, start: Int): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return Math.min(Math.max(0, start), length)
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until prefixLen) {
+            if (prefix[i].code > 127) {
+                return VectorScanProvider.Companion.UNSUPPORTED
+            }
+        }
         if (prefixLen > 1) {
             return Utf16.indexOfIgnoreCase(chars, offset, length, prefix, start)
         }
@@ -114,7 +160,7 @@ internal object ShortSwarScan {
         var pos = Math.max(0, start)
         val wordEnd = length - 4
 
-        val first: Char = prefix.charAt(0)
+        val first: Char = prefix[0]
         val low = Ascii.toLowerCase(first).code.toShort()
         val high = Ascii.toUpperCase(first).code.toShort()
         val repeatedLow = (low.toLong() and 0xFFFFL) * Swar.SHORT_ONES
@@ -130,24 +176,39 @@ internal object ShortSwarScan {
 
             if (matches != 0L) {
                 val limit = pos + 4
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in pos until limit) {
+                    if (WorkLimit.candidateInBounds(i, start, length, prefixLen)
+                        && Utf16.regionMatchesIgnoreCase(chars, offset + i, prefix, prefixLen)
+                    ) {
+                        return i
+                    }
+                }
             }
             pos += 4
         }
 
         val scalarLimit = length - prefixLen
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= scalarLimit) {
+            if (Utf16.regionMatchesIgnoreCase(chars, offset + pos, prefix, prefixLen)) {
+                return pos
+            }
+            pos++
+        }
         return -1
     }
 
     fun indexOfIgnoreCaseUtf16(
         bytes: ByteArray, offset: Int, length: Int, prefix: String, start: Int
     ): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return Math.min(Math.max(0, start), length)
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until prefixLen) {
+            if (prefix[i].code > 127) {
+                return VectorScanProvider.Companion.UNSUPPORTED
+            }
+        }
         if (prefixLen > 1) {
             return Utf16.indexOfIgnoreCaseUtf16(bytes, offset, length, prefix, start)
         }
@@ -158,7 +219,7 @@ internal object ShortSwarScan {
         var pos = Math.max(0, start)
         val wordEnd = length - 4
 
-        val first: Char = prefix.charAt(0)
+        val first: Char = prefix[0]
         val low = Ascii.toLowerCase(first).code.toShort()
         val high = Ascii.toUpperCase(first).code.toShort()
         val repeatedLow = (low.toLong() and 0xFFFFL) * Swar.SHORT_ONES
@@ -174,32 +235,62 @@ internal object ShortSwarScan {
 
             if (matches != 0L) {
                 val limit = pos + 4
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in pos until limit) {
+                    if (WorkLimit.candidateInBounds(i, start, length, prefixLen)
+                        && Utf16.regionMatchesIgnoreCaseUtf16(bytes, offset + (i shl 1), prefix, prefixLen)
+                    ) {
+                        return i
+                    }
+                }
             }
             pos += 4
         }
 
         val scalarLimit = length - prefixLen
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= scalarLimit) {
+            if (Utf16.regionMatchesIgnoreCaseUtf16(bytes, offset + (pos shl 1), prefix, prefixLen)) {
+                return pos
+            }
+            pos++
+        }
         return -1
     }
 
     private fun requiresScalarRangeComparison(ranges: IntArray): Boolean {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 1 until ranges.size step 2) {
+            if (ranges[i] > 0x7FFF) {
+                return true
+            }
+        }
         return false
     }
 
     private fun scalarIndexOfCharClass(
         chars: CharArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in maxOf(0, start) until length) {
+            val ch: Char = chars[offset + i]
+            for (r in ranges.indices step 2) {
+                if (ch.code >= ranges[r] && ch.code <= ranges[r + 1]) {
+                    return i
+                }
+            }
+        }
         return -1
     }
 
     private fun scalarIndexOfCharClassUtf16(
         bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in maxOf(0, start) until length) {
+            val byteIndex = offset + (i shl 1)
+            val ch = ((bytes[byteIndex].toInt() and 0xFF) or ((bytes[byteIndex + 1].toInt() and 0xFF) shl 8))
+            for (r in ranges.indices step 2) {
+                if (ch >= ranges[r] && ch <= ranges[r + 1]) {
+                    return i
+                }
+            }
+        }
         return -1
     }
 

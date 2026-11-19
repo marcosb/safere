@@ -73,10 +73,10 @@ internal class BitState(// -----------------------------------------------------
         windowExceeded = false
         budgetExceeded = false
         stepCount = 0
-        stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size() * textSlots)
+        stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
         bestMatch = null
         matchResult =
-            if (resultBuffer != null && resultBuffer.length >= ncap) resultBuffer else IntArray(ncap)
+            if (resultBuffer != null && resultBuffer.size >= ncap) resultBuffer else IntArray(ncap)
         val limit = if (anchored) startPos + 1 else Math.min(searchLimit + 1, textLen + 1)
         pruneAcrossStarts = false
         unvisitedKindLimit = ALT
@@ -98,21 +98,21 @@ internal class BitState(// -----------------------------------------------------
                 foldVisitedIntoDead()
             }
             if (searchStart < textLen) {
-                searchStart = InputScanner.Companion.position(text!!.decodeForward(searchStart)) - 1
+                searchStart = InputScanner.position(text!!.decodeForward(searchStart)) - 1
             }
             searchStart++
         }
         return null
     }
 
-    private val instructions: Array<Inst>
-    private var text: InputScanner?
-    private var textLen: Int
-    private var endPos: Int
-    private var longest: Boolean
-    private var endMatch: Boolean
-    private var ncap: Int
-    private var graphemeContext: GraphemeSupport.Context?
+    private val instructions: Array<Inst?>
+    private var text: InputScanner? = null
+    private var textLen: Int = 0
+    private var endPos: Int = 0
+    private var longest: Boolean = false
+    private var endMatch: Boolean = false
+    private var ncap: Int = 0
+    private var graphemeContext: GraphemeSupport.Context? = null
 
     /**
      * Per-start visited bitmap: bit `((pos - basePos) * progSize + instId)` tracks which (ALT,
@@ -147,13 +147,11 @@ internal class BitState(// -----------------------------------------------------
     private val dead: LongArray
 
     /** Dirty word ranges of [.visited] and [.dead]; clears touch only these words.  */
-    private var visitedLo: Int
-
-    private var visitedHi: Int
-    private var deadLo: Int
-    private var deadHi: Int
-
-    private var textSlots: Int
+    private var visitedLo: Int = 0
+    private var visitedHi: Int = 0
+    private var deadLo: Int = 0
+    private var deadHi: Int = 0
+    private var textSlots: Int = 0
     private val progSize: Int
 
     /** Whether the current [.doSearch] prunes later starts with [.dead].  */
@@ -163,12 +161,12 @@ internal class BitState(// -----------------------------------------------------
      * Highest [.altKind] value that [.shouldVisit] accepts without touching the bitmaps:
      * [.ALT] while cross-start pruning is inactive, [.NOT_ALT] once active.
      */
-    private var unvisitedKindLimit: Byte
+    private var unvisitedKindLimit: Byte = 0.toByte()
 
     /**
      * Step count at which [.trySearch] either activates cross-start pruning or trips [ ][.stepBudget]. Merging both checks keeps a single branch on the hot instruction loop.
      */
-    private var nextStepThreshold: Long
+    private var nextStepThreshold: Long = 0L
 
     /**
      * Per-instruction kind for [.shouldVisit]: 0 = not an ALT, 1 = ALT, 2 = epsilon-cycle ALT.
@@ -180,7 +178,6 @@ internal class BitState(// -----------------------------------------------------
 
     /** Loop entry/check continuations, optionally including one adjacent capture write.  */
     private val loopEntries: Array<LoopEntry?>?
-
     private val lazyRuneLoops: Array<LazyRuneLoop?>?
 
     /** Progress checks immediately following captures, or null when none exist.  */
@@ -190,55 +187,54 @@ internal class BitState(// -----------------------------------------------------
     private val greedyRunes: Array<Inst?>?
 
     /** Current capture registers.  */
-    private var cap: IntArray
+    private lateinit var cap: IntArray
 
     /** Current loop progress-check registers.  */
     private val loopRegs: IntArray
 
     /** Best match found so far.  */
-    private var bestMatch: IntArray?
+    private var bestMatch: IntArray? = null
 
     /** Caller-owned or BitState-owned array that receives successful capture results.  */
-    private var matchResult: IntArray
+    private lateinit var matchResult: IntArray
 
     /** Work-budget accounting for falling back when BitState backtracking is too expensive.  */
-    private var stepBudget: Long
-
-    private var stepCount: Long
-    private var budgetExceeded: Boolean
+    private var stepBudget: Long = 0L
+    private var stepCount: Long = 0L
+    private var budgetExceeded: Boolean = false
     private var speculative = false
     private var windowExceeded = false
 
     /** Explicit job stack for backtracking.  */
-    private var jobInstId: IntArray
+    private lateinit var jobInstId: IntArray
 
-    private var jobPos: IntArray
-    private var jobCount: Int
-    private var basePos: Int
+    private lateinit var jobPos: IntArray
+    private var jobCount: Int = 0
+    private var basePos: Int = 0
 
     /** Creates a fresh workspace. Passing null greedy-loop metadata uses ordinary ALT dispatch.  */
     init {
-        this.instructions = prog.frozenInstructions()
+        this.instructions = prog.frozenInstructions()!!
         this.text = text
-        this.textLen = text.length()
+        this.textLen = text.length
         this.basePos = startPos
         this.endPos = endPos
         this.longest = longest
         this.endMatch = endMatch || prog.anchorEnd()
         this.ncap = ncap
         this.textSlots = (endPos - basePos) + 2
-        this.progSize = prog.size()
-        this.graphemeContext = GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+        this.progSize = prog.size
+        this.graphemeContext = GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics())
 
-        val cycleAlts = prog.epsilonCycleAlts()
+        val cycleAlts = prog.epsilonCycleAlts()!!
         this.altKind = ByteArray(progSize)
         for (i in 0..<progSize) {
             val instruction = prog.inst(i)
-            if (cycleAlts[i]) {
+            if (cycleAlts!![i]) {
                 altKind[i] = CYCLE_ALT
             } else {
-                val op = instruction.opCode
-                if (op == InstOp.Companion.OP_ALT || op == InstOp.Companion.OP_ALT_MATCH) {
+                val op = instruction!!.opCode
+                if (op == InstOp.OP_ALT || op == InstOp.OP_ALT_MATCH) {
                     altKind[i] = ALT
                 }
             }
@@ -270,7 +266,7 @@ internal class BitState(// -----------------------------------------------------
         this.jobInstId = IntArray(maxJobs)
         this.jobPos = IntArray(maxJobs)
         this.jobCount = 0
-        this.stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size() * textSlots)
+        this.stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
         this.nextStepThreshold = this.stepBudget
         this.unvisitedKindLimit = ALT
         this.stepCount = 0
@@ -360,8 +356,8 @@ internal class BitState(// -----------------------------------------------------
 
     /** Pushes a job onto the stack, growing if needed.  */
     private fun push(instId: Int, pos: Int) {
-        if (jobCount >= jobInstId.length) {
-            val newLen: Int = jobInstId.length * 2
+        if (jobCount >= jobInstId.size) {
+            val newLen: Int = jobInstId.size * 2
             jobInstId = Arrays.copyOf(jobInstId, newLen)
             jobPos = Arrays.copyOf(jobPos, newLen)
         }
@@ -373,7 +369,7 @@ internal class BitState(// -----------------------------------------------------
     /** Charges every logical instruction, including instructions executed without a stack job.  */
     private fun stepWithinBudget(): Boolean {
         if (WorkCounterConfig.ENABLED) {
-            record()
+            WorkCounter.record()
         }
         return ++stepCount <= nextStepThreshold || onStepThresholdExceeded()
     }
@@ -401,7 +397,7 @@ internal class BitState(// -----------------------------------------------------
         if (ncap > 0) {
             cap[0] = startPos
         }
-        if (loopRegs.length > 0) {
+        if (loopRegs.size > 0) {
             Arrays.fill(loopRegs, -1)
         }
 
@@ -435,10 +431,10 @@ internal class BitState(// -----------------------------------------------------
                     break
                 }
 
-                val ip = instructions[id]
+                val ip = instructions[id]!!
                 when (ip.opCode) {
-                    InstOp.Companion.OP_FAIL -> {}
-                    InstOp.Companion.OP_ALT, InstOp.Companion.OP_ALT_MATCH -> {
+                    InstOp.OP_FAIL -> {}
+                    InstOp.OP_ALT, InstOp.OP_ALT_MATCH -> {
                         val rune = if (greedyRunes == null) null else greedyRunes[id]
                         if (rune != null) {
                             runGreedyLoop(id, ip, rune, pos)
@@ -468,14 +464,14 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_NOP -> {
+                    InstOp.OP_NOP -> {
                         if (shouldVisit(ip.out, pos)) {
                             id = ip.out
                             continue
                         }
                     }
 
-                    InstOp.Companion.OP_CAPTURE -> {
+                    InstOp.OP_CAPTURE -> {
                         val reg = ip.arg
                         if (reg < ncap) {
                             // Push restore sentinel: if we backtrack past this, undo the capture.
@@ -496,16 +492,16 @@ internal class BitState(// -----------------------------------------------------
                                 var nextPos = pos + 1
                                 if (cp < 0) {
                                     val decoded = text!!.decodeForward(pos)
-                                    cp = InputScanner.Companion.codePoint(decoded)
-                                    nextPos = InputScanner.Companion.position(decoded)
+                                    cp = InputScanner.codePoint(decoded)
+                                    nextPos = InputScanner.position(decoded)
                                     if (speculative && nextPos > endPos) {
                                         windowExceeded = true
                                         return false
                                     }
                                 }
-                                val rune = fused.rune
+                                val rune = fused.rune!!
                                 val matches =
-                                    if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE)
+                                    if (rune.opCode == InstOp.OP_CHAR_RANGE)
                                         rune.matchesChar(cp)
                                     else
                                         rune.matchesCharClass(cp)
@@ -548,8 +544,8 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_EMPTY_WIDTH -> {
-                        val curFlags: Int = emptyFlags(text, pos, prog.hasGraphemeSemantics(), graphemeContext)
+                    InstOp.OP_EMPTY_WIDTH -> {
+                        val curFlags: Int = Nfa.emptyFlags(text!!, pos, prog.hasGraphemeSemantics(), graphemeContext)
                         if ((ip.arg and curFlags.inv()) == 0) {
                             if (shouldVisit(ip.out, pos)) {
                                 id = ip.out
@@ -558,7 +554,7 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_LOOP_ENTER -> {
+                    InstOp.OP_LOOP_ENTER -> {
                         val reg = ip.arg
                         push(-(ncap + reg + 1), loopRegs[reg])
                         loopRegs[reg] = -1
@@ -593,7 +589,7 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_PROGRESS_CHECK -> {
+                    InstOp.OP_PROGRESS_CHECK -> {
                         val next = progressContinuation(ip, pos)
                         if (next >= 0) {
                             id = next
@@ -601,14 +597,14 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_CHAR_RANGE -> {
+                    InstOp.OP_CHAR_RANGE -> {
                         if (pos < endPos) {
                             var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
                             var nextPos = pos + 1
                             if (cp < 0) {
                                 val decoded = text!!.decodeForward(pos)
-                                cp = InputScanner.Companion.codePoint(decoded)
-                                nextPos = InputScanner.Companion.position(decoded)
+                                cp = InputScanner.codePoint(decoded)
+                                nextPos = InputScanner.position(decoded)
                                 if (speculative && nextPos > endPos) {
                                     windowExceeded = true
                                     return false
@@ -627,14 +623,14 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_CHAR_CLASS -> {
+                    InstOp.OP_CHAR_CLASS -> {
                         if (pos < endPos) {
                             var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
                             var nextPos = pos + 1
                             if (cp < 0) {
                                 val decoded = text!!.decodeForward(pos)
-                                cp = InputScanner.Companion.codePoint(decoded)
-                                nextPos = InputScanner.Companion.position(decoded)
+                                cp = InputScanner.codePoint(decoded)
+                                nextPos = InputScanner.position(decoded)
                                 if (speculative && nextPos > endPos) {
                                     windowExceeded = true
                                     return false
@@ -653,13 +649,13 @@ internal class BitState(// -----------------------------------------------------
                         }
                     }
 
-                    InstOp.Companion.OP_MATCH -> {
+                    InstOp.OP_MATCH -> {
                         if (endMatch && pos != endPos) {
                             // $ (dollarAnchorEnd) allows ending before a trailing line terminator at the actual
-                            // text end. Use text.length() (not endPos) because dollarAnchorEnd is a property of
+                            // text end. Use text.length (not endPos) because dollarAnchorEnd is a property of
                             // the text boundary, not the search range.
                             if (!prog.dollarAnchorEnd()
-                                || !Nfa.Companion.isAtTrailingLineTerminator(text, pos, prog.dollarAnchorUnixLines())
+                                || !Nfa.isAtTrailingLineTerminator(text!!, pos, prog.dollarAnchorUnixLines())
                             ) {
                                 break // must match at the end boundary
                             }
@@ -713,15 +709,15 @@ internal class BitState(// -----------------------------------------------------
             var nextPos = pos + 1
             if (cp < 0) {
                 val decoded = text!!.decodeForward(pos)
-                cp = InputScanner.Companion.codePoint(decoded)
-                nextPos = InputScanner.Companion.position(decoded)
+                cp = InputScanner.codePoint(decoded)
+                nextPos = InputScanner.position(decoded)
                 if (speculative && nextPos > endPos) {
                     windowExceeded = true
                     return
                 }
             }
             val matches =
-                if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE) rune.matchesChar(cp) else rune.matchesCharClass(cp)
+                if (rune.opCode == InstOp.OP_CHAR_RANGE) rune.matchesChar(cp) else rune.matchesCharClass(cp)
             if (!matches || !shouldVisit(id, nextPos) || !stepWithinBudget()) {
                 return
             }
@@ -736,7 +732,7 @@ internal class BitState(// -----------------------------------------------------
         var steps = 0
         while (pos < endPos) {
             val cp = text!!.asciiAt(pos)
-            if (cp < 0 || cp == loop.exitChar || !(if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE)
+            if (cp < 0 || cp == loop.exitChar || !(if (rune!!.opCode == InstOp.OP_CHAR_RANGE)
                     rune.matchesChar(cp)
                 else
                     rune.matchesCharClass(cp))
@@ -747,13 +743,13 @@ internal class BitState(// -----------------------------------------------------
                 // The failed literal and the body each take one step. Walk the compiled exit once
                 // to count its NOPs, captures, and restores of active capture registers.
                 steps = 2
-                var exit = instructions[loop.exitStart]
-                while (exit.opCode == InstOp.Companion.OP_CAPTURE || exit.opCode == InstOp.Companion.OP_NOP) {
+                var exit = instructions[loop.exitStart]!!
+                while (exit.opCode == InstOp.OP_CAPTURE || exit.opCode == InstOp.OP_NOP) {
                     steps++
-                    if (exit.opCode == InstOp.Companion.OP_CAPTURE && exit.arg < ncap) {
+                    if (exit.opCode == InstOp.OP_CAPTURE && exit.arg < ncap) {
                         steps++
                     }
-                    exit = instructions[exit.out]
+                    exit = instructions[exit.out]!!
                 }
             }
             if (WorkCounterConfig.ENABLED) {
@@ -830,9 +826,9 @@ internal class BitState(// -----------------------------------------------------
             return false
         }
         val newTextSlots = (endPos - startPos) + 2
-        val totalBits = prog.size() * newTextSlots
+        val totalBits = prog.size * newTextSlots
         val requiredVisitedLen = (totalBits + 63) / 64
-        return visited.length >= requiredVisitedLen && jobInstId.length >= Math.min(totalBits, 4096)
+        return visited.size >= requiredVisitedLen && jobInstId.size >= Math.min(totalBits, 4096)
     }
 
     /** Clears input-dependent references before this object enters the Pattern-level reuse cache.  */
@@ -849,14 +845,14 @@ internal class BitState(// -----------------------------------------------------
         text: InputScanner, startPos: Int, endPos: Int, ncap: Int, longest: Boolean, endMatch: Boolean
     ) {
         this.text = text
-        this.textLen = text.length()
+        this.textLen = text.length
         this.basePos = startPos
         this.endPos = endPos
         this.longest = longest
         this.endMatch = endMatch || prog.anchorEnd()
         this.ncap = ncap
         this.textSlots = (endPos - basePos) + 2
-        this.graphemeContext = GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+        this.graphemeContext = GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics())
         this.bestMatch = null
         this.jobCount = 0
         if (visitedHi >= visitedLo) {
@@ -869,11 +865,11 @@ internal class BitState(// -----------------------------------------------------
             deadLo = Integer.MAX_VALUE
             deadHi = -1
         }
-        if (cap.length < ncap) {
+        if (cap.size < ncap) {
             cap = IntArray(ncap)
         }
         Arrays.fill(cap, 0, ncap, -1)
-        if (loopRegs.length > 0) {
+        if (loopRegs.size > 0) {
             Arrays.fill(loopRegs, -1)
         }
     }
@@ -903,7 +899,7 @@ internal class BitState(// -----------------------------------------------------
          * program, or -1 if the program is too large for BitState.
          */
         fun maxTextSize(prog: Prog): Int {
-            val instCount = prog.size()
+            val instCount = prog.size
             if (instCount == 0) {
                 return -1
             }
@@ -924,7 +920,7 @@ internal class BitState(// -----------------------------------------------------
         fun search(
             prog: Prog, text: String, anchored: Boolean, longest: Boolean, endMatch: Boolean, nsubmatch: Int
         ): IntArray? {
-            return search(prog, text, 0, text.length(), anchored, longest, endMatch, nsubmatch)
+            return search(prog, text, 0, text.length, anchored, longest, endMatch, nsubmatch)
         }
 
         /**
@@ -949,7 +945,7 @@ internal class BitState(// -----------------------------------------------------
             endMatch: Boolean,
             nsubmatch: Int
         ): IntArray? {
-            return search(prog, text, startPos, text.length(), anchored, longest, endMatch, nsubmatch)
+            return search(prog, text, startPos, text.length, anchored, longest, endMatch, nsubmatch)
         }
 
         /**
@@ -959,7 +955,7 @@ internal class BitState(// -----------------------------------------------------
          * @param text the full input text
          * @param startPos the char index in `text` at which to begin searching
          * @param searchLimit upper bound on where to try start positions; only positions up to this index
-         * are tried. The inner search may still match characters beyond this position. Use `text.length()` for unbounded search.
+         * are tried. The inner search may still match characters beyond this position. Use `text.length` for unbounded search.
          * @param anchored if true, match must start at `startPos`
          * @param longest if true, find the longest match; otherwise find the first (greedy) match
          * @param endMatch if true, match must extend to end of text
@@ -1018,7 +1014,7 @@ internal class BitState(// -----------------------------------------------------
             return search(
                 cached,
                 prog,
-                StringInputScanner(text),
+                StringInputScanner(text!!),
                 startPos,
                 searchLimit,
                 anchored,
@@ -1043,7 +1039,7 @@ internal class BitState(// -----------------------------------------------------
         ): IntArray? {
             var anchored = anchored
             var endMatch = endMatch
-            val textLen = text.length()
+            val textLen = text.length
             val maxLen: Int = maxTextSize(prog)
             if (maxLen < 0 || textLen > maxLen) {
                 return null // text too large for BitState
@@ -1082,7 +1078,7 @@ internal class BitState(// -----------------------------------------------------
             endMatch: Boolean
         ): BitState {
             return getOrCreate(
-                cached, prog, StringInputScanner(text), startPos, endPos, ncap, longest, endMatch
+                cached, prog, StringInputScanner(text!!), startPos, endPos, ncap, longest, endMatch
             )
         }
 

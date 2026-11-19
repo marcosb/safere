@@ -34,7 +34,7 @@ internal class CrossEngineTest {
 
     /** A single cross-engine test case.  */
     @JvmRecord
-    internal data class TestCase(val pattern: String?, val input: String?, val divergence: Divergence?) {
+    internal data class TestCase(val pattern: String?, val input: String?, val divergence: Divergence?)      {
         constructor(pattern: String?, input: String?) : this(pattern, input, Divergence.NONE)
 
         override fun toString(): String {

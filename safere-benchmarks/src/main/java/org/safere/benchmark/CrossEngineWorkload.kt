@@ -50,7 +50,7 @@ internal class CrossEngineWorkload(
         Objects.requireNonNull<TimingGroup?>(timingGroup)
         require(!id!!.isBlank()) { "Cross-engine workload ID must not be blank" }
         require(id.indexOf('@') < 0) { "Cross-engine workload ID must not contain '@': " + id }
-        require(!patterns.isEmpty()) { id + " requires at least one pattern" }
+        require(!patterns.isEmpty) { id + " requires at least one pattern" }
         require(
             !(inputKeys.isEmpty()
                     && operation != BenchmarkOperation.COMPILE && operation != BenchmarkOperation.FIND_ROTATING_UTF16 && operation != BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16)

@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import java.util.Map
 
 /**
@@ -28,7 +27,7 @@ internal data class EnginePathOptions(
     val bitState: Boolean,
     val lazyCaptureExtraction: Boolean
 ) {
-    internal interface OptionAccessor {
+    fun interface OptionAccessor {
         fun enabled(options: EnginePathOptions?): Boolean
     }
 
@@ -119,7 +118,7 @@ internal data class EnginePathOptions(
 
     companion object {
         private val ALL_ENABLED: EnginePathOptions = builder().build()
-        private val ACCESSORS: MutableMap<EnginePath?, OptionAccessor?> = buildAccessors()
+        private val ACCESSORS: MutableMap<EnginePath, OptionAccessor> = buildAccessors()
 
         fun allEnabled(): EnginePathOptions {
             return ALL_ENABLED
@@ -129,32 +128,35 @@ internal data class EnginePathOptions(
             return Builder()
         }
 
-        fun accessors(): MutableMap<EnginePath?, OptionAccessor?> {
+        fun accessors(): MutableMap<EnginePath, OptionAccessor> {
             return ACCESSORS
         }
 
-        private fun buildAccessors(): MutableMap<EnginePath?, OptionAccessor?> {
-            val accessors: EnumMap<EnginePath?, OptionAccessor?> =
-                EnumMap<EnginePath?, OptionAccessor?>(EnginePath::class.java)
-            accessors.put(EnginePath.LITERAL_FAST_PATHS, EnginePathOptions::literalFastPaths)
-            accessors.put(
-                EnginePath.CHAR_CLASS_MATCH_FAST_PATHS, EnginePathOptions::charClassMatchFastPaths
-            )
-            accessors.put(
-                EnginePath.CHAR_CLASS_REPLACEMENT_FAST_PATH,
-                EnginePathOptions::charClassReplacementFastPath
-            )
-            accessors.put(
-                EnginePath.KEYWORD_ALTERNATION_FAST_PATH, EnginePathOptions::keywordAlternationFastPath
-            )
-            accessors.put(EnginePath.START_ACCELERATION, EnginePathOptions::startAcceleration)
-            accessors.put(EnginePath.SHIFT_DFA, EnginePathOptions::shiftDfa)
-            accessors.put(EnginePath.ONE_PASS, EnginePathOptions::onePass)
-            accessors.put(EnginePath.DFA, EnginePathOptions::dfa)
-            accessors.put(EnginePath.REVERSE_DFA, EnginePathOptions::reverseDfa)
-            accessors.put(EnginePath.BIT_STATE, EnginePathOptions::bitState)
-            accessors.put(EnginePath.LAZY_CAPTURE_EXTRACTION, EnginePathOptions::lazyCaptureExtraction)
-            return Map.copyOf<EnginePath?, OptionAccessor?>(accessors)
+        private fun buildAccessors(): MutableMap<EnginePath, OptionAccessor> {
+            val accessors: java.util.EnumMap<EnginePath, OptionAccessor> =
+                java.util.EnumMap(EnginePath::class.java)
+            accessors[EnginePath.LITERAL_FAST_PATHS] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.literalFastPaths }
+            accessors[EnginePath.CHAR_CLASS_MATCH_FAST_PATHS] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.charClassMatchFastPaths }
+            accessors[EnginePath.CHAR_CLASS_REPLACEMENT_FAST_PATH] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.charClassReplacementFastPath }
+            accessors[EnginePath.KEYWORD_ALTERNATION_FAST_PATH] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.keywordAlternationFastPath }
+            accessors[EnginePath.START_ACCELERATION] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.startAcceleration }
+            accessors[EnginePath.SHIFT_DFA] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.shiftDfa }
+            accessors[EnginePath.ONE_PASS] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.onePass }
+            accessors[EnginePath.DFA] = OptionAccessor { options: EnginePathOptions? -> options != null && options.dfa }
+            accessors[EnginePath.REVERSE_DFA] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.reverseDfa }
+            accessors[EnginePath.BIT_STATE] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.bitState }
+            accessors[EnginePath.LAZY_CAPTURE_EXTRACTION] =
+                OptionAccessor { options: EnginePathOptions? -> options != null && options.lazyCaptureExtraction }
+            return Map.copyOf(accessors)
         }
     }
 }

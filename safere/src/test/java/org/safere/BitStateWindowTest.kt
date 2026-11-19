@@ -73,22 +73,22 @@ internal class BitStateWindowTest {
             Assertions.assertThat(bs.windowExceeded()).isTrue()
             bs =
                 BitState.getOrCreate(
-                    bs, prog, input, 0, input.length(), 2 * prog.numCaptures(), false, true
+                    bs, prog, input, 0, input.length, 2 * prog.numCaptures(), false, true
                 )
             val expected =
                 Nfa.search(
                     prog,
                     input,
                     0,
-                    input.length(),
-                    input.length(),
+                    input.length,
+                    input.length,
                     0,
                     Nfa.Anchor.ANCHORED,
                     Nfa.MatchKind.FULL_MATCH,
                     prog.numCaptures(),
                     null
                 )
-            Assertions.assertThat(bs.doSearch(0, input.length(), true)).isEqualTo(expected)
+            Assertions.assertThat(bs.doSearch(0, input.length, true)).isEqualTo(expected)
             Assertions.assertThat(bs.windowExceeded()).isFalse()
         }
     }
@@ -157,17 +157,17 @@ internal class BitStateWindowTest {
                                 prog,
                                 input,
                                 0,
-                                input.length(),
-                                input.length(),
+                                input.length,
+                                input.length,
                                 0,
                                 if (anchored) Nfa.Anchor.ANCHORED else Nfa.Anchor.UNANCHORED,
                                 Nfa.MatchKind.FIRST_MATCH,
                                 prog.numCaptures(),
                                 null
                             )
-                        for (end in 0..input.length()) {
+                        for (end in 0..input.length) {
                             val bs: BitState = window(prog, input, end)
-                            val result = bs.doSearchWindow(0, input.length(), anchored!!, null)
+                            val result = bs.doSearchWindow(0, input.length, anchored!!, null)
                             if (result != null) {
                                 Assertions.assertThat(bs.windowExceeded()).isFalse()
                                 Assertions.assertThat(result)
@@ -314,7 +314,7 @@ internal class BitStateWindowTest {
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
                         if (i >= 2 && i < 66) {
-                            recovered = recovered or (operations.getFirst().boundaryStrategy == MatchStrategy.BIT_STATE)
+                            recovered = recovered or (operations.first().boundaryStrategy == MatchStrategy.BIT_STATE)
                         }
                         Assertions.assertThat(oracle.find()).isTrue()
                         for (group in 0..matcher.groupCount()) {
@@ -353,10 +353,10 @@ internal class BitStateWindowTest {
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
                     Assertions.assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400)
-                    if (operations.getFirst().strategyDecisions.contains(windowFailure())) {
+                    if (operations.first().strategyDecisions.contains(windowFailure())) {
                         failures.add(i)
                     } else {
-                        Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                        Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
                             windowBackoff()
                         )
                     }
@@ -375,12 +375,12 @@ internal class BitStateWindowTest {
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
                     Assertions.assertThat(matcher.end(1) - matcher.start(1)).isIn(3, 6)
-                    if (operations.getFirst().boundaryStrategy == MatchStrategy.BIT_STATE) {
+                    if (operations.first().boundaryStrategy == MatchStrategy.BIT_STATE) {
                         recovered = true
                         // A successful retry restores consecutive speculation, without another delay.
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
-                        Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                        Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
                             .isEqualTo(MatchStrategy.BIT_STATE)
                         break
                     }
@@ -434,7 +434,7 @@ internal class BitStateWindowTest {
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
                     }
-                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
                         windowBackoff()
                     )
                     when (change) {
@@ -445,10 +445,10 @@ internal class BitStateWindowTest {
                     }
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
-                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
                         windowFailure()
                     )
-                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).doesNotContain(
+                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).doesNotContain(
                         windowBackoff()
                     )
                 }
@@ -486,7 +486,7 @@ internal class BitStateWindowTest {
 
                 operations.clear()
                 Assertions.assertThat(matcher.reset().find()).isTrue()
-                Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions)
+                Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions)
                     .contains(windowFailure())
             }
         } finally {
@@ -537,7 +537,7 @@ internal class BitStateWindowTest {
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.reset(shortText).find()).isTrue()
-            Assertions.assertThat<MatchStrategy?>(operations.getLast().boundaryStrategy)
+            Assertions.assertThat<MatchStrategy?>(operations.last().boundaryStrategy)
                 .isEqualTo(MatchStrategy.BIT_STATE)
 
             matcher.reset(longText)
@@ -546,7 +546,7 @@ internal class BitStateWindowTest {
             operations.clear()
             matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"))
             Assertions.assertThat(matcher.find()).isTrue()
-            Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(windowFailure())
+            Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(windowFailure())
         } finally {
             Pattern.setDiagnostics(previous)
         }
@@ -569,7 +569,7 @@ internal class BitStateWindowTest {
                 for (i in actual.indices) {
                     operations.clear()
                     Assertions.assertThat(actual.get(i).find()).isTrue()
-                    Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                    Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
                         .isEqualTo(MatchStrategy.BIT_STATE)
                     Assertions.assertThat(expected.get(i).find()).isTrue()
                     Assertions.assertThat(actual.get(i).start()).isEqualTo(expected.get(i).start())
@@ -587,8 +587,8 @@ internal class BitStateWindowTest {
         val prog = Pattern.compile("x(.*?)z").prog()
         for (ncap in intArrayOf(2, 4)) {
             for (utf8 in mutableListOf<Boolean?>(false, true)) {
-                val shortWork: Long = Companion.lazyRuneLoopWork(prog, 100, ncap, utf8!!)
-                val longWork: Long = Companion.lazyRuneLoopWork(prog, 300, ncap, utf8)
+                val shortWork: Long = lazyRuneLoopWork(prog, 100, ncap, utf8!!)
+                val longWork: Long = lazyRuneLoopWork(prog, 300, ncap, utf8)
                 // Each extra ASCII rune tries ALT, capture, literal and body. Captures add a restore
                 // only when requested. The failed literal and the body each decode one UTF-8 byte.
                 val workPerRune = 4 + (if (ncap == 4) 1 else 0) + (if (utf8) 2 else 0)
@@ -612,9 +612,9 @@ internal class BitStateWindowTest {
                 operations.clear()
                 Assertions.assertThat(matcher.find()).isTrue()
                 Assertions.assertThat(matcher.end()).isEqualTo(4097)
-                Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions)
+                Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions)
                     .contains(windowFailure())
-                Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
                     .isEqualTo(MatchStrategy.NFA)
             }
         } finally {
@@ -636,7 +636,7 @@ internal class BitStateWindowTest {
                     val pattern = Pattern.compile("(?:(b?)*?(c|)+)*c")
                     // The hint fits the bitmap, including when it exceeds the separate hint limit.
                     Assertions.assertThat(BitState.maxTextSize(pattern.prog()))
-                        .isBetween(prefix.length, scanner.length() - 1)
+                        .isBetween(prefix.length, scanner.length - 1)
                     val cache = pattern.getOrCreateThreadCache()
                     val matcher =
                         if (scanner is Utf8InputScanner)
@@ -645,10 +645,10 @@ internal class BitStateWindowTest {
                             pattern.matcher(text)
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
-                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
                         windowFailure()
                     )
-                    Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                    Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
                         .isEqualTo(MatchStrategy.NFA)
 
                     // The NFA restart leaves the failed attempt in the cache with its own step count.
@@ -702,9 +702,9 @@ internal class BitStateWindowTest {
         private fun lazyRuneLoopWork(prog: Prog?, repeat: Int, ncap: Int, utf8: Boolean): Long {
             val scanner: InputScanner = scanners("x" + "a".repeat(repeat) + "z").get(if (utf8) 1 else 0)
             val engine =
-                BitState.getOrCreate(null, prog, scanner, 0, scanner.length(), ncap, false, false)
+                BitState.getOrCreate(null, prog, scanner, 0, scanner.length, ncap, false, false)
             return WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length()) })
+                Runnable { Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length) })
         }
 
         private fun unhintedPattern(regex: String?): Pattern {

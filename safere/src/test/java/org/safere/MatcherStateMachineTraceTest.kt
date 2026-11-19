@@ -35,16 +35,16 @@ internal class MatcherStateMachineTraceTest {
                     val input = "x".repeat(padding!!) + body + "z"
                     for (anchoring in mutableListOf<Boolean?>(false, true)) {
                         for (transparent in mutableListOf<Boolean?>(false, true)) {
-                            Companion.assertTrace(
+                            assertTrace(
                                 regex!!,
                                 input,
-                                Step.Companion.region(padding, padding + body!!.length),
-                                Step.Companion.useAnchoringBounds(anchoring!!),
-                                Step.Companion.useTransparentBounds(transparent!!),
-                                Step.Companion.lookingAt(),
-                                Step.Companion.findWithBounds(),
-                                Step.Companion.findWithBounds(),
-                                Step.Companion.findWithBounds()
+                                Step.region(padding, padding + body!!.length),
+                                Step.useAnchoringBounds(anchoring!!),
+                                Step.useTransparentBounds(transparent!!),
+                                Step.lookingAt(),
+                                Step.findWithBounds(),
+                                Step.findWithBounds(),
+                                Step.findWithBounds()
                             )
                         }
                     }
@@ -56,13 +56,13 @@ internal class MatcherStateMachineTraceTest {
     @Test
     fun failedExplicitFindStartRetainsResetContinuation() {
         for (regex in mutableListOf<String?>("^[ab]*", "\\A(a?)", "a")) {
-            Companion.assertTrace(
+            assertTrace(
                 regex!!,
                 "a!",
-                Step.Companion.findFrom(1),
-                Step.Companion.findWithBounds(),
-                Step.Companion.findWithBounds(),
-                Step.Companion.findWithBounds()
+                Step.findFrom(1),
+                Step.findWithBounds(),
+                Step.findWithBounds(),
+                Step.findWithBounds()
             )
         }
     }
@@ -75,27 +75,27 @@ internal class MatcherStateMachineTraceTest {
             for (input in List.of<String?>("", "!", "!a😀b!", "a!", "!".repeat(512), "!\na")) {
                 for (region in mutableListOf<Boolean?>(false, true)) {
                     for (anchoring in mutableListOf<Boolean?>(false, true)) {
-                        for (initial in List.of<Step?>(Step.Companion.find(), Step.Companion.lookingAt())) {
+                        for (initial in List.of<Step?>(Step.find(), Step.lookingAt())) {
                             for (attempt in List.of<Step?>(
-                                Step.Companion.find(),
-                                Step.Companion.lookingAt(),
-                                Step.Companion.matches()
+                                Step.find(),
+                                Step.lookingAt(),
+                                Step.matches()
                             )) {
                                 val text = if (region) "xx" + input + "yy" else input
-                                Companion.assertTrace(
+                                assertTrace(
                                     regex!!,
                                     text,
-                                    Step.Companion.region(
+                                    Step.region(
                                         if (region) 2 else 0,
                                         if (region) input.length + 2 else input.length
                                     ),
-                                    Step.Companion.useAnchoringBounds(anchoring!!),
+                                    Step.useAnchoringBounds(anchoring!!),
                                     initial,
                                     attempt,
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.findWithBounds()
+                                    Step.findWithBounds(),
+                                    Step.findWithBounds(),
+                                    Step.findWithBounds(),
+                                    Step.findWithBounds()
                                 )
                             }
                         }
@@ -111,26 +111,26 @@ internal class MatcherStateMachineTraceTest {
         // Covers issue #808, including empty matches and repeated failed attempts.
         for (regex in mutableListOf<String?>("a", "(a+)", "a*", "(a|b)+", "😀*", "^a", "^[ab]")) {
             for (input in mutableListOf<String?>("a a", "ba a", "a!", "!a", "😀!😀", "a")) {
-                for (initial in List.of<Step?>(Step.Companion.find(), Step.Companion.lookingAt())) {
-                    for (attempt in List.of<Step?>(Step.Companion.matches(), Step.Companion.lookingAt())) {
+                for (initial in List.of<Step?>(Step.find(), Step.lookingAt())) {
+                    for (attempt in List.of<Step?>(Step.matches(), Step.lookingAt())) {
                         for (region in mutableListOf<Boolean?>(false, true)) {
                             val text: String = (if (region) "xx" + input + "yy" else input)!!
-                            Companion.assertTrace(
+                            assertTrace(
                                 regex!!,
                                 text,
-                                Step.Companion.region(
+                                Step.region(
                                     if (region) 2 else 0,
                                     if (region) input!!.length + 2 else input!!.length
                                 ),
                                 initial,
                                 attempt,
-                                Step.Companion.start(),
+                                Step.start(),
                                 attempt,
-                                Step.Companion.findWithBounds(),
-                                Step.Companion.findWithBounds(),
-                                Step.Companion.reset(),
-                                Step.Companion.find(),
-                                Step.Companion.start()
+                                Step.findWithBounds(),
+                                Step.findWithBounds(),
+                                Step.reset(),
+                                Step.find(),
+                                Step.start()
                             )
                         }
                     }
@@ -143,30 +143,30 @@ internal class MatcherStateMachineTraceTest {
     @DisplayName("interleaved match attempts retain continuation through exhaustion and resets")
     fun interleavedAttemptsRetainContinuation() {
         val operations =
-            List.of<Step?>(Step.Companion.findWithBounds(), Step.Companion.matches(), Step.Companion.lookingAt())
+            List.of<Step?>(Step.findWithBounds(), Step.matches(), Step.lookingAt())
         for (regex in mutableListOf<String?>("a", "a*", "(a|b)+", "^a", "^[ab]", "😀*")) {
             for (input in List.of<String?>("", "a", "a a", "!a", "😀!😀", "ba".repeat(300))) {
                 for (first in operations) {
                     for (second in operations) {
                         for (third in operations) {
                             for (fourth in operations) {
-                                Companion.assertTrace(
+                                assertTrace(
                                     regex!!,
                                     input,
                                     first,
                                     second,
                                     third,
                                     fourth,
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.usePattern("a*"),
-                                    Step.Companion.matches(),
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.region(0, input.length),
-                                    Step.Companion.matches(),
-                                    Step.Companion.findWithBounds(),
-                                    Step.Companion.findFrom(input.length),
-                                    Step.Companion.matches(),
-                                    Step.Companion.findWithBounds()
+                                    Step.findWithBounds(),
+                                    Step.usePattern("a*"),
+                                    Step.matches(),
+                                    Step.findWithBounds(),
+                                    Step.region(0, input.length),
+                                    Step.matches(),
+                                    Step.findWithBounds(),
+                                    Step.findFrom(input.length),
+                                    Step.matches(),
+                                    Step.findWithBounds()
                                 )
                             }
                         }
@@ -182,12 +182,12 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "a",
             "ba",
-            Step.Companion.matches(),
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.start(),
-            Step.Companion.end(),
-            Step.Companion.find()
+            Step.matches(),
+            Step.find(),
+            Step.group(),
+            Step.start(),
+            Step.end(),
+            Step.find()
         )
     }
 
@@ -197,12 +197,12 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "a",
             "ba",
-            Step.Companion.lookingAt(),
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.start(),
-            Step.Companion.end(),
-            Step.Companion.find()
+            Step.lookingAt(),
+            Step.find(),
+            Step.group(),
+            Step.start(),
+            Step.end(),
+            Step.find()
         )
     }
 
@@ -212,13 +212,13 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "a*",
             "ba",
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.find()
+            Step.find(),
+            Step.group(),
+            Step.find(),
+            Step.group(),
+            Step.find(),
+            Step.group(),
+            Step.find()
         )
     }
 
@@ -228,14 +228,14 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "\\d+",
             "xx11yy22",
-            Step.Companion.region(2, 4),
-            Step.Companion.find(),
-            Step.Companion.appendReplacement("[$0]"),
-            Step.Companion.findFrom(6),
-            Step.Companion.regionStart(),
-            Step.Companion.regionEnd(),
-            Step.Companion.appendReplacement("[$0]"),
-            Step.Companion.appendTail()
+            Step.region(2, 4),
+            Step.find(),
+            Step.appendReplacement("[$0]"),
+            Step.findFrom(6),
+            Step.regionStart(),
+            Step.regionEnd(),
+            Step.appendReplacement("[$0]"),
+            Step.appendTail()
         )
     }
 
@@ -245,13 +245,13 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "a*",
             "ba",
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.usePattern("."),
-            Step.Companion.find(),
-            Step.Companion.group(),
-            Step.Companion.find(),
-            Step.Companion.group()
+            Step.find(),
+            Step.group(),
+            Step.usePattern("."),
+            Step.find(),
+            Step.group(),
+            Step.find(),
+            Step.group()
         )
     }
 
@@ -261,14 +261,14 @@ internal class MatcherStateMachineTraceTest {
         assertTrace(
             "(a+)",
             "xxaaaa",
-            Step.Companion.region(2, 6),
-            Step.Companion.find(),
-            Step.Companion.useAnchoringBounds(false),
-            Step.Companion.group(1),
-            Step.Companion.toMatchResult(),
-            Step.Companion.useTransparentBounds(true),
-            Step.Companion.start(1),
-            Step.Companion.end(1)
+            Step.region(2, 6),
+            Step.find(),
+            Step.useAnchoringBounds(false),
+            Step.group(1),
+            Step.toMatchResult(),
+            Step.useTransparentBounds(true),
+            Step.start(1),
+            Step.end(1)
         )
     }
 
@@ -688,7 +688,7 @@ internal class MatcherStateMachineTraceTest {
             fun toMatchResult(): Step {
                 return value(
                     "toMatchResult",
-                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> Companion.snapshot(subject!!.toMatchResult()!!) })
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> snapshot(subject!!.toMatchResult()!!) })
             }
 
             fun appendReplacement(replacement: String?): Step {
@@ -724,7 +724,7 @@ internal class MatcherStateMachineTraceTest {
                     })
             }
 
-            private fun snapshot(result: MatchResult): String? {
+            private fun snapshot(result: MatchResult): String {
                 val groups: MutableList<String?> = ArrayList<String?>()
                 for (group in 0..result.groupCount()) {
                     try {

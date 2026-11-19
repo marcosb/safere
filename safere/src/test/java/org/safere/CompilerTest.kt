@@ -31,7 +31,7 @@ internal object CompilerTest {
     // ---------------------------------------------------------------------------
     private fun assertHasInstOp(prog: Prog, op: InstOp?) {
         var found = false
-        for (i in 0..<prog.size()) {
+        for (i in 0..<prog.size) {
             if (prog.inst(i).op == op) {
                 found = true
                 break
@@ -44,7 +44,7 @@ internal object CompilerTest {
 
     private fun countInstOp(prog: Prog, op: InstOp?): Int {
         var count = 0
-        for (i in 0..<prog.size()) {
+        for (i in 0..<prog.size) {
             if (prog.inst(i).op == op) {
                 count++
             }
@@ -54,7 +54,7 @@ internal object CompilerTest {
 
     private fun assertHasCharRange(prog: Prog, lo: Int, hi: Int) {
         var found = false
-        for (i in 0..<prog.size()) {
+        for (i in 0..<prog.size) {
             val inst = prog.inst(i)
             if (inst.op == InstOp.CHAR_RANGE && inst.lo == lo && inst.hi == hi) {
                 found = true
@@ -78,25 +78,25 @@ internal object CompilerTest {
         fun compileSingleLiteral() {
             val prog: Prog? = compile("a")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size()).isGreaterThan(1)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            Assertions.assertThat(prog!!.size).isGreaterThan(1)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
         fun compileTwoLiterals() {
             val prog: Prog? = compile("ab")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val charRangeCount = CompilerTest.countInstOp(prog!!, InstOp.CHAR_RANGE)
+            val charRangeCount = countInstOp(prog!!, InstOp.CHAR_RANGE)
             Assertions.assertThat(charRangeCount).isGreaterThanOrEqualTo(2)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
         fun compileThreeLiterals() {
             val prog: Prog? = compile("abc")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val charRangeCount = CompilerTest.countInstOp(prog!!, InstOp.CHAR_RANGE)
+            val charRangeCount = countInstOp(prog!!, InstOp.CHAR_RANGE)
             Assertions.assertThat(charRangeCount).isGreaterThanOrEqualTo(3)
         }
 
@@ -104,7 +104,7 @@ internal object CompilerTest {
         fun compileEmptyPattern() {
             val prog: Prog? = compile("")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.MATCH)
         }
     }
 
@@ -118,15 +118,15 @@ internal object CompilerTest {
         fun compileAlternation() {
             val prog: Prog? = compile("a|b")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
         fun compileMultiAlternation() {
             val prog: Prog? = compile("a|b|c")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog!!, InstOp.ALT)
         }
     }
 
@@ -140,55 +140,55 @@ internal object CompilerTest {
         fun compileStar() {
             val prog: Prog? = compile("a*")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileStarNonGreedy() {
             val prog: Prog? = compile("a*?")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compilePlus() {
             val prog: Prog? = compile("a+")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compilePlusNonGreedy() {
             val prog: Prog? = compile("a+?")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileQuest() {
             val prog: Prog? = compile("a?")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileQuestNonGreedy() {
             val prog: Prog? = compile("a??")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileFixedRepeat() {
             val prog: Prog? = compile("a{3}")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val charRangeCount = CompilerTest.countInstOp(prog!!, InstOp.CHAR_RANGE)
+            val charRangeCount = countInstOp(prog!!, InstOp.CHAR_RANGE)
             Assertions.assertThat(charRangeCount).isGreaterThanOrEqualTo(3)
         }
 
@@ -196,8 +196,8 @@ internal object CompilerTest {
         fun compileBoundedRepeat() {
             val prog: Prog? = compile("a{2,4}")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
     }
 
@@ -211,23 +211,23 @@ internal object CompilerTest {
         fun compileCharClassRange() {
             val prog: Prog? = compile("[a-z]")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
-            CompilerTest.assertHasCharRange(prog, 'a'.code, 'z'.code)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasCharRange(prog, 'a'.code, 'z'.code)
         }
 
         @Test
         fun compileCharClassEnumeration() {
             val prog: Prog? = compile("[abc]")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileNegatedCharClass() {
             val prog: Prog? = compile("[^a]")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
-            val count = CompilerTest.countInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            val count = countInstOp(prog, InstOp.CHAR_RANGE)
             Assertions.assertThat(count).isGreaterThanOrEqualTo(1)
         }
 
@@ -235,14 +235,14 @@ internal object CompilerTest {
         fun compileAnyChar() {
             val prog: Prog? = compile(".")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
         }
 
         @Test
         fun compileAnyCharWithDotNl() {
             val prog = compile(".", DEFAULT_FLAGS or ParseFlags.DOT_NL)
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
         }
     }
 
@@ -256,8 +256,8 @@ internal object CompilerTest {
         fun compileSingleCapture() {
             val prog: Prog? = compile("(a)")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CAPTURE)
-            val captureCount = CompilerTest.countInstOp(prog, InstOp.CAPTURE)
+            assertHasInstOp(prog!!, InstOp.CAPTURE)
+            val captureCount = countInstOp(prog, InstOp.CAPTURE)
             Assertions.assertThat(captureCount).isEqualTo(2)
             Assertions.assertThat(prog.numCaptures()).isEqualTo(2)
         }
@@ -266,7 +266,7 @@ internal object CompilerTest {
         fun compileMultiCapture() {
             val prog: Prog? = compile("(a)(b)")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val captureCount = CompilerTest.countInstOp(prog!!, InstOp.CAPTURE)
+            val captureCount = countInstOp(prog!!, InstOp.CAPTURE)
             Assertions.assertThat(captureCount).isEqualTo(4)
             Assertions.assertThat(prog.numCaptures()).isEqualTo(3)
         }
@@ -275,7 +275,7 @@ internal object CompilerTest {
         fun compileNonCapturingGroup() {
             val prog: Prog? = compile("(?:a)")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val captureCount = CompilerTest.countInstOp(prog!!, InstOp.CAPTURE)
+            val captureCount = countInstOp(prog!!, InstOp.CAPTURE)
             Assertions.assertThat(captureCount).isEqualTo(0)
         }
 
@@ -297,21 +297,21 @@ internal object CompilerTest {
         fun compileBeginLine() {
             val prog: Prog? = compile("^a")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.EMPTY_WIDTH)
+            assertHasInstOp(prog!!, InstOp.EMPTY_WIDTH)
         }
 
         @Test
         fun compileEndLine() {
             val prog: Prog? = compile("a$")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.EMPTY_WIDTH)
+            assertHasInstOp(prog!!, InstOp.EMPTY_WIDTH)
         }
 
         @Test
         fun compileWordBoundary() {
             val prog: Prog? = compile("\\ba\\b")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val emptyCount = CompilerTest.countInstOp(prog!!, InstOp.EMPTY_WIDTH)
+            val emptyCount = countInstOp(prog!!, InstOp.EMPTY_WIDTH)
             Assertions.assertThat(emptyCount).isGreaterThanOrEqualTo(2)
         }
 
@@ -376,35 +376,35 @@ internal object CompilerTest {
         fun compileComplexPattern() {
             val prog: Prog? = compile("a(b|c)*d")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.ALT)
-            CompilerTest.assertHasInstOp(prog, InstOp.CHAR_RANGE)
-            CompilerTest.assertHasInstOp(prog, InstOp.CAPTURE)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.ALT)
+            assertHasInstOp(prog, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog, InstOp.CAPTURE)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
         fun compileDigitsAndDot() {
             val prog: Prog? = compile("(\\d+\\.\\d+)")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CAPTURE)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.CAPTURE)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
         fun compileCaseInsensitive() {
             val prog: Prog? = compile("(?i)abc")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
-            Assertions.assertThat(CompilerTest.fullMatch(prog, "ABC")).isTrue()
-            Assertions.assertThat(CompilerTest.fullMatch(prog, "ABD")).isFalse()
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            Assertions.assertThat(fullMatch(prog, "ABC")).isTrue()
+            Assertions.assertThat(fullMatch(prog, "ABD")).isFalse()
         }
 
         @Test
         fun compileUnicodeCharacter() {
             val prog: Prog? = compile("\\x{1F600}")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            CompilerTest.assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
-            CompilerTest.assertHasInstOp(prog, InstOp.MATCH)
+            assertHasInstOp(prog!!, InstOp.CHAR_RANGE)
+            assertHasInstOp(prog, InstOp.MATCH)
         }
 
         @Test
@@ -419,14 +419,14 @@ internal object CompilerTest {
         fun reasonableInstructionCount() {
             val prog: Prog? = compile("a")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size()).isLessThan(20)
+            Assertions.assertThat(prog!!.size).isLessThan(20)
         }
 
         @Test
         fun largerPatternReasonableSize() {
             val prog: Prog? = compile("[a-zA-Z_][a-zA-Z0-9_]*")
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size()).isLessThan(100)
+            Assertions.assertThat(prog!!.size).isLessThan(100)
         }
 
         @Test

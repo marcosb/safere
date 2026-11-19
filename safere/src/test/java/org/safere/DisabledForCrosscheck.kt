@@ -48,7 +48,7 @@ internal class DisabledForCrosscheckCondition : ExecutionCondition {
         }
 
         return context
-            .getElement()
+            .element
             .map<DisabledForCrosscheck?>(Function { element: AnnotatedElement? ->
                 element!!.getAnnotation<DisabledForCrosscheck?>(
                     DisabledForCrosscheck::class.java

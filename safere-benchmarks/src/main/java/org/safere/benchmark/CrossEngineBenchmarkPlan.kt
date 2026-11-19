@@ -12,6 +12,12 @@ import java.util.List
 import java.util.function.Consumer
 import java.util.function.Supplier
 import java.util.stream.Collectors
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashMap
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.minus
+import kotlin.sequences.minus
 
 /** Expands and validates the declarative ordinary cross-engine workload matrix.  */
 internal class CrossEngineBenchmarkPlan private constructor(
@@ -74,7 +80,7 @@ internal class CrossEngineBenchmarkPlan private constructor(
         val variantId = trialId.substring(separator + 1)
         val workload: CrossEngineWorkload = workloads.get(workloadId)!!
         requireNotNull(workload) { "Unknown cross-engine workload ID: " + workloadId }
-        RegexEngineVariant.Companion.fromId(variantId)
+        RegexEngineVariant.fromId(variantId)
         val exclusion =
             exclusions.stream()
                 .filter { candidate: MaterializedExecutionPlan.Entry? ->
@@ -132,38 +138,38 @@ internal class CrossEngineBenchmarkPlan private constructor(
     }
 
     companion object {
-        private val CROSS_ENGINE_OPERATIONS: EnumSet<DeclarativeBenchmarkPlan.Operation?> =
-            EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
-                DeclarativeBenchmarkPlan.Operation.MATCHES,
-                DeclarativeBenchmarkPlan.Operation.FIND,
-                DeclarativeBenchmarkPlan.Operation.LOOKING_AT,
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_COUNT,
-                DeclarativeBenchmarkPlan.Operation.MATCHES_CORPUS,
-                DeclarativeBenchmarkPlan.Operation.MATCHES_GROUP_LENGTH_SUM,
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_LENGTH_SUM,
-                DeclarativeBenchmarkPlan.Operation.FIND_ALL_GROUP_LENGTH_SUM,
-                DeclarativeBenchmarkPlan.Operation.CAPTURE_GROUPS,
-                DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST,
-                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL,
-                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM,
-                DeclarativeBenchmarkPlan.Operation.MANUAL_REPLACE_ALL,
-                DeclarativeBenchmarkPlan.Operation.SPLIT_LENGTH_SUM,
-                DeclarativeBenchmarkPlan.Operation.COMPILE,
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND,
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_MATCHES,
-                DeclarativeBenchmarkPlan.Operation.FIND_ROTATING_UTF16,
-                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND_ROTATING_UTF16,
-                DeclarativeBenchmarkPlan.Operation.MATCHER_RESET_FIND,
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_FIND,
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_MATCHES,
-                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_TOKENIZE,
-                DeclarativeBenchmarkPlan.Operation.FIND_SAMPLED_GROUP,
-                DeclarativeBenchmarkPlan.Operation.FIND_GROUP_PRESENT,
-                DeclarativeBenchmarkPlan.Operation.FIND_GROUP
+        private val CROSS_ENGINE_OPERATIONS: EnumSet<Operation?> =
+            EnumSet.of<Operation?>(
+                Operation.MATCHES,
+                Operation.FIND,
+                Operation.LOOKING_AT,
+                Operation.FIND_ALL_COUNT,
+                Operation.MATCHES_CORPUS,
+                Operation.MATCHES_GROUP_LENGTH_SUM,
+                Operation.FIND_ALL_LENGTH_SUM,
+                Operation.FIND_ALL_GROUP_LENGTH_SUM,
+                Operation.CAPTURE_GROUPS,
+                Operation.REPLACE_FIRST,
+                Operation.REPLACE_ALL,
+                Operation.REPLACE_ALL_LENGTH_SUM,
+                Operation.MANUAL_REPLACE_ALL,
+                Operation.SPLIT_LENGTH_SUM,
+                Operation.COMPILE,
+                Operation.COMPILE_AND_FIND,
+                Operation.COMPILE_AND_MATCHES,
+                Operation.FIND_ROTATING_UTF16,
+                Operation.COMPILE_AND_FIND_ROTATING_UTF16,
+                Operation.MATCHER_RESET_FIND,
+                Operation.MATCHER_REGION_FIND,
+                Operation.MATCHER_REGION_MATCHES,
+                Operation.MATCHER_REGION_TOKENIZE,
+                Operation.FIND_SAMPLED_GROUP,
+                Operation.FIND_GROUP_PRESENT,
+                Operation.FIND_GROUP
             )
 
         fun load(): CrossEngineBenchmarkPlan {
-            return fromMaterialized(MaterializedExecutionPlan.Companion.load().entriesForRunner("java"))
+            return fromMaterialized(MaterializedExecutionPlan.load().entriesForRunner("java"))
         }
 
         fun fromMaterialized(entries: MutableList<MaterializedExecutionPlan.Entry>): CrossEngineBenchmarkPlan {
@@ -183,7 +189,7 @@ internal class CrossEngineBenchmarkPlan private constructor(
                 }
                 val workload: CrossEngineWorkload = convert(entry.workload)
                 workloads.putIfAbsent(entry.workloadId, workload)
-                val variant: RegexEngineVariant = RegexEngineVariant.Companion.fromId(entry.engineId)
+                val variant: RegexEngineVariant = RegexEngineVariant.fromId(entry.engineId)
                 val converted = Trial(workload, variant)
                 require(
                     trials.put(
@@ -229,7 +235,7 @@ internal class CrossEngineBenchmarkPlan private constructor(
                 plan.trials(query.timingGroup).stream()
                     .filter { trial: Trial? ->
                         System.getProperty("safere.benchmark.scanProvider") == null
-                                || BenchmarkCollectionPlan.Companion.matchesScanProvider(
+                                || BenchmarkCollectionPlan.matchesScanProvider(
                             trial!!.id(), System.getProperty("safere.benchmark.scanProvider")
                         )
                     }
@@ -260,7 +266,7 @@ internal class CrossEngineBenchmarkPlan private constructor(
                         else -> throw IllegalArgumentException(queryArgs[0])
                     }
                 println("-p")
-                println(BenchmarkCollectionPlan.Companion.argumentFileToken(parameter + "=" + trialIds))
+                println(BenchmarkCollectionPlan.argumentFileToken(parameter + "=" + trialIds))
             } else {
                 println(trialIds)
             }
@@ -331,13 +337,13 @@ internal class CrossEngineBenchmarkPlan private constructor(
             }
             val value = expected.value()
             return when (expected.type) {
-                ResultType.BOOLEAN -> value!!.getAsBoolean()
-                ResultType.INTEGER -> value!!.getAsInt()
-                ResultType.STRING -> value!!.getAsString()
+                ResultType.BOOLEAN -> value!!.asBoolean
+                ResultType.INTEGER -> value!!.asInt
+                ResultType.STRING -> value!!.asString
                 ResultType.STRING_LIST -> {
                     val values: MutableList<String?> = ArrayList<String?>()
-                    value!!.getAsJsonArray()
-                        .forEach(Consumer { element: JsonElement? -> values.add(element!!.getAsString()) })
+                    value!!.asJsonArray
+                        .forEach(Consumer { element: JsonElement? -> values.add(element!!.asString) })
                     List.copyOf<String?>(values)
                 }
             }

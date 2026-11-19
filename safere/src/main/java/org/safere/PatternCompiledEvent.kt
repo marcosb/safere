@@ -8,12 +8,10 @@ import java.util.*
 
 /** Event emitted after a pattern is compiled while diagnostics are enabled.  */
 @JvmRecord
-data class PatternCompiledEvent(pattern: PatternDescriptor?) {
-    val pattern: PatternDescriptor?
+data class PatternCompiledEvent(val pattern: PatternDescriptor?) {
 
     /** Creates a pattern compilation event.  */
     init {
-        this.pattern = pattern
         Objects.requireNonNull<PatternDescriptor?>(pattern, "pattern")
     }
 }

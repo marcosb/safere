@@ -38,8 +38,8 @@ internal class SimplifierTest {
                                 .isEqualTo(matched)
                             if (matched) {
                                 Assertions.assertThat(matcher.start("g"))
-                                    .isEqualTo(if (count == 0) -1 else body.length - units.get(atom)!!.length)
-                                Assertions.assertThat(matcher.end("g")).isEqualTo(if (count == 0) -1 else body.length)
+                                    .isEqualTo(if (count == 0) -1 else body.size - units.get(atom)!!.length)
+                                Assertions.assertThat(matcher.end("g")).isEqualTo(if (count == 0) -1 else body.size)
                             }
                         }
                     }

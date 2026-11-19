@@ -12,6 +12,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
+import kotlin.collections.MutableList
 import kotlin.math.max
 
 /**
@@ -29,7 +30,7 @@ internal class ShortScanEquivalenceTest {
 
         Assertions.assertThat(
             ByteVectorScan.indexOfIgnoreCase(
-                input, 0, input.size, prefix, prefix.length, 0, 'z'.code.toByte(), 'Z'.code.toByte(), 0
+                input, 0, input.length, prefix, prefix.length, 0, 'z'.code.toByte(), 'Z'.code.toByte(), 0
             )
         )
             .isEqualTo(VectorScanProvider.UNSUPPORTED)
@@ -37,9 +38,9 @@ internal class ShortScanEquivalenceTest {
 
     @Test
     fun vectorCandidateBoundsDoNotOverflow() {
-        Assertions.assertThat(WorkLimit.candidateInBounds(Int.Companion.MAX_VALUE - 4, 0, Int.Companion.MAX_VALUE, 8))
+        Assertions.assertThat(WorkLimit.candidateInBounds(Int.MAX_VALUE - 4, 0, Int.MAX_VALUE, 8))
             .isFalse()
-        Assertions.assertThat(WorkLimit.candidateInBounds(Int.Companion.MAX_VALUE - 8, 0, Int.Companion.MAX_VALUE, 8))
+        Assertions.assertThat(WorkLimit.candidateInBounds(Int.MAX_VALUE - 8, 0, Int.MAX_VALUE, 8))
             .isTrue()
     }
 
@@ -155,9 +156,9 @@ internal class ShortScanEquivalenceTest {
 
         // SWAR
         val utf16SwarByte =
-            ShortSwarScan.indexOfIgnoreCaseUtf16(utf16Bytes, 0, haystackUtf16.length, prefix, 0)
+            ShortSwarScan.indexOfIgnoreCaseUtf16(utf16Bytes, 0, haystackUtf16.size, prefix, 0)
         val utf16SwarChar =
-            ShortSwarScan.indexOfIgnoreCase(chars, 0, haystackUtf16.length, prefix, 0)
+            ShortSwarScan.indexOfIgnoreCase(chars, 0, haystackUtf16.size, prefix, 0)
 
         Assertions.assertThat(utf16SwarByte).isEqualTo(705)
         Assertions.assertThat(utf16SwarChar).isEqualTo(705)
@@ -165,9 +166,9 @@ internal class ShortScanEquivalenceTest {
         // Vector
         if (isVectorApiAvailable) {
             val utf16VecByte =
-                ShortVectorScan.indexOfIgnoreCaseUtf16(utf16Bytes, 0, haystackUtf16.length, prefix, 0)
+                ShortVectorScan.indexOfIgnoreCaseUtf16(utf16Bytes, 0, haystackUtf16.size, prefix, 0)
             val utf16VecChar =
-                ShortVectorScan.indexOfIgnoreCase(chars, 0, haystackUtf16.length, prefix, 0)
+                ShortVectorScan.indexOfIgnoreCase(chars, 0, haystackUtf16.size, prefix, 0)
 
             Assertions.assertThat(utf16VecByte).isEqualTo(705)
             Assertions.assertThat(utf16VecChar).isEqualTo(705)
@@ -236,7 +237,7 @@ internal class ShortScanEquivalenceTest {
         val utf16Bytes = String(chars).toByteArray(StandardCharsets.UTF_16LE)
 
         for (ranges in arrayOf<IntArray?>(intArrayOf(0x7000, 0x7FFF), intArrayOf(0x8000, 0x9000))) {
-            val expected: Int = Companion.scalarIndexOfCharClass(chars, ranges!!, 0)
+            val expected: Int = scalarIndexOfCharClass(chars, ranges!!, 0)
             Assertions.assertThat(ShortVectorScan.indexOfCharClass(chars, 0, chars.size, ranges, 0))
                 .isEqualTo(expected)
             Assertions.assertThat(ShortVectorScan.indexOfCharClassUtf16(utf16Bytes, 0, chars.size, ranges, 0))
@@ -301,7 +302,7 @@ internal class ShortScanEquivalenceTest {
             }
 
         private fun scalarIndexOfAsciiClass(input: ByteArray, ranges: IntArray, start: Int): Int {
-            for (i in start..<input.size) {
+            for (i in start..<input.length) {
                 val b = input[i].toInt() and 0xFF
                 var r = 0
                 while (r < ranges.size) {
@@ -315,7 +316,7 @@ internal class ShortScanEquivalenceTest {
         }
 
         private fun scalarIndexOfCharClass(input: CharArray, ranges: IntArray, start: Int): Int {
-            for (i in start..<input.size) {
+            for (i in start..<input.length) {
                 val c = input[i]
                 var r = 0
                 while (r < ranges.size) {

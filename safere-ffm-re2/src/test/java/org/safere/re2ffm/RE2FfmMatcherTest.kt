@@ -163,7 +163,7 @@ internal class RE2FfmMatcherTest {
             .isInstanceOf(IllegalStateException::class.java)
         Assertions.assertThat(actual.find()).isTrue()
         Assertions.assertThat(actual.group(1)).isEqualTo("a")
-        Assertions.assertThat(actual.start(1)).isEqualTo(prefix.length())
+        Assertions.assertThat(actual.start(1)).isEqualTo(prefix.length)
     }
 
     @ParameterizedTest
@@ -182,7 +182,7 @@ internal class RE2FfmMatcherTest {
     @Test
     fun emptyRegionsAndEmptyCapturesRemainParticipating() {
         for (input in List.of<String?>("", "ab")) {
-            val end: Int = input.length()
+            val end: Int = input.length
             val actual: RE2FfmMatcher = compile("()").matcher(input).region(end, end)
             Assertions.assertThat(actual.matches()).isTrue()
             Assertions.assertThat(actual.group(1)).isEmpty()

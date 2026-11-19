@@ -13,22 +13,14 @@ internal class LiteralAlternation private constructor(
     utf8FirstByteScan: Utf8StartAccelerator.CharClass?
 ) {
     // The literals are ASCII, so their UTF-8 encodings are their chars as bytes.
-    private val utf8Literals: Array<ByteArray>
-    private val utf8Failures: Array<IntArray?>
+    private val utf8Literals: Array<ByteArray> =
+        Array(literals.size) { i -> literals[i].toByteArray(StandardCharsets.US_ASCII) }
+    private val utf8Failures: Array<IntArray> =
+        Array(literals.size) { i -> Pattern.literalFailure(utf8Literals[i]) }
 
     // The first-byte scan that UTF-8 searches without this plan start with, or null when they use
     // something else; the UTF-8 search is then off.
-    private val utf8FirstByteScan: Utf8StartAccelerator.CharClass?
-
-    init {
-        this.utf8Literals = arrayOfNulls<ByteArray>(literals.length)
-        this.utf8Failures = arrayOfNulls<IntArray>(literals.length)
-        for (i in literals.indices) {
-            utf8Literals[i] = literals[i].getBytes(StandardCharsets.US_ASCII)
-            utf8Failures[i] = Pattern.Companion.literalFailure(utf8Literals[i])
-        }
-        this.utf8FirstByteScan = utf8FirstByteScan
-    }
+    private val utf8FirstByteScan: Utf8StartAccelerator.CharClass? = utf8FirstByteScan
 
     /**
      * Returns packed start/end bounds, NO_MATCH, or FALLBACK. Only the initial search uses this plan.
@@ -38,7 +30,7 @@ internal class LiteralAlternation private constructor(
         if (from != 0) {
             return FALLBACK
         }
-        val length: Int = text.length()
+        val length: Int = text.length
         if (!wholeInputRejection) {
             // Preserve locality for patterns that did not already scan the whole input for rejection.
             var start = 0
@@ -64,18 +56,18 @@ internal class LiteralAlternation private constructor(
         if (from != 0) {
             return FALLBACK
         }
-        val length: Int = text.length()
+        val length: Int = text.length
         var start = 0
         while (start < length) {
             val limit = start + Math.min(WINDOW_LENGTH, length - start)
             var bestStart = limit
             var bestEnd = -1
             for (literal in literals) {
-                val end = bestStart + Math.min(literal.length() - 1, length - bestStart)
+                val end = bestStart + Math.min(literal.length - 1, length - bestStart)
                 val candidate = text.indexOf(literal, start, end)
                 if (candidate >= 0 && candidate < bestStart) {
                     bestStart = candidate
-                    bestEnd = candidate + literal.length()
+                    bestEnd = candidate + literal.length
                     if (candidate == start) {
                         break
                     }
@@ -105,7 +97,7 @@ internal class LiteralAlternation private constructor(
         }
         val bytes = text.bytes()
         val offset = text.offset()
-        val length = text.length()
+        val length = text.length
         var spanStart = 0
         var candidates = 0
         var position = 0
@@ -137,12 +129,12 @@ internal class LiteralAlternation private constructor(
     private fun matchAt(bytes: ByteArray?, offset: Int, length: Int, position: Int): Long {
         for (literal in utf8Literals) {
             if (WorkCounterConfig.ENABLED) {
-                WorkCounter.record(literal.length.toLong())
+                WorkCounter.record(literal.size.toLong())
             }
-            if (literal.length <= length - position
-                && ByteSwarScan.Companion.matchesAt(bytes, offset, literal, position)
+            if (literal.size <= length - position
+                && ByteSwarScan.matchesAt(bytes!!, offset, literal, position)
             ) {
-                return (position.toLong() shl 32) or (position + literal.length).toLong()
+                return (position.toLong() shl 32) or (position + literal.size).toLong()
             }
         }
         return NO_MATCH
@@ -150,7 +142,7 @@ internal class LiteralAlternation private constructor(
 
     /** Searches [start, length), where no literal starts before start.  */
     private fun searchFrom(text: Utf8InputScanner, start: Int): Long {
-        val length = text.length()
+        val length = text.length
         if (length - start <= PROBE_LENGTH * 4) {
             return search(text, start, length)
         }
@@ -161,7 +153,7 @@ internal class LiteralAlternation private constructor(
     private fun searchGrowingWindows(text: Utf8InputScanner, start: Int, windowLength: Int): Long {
         var start = start
         var windowLength = windowLength
-        val length = text.length()
+        val length = text.length
         while (start < length) {
             val remaining = length - start
             val width = Math.min(windowLength, remaining)
@@ -186,7 +178,7 @@ internal class LiteralAlternation private constructor(
             val idx = text.indexOfWithin(literal, utf8Failures[i], from, bestStart - 1)
             if (idx >= 0) {
                 bestStart = idx
-                bestEnd = idx + literal.length
+                bestEnd = idx + literal.size
                 // Alternatives are visited in priority order; no later alternative can improve this.
                 if (idx == from) {
                     break
@@ -199,7 +191,7 @@ internal class LiteralAlternation private constructor(
     private fun searchGrowingWindows(text: String, start: Int, windowLength: Int): Long {
         var start = start
         var windowLength = windowLength
-        val length: Int = text.length()
+        val length: Int = text.length
         while (start < length) {
             val remaining = length - start
             val width = Math.min(windowLength, remaining)
@@ -221,16 +213,28 @@ internal class LiteralAlternation private constructor(
     private fun search(text: String, from: Int, limit: Int): Long {
         var bestStart = limit
         var bestEnd = -1
-        val length: Int = text.length()
+        val length: Int = text.length
         for (literal in literals) {
-            val end = bestStart + Math.min(literal.length() - 1, length - bestStart)
-            val idx = if (end == length) text.indexOf(literal, from) else text.indexOf(literal, from, end)
+            val end = bestStart + Math.min(literal.length - 1, length - bestStart)
+            val idx = run {
+                var hit = -1
+                var i = from
+                val lastStart = if (end == length) length - literal.length else end - 1
+                while (i <= lastStart && i <= length - literal.length) {
+                    if (text.startsWith(literal, i)) {
+                        hit = i
+                        break
+                    }
+                    i++
+                }
+                hit
+            }
             if (WorkCounterConfig.ENABLED) {
-                WorkCounter.record((if (idx >= 0) idx - from + literal.length() else end - from).toLong())
+                WorkCounter.record((if (idx >= 0) idx - from + literal.length else end - from).toLong())
             }
             if (idx >= 0 && idx < bestStart) {
                 bestStart = idx
-                bestEnd = idx + literal.length()
+                bestEnd = idx + literal.length
                 // Alternatives are visited in priority order; no later alternative can improve this.
                 if (idx == from) {
                     break
@@ -265,14 +269,14 @@ internal class LiteralAlternation private constructor(
         ): LiteralAlternation? {
             var ast = ast
             while (ast.op == RegexpOp.NON_CAPTURE || (ast.op == RegexpOp.CAPTURE && ast.cap == 0)) {
-                ast = ast.sub()
+                ast = ast.sub()!!
             }
             if (ast.op != RegexpOp.ALTERNATE || ast.nsub() < 2 || ast.nsub() > MAX_ALTERNATIVES) {
                 return null
             }
-            val literals: Array<String> = arrayOfNulls<String>(ast.nsub())
+            val literals: Array<String?> = arrayOfNulls<String>(ast.nsub())
             for (i in literals.indices) {
-                literals[i] = MultiAnchorCompiler.extractExactAsciiLiteral(ast.subs.get(i))
+                literals[i] = MultiAnchorCompiler.extractExactAsciiLiteral(ast.subs!!.get(i))
                 if (literals[i] == null) {
                     return null
                 }
@@ -282,11 +286,11 @@ internal class LiteralAlternation private constructor(
                 // comparison work per input position, keeping indexOf's O(n * m) worst case linear in n.
                 // WorkCounter charges distance, not character comparisons, so it relies on these caps.
                 // Keep the existing engine for longer needles.
-                if (literals[i].length() > MAX_LITERAL_LENGTH) {
+                if (literals[i]!!.length > MAX_LITERAL_LENGTH) {
                     return null
                 }
             }
-            return LiteralAlternation(literals, wholeInputRejection, utf8FirstByteScan)
+            return LiteralAlternation(literals.requireNoNulls(), wholeInputRejection, utf8FirstByteScan)
         }
     }
 }

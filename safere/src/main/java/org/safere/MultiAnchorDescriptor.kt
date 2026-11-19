@@ -88,8 +88,8 @@ internal class MultiAnchorDescriptor @JvmOverloads constructor(
         }
         val startLiteral: String? =
             when (startPlan) {
-                -> if (lit.foldCase) null else lit.prefix
-                -> fo.fol.literal()
+                is StartPlan.Literal -> if (startPlan.foldCase) null else startPlan.prefix
+                is StartPlan.FixedOffset -> startPlan.fol!!.literal()
                 else -> null
             }
         return startLiteral != null && !startLiteral.isEmpty() && RarityOracle.startLiteralCompetitiveWithReject(
@@ -107,208 +107,172 @@ internal class MultiAnchorDescriptor @JvmOverloads constructor(
      */
     fun startSubsumesFindReject(): Boolean {
         if (startAnchored
-            || (startPlan !is StartPlan.LeadingExpansion) || !MultiAnchorCompiler.isWideLeadingClass(startPlan.leadingClass) || (startPlan.innerPlan !is StartPlan.Literal) || lit.foldCase
+            || (startPlan !is StartPlan.LeadingExpansion)
+            || !MultiAnchorCompiler.isWideLeadingClass(startPlan.leadingClass!!)
+            || (startPlan.innerPlan !is StartPlan.Literal)
+            || startPlan.innerPlan.foldCase
         ) {
             return false
         }
-        return when (rejectPlan) {
-            -> {
-                for (plan in composite.plans) {
-                    if (!impliedByLiteral(plan, lit.prefix)) {
-                        false
+        val lit = startPlan.innerPlan
+        return when (val plan = rejectPlan) {
+            is RejectPlan.Composite -> {
+                for (part in plan.plans!!) {
+                    if (!impliedByLiteral(part, lit.prefix!!)) {
+                        return false
                     }
                 }
                 true
             }
 
-            else -> impliedByLiteral(rejectPlan, lit.prefix)
+            else -> impliedByLiteral(plan, lit.prefix!!)
         }
     }
 
-    internal interface StartPlan {
-        @JvmRecord
-        data class None : StartPlan {
+    internal sealed interface StartPlan {
+        class None private constructor() : StartPlan {
             companion object {
                 val INSTANCE: None = None()
             }
         }
 
         @JvmRecord
-        data class Literal(prefix: String?, foldCase: Boolean) : StartPlan {
-            val prefix: String?
-            val foldCase: Boolean
+        data class Literal(val prefix: String?, val foldCase: Boolean) : StartPlan {
 
             init {
-                this.foldCase = foldCase
-                this.prefix = prefix
-                Objects.requireNonNull<String?>(prefix, "prefix")
+                Objects.requireNonNull(prefix, "prefix")
             }
         }
 
         @JvmRecord
-        data class CharClass(scanInfo: CharClassScanInfo?) : StartPlan {
-            val scanInfo: CharClassScanInfo?
+        data class CharClass(val scanInfo: CharClassScanInfo?) : StartPlan {
 
             init {
-                this.scanInfo = scanInfo
                 Objects.requireNonNull<CharClassScanInfo?>(scanInfo, "scanInfo")
             }
         }
 
         @JvmRecord
-        data class FixedOffset(fol: Pattern.FixedOffsetLiteral?, leadingClass: CharClassScanInfo?) : StartPlan {
-            val fol: Pattern.FixedOffsetLiteral?
-            val leadingClass: CharClassScanInfo?
+        data class FixedOffset(val fol: FixedOffsetLiteral?, val leadingClass: CharClassScanInfo?) : StartPlan {
 
             init {
-                this.leadingClass = leadingClass
-                this.fol = fol
-                Objects.requireNonNull<Pattern.FixedOffsetLiteral?>(fol, "fol")
+                Objects.requireNonNull<FixedOffsetLiteral?>(fol, "fol")
             }
         }
 
         /** A required ASCII class following an exact-width ASCII prefix.  */
         @JvmRecord
-        data class FixedOffsetClass(scanInfo: CharClassScanInfo?, offset: Int, leadingClass: CharClassScanInfo?) :
-            StartPlan {
-            val scanInfo: CharClassScanInfo?
-            val offset: Int
+        data class FixedOffsetClass(
+            val scanInfo: CharClassScanInfo?,
+            val offset: Int,
             val leadingClass: CharClassScanInfo?
+        ) :
+            StartPlan {
 
             init {
-                this.leadingClass = leadingClass
-                this.offset = offset
-                this.scanInfo = scanInfo
                 Objects.requireNonNull<CharClassScanInfo?>(scanInfo, "scanInfo")
                 Objects.requireNonNull<CharClassScanInfo?>(leadingClass, "leadingClass")
             }
         }
 
         @JvmRecord
-        data class MultiLiteral(literals: Array<String?>?, fallbackClass: CharClassScanInfo?) : StartPlan {
-            val literals: Array<String?>?
-            val fallbackClass: CharClassScanInfo?
+        data class MultiLiteral(val literals: Array<String?>?, val fallbackClass: CharClassScanInfo?) : StartPlan {
 
             init {
-                this.fallbackClass = fallbackClass
-                this.literals = literals
                 Objects.requireNonNull<Array<String?>?>(literals, "literals")
             }
         }
 
         @JvmRecord
         data class LeadingExpansion(
-            leadingClass: CharClassScanInfo?,
-            minRepetition: Int,
-            maxRepetition: Int,
-            hasLeadingAssertions: Boolean,
-            innerPlan: StartPlan?
-        ) : StartPlan {
-            val leadingClass: CharClassScanInfo?
-            val minRepetition: Int
-            val maxRepetition: Int
-            val hasLeadingAssertions: Boolean
+            val leadingClass: CharClassScanInfo?,
+            val minRepetition: Int,
+            val maxRepetition: Int,
+            val hasLeadingAssertions: Boolean,
             val innerPlan: StartPlan?
+        ) : StartPlan {
 
             init {
-                this.innerPlan = innerPlan
-                this.hasLeadingAssertions = hasLeadingAssertions
-                this.maxRepetition = maxRepetition
-                this.minRepetition = minRepetition
-                this.leadingClass = leadingClass
                 Objects.requireNonNull<CharClassScanInfo?>(leadingClass, "leadingClass")
                 Objects.requireNonNull<StartPlan?>(innerPlan, "innerPlan")
             }
         }
 
         @JvmRecord
-        data class LineAnchor(acceleration: StartAcceleration?) : StartPlan {
-            val acceleration: StartAcceleration?
+        data class LineAnchor(val acceleration: StartAcceleration?) : StartPlan {
 
             init {
-                this.acceleration = acceleration
                 Objects.requireNonNull<StartAcceleration?>(acceleration, "acceleration")
             }
         }
     }
 
     internal interface RejectPlan {
-        @JvmRecord
-        data class None : RejectPlan {
+        class None private constructor() : RejectPlan {
             companion object {
                 val INSTANCE: None = None()
             }
         }
 
         @JvmRecord
-        data class RequiredLiteral(literal: String?) : RejectPlan {
-            val literal: String?
+        data class RequiredLiteral(val literal: String?) : RejectPlan {
 
             init {
-                this.literal = literal
                 Objects.requireNonNull<String?>(literal, "literal")
             }
         }
 
         @JvmRecord
-        data class RequiredCharClass(scanInfo: CharClassScanInfo?) : RejectPlan {
-            val scanInfo: CharClassScanInfo?
+        data class RequiredCharClass(val scanInfo: CharClassScanInfo?) : RejectPlan {
 
             init {
-                this.scanInfo = scanInfo
                 Objects.requireNonNull<CharClassScanInfo?>(scanInfo, "scanInfo")
             }
         }
 
         @JvmRecord
-        data class DisjointLiterals(literals: Array<String?>?) : RejectPlan {
-            val literals: Array<String?>?
+        data class DisjointLiterals(val literals: Array<String?>?) : RejectPlan {
 
             init {
-                this.literals = literals
                 Objects.requireNonNull<Array<String?>?>(literals, "literals")
             }
         }
 
         @JvmRecord
-        data class EndAnchoredSuffix(suffix: SuffixInfo?) : RejectPlan {
-            val suffix: SuffixInfo?
+        data class EndAnchoredSuffix(val suffix: SuffixInfo?) : RejectPlan {
 
             init {
-                this.suffix = suffix
                 Objects.requireNonNull<SuffixInfo?>(suffix, "suffix")
             }
         }
 
         @JvmRecord
-        data class EndAnchoredCharClass(charClass: EndAnchoredCharClassInfo?) : RejectPlan {
-            val charClass: EndAnchoredCharClassInfo?
+        data class EndAnchoredCharClass(val charClass: EndAnchoredCharClassInfo?) : RejectPlan {
 
             init {
-                this.charClass = charClass
                 Objects.requireNonNull<EndAnchoredCharClassInfo?>(charClass, "charClass")
             }
         }
 
         @JvmRecord
-        data class Composite(plans: Array<RejectPlan>?) : RejectPlan {
-            val plans: Array<RejectPlan>?
+        data class Composite(val plans: Array<RejectPlan>?) : RejectPlan {
 
             init {
-                this.plans = plans
-                Objects.requireNonNull<Array<RejectPlan?>?>(plans, "plans")
+                Objects.requireNonNull(plans, "plans")
             }
         }
     }
 
     companion object {
         val NONE: MultiAnchorDescriptor =
-            MultiAnchorDescriptor(false, StartPlan.None.Companion.INSTANCE, RejectPlan.None.Companion.INSTANCE)
+            MultiAnchorDescriptor(false, StartPlan.None.INSTANCE, RejectPlan.None.INSTANCE)
 
         private fun impliedByLiteral(plan: RejectPlan, literal: String): Boolean {
             return when (plan) {
-                -> literal.contains(rl.literal)
-                -> literal.codePoints().anyMatch(IntPredicate { cp: Int -> rc.scanInfo.contains(cp) })
+                is RequiredLiteral -> literal.contains(plan.literal!!)
+                is RejectPlan.RequiredCharClass -> literal.codePoints()
+                    .anyMatch(IntPredicate { cp: Int -> plan.scanInfo!!.contains(cp) })
+
                 else -> false
             }
         }

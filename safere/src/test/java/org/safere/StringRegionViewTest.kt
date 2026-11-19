@@ -221,7 +221,7 @@ internal class StringRegionViewTest {
                     allocationBeanClass.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType)
                 val allocated = allocationBeanClass.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
                 Assumptions.assumeTrue(supported.invoke(threadBean) as Boolean)
-                if (!enabled.invoke(threadBean) as Boolean) {
+                if ((enabled.invoke(threadBean) as Boolean?) != true) {
                     enable.invoke(threadBean, true)
                 }
                 return AllocationTracker(threadBean, allocated)

@@ -12,12 +12,12 @@ import java.util.*
  * A resizable array of primitive `int` values to avoid boxing and object allocation overhead.
  */
 internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
-    private var data: IntArray
-    private var size = 0
+    private lateinit var data: IntArray
+    var size = 0
 
     fun add(value: Int) {
-        if (size == data.length) {
-            data = Arrays.copyOf(data, data.length * 2)
+        if (size == data.size) {
+            data = Arrays.copyOf(data, data.size * 2)
         }
         data[size++] = value
     }
@@ -34,8 +34,7 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
         size = 0
     }
 
-    val isEmpty: Boolean
-        get() = size == 0
+    fun isEmpty(): Boolean = size == 0
 
     fun removeLast(): Int {
         return data[--size]

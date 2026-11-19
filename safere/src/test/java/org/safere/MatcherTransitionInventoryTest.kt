@@ -8,7 +8,9 @@ import org.assertj.core.api.Assertions
 import org.assertj.core.api.ThrowingConsumer
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.safere.MatcherTransitionInventory.*
+import org.safere.MatcherTransitionInventory.DeferredCaptureEffect
+import org.safere.MatcherTransitionInventory.ResultEffect
+import org.safere.MatcherTransitionInventory.Transition
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.*
@@ -24,10 +26,10 @@ internal class MatcherTransitionInventoryTest {
     fun transitionInventoryCoversPublicMatcherMethods() {
         val actualPublicMethods =
             Arrays.stream<Method>(Matcher::class.java.getDeclaredMethods())
-                .filter { method: Method? -> Modifier.isPublic(method!!.getModifiers()) }
-                .filter { method: Method? -> !method!!.isBridge() }
-                .filter { method: Method? -> !method!!.isSynthetic() }
-                .map<MatcherTransitionInventory.Signature?> { method: Method? -> Companion.signature(method!!) }
+                .filter { method: Method? -> Modifier.isPublic(method!!.modifiers) }
+                .filter { method: Method? -> !method!!.isBridge }
+                .filter { method: Method? -> !method!!.isSynthetic }
+                .map<MatcherTransitionInventory.Signature?> { method: Method? -> signature(method!!) }
                 .collect(Collectors.toSet())
 
         val inventoriedMethods =
@@ -48,10 +50,10 @@ internal class MatcherTransitionInventoryTest {
     fun utf8TransitionInventoryCoversPublicMatcherMethods() {
         val actualPublicMethods =
             Arrays.stream<Method>(Utf8Matcher::class.java.getDeclaredMethods())
-                .filter { method: Method? -> Modifier.isPublic(method!!.getModifiers()) }
-                .filter { method: Method? -> !method!!.isBridge() }
-                .filter { method: Method? -> !method!!.isSynthetic() }
-                .map<MatcherTransitionInventory.Signature?> { method: Method? -> Companion.signature(method!!) }
+                .filter { method: Method? -> Modifier.isPublic(method!!.modifiers) }
+                .filter { method: Method? -> !method!!.isBridge }
+                .filter { method: Method? -> !method!!.isSynthetic }
+                .map<MatcherTransitionInventory.Signature?> { method: Method? -> signature(method!!) }
                 .collect(Collectors.toSet())
 
         val inventoriedMethods =
@@ -101,9 +103,9 @@ internal class MatcherTransitionInventoryTest {
     companion object {
         private fun signature(method: Method): MatcherTransitionInventory.Signature {
             return MatcherTransitionInventory.Signature(
-                method.getName(),
-                List.of<Class<*>?>(*method.getParameterTypes()),
-                Modifier.isStatic(method.getModifiers())
+                method.name,
+                List.of<Class<*>?>(*method.parameterTypes),
+                Modifier.isStatic(method.modifiers)
             )
         }
 
@@ -113,7 +115,7 @@ internal class MatcherTransitionInventoryTest {
         ): MutableList<String?> {
             return expected.stream()
                 .filter { signature: MatcherTransitionInventory.Signature? -> !actual.contains(signature) }
-                .map<String?> { signature: MatcherTransitionInventory.Signature? -> Companion.format(signature!!) }
+                .map<String?> { signature: MatcherTransitionInventory.Signature? -> format(signature!!) }
                 .sorted(Comparator.naturalOrder<String?>())
                 .toList()
         }

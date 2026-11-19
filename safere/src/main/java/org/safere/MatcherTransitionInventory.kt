@@ -252,8 +252,8 @@ internal object MatcherTransitionInventory {
         return UTF8_TRANSITIONS
     }
 
-    fun transitionFor(signature: Signature?): Optional<Transition?> {
-        return Optional.ofNullable<Transition?>(BY_SIGNATURE.get(signature))
+    fun transitionFor(signature: Signature?): Optional<Transition> {
+        return Optional.ofNullable(BY_SIGNATURE.get(signature))
     }
 
     private fun signature(name: String?, vararg parameterTypes: Class<*>?): Signature {

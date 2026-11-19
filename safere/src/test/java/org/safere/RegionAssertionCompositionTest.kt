@@ -28,7 +28,7 @@ internal class RegionAssertionCompositionTest {
         val anchoring: Boolean,
         val opaqueEnd: Int,
         val transparentEnd: Int
-    ) {
+    )      {
         override fun toString(): String {
             return name
         }

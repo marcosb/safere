@@ -14,6 +14,32 @@ import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
 import java.util.regex.Pattern
+import kotlin.Any
+import kotlin.Boolean
+import kotlin.ByteArray
+import kotlin.Exception
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.String
+import kotlin.Throws
+import kotlin.booleanArrayOf
+import kotlin.code
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.indices
+import kotlin.collections.last
+import kotlin.collections.mutableListOf
+import kotlin.collections.plus
+import kotlin.collections.reversed
+import kotlin.compareTo
+import kotlin.intArrayOf
+import kotlin.plus
+import kotlin.sequences.plus
+import kotlin.text.StringBuilder
+import kotlin.text.plus
+import kotlin.text.repeat
+import kotlin.text.substring
+import kotlin.text.toByteArray
 
 /**
  * Tests for [Dfa].
@@ -34,11 +60,11 @@ internal class DfaTest {
                 val reverse = operation == 1
                 val prog = if (reverse) pattern.reverseProg() else pattern.prog()
                 val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
-                val start = dfa.startState(scanner, if (reverse) scanner.length() else 0, false, reverse)
+                val start = dfa.startState(scanner, if (reverse) scanner.length else 0, false, reverse)
                 val matched =
                     when (operation) {
                         0 -> dfa.doSearch(scanner, false, false).matched
-                        1 -> dfa.doSearchReverse(scanner, scanner.length(), 0, false, false).matched
+                        1 -> dfa.doSearchReverse(scanner, scanner.length, 0, false, false).matched
                         else -> dfa.doSearchMany(scanner, false).matched
                     }
                 Assertions.assertThat(matched).isFalse()
@@ -732,18 +758,18 @@ internal class DfaTest {
                             val where = regex + " budget=" + budget + " anchored=" + anchored
                             val results: MutableList<Any?> = ArrayList<Any?>()
                             results.add(first.doSearch(text, 0, anchored, false))
-                            assertBailFlagMatches(first, results.getLast(), "doSearch " + where)
+                            assertBailFlagMatches(first, results.last(), "doSearch " + where)
                             results.add(longest.doSearch(text, 0, anchored, true))
-                            assertBailFlagMatches(longest, results.getLast(), "doSearch longest " + where)
+                            assertBailFlagMatches(longest, results.last(), "doSearch longest " + where)
                             results.add(longest.doSearchMany(text, anchored))
-                            assertBailFlagMatches(longest, results.getLast(), "doSearchMany " + where)
+                            assertBailFlagMatches(longest, results.last(), "doSearchMany " + where)
                             if (reverse != null) {
                                 results.add(
                                     reverse.doSearchReverse(
                                         StringInputScanner(text), text.length, 0, anchored, true
                                     )
                                 )
-                                assertBailFlagMatches(reverse, results.getLast(), "doSearchReverse " + where)
+                                assertBailFlagMatches(reverse, results.last(), "doSearchReverse " + where)
                             }
                             for (result in results) {
                                 if (result == null) {
@@ -808,23 +834,23 @@ internal class DfaTest {
             val reverse = org.safere.Pattern.compile("(?s:.*)abc$").reverseDfa()
             for (pass in 0..1) {
                 val probe =
-                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64)
+                    reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)
                 Assertions.assertThat<Dfa.SearchResult?>(probe).isNotNull()
                 Assertions.assertThat(probe!!.scanLimitReached).isTrue()
                 Assertions.assertThat(reverse.lastSearchBailed()).isFalse()
 
-                val full = reverse.doSearchReverse(scanner, scanner.length(), 0, true, true)
+                val full = reverse.doSearchReverse(scanner, scanner.length, 0, true, true)
                 Assertions.assertThat<Dfa.SearchResult?>(full).isNotNull()
                 Assertions.assertThat(full!!.scanLimitReached).isFalse()
                 Assertions.assertThat(full.matched).isTrue()
                 Assertions.assertThat(full.pos).isZero()
 
                 val existence =
-                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, false, 64)
+                    reverse.doSearchReverse(scanner, scanner.length, 0, true, false, 64)
                 Assertions.assertThat<Dfa.SearchResult?>(existence).isNotNull()
                 Assertions.assertThat(existence!!.scanLimitReached).isFalse()
                 Assertions.assertThat(existence.matched).isTrue()
-                Assertions.assertThat(existence.pos).isEqualTo(scanner.length() - 3)
+                Assertions.assertThat(existence.pos).isEqualTo(scanner.length - 3)
             }
         }
     }
@@ -844,10 +870,10 @@ internal class DfaTest {
                     for (regex in List.of<String?>("\\b" + tail + "$", "\\B" + tail + "$", tail + "$")) {
                         val reverse = org.safere.Pattern.compile(regex).reverseDfa()
                         val full =
-                            reverse.doSearchReverse(scanner, scanner.length(), 0, true, true)
+                            reverse.doSearchReverse(scanner, scanner.length, 0, true, true)
                         for (limit in 0..16) {
                             val probe =
-                                reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, limit)
+                                reverse.doSearchReverse(scanner, scanner.length, 0, true, true, limit)
                             Assertions.assertThat<Dfa.SearchResult?>(probe).`as`("/%s/ limit %s", regex, limit)
                                 .isNotNull()
                             Assertions.assertThat(reverse.lastSearchBailed()).isFalse()
@@ -880,7 +906,7 @@ internal class DfaTest {
                     for (pass in 0..1) {
                         val result =
                             reverse.doSearchReverse(
-                                scanner, scanner.length(), scanner.length() - 1, true, true
+                                scanner, scanner.length, scanner.length - 1, true, true
                             )
                         Assertions.assertThat<Dfa.SearchResult?>(result)
                             .`as`("%s after %s (%s)", regex, prefix, scanner.javaClass)
@@ -889,7 +915,7 @@ internal class DfaTest {
                             .`as`("%s after %s (%s)", regex, prefix, scanner.javaClass)
                             .isEqualTo(expected)
                         if (expected) {
-                            Assertions.assertThat(result.pos).isEqualTo(scanner.length() - 1)
+                            Assertions.assertThat(result.pos).isEqualTo(scanner.length - 1)
                         }
                     }
                 }
@@ -909,16 +935,16 @@ internal class DfaTest {
             )) {
                 for (regex in mutableListOf<String?>(".", ".|", ".+")) {
                     val reverse = org.safere.Pattern.compile(regex).reverseDfa()
-                    for (start in 1..<scanner.length()) {
+                    for (start in 1..<scanner.length) {
                         for (pass in 0..1) {
                             val result =
-                                reverse.doSearchReverse(scanner, scanner.length(), start, true, true)
+                                reverse.doSearchReverse(scanner, scanner.length, start, true, true)
                             Assertions.assertThat<Dfa.SearchResult?>(result)
                                 .`as`("%s on %s from %s (%s)", regex, text, start, scanner.javaClass)
                                 .isNotNull()
                             Assertions.assertThat(result!!.matched).isTrue()
                             Assertions.assertThat(result.pos)
-                                .isEqualTo(if (regex == ".+") start else scanner.length() - 1)
+                                .isEqualTo(if (regex == ".+") start else scanner.length - 1)
                         }
                     }
                 }
@@ -951,7 +977,7 @@ internal class DfaTest {
                 val reverse = org.safere.Pattern.compile(c.regex).reverseDfa()
                 for (pass in 0..1) {
                     val result =
-                        reverse.doSearchReverse(scanner, scanner.length(), startLimit, true, true)
+                        reverse.doSearchReverse(scanner, scanner.length, startLimit, true, true)
                     Assertions.assertThat<Dfa.SearchResult?>(result).`as`("%s (%s)", c, scanner.javaClass).isNotNull()
                     Assertions.assertThat(result!!.matched).`as`("%s (%s)", c, scanner.javaClass).isTrue()
                     Assertions.assertThat(result.pos).`as`("%s (%s)", c, scanner.javaClass).isEqualTo(startLimit)
@@ -1324,7 +1350,7 @@ internal class DfaTest {
         for (i in text.indices) {
             text[i] = (47 + random.nextInt(11)).toByte() // '/', '0'-'9'
         }
-        val matcher = pattern.matcher(Utf8Input.trusted(text, 0, text.size))
+        val matcher = pattern.matcher(Utf8Input.trusted(text, 0, text.length))
         var matches = 0
         while (matcher.find()) {
             matches++
@@ -1425,12 +1451,12 @@ internal class DfaTest {
         val stringMatcher = pattern.matcher(withMatch)
         Assertions.assertThat(stringMatcher.find()).isTrue()
         Assertions.assertThat(stringMatcher.start()).isEqualTo(adversarialNoise.length)
-        Assertions.assertThat(stringMatcher.end()).isEqualTo(withMatch.length)
+        Assertions.assertThat(stringMatcher.end()).isEqualTo(withMatch.size)
 
         val utf8Matcher = pattern.matcher(Utf8Input.validated(withMatch.toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(utf8Matcher.find()).isTrue()
         Assertions.assertThat(utf8Matcher.start()).isEqualTo(adversarialNoise.length)
-        Assertions.assertThat(utf8Matcher.end()).isEqualTo(withMatch.length)
+        Assertions.assertThat(utf8Matcher.end()).isEqualTo(withMatch.size)
     }
 
     @Test

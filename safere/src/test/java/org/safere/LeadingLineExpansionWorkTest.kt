@@ -97,8 +97,8 @@ internal class LeadingLineExpansionWorkTest {
                     Assertions.assertThat(count(pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))))
                         .isEqualTo(lines)
                 })
-        Assertions.assertThat(stringSteps).isLessThan((text.length / 2).toLong())
-        Assertions.assertThat(utf8Steps).isLessThan((text.length / 2).toLong())
+        Assertions.assertThat(stringSteps).isLessThan((text.size / 2).toLong())
+        Assertions.assertThat(utf8Steps).isLessThan((text.size / 2).toLong())
     }
 
     @ParameterizedTest
@@ -119,7 +119,7 @@ internal class LeadingLineExpansionWorkTest {
                                 count(pattern.matcher(input))
                         Assertions.assertThat(matches).isEqualTo(expected)
                     })
-            Assertions.assertThat(work).isLessThan(10L * input.length)
+            Assertions.assertThat(work).isLessThan(10L * input.size)
         }
     }
 

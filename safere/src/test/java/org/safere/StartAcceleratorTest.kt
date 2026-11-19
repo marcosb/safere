@@ -193,7 +193,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(accelerator, scanner, 0)).isEqualTo(expected)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(accelerator, scanner, expected + 1))
             .isEqualTo(expected + "шЕРЛОК хОЛМС ".toByteArray(StandardCharsets.UTF_8).size)
-        Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(accelerator, scanner, scanner.length()))
+        Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(accelerator, scanner, scanner.length))
             .isEqualTo(-1)
     }
 
@@ -438,7 +438,7 @@ internal class StartAcceleratorTest {
                 for (input in testInputs) {
                     val strCandidate = StringStartAccelerator.findNextCandidate(strAcc, input, 0, false)
                     val utf8Candidate =
-                        Utf8StartAccelerator.findNextCandidate(utf8Acc, Companion.utf8Scanner(input!!), 0)
+                        Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(input!!), 0)
                     Assertions.assertThat(utf8Candidate)
                         .`as`("Candidate indices should match for pattern '%s' on input '%s'", patStr, input)
                         .isEqualTo(strCandidate)
@@ -744,7 +744,7 @@ internal class StartAcceleratorTest {
         val le =
             plan as StartPlan.LeadingExpansion
         Assertions.assertThat(le.minRepetition).isEqualTo(1)
-        Assertions.assertThat(le.maxRepetition).isEqualTo(Int.Companion.MAX_VALUE)
+        Assertions.assertThat(le.maxRepetition).isEqualTo(Int.MAX_VALUE)
 
         val strAcc = pattern.stringStartAccelerator()
         Assertions.assertThat<StringStartAccelerator?>(strAcc)

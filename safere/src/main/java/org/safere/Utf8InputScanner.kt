@@ -11,11 +11,7 @@ import java.util.*
 
 internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : ByteSwarScan(bytes, offset, length),
     InputScanner {
-    constructor(bytes: ByteArray) : this(bytes, 0, bytes.length)
-
-    override fun length(): Int {
-        return length
-    }
+    constructor(bytes: ByteArray) : this(bytes, 0, bytes.size)
 
     override fun indexOfAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
         val start = Math.max(0, fromIndex)
@@ -24,7 +20,12 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in start until scanLen) {
+                WorkCounter.record()
+                if (unsignedByteAt(i) == ascii) {
+                    return i
+                }
+            }
             return -1
         }
         val res = scanByte(scanLen, ascii.toByte(), start)
@@ -38,10 +39,16 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (position in start until scanLen) {
+                WorkCounter.record()
+                val value = unsignedByteAt(position)
+                if (value >= 0x80 || value == ascii) {
+                    return position
+                }
+            }
             return -1
         }
-        return ByteSwarScan.Companion.indexOfByteOrNonAscii(bytes, offset, scanLen, ascii.toByte(), start)
+        return indexOfByteOrNonAscii(bytes, offset, scanLen, ascii.toByte(), start)
     }
 
     private fun scanByte(scanLen: Int, b0: Byte, start: Int): Int {
@@ -49,13 +56,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         val byteProvider = VectorScanProviders.providerFor(ScanKind.BYTE, window)
         if (byteProvider != null) {
             val idx = byteProvider.indexOfByte(bytes, offset, scanLen, b0, start)
-            if (idx != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (idx != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.BYTE, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                 return idx
             }
         }
         ScanAudit.record(ScanKind.BYTE, ScanDirection.FORWARD, window, ScanPath.SWAR)
-        return ByteSwarScan.Companion.indexOfByte(bytes, offset, scanLen, b0, start)
+        return indexOfByte(bytes, offset, scanLen, b0, start)
     }
 
     override fun indexOfAsciiPair(c1: Int, c2: Int, fromIndex: Int, limit: Int): Int {
@@ -65,7 +72,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in start until scanLen) {
+                WorkCounter.record()
+                val value = unsignedByteAt(i)
+                if (value == c1 || value == c2) {
+                    return i
+                }
+            }
             return -1
         }
         val res = scanBytePair(scanLen, c1.toByte(), c2.toByte(), start)
@@ -79,10 +92,16 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (position in start until scanLen) {
+                WorkCounter.record()
+                val value = unsignedByteAt(position)
+                if (value >= 0x80 || value == c1 || value == c2) {
+                    return position
+                }
+            }
             return -1
         }
-        return ByteSwarScan.Companion.indexOfBytePairOrNonAscii(
+        return indexOfBytePairOrNonAscii(
             bytes, offset, scanLen, c1.toByte(), c2.toByte(), start
         )
     }
@@ -94,7 +113,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in start until scanLen) {
+                WorkCounter.record()
+                val value = unsignedByteAt(i)
+                if (value == c1 || value == c2 || value == c3) {
+                    return i
+                }
+            }
             return -1
         }
         val res = scanByteTriple(scanLen, c1.toByte(), c2.toByte(), c3.toByte(), start)
@@ -108,10 +133,16 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         if (WorkCounterConfig.ENABLED) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (position in start until scanLen) {
+                WorkCounter.record()
+                val value = unsignedByteAt(position)
+                if (value >= 0x80 || value == c1 || value == c2 || value == c3) {
+                    return position
+                }
+            }
             return -1
         }
-        return ByteSwarScan.Companion.indexOfByteTripleOrNonAscii(
+        return indexOfByteTripleOrNonAscii(
             bytes, offset, scanLen, c1.toByte(), c2.toByte(), c3.toByte(), start
         )
     }
@@ -121,13 +152,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         val pairProvider = VectorScanProviders.providerFor(ScanKind.PAIR, window)
         if (pairProvider != null) {
             val idx = pairProvider.indexOfBytePair(bytes, offset, scanLen, b0, b1, start)
-            if (idx != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (idx != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.PAIR, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                 return idx
             }
         }
         ScanAudit.record(ScanKind.PAIR, ScanDirection.FORWARD, window, ScanPath.SWAR)
-        return ByteSwarScan.Companion.indexOfBytePair(bytes, offset, scanLen, b0, b1, start)
+        return indexOfBytePair(bytes, offset, scanLen, b0, b1, start)
     }
 
     private fun scanByteTriple(scanLen: Int, b0: Byte, b1: Byte, b2: Byte, start: Int): Int {
@@ -135,13 +166,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         val tripleProvider = VectorScanProviders.providerFor(ScanKind.TRIPLE, window)
         if (tripleProvider != null) {
             val idx = tripleProvider.indexOfByteTriple(bytes, offset, scanLen, b0, b1, b2, start)
-            if (idx != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (idx != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.TRIPLE, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                 return idx
             }
         }
         ScanAudit.record(ScanKind.TRIPLE, ScanDirection.FORWARD, window, ScanPath.SWAR)
-        return ByteSwarScan.Companion.indexOfByteTriple(bytes, offset, scanLen, b0, b1, b2, start)
+        return indexOfByteTriple(bytes, offset, scanLen, b0, b1, b2, start)
     }
 
     fun slice(start: Int, end: Int): Utf8InputScanner {
@@ -150,7 +181,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
 
     @JvmOverloads
     fun startsWith(prefix: ByteArray, startPos: Int, foldCase: Boolean = false): Boolean {
-        val prefixLen: Int = prefix.length
+        val prefixLen: Int = prefix.size
         if (startPos >= 0 && length - startPos >= prefixLen) {
             val start = offset + startPos
             if (if (foldCase)
@@ -168,7 +199,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     fun endsWith(suffix: ByteArray, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
-        val suffixLen: Int = suffix.length
+        val suffixLen: Int = suffix.size
         if (length >= suffixLen) {
             val start = offset + length - suffixLen
             if (if (foldCase)
@@ -215,7 +246,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return asciiAt(pos - 1)
     }
 
-    override fun indexOfCodePointClass(ranges: IntArray, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {
+    override fun indexOfCodePointClass(ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {
+        val rangeTable = ranges ?: return -1
         var position = Math.max(0, start)
         val scanLen = Math.min(length, limit)
         if (position >= scanLen) {
@@ -226,45 +258,55 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             if (VectorScanProviders.providerForPolicy(
                     ScanKind.CLASS,
                     window
-                ) == null && ranges.length >= 4 && ranges.length <= 8 && ranges[0] >= 0 && ranges[ranges.length - 1] < 0x80 && window >= MULTI_RANGE_SWAR_MINIMUM_LENGTH && !isAsciiPair(
-                    ranges
-                ) && !isAsciiTriple(ranges)
+                ) == null && rangeTable.size >= 4 && rangeTable.size <= 8 && rangeTable[0] >= 0 && rangeTable[rangeTable.size - 1] < 0x80 && window >= MULTI_RANGE_SWAR_MINIMUM_LENGTH && !isAsciiPair(
+                    rangeTable
+                ) && !isAsciiTriple(rangeTable)
             ) {
                 // No Vector kernel for this window, but SWAR still beats decoding code points one at a
                 // time. Declining the Vector tier is not a reason to fall all the way back to scalar.
                 ScanAudit.recordConsultation(ScanKind.CLASS, window)
                 ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.SWAR)
                 val scalarLimit = Math.min(scanLen, position + MULTI_RANGE_SWAR_SCALAR_PROLOGUE_LENGTH)
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                while (position < scalarLimit) {
+                    val value = unsignedByteAt(position)
+                    if ((value < java.lang.Long.SIZE && (bitmap0 and (1L shl value)) != 0L)
+                        || (value >= java.lang.Long.SIZE
+                                && value < 128
+                                && (bitmap1 and (1L shl (value - java.lang.Long.SIZE))) != 0L)
+                    ) {
+                        return position
+                    }
+                    position++
+                }
                 if (position >= scanLen) {
                     return -1
                 }
-                return ByteSwarScan.Companion.indexOfMultipleByteRanges(
-                    bytes, offset, scanLen, ranges, bitmap0, bitmap1, position
+                return indexOfMultipleByteRanges(
+                    bytes, offset, scanLen, rangeTable, bitmap0, bitmap1, position
                 )
             }
-            val asciiResult = indexOfAsciiRanges(ranges, bitmap0, bitmap1, position, scanLen)
+            val asciiResult = indexOfAsciiRanges(rangeTable, bitmap0, bitmap1, position, scanLen)
             if (asciiResult >= -1) {
                 return asciiResult
             }
             if (bitmap0 == 0L && bitmap1 == 0L) {
-                return indexOfNonAsciiCodePointClass(ranges, position, scanLen)
+                return indexOfNonAsciiCodePointClass(rangeTable, position, scanLen)
             }
         }
         while (position < scanLen) {
             val codePointPosition = position
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             var codePoint = asciiAt(position)
             if (codePoint >= 0) {
                 position++
             } else {
                 val decoded = decodeForward(position)
-                codePoint = InputScanner.Companion.codePoint(decoded)
-                position = InputScanner.Companion.position(decoded)
+                codePoint = InputScanner.codePoint(decoded)
+                position = InputScanner.position(decoded)
             }
-            if (InputScanner.Companion.classContains(ranges, bitmap0, bitmap1, codePoint)) {
+            if (InputScanner.classContains(rangeTable, bitmap0, bitmap1, codePoint)) {
                 return if (codePointPosition < scanLen) codePointPosition else -1
             }
         }
@@ -278,10 +320,10 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
      * requires the general code-point scan
      */
     private fun indexOfAsciiRanges(ranges: IntArray, bitmap0: Long, bitmap1: Long, start: Int, scanLen: Int): Int {
-        if (ranges.length < 2 || ranges[0] < 0 || ranges[ranges.length - 1] >= 0x80) {
+        if (ranges.size < 2 || ranges[0] < 0 || ranges[ranges.size - 1] >= 0x80) {
             return -2
         }
-        when (ranges.length) {
+        when (ranges.size) {
             2 -> {
                 val low = ranges[0]
                 val high = ranges[1]
@@ -315,16 +357,22 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (classProvider != null) {
             var position = start
             val scalarLimit = Math.min(scanLen, position + VECTOR_SCALAR_PROLOGUE_LENGTH)
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            while (position < scalarLimit) {
+                if (InputScanner.classContains(ranges, bitmap0, bitmap1, unsignedByteAt(position))) {
+                    ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.VECTOR)
+                    return position
+                }
+                position++
+            }
             val result = classProvider.indexOfAsciiClass(bytes, offset, scanLen, ranges, position)
-            if (result != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (result != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                 return result
             }
         }
-        if (ranges.length == 2) {
+        if (ranges.size == 2) {
             ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.SWAR)
-            return ByteSwarScan.Companion.indexOfByteRange(bytes, offset, scanLen, ranges[0], ranges[1], start)
+            return indexOfByteRange(bytes, offset, scanLen, ranges[0], ranges[1], start)
         }
         ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.DECLINED)
         return -2
@@ -343,7 +391,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     fun indexOfUtf8Sequence(sequence: ByteArray, start: Int, limit: Int): Int {
         val position = Math.max(0, start)
         val scanLen = Math.min(length, limit)
-        val tail: Int = sequence.length - 1
+        val tail: Int = sequence.size - 1
         val last = sequence[tail]
         var from = position + tail
         var result = -1
@@ -360,7 +408,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             from = hit + 1
         }
         if (WorkCounterConfig.ENABLED && position < scanLen) {
-            WorkCounter.record(((if (result >= 0) result + sequence.length else scanLen) - position).toLong())
+            WorkCounter.record(((if (result >= 0) result + sequence.size else scanLen) - position).toLong())
         }
         return result
     }
@@ -371,7 +419,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (position >= scanLen) {
             return -1
         }
-        val tail: Int = sequence.length - 1
+        val tail: Int = sequence.size - 1
         val asciiByte = ascii.toByte()
         val last = sequence[tail]
         var from = position
@@ -402,11 +450,15 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     private fun precedingBytesMatch(sequence: ByteArray, candidate: Int, count: Int): Boolean {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until count) {
+            if (bytes[offset + candidate + i] != sequence[i]) {
+                return false
+            }
+        }
         return true
     }
 
-    private fun indexOfNonAsciiCodePointClass(ranges: IntArray?, start: Int, scanLen: Int): Int {
+    private fun indexOfNonAsciiCodePointClass(ranges: IntArray, start: Int, scanLen: Int): Int {
         var position = start
         val wordEnd = scanLen - java.lang.Long.BYTES
         while (position < scanLen) {
@@ -424,9 +476,9 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             }
             val codePointPosition = position
             val decoded = decodeForward(position)
-            val codePoint: Int = InputScanner.Companion.codePoint(decoded)
-            position = InputScanner.Companion.position(decoded)
-            if (InputScanner.Companion.classContains(ranges, 0, 0, codePoint)) {
+            val codePoint: Int = InputScanner.codePoint(decoded)
+            position = InputScanner.position(decoded)
+            if (InputScanner.classContains(ranges!!, 0, 0, codePoint)) {
                 return if (codePointPosition < scanLen) codePointPosition else -1
             }
         }
@@ -438,11 +490,11 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int): Int {
-        if (literal.length == 0) {
+        if (literal.size == 0) {
             return start
         }
         if (!WorkCounterConfig.ENABLED) {
-            if (literal.length == 1) {
+            if (literal.size == 1) {
                 return indexOfByte(literal[0], start)
             }
             if (shifts != null) {
@@ -453,8 +505,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
                 // wins by a growing margin. The crossover scales with the literal length, since a longer
                 // literal lets the skip loop advance further per step.
                 val result =
-                    if (remaining(start) >= ByteSwarScan.Companion.filterThreshold(literal.length))
-                        ByteSwarScan.Companion.indexOfFiltered(bytes, offset, length, literal, start)
+                    if (remaining(start) >= filterThreshold(literal.size))
+                        indexOfFiltered(bytes, offset, length, literal, start)
                     else
                         boundedBoyerMooreHorspool(literal, shifts, start)
                 // A match index or a trusted -1; only the -2 "work budget exhausted" sentinel falls
@@ -479,8 +531,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
      * this instead.
      */
     fun indexOfInTail(literal: ByteArray, failure: IntArray, start: Int): Int {
-        if (!WorkCounterConfig.ENABLED && literal.length > 1) {
-            val result: Int = ByteSwarScan.Companion.indexOfFiltered(bytes, offset, length, literal, start)
+        if (!WorkCounterConfig.ENABLED && literal.size > 1) {
+            val result: Int = indexOfFiltered(bytes, offset, length, literal, start)
             if (result >= -1) {
                 return result
             }
@@ -490,7 +542,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
 
     fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int, rareByteOffset: Int): Int {
         if (rareByteOffset < 0 || WorkCounterConfig.ENABLED
-            || remaining(start) < ByteSwarScan.Companion.filterThreshold(literal.length)
+            || remaining(start) < filterThreshold(literal.size)
         ) {
             return indexOf(literal, failure, shifts, start)
         }
@@ -499,7 +551,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     private fun indexOfRareByte(literal: ByteArray, anchorOffset: Int, start: Int): Int {
-        val lastStart: Int = length - literal.length
+        val lastStart: Int = length - literal.size
         if (start > lastStart) {
             return -1
         }
@@ -508,15 +560,15 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         var work: Long = 0
         val workLimit = WorkLimit.forRemaining(remaining(start))
         while (searchFrom < scanEnd) {
-            val hit: Int = ByteSwarScan.Companion.indexOfByte(bytes, offset, scanEnd, literal[anchorOffset], searchFrom)
+            val hit: Int = indexOfByte(bytes, offset, scanEnd, literal[anchorOffset], searchFrom)
             if (hit < 0) {
                 return -1
             }
             val candidate = hit - anchorOffset
-            if (ByteSwarScan.Companion.matchesAt(bytes, offset, literal, candidate)) {
+            if (matchesAt(bytes, offset, literal, candidate)) {
                 return candidate
             }
-            work += literal.length.toLong()
+            work += literal.size.toLong()
             if (WorkLimit.isExhausted(work, workLimit)) {
                 return -2
             }
@@ -526,18 +578,18 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     fun indexOfWithin(literal: ByteArray, failure: IntArray, start: Int, maxStart: Int): Int {
-        if (literal.length == 0) {
+        if (literal.size == 0) {
             return if (start <= maxStart) start else -1
         }
-        val lastStart = Math.min(length - literal.length, maxStart)
+        val lastStart = Math.min(length - literal.size, maxStart)
         if (start > lastStart) {
             return -1
         }
-        val limit: Int = lastStart + literal.length
+        val limit: Int = lastStart + literal.size
         if (!WorkCounterConfig.ENABLED
-            && limit - start >= ByteSwarScan.Companion.filterThreshold(literal.length)
+            && limit - start >= filterThreshold(literal.size)
         ) {
-            val result: Int = ByteSwarScan.Companion.indexOfFiltered(bytes, offset, limit, literal, start)
+            val result: Int = indexOfFiltered(bytes, offset, limit, literal, start)
             if (result >= -1) {
                 return result
             }
@@ -557,7 +609,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     fun indexOfIgnoreCase(
         prefix: String, failure: IntArray, anchorOffset: Int, anchorLow: Byte, anchorHigh: Byte, start: Int
     ): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return start
         }
@@ -576,16 +628,16 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
                         anchorHigh,
                         start
                     )
-                if (result != VectorScanProvider.Companion.UNSUPPORTED) {
+                if (result != VectorScanProvider.UNSUPPORTED) {
                     ScanAudit.record(ScanKind.IGNORE_CASE, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                     return result
                 }
             }
             val swarResult: Int =
-                ByteSwarScan.Companion.indexOfIgnoreCase(
+                indexOfIgnoreCase(
                     bytes, offset, length, prefix, prefixLen, anchorOffset, anchorLow, anchorHigh, start
                 )
-            if (swarResult != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (swarResult != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.IGNORE_CASE, ScanDirection.FORWARD, window, ScanPath.SWAR)
                 return swarResult
             }
@@ -598,7 +650,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (prefix.isEmpty()) {
             return if (start <= maxStart) start else -1
         }
-        val limit = Math.min(length, maxStart + prefix.length())
+        val limit = Math.min(length, maxStart + prefix.length)
         return indexOfLinearIgnoreCase(bytes, offset, limit, prefix, failure, start)
     }
 
@@ -613,7 +665,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         high2: Byte,
         start: Int
     ): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return start
         }
@@ -625,17 +677,17 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
                         bytes, offset, length, prefix, prefixLen, offset1, low1, high1, offset2, low2,
                         high2, start
                     )
-                if (result != VectorScanProvider.Companion.UNSUPPORTED) {
+                if (result != VectorScanProvider.UNSUPPORTED) {
                     ScanAudit.record(ScanKind.IGNORE_CASE, ScanDirection.FORWARD, window, ScanPath.VECTOR)
                     return result
                 }
             }
             val swarResult: Int =
-                ByteSwarScan.Companion.indexOfPairIgnoreCase(
+                indexOfPairIgnoreCase(
                     bytes, offset, length, prefix, prefixLen, offset1, low1, high1, offset2, low2, high2,
                     start
                 )
-            if (swarResult != VectorScanProvider.Companion.UNSUPPORTED) {
+            if (swarResult != VectorScanProvider.UNSUPPORTED) {
                 ScanAudit.record(ScanKind.IGNORE_CASE, ScanDirection.FORWARD, window, ScanPath.SWAR)
                 return swarResult
             }
@@ -652,7 +704,17 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         var second = -1
         var last = -1
         var contiguous = true
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (value in 0 until 128) {
+            if (asciiClass.contains(value)) {
+                if (first < 0) {
+                    first = value
+                } else if (second < 0) {
+                    second = value
+                }
+                contiguous = contiguous and (last < 0 || value == last + 1)
+                last = value
+            }
+        }
         if (first < 0) {
             return -1
         }
@@ -666,7 +728,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return scanBytePair(length, first.toByte(), second.toByte(), start)
         }
         return if (contiguous)
-            ByteSwarScan.Companion.indexOfByteRange(bytes, offset, length, first, last, start)
+            indexOfByteRange(bytes, offset, length, first, last, start)
         else
             indexOfAsciiClassScalar(asciiClass, start)
     }
@@ -679,7 +741,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
      * work budget was exhausted before either could be established
      */
     fun boundedBoyerMooreHorspool(literal: ByteArray, shifts: IntArray, start: Int): Int {
-        val last: Int = literal.length - 1
+        val last: Int = literal.size - 1
         var position = start + last
         var work: Long = 0
         val workLimit = WorkLimit.forRemaining(remaining(start))
@@ -687,37 +749,63 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             // Keep two dependent skip steps under one outer backedge. C2 otherwise leaves this loop
             // scalar when it is compiled alongside the candidate-filter path, adding a backedge and
             // safepoint poll to every skip.
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (step in 0 until BOYER_MOORE_HORSPOOL_BATCH_SIZE) {
+                if (position >= length) {
+                    break
+                }
+                var literalPosition = last
+                var inputPosition = position
+                while (literalPosition >= 0 && bytes[offset + inputPosition] == literal[literalPosition]) {
+                    literalPosition--
+                    inputPosition--
+                }
+                if (literalPosition < 0) {
+                    return inputPosition + 1
+                }
+                work += (last - literalPosition + 1).toLong()
+                if (WorkLimit.isExhausted(work, workLimit)) {
+                    return -2
+                }
+                position += shifts[bytes[offset + position].toInt() and 0xFF]
+            }
         }
         return -1
     }
 
     private fun indexOfAsciiClassScalar(asciiClass: AsciiBitmap, start: Int): Int {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (position in start until length) {
+            if (WorkCounterConfig.ENABLED) {
+                WorkCounter.record()
+            }
+            val value = bytes[offset + position].toInt() and 0xFF
+            if (asciiClass.contains(value)) {
+                return position
+            }
+        }
         return -1
     }
 
     override fun decodeForward(pos: Int): Long {
         if (WorkCounterConfig.ENABLED) {
-            record()
+            WorkCounter.record()
         }
         if (pos >= length) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, length)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, length)
         }
         val b1 = unsignedByteAt(pos)
         if (b1 < 0x80) {
-            return InputScanner.Companion.decoded(b1, pos + 1)
+            return InputScanner.decoded(b1, pos + 1)
         }
         if (b1 >= 0xC2 && b1 <= 0xDF && continuation(pos + 1)) {
             val codePoint = ((b1 and 0x1F) shl 6) or (unsignedByteAt(pos + 1) and 0x3F)
-            return InputScanner.Companion.decoded(codePoint, pos + 2)
+            return InputScanner.decoded(codePoint, pos + 2)
         }
         if (b1 >= 0xE0 && b1 <= 0xEF && validThreeByteSecond(b1, pos + 1) && continuation(pos + 2)) {
             val codePoint =
                 (((b1 and 0x0F) shl 12)
                         or ((unsignedByteAt(pos + 1) and 0x3F) shl 6)
                         or (unsignedByteAt(pos + 2) and 0x3F))
-            return InputScanner.Companion.decoded(codePoint, pos + 3)
+            return InputScanner.decoded(codePoint, pos + 3)
         }
         if (b1 >= 0xF0 && b1 <= 0xF4 && validFourByteSecond(b1, pos + 1)
             && continuation(pos + 2)
@@ -728,25 +816,30 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
                         or ((unsignedByteAt(pos + 1) and 0x3F) shl 12)
                         or ((unsignedByteAt(pos + 2) and 0x3F) shl 6)
                         or (unsignedByteAt(pos + 3) and 0x3F))
-            return InputScanner.Companion.decoded(codePoint, pos + 4)
+            return InputScanner.decoded(codePoint, pos + 4)
         }
-        return InputScanner.Companion.decoded(REPLACEMENT_CHARACTER, pos + 1)
+        return InputScanner.decoded(REPLACEMENT_CHARACTER, pos + 1)
     }
 
     override fun decodeBackward(pos: Int): Long {
         if (WorkCounterConfig.ENABLED) {
-            record()
+            WorkCounter.record()
         }
         if (pos <= 0) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, 0)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, 0)
         }
         val last = unsignedByteAt(pos - 1)
         if (last < 0x80) {
-            return InputScanner.Companion.decoded(last, pos - 1)
+            return InputScanner.decoded(last, pos - 1)
         }
         val earliest = Math.max(0, pos - 4)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
-        return InputScanner.Companion.decoded(REPLACEMENT_CHARACTER, pos - 1)
+        for (start in pos - 2 downTo earliest) {
+            val decoded = decodeForward(start)
+            if (InputScanner.position(decoded) == pos) {
+                return InputScanner.decoded(InputScanner.codePoint(decoded), start)
+            }
+        }
+        return InputScanner.decoded(REPLACEMENT_CHARACTER, pos - 1)
     }
 
     override fun isCodePointBoundary(pos: Int): Boolean {
@@ -757,7 +850,12 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return true
         }
         val earliest = Math.max(0, pos - 3)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (start in earliest until pos) {
+            val decoded = decodeForward(start)
+            if (InputScanner.position(decoded) > pos) {
+                return false
+            }
+        }
         return true
     }
 
@@ -766,16 +864,16 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             return -1
         }
         val decoded = decodeBackward(logicalEndPos)
-        val codePoint: Int = InputScanner.Companion.codePoint(decoded)
-        val previous: Int = InputScanner.Companion.position(decoded)
+        val codePoint: Int = InputScanner.codePoint(decoded)
+        val previous: Int = InputScanner.position(decoded)
         if (unixLines) {
             return if (codePoint == '\n'.code) previous else -1
         }
         if (codePoint == '\n'.code) {
             if (previous > 0) {
                 val before = decodeBackward(previous)
-                if (InputScanner.Companion.codePoint(before) == '\r'.code) {
-                    return InputScanner.Companion.position(before)
+                if (InputScanner.codePoint(before) == '\r'.code) {
+                    return InputScanner.position(before)
                 }
             }
             return previous
@@ -794,7 +892,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return if (trailingTerminator >= 0) trailingTerminator else length
     }
 
-    fun bytes(): ByteArray? {
+    fun bytes(): ByteArray {
         return bytes
     }
 
@@ -838,9 +936,10 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return true
     }
 
-    override fun indexOfCharClass(scanInfo: CharClassScanInfo, start: Int): Int {
+    override fun indexOfCharClass(scanInfo: CharClassScanInfo?, start: Int): Int {
+        val info = scanInfo!!
         return indexOfCodePointClass(
-            scanInfo.ranges(), scanInfo.bitmap0(), scanInfo.bitmap1(), start, length
+            info.ranges, info.bitmap0, info.bitmap1, start, length
         )
     }
 
@@ -860,9 +959,9 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             var position = 0
             while (position < length) {
                 val decoded = scanner.decodeForward(position)
-                val next: Int = InputScanner.Companion.position(decoded)
+                val next: Int = InputScanner.position(decoded)
                 require(
-                    !(InputScanner.Companion.codePoint(decoded) == REPLACEMENT_CHARACTER && next == position + 1 && scanner.unsignedByteAt(
+                    !(InputScanner.codePoint(decoded) == REPLACEMENT_CHARACTER && next == position + 1 && scanner.unsignedByteAt(
                         position
                     ) >= 0x80)
                 ) { "Malformed UTF-8 at byte " + position }
@@ -873,16 +972,28 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         private fun equalsFoldCase(
             input: ByteArray, inputStart: Int, suffix: ByteArray, suffixStart: Int, len: Int
         ): Boolean {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (i in 0 until len) {
+                val b1 = input[inputStart + i]
+                val b2 = suffix[suffixStart + i]
+                if (b1 != b2) {
+                    val c1: Int =
+                        if (b1 >= 'A'.code.toByte() && b1 <= 'Z'.code.toByte()) b1 + ('a'.code - 'A'.code) else b1.toInt()
+                    val c2: Int =
+                        if (b2 >= 'A'.code.toByte() && b2 <= 'Z'.code.toByte()) b2 + ('a'.code - 'A'.code) else b2.toInt()
+                    if (c1 != c2) {
+                        return false
+                    }
+                }
+            }
             return true
         }
 
         private fun isAsciiPair(ranges: IntArray): Boolean {
-            return ranges.length == 4 && ranges[0] == ranges[1] && ranges[2] == ranges[3]
+            return ranges.size == 4 && ranges[0] == ranges[1] && ranges[2] == ranges[3]
         }
 
         fun isAsciiTriple(ranges: IntArray): Boolean {
-            return ranges.length == 6 && ranges[0] == ranges[1] && ranges[2] == ranges[3] && ranges[4] == ranges[5]
+            return ranges.size == 6 && ranges[0] == ranges[1] && ranges[2] == ranges[3] && ranges[4] == ranges[5]
         }
 
         /**
@@ -900,16 +1011,44 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             bytes: ByteArray, offset: Int, length: Int, literal: ByteArray, failure: IntArray, start: Int
         ): Int {
             var matched = 0
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (position in start until length) {
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record()
+                }
+                val current = bytes[offset + position]
+                while (matched > 0 && current != literal[matched]) {
+                    matched = failure[matched - 1]
+                }
+                if (current == literal[matched]) {
+                    matched++
+                    if (matched == literal.size) {
+                        return position - literal.size + 1
+                    }
+                }
+            }
             return -1
         }
 
         fun indexOfLinearIgnoreCase(
             bytes: ByteArray, offset: Int, length: Int, prefix: String, failure: IntArray, start: Int
         ): Int {
-            val prefixLen: Int = prefix.length()
+            val prefixLen: Int = prefix.length
             var matched = 0
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (position in start until length) {
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record()
+                }
+                val current: Int = Ascii.toLowerCase(bytes[offset + position].toInt() and 0xFF)
+                while (matched > 0 && current != prefix[matched].code) {
+                    matched = failure[matched - 1]
+                }
+                if (current == prefix[matched].code) {
+                    matched++
+                    if (matched == prefixLen) {
+                        return position - prefixLen + 1
+                    }
+                }
+            }
             return -1
         }
     }

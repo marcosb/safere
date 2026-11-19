@@ -38,20 +38,20 @@ class CaptureSemanticsFuzzer {
         assertAcceptedPath(
             "(?:" + captured + "{" + minimum + "," + maximum + "})" + outer + reluctant + "!",
             run + "!",
-            run.length - atom.length,
-            run.length
+            run.size - atom.length,
+            run.size
         )
         assertAcceptedPath(
             "(?:(?:" + atom + "(?<last>b)?){1," + maximum + "})+",
             run + "b",
-            run.length,
-            run.length + 1
+            run.size,
+            run.size + 1
         )
         assertAcceptedPath(
             "(?:(?<last>" + atom + "b?)+(" + atom + "){0," + maximum + "})+",
             run + "b",
-            run.length - atom.length,
-            run.length + 1
+            run.size - atom.length,
+            run.size + 1
         )
     }
 
@@ -505,7 +505,7 @@ class CaptureSemanticsFuzzer {
         }
 
         private fun pick(data: FuzzedDataProvider, vararg values: String): String {
-            return values[data.consumeInt(0, values.size - 1)]
+            return values[data.consumeInt(0, values.length - 1)]
         }
     }
 }

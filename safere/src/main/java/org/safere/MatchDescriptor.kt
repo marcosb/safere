@@ -61,7 +61,7 @@ internal data class MatchDescriptor(
         val NONE: MatchDescriptor = MatchDescriptor(null, false, null, null, null, 0, null)
 
         private fun compileClassHashChain(literal: String?, foldCase: Boolean): ClassHashChain? {
-            return if (literal != null && foldCase) ClassHashChain.Companion.compileCaseInsensitive(literal) else null
+            return if (literal != null && foldCase) ClassHashChain.compileCaseInsensitive(literal) else null
         }
     }
 }

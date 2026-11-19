@@ -91,32 +91,20 @@ internal object WorkCounter {
     }
 
     private class Counter {
-        private var units: Long = 0
-        private var forwardDfaSteps: Long = 0
-        private var innerLiteralProbes: Long = 0
-        private var startScanCalls: Long = 0
-        private var startSkippedUnits: Long = 0
-        private var quarantineCount: Long = 0
-        private var largestQuarantine = 0
+        var units: Long = 0
+        var forwardDfaSteps: Long = 0
+        var innerLiteralProbes: Long = 0
+        var startScanCalls: Long = 0
+        var startSkippedUnits: Long = 0
+        var quarantineCount: Long = 0
+        var largestQuarantine = 0
     }
 
     @JvmRecord
     internal data class StartAccelerationWork(
-        calls: Long,
-        skippedUnits: Long,
-        quarantines: Long,
-        largestQuarantine: Int
-    ) {
-        val calls: Long
-        val skippedUnits: Long
-        val quarantines: Long
+        val calls: Long,
+        val skippedUnits: Long,
+        val quarantines: Long,
         val largestQuarantine: Int
-
-        init {
-            this.calls = calls
-            this.skippedUnits = skippedUnits
-            this.quarantines = quarantines
-            this.largestQuarantine = largestQuarantine
-        }
-    }
+    )
 }

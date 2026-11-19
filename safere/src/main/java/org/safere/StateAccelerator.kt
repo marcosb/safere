@@ -12,7 +12,7 @@ package org.safere
  * vector intrinsics to scan directly to the next escape character that could cause a state
  * transition change.
  */
-internal interface StateAccelerator {
+internal sealed interface StateAccelerator {
     /**
      * Finds the next index at or after `fromIndex` and strictly less than `limit`
      * containing an escape character.
@@ -26,63 +26,42 @@ internal interface StateAccelerator {
     fun policy(): AcceleratorPolicy?
 
     /** Accelerator for a single escape character (e.g. quote `'"'` or newline `'\n'`).  */
-    @JvmRecord
-    data class SingleAsciiEscape(escape: Int) : StateAccelerator {
-        override fun findEscape(text: InputScanner, fromIndex: Int, limit: Int): Int {
-            return text.indexOfAscii(escape, fromIndex, limit)
+    data class SingleAsciiEscape(val escape: Int) : StateAccelerator {
+        override fun findEscape(text: InputScanner?, fromIndex: Int, limit: Int): Int {
+            return text!!.indexOfAscii(escape, fromIndex, limit)
         }
 
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.LITERAL
+            return AcceleratorPolicy.LITERAL
         }
 
-        val escape: Int
 
-        init {
-            this.escape = escape
-        }
     }
 
     /** Accelerator for two escape characters (e.g. quote `'"'` and backslash `'\\'`).  */
-    @JvmRecord
-    data class AsciiPairEscape(c1: Int, c2: Int) : StateAccelerator {
-        override fun findEscape(text: InputScanner, fromIndex: Int, limit: Int): Int {
-            return text.indexOfAsciiPair(c1, c2, fromIndex, limit)
+    data class AsciiPairEscape(val c1: Int, val c2: Int) : StateAccelerator {
+        override fun findEscape(text: InputScanner?, fromIndex: Int, limit: Int): Int {
+            return text!!.indexOfAsciiPair(c1, c2, fromIndex, limit)
         }
 
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.CHAR_CLASS
+            return AcceleratorPolicy.CHAR_CLASS
         }
 
-        val c1: Int
-        val c2: Int
 
-        init {
-            this.c1 = c1
-            this.c2 = c2
-        }
     }
 
     /** Accelerator for three escape characters (e.g. comma, semicolon, newline).  */
-    @JvmRecord
-    data class AsciiTripleEscape(c1: Int, c2: Int, c3: Int) : StateAccelerator {
-        override fun findEscape(text: InputScanner, fromIndex: Int, limit: Int): Int {
-            return text.indexOfAsciiTriple(c1, c2, c3, fromIndex, limit)
+    data class AsciiTripleEscape(val c1: Int, val c2: Int, val c3: Int) : StateAccelerator {
+        override fun findEscape(text: InputScanner?, fromIndex: Int, limit: Int): Int {
+            return text!!.indexOfAsciiTriple(c1, c2, c3, fromIndex, limit)
         }
 
         override fun policy(): AcceleratorPolicy {
-            return AcceleratorPolicy.Companion.CHAR_CLASS
+            return AcceleratorPolicy.CHAR_CLASS
         }
 
-        val c1: Int
-        val c2: Int
-        val c3: Int
 
-        init {
-            this.c1 = c1
-            this.c2 = c2
-            this.c3 = c3
-        }
     }
 
     companion object {
@@ -101,9 +80,10 @@ internal interface StateAccelerator {
             accelerator: StateAccelerator, text: InputScanner, fromIndex: Int, limit: Int
         ): Int {
             return when (accelerator) {
-                -> text.indexOfAscii(single.escape, fromIndex, limit)
-                -> text.indexOfAsciiPair(pair.c1, pair.c2, fromIndex, limit)
-                -> text.indexOfAsciiTriple(triple.c1, triple.c2, triple.c3, fromIndex, limit)
+                is SingleAsciiEscape -> text.indexOfAscii(accelerator.escape, fromIndex, limit)
+                is AsciiPairEscape -> text.indexOfAsciiPair(accelerator.c1, accelerator.c2, fromIndex, limit)
+                is AsciiTripleEscape ->
+                    text.indexOfAsciiTriple(accelerator.c1, accelerator.c2, accelerator.c3, fromIndex, limit)
             }
         }
 
@@ -118,11 +98,14 @@ internal interface StateAccelerator {
             accelerator: StateAccelerator, text: InputScanner, fromIndex: Int, limit: Int
         ): Int {
             return when (accelerator) {
-                -> text.indexOfAsciiOrNonAscii(single.escape, fromIndex, limit)
-                -> text.indexOfAsciiPairOrNonAscii(pair.c1, pair.c2, fromIndex, limit)
-                -> text.indexOfAsciiTripleOrNonAscii(
-                    triple.c1, triple.c2, triple.c3, fromIndex, limit
-                )
+                is SingleAsciiEscape -> text.indexOfAsciiOrNonAscii(accelerator.escape, fromIndex, limit)
+                is AsciiPairEscape ->
+                    text.indexOfAsciiPairOrNonAscii(accelerator.c1, accelerator.c2, fromIndex, limit)
+
+                is AsciiTripleEscape ->
+                    text.indexOfAsciiTripleOrNonAscii(
+                        accelerator.c1, accelerator.c2, accelerator.c3, fromIndex, limit
+                    )
             }
         }
     }

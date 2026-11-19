@@ -109,7 +109,7 @@ internal class DfaStartAccelerationBackoffTest {
         // the whole gap.
         Assertions.assertThat(sparseWork.skippedUnits)
             .`as`("%s", sparseWork)
-            .isGreaterThan((sparse.length - POLICY.maxQuarantineWindow - sparseUnit.length).toLong())
+            .isGreaterThan((sparse.size - POLICY.maxQuarantineWindow - sparseUnit.length).toLong())
         Assertions.assertThat(sparseWork.quarantines).isZero()
     }
 

@@ -89,7 +89,7 @@ object RegionZeroWidthDivergenceSweep {
     @JvmStatic
     fun main(args: Array<String>) {
         val options: SweepOptions =
-            SweepOptions.Companion.parse(
+            SweepOptions.parse(
                 args,
                 Path.of("target", "exhaustive-reports", "region-zero-width-sweep"),
                 "region-zero-width-divergences.jsonl",
@@ -168,8 +168,8 @@ object RegionZeroWidthDivergenceSweep {
         text: String?,
         start: Int,
         end: Int,
-        transparentBounds: Boolean = BOUNDS_MODES.getFirst().transparentBounds,
-        anchoringBounds: Boolean = BOUNDS_MODES.getFirst().anchoringBounds
+        transparentBounds: Boolean = BOUNDS_MODES.first().transparentBounds,
+        anchoringBounds: Boolean = BOUNDS_MODES.first().anchoringBounds
     ): CaseSpec {
         for (regexCase in REGEXES) {
             if (regexCase.regex != regex) {
@@ -336,7 +336,7 @@ object RegionZeroWidthDivergenceSweep {
                 Pattern.compile(spec.regexCase!!.regex, spec.flagMode!!.flags)
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -348,7 +348,7 @@ object RegionZeroWidthDivergenceSweep {
                 org.safere.Pattern.compile(spec.regexCase!!.regex, spec.flagMode!!.flags)
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -636,7 +636,7 @@ object RegionZeroWidthDivergenceSweep {
     ) {
         fun toJson(): String {
             val `object` = SweepJson.`object`()
-            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.add("case", caseJson(spec!!))
             `object`.addProperty("bucket", bucket())
             `object`.addProperty("classification", classification!!.name)
             `object`.addProperty("classificationStatus", classification.status()!!.name)

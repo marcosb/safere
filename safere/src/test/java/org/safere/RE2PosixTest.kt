@@ -53,7 +53,7 @@ internal class RE2PosixTest {
         val expectedEnd: Int,
         val expectedGroups: Array<IntArray?>?,
         val caseInsensitive: Boolean
-    ) {
+    )      {
         override fun toString(): String {
             return String.format(
                 "%s:%d pat=\"%s\" text=\"%s\" match=%b", file, lineNum, pattern, text, expectMatch
@@ -275,7 +275,7 @@ internal class RE2PosixTest {
                     } else {
                         expectMatch = true
                         val groups: MutableList<IntArray?> = parseGroups(expected)
-                        if (!groups.isEmpty()) {
+                        if (!groups.isEmpty) {
                             expectedStart = groups.get(0)!![0]
                             expectedEnd = groups.get(0)!![1]
                             if (groups.size > 1) {

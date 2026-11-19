@@ -5,7 +5,6 @@
 package org.safere
 
 import java.util.*
-import java.util.function.IntFunction
 import java.util.function.Predicate
 
 /**
@@ -62,18 +61,18 @@ internal class ClassHashChain private constructor(
      */
     fun shiftAt(text: CharSequence, candidatePos: Int): Int {
         val inPos = candidatePos + (length - 1)
-        if (inPos >= text.length()) {
+        if (inPos >= text.length) {
             return 0
         }
-        val c0: Char = text.charAt(inPos - 1)
-        val c1: Char = text.charAt(inPos)
+        val c0: Char = text[inPos - 1]
+        val c1: Char = text[inPos]
         val h: Int = hash(c0, c1)
         return shifts[h].toInt() and 0xFF
     }
 
     /** Searches for the case-insensitive literal in `text` starting from `start`.  */
     fun search(text: CharSequence, start: Int, workLimit: Long): Int {
-        val textLength: Int = text.length()
+        val textLength: Int = text.length
         if (textLength - start < length) {
             return -1
         }
@@ -83,10 +82,10 @@ internal class ClassHashChain private constructor(
 
         while (position < textLength) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val c0: Char = text.charAt(position - 1)
-            val c1: Char = text.charAt(position)
+            val c0: Char = text[position - 1]
+            val c1: Char = text[position]
             val h: Int = hash(c0, c1)
             val shift = shifts[h].toInt() and 0xFF
 
@@ -127,21 +126,21 @@ internal class ClassHashChain private constructor(
          * unstable case folding widths
          */
         fun compileCaseInsensitive(literal: String?): ClassHashChain? {
-            if (literal == null || literal.length() < 4) {
+            if (literal == null || literal.length < 4) {
                 return null
             }
-            val m: Int = literal.length()
+            val m: Int = literal.length
             val codePointVariants: MutableList<Array<CharArray>?> = ArrayList<Array<CharArray>?>()
             run {
                 var i = 0
-                while (i < literal.length()) {
+                while (i < literal.length) {
                     val codePoint = literal.codePointAt(i)
                     val original = Character.toChars(codePoint)
                     val variants: MutableList<CharArray?> = ArrayList<CharArray?>()
                     var folded = codePoint
                     do {
                         val foldedChars = Character.toChars(folded)
-                        if (foldedChars.length != original.length) {
+                        if (foldedChars.size != original.size) {
                             return null
                         }
                         if (variants.stream()
@@ -149,10 +148,10 @@ internal class ClassHashChain private constructor(
                         ) {
                             variants.add(foldedChars)
                         }
-                        folded = Inst.Companion.simpleFold(folded)
+                        folded = Inst.simpleFold(folded)
                     } while (folded != codePoint)
-                    codePointVariants.add(variants.toArray<CharArray?>(IntFunction { _Dummy_.__Array__() }))
-                    i += original.length
+                    codePointVariants.add(variants.toTypedArray() as Array<CharArray>)
+                    i += original.size
                 }
             }
 
@@ -160,7 +159,7 @@ internal class ClassHashChain private constructor(
             val intraCharOffset = IntArray(m)
             var charIndex = 0
             for (codePointIndex in codePointVariants.indices) {
-                val charCount: Int = codePointVariants.get(codePointIndex)!![0].length
+                val charCount: Int = codePointVariants.get(codePointIndex)!![0].size
                 for (charOffset in 0..<charCount) {
                     codePointIndexForChar[charIndex] = codePointIndex
                     intraCharOffset[charIndex] = charOffset

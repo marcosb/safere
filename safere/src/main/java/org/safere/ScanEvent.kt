@@ -15,16 +15,9 @@ package org.safere
  * @param path the implementation tier that actually ran
  */
 @JvmRecord
-internal data class ScanEvent(kind: ScanKind?, direction: ScanDirection?, windowLength: Int, path: ScanPath?) {
-    val kind: ScanKind?
-    val direction: ScanDirection?
-    val windowLength: Int
+internal data class ScanEvent(
+    val kind: ScanKind?,
+    val direction: ScanDirection?,
+    val windowLength: Int,
     val path: ScanPath?
-
-    init {
-        this.kind = kind
-        this.direction = direction
-        this.windowLength = windowLength
-        this.path = path
-    }
-}
+)

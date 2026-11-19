@@ -43,7 +43,7 @@ internal class Utf8EnginePathEquivalenceTest {
                 for (all in booleanArrayOf(false, true)) {
                     Assertions.assertThat(Companion.replacement(canonical, input, replacement!!, all))
                         .`as`("/%s/ on %s replacing with %s, all=%s", regex, source, replacement, all)
-                        .isEqualTo(Companion.replacement(generic, input, replacement, all))
+                        .isEqualTo(replacement(generic, input, replacement, all))
                 }
             }
         }
@@ -76,7 +76,7 @@ internal class Utf8EnginePathEquivalenceTest {
 
         Assertions.assertThat<MatchTrace?>(trace(nfa, input)).isEqualTo(trace(canonical, input))
         Assertions.assertThat<MatchTrace?>(trace(canonical, input))
-            .extracting<Int?, RuntimeException?>(ThrowingExtractor { match: MatchTrace? -> match!!.groups.getFirst().start })
+            .extracting<Int?, RuntimeException?>(ThrowingExtractor { match: MatchTrace? -> match!!.groups.first().start })
             .containsExactly(0, 4, 6, 7)
     }
 

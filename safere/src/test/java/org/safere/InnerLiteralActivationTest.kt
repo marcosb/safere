@@ -93,9 +93,9 @@ internal class InnerLiteralActivationTest {
             )) {
                 for (padding in intArrayOf(0, 1)) {
                     val input = if (padding == 0) body else "«" + body + "»"
-                    val actual = pattern.matcher(input).region(padding, input.length - padding)
+                    val actual = pattern.matcher(input).region(padding, input.size - padding)
                     val expected =
-                        reference.matcher(input).region(padding, input.length - padding)
+                        reference.matcher(input).region(padding, input.size - padding)
                     val bytes = pattern.matcher(Utf8Input.validated(body.toByteArray(StandardCharsets.UTF_8)))
                     while (expected.find()) {
                         Assertions.assertThat(actual.find()).isTrue()

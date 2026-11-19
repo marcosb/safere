@@ -28,7 +28,7 @@ class AdaptivePhaseCounters {
         phase2Documents = 0
     }
 
-    fun record(phase: Int, nanos: Long, documents: Int) {
+    fun WorkCounter.record(phase: Int, nanos: Long, documents: Int) {
         when (phase) {
             0 -> {
                 phase0Nanos += nanos

@@ -58,11 +58,11 @@ internal class StringRegionInputScannerTest {
             for (end in start..text.length) {
                 val copy = StringInputScanner(text.substring(start, end))
                 val view = StringRegionInputScanner(text, start, end)
-                Assertions.assertThat(view.length()).isEqualTo(copy.length())
-                for (pos in 0..view.length()) {
+                Assertions.assertThat(view.length).isEqualTo(copy.length)
+                for (pos in 0..view.length) {
                     Assertions.assertThat(view.decodeForward(pos)).isEqualTo(copy.decodeForward(pos))
                     Assertions.assertThat(view.decodeBackward(pos)).isEqualTo(copy.decodeBackward(pos))
-                    for (limit in pos..view.length()) {
+                    for (limit in pos..view.length) {
                         Assertions.assertThat(view.decodeForward(pos, limit)).isEqualTo(copy.decodeForward(pos, limit))
                     }
                     for (lower in 0..pos) {
@@ -70,7 +70,7 @@ internal class StringRegionInputScannerTest {
                             .isEqualTo(copy.decodeBackward(pos, lower))
                     }
                     Assertions.assertThat(view.isCodePointBoundary(pos)).isEqualTo(copy.isCodePointBoundary(pos))
-                    if (pos < view.length()) {
+                    if (pos < view.length) {
                         Assertions.assertThat(view.asciiAt(pos)).isEqualTo(copy.asciiAt(pos))
                         Assertions.assertThat(view.singleUnitCodePointAt(pos))
                             .isEqualTo(copy.singleUnitCodePointAt(pos))
@@ -79,7 +79,7 @@ internal class StringRegionInputScannerTest {
                         Assertions.assertThat(view.singleUnitCodePointBefore(pos))
                             .isEqualTo(copy.singleUnitCodePointBefore(pos))
                     }
-                    for (limit in pos..view.length()) {
+                    for (limit in pos..view.length) {
                         Assertions.assertThat(view.indexOfAscii('a'.code, pos, limit))
                             .isEqualTo(copy.indexOfAscii('a'.code, pos, limit))
                         Assertions.assertThat(view.indexOfAsciiPair('a'.code, 'b'.code, pos, limit))

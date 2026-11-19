@@ -40,7 +40,7 @@ fun interface Utf8Sink {
         }
         val chunk = ByteArray(Math.min(source.remaining(), 8192))
         while (source.hasRemaining()) {
-            val length = Math.min(source.remaining(), chunk.length)
+            val length = Math.min(source.remaining(), chunk.size)
             source.get(chunk, 0, length)
             append(chunk, 0, length)
         }

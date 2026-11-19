@@ -63,7 +63,7 @@ internal class ModuleDescriptorTest {
           public static void main(String[] args) {
             byte[] input = new byte[2048];
             Arrays.fill(input, (byte) 'a');
-            input[input.length - 1] = 'z';
+            input[input.size - 1] = 'z';
             if (!Pattern.compile("[z]").find(Utf8Input.trusted(input))) {
               throw new AssertionError("Vector-enabled search did not find the final byte");
             }
@@ -114,13 +114,13 @@ internal class ModuleDescriptorTest {
 
         @Throws(URISyntaxException::class)
         private fun safeReModulePath(): Path {
-            return Path.of(Pattern::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
+            return Path.of(Pattern::class.java.getProtectionDomain().codeSource.location.toURI())
         }
 
         @Throws(IOException::class, InterruptedException::class)
         private fun run(vararg command: String?): ProcessResult {
             val process = ProcessBuilder(*command).redirectErrorStream(true).start()
-            val output = String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
+            val output = String(process.inputStream.readAllBytes(), StandardCharsets.UTF_8)
             return ProcessResult(process.waitFor(), output)
         }
     }

@@ -62,9 +62,9 @@ internal class LeadingExpansionVerificationWorkTest {
                 operations.put(
                     "split",
                     Runnable { Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input) })
-                val reference: Long = Companion.work(operations.get("String find")!!)
+                val reference: Long = work(operations.get("String find")!!)
                 operations.forEach { (name: String?, operation: Runnable?) ->
-                    val actual: Long = Companion.work(operation!!)
+                    val actual: Long = work(operation!!)
                     if (actual > reference * 2 + 100) {
                         failures.add(
                             String.format(

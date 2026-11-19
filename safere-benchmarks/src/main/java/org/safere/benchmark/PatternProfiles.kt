@@ -77,9 +77,6 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
 
         private val field: String?
 
-        init {
-            this.field = field
-        }
 
         fun field(): String? {
             return field
@@ -124,34 +121,34 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
             while (!pending.isEmpty()) {
                 val frame = pending.pop()
                 val element = frame.element
-                if (element.isJsonObject()) {
-                    val `object` = element.getAsJsonObject()
+                if (element.isJsonObject) {
+                    val `object` = element.asJsonObject
                     for (entry in List.copyOf<MutableMap.MutableEntry<String?, JsonElement?>?>(`object`.entrySet())) {
                         val child: JsonElement = entry.value!!
-                        val childKind: ValueKind = Companion.valueKind(entry.key!!, frame.kind!!)
+                        val childKind: ValueKind = valueKind(entry.key!!, frame.kind!!)
                         if (isInlinePattern(child)) {
                             `object`.add(
                                 entry.key,
                                 normalizePattern(
-                                    child.getAsJsonObject(), childKind, patternProfiles, replacementProfiles
+                                    child.asJsonObject, childKind, patternProfiles, replacementProfiles
                                 )
                             )
-                        } else if (child.isJsonArray() || child.isJsonObject()) {
+                        } else if (child.isJsonArray || child.isJsonObject) {
                             pending.push(NormalizationFrame(child, childKind))
                         }
                     }
                 } else {
-                    val array = element.getAsJsonArray()
-                    for (index in 0..<array.size()) {
+                    val array = element.asJsonArray
+                    for (index in 0..<array.size) {
                         val child = array.get(index)
                         if (isInlinePattern(child)) {
                             array.set(
                                 index,
-                                Companion.normalizePattern(
-                                    child.getAsJsonObject(), frame.kind!!, patternProfiles, replacementProfiles
+                                normalizePattern(
+                                    child.asJsonObject, frame.kind!!, patternProfiles, replacementProfiles
                                 )
                             )
-                        } else if (child.isJsonArray() || child.isJsonObject()) {
+                        } else if (child.isJsonArray || child.isJsonObject) {
                             pending.push(NormalizationFrame(child, frame.kind))
                         }
                     }
@@ -163,8 +160,8 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
         }
 
         private fun isInlinePattern(element: JsonElement): Boolean {
-            return element.isJsonObject()
-                    && (element.getAsJsonObject().has("java") || element.getAsJsonObject().has("alternates"))
+            return element.isJsonObject
+                    && (element.asJsonObject.has("java") || element.asJsonObject.has("alternates"))
         }
 
         private fun valueKind(field: String, inherited: ValueKind): ValueKind {
@@ -190,17 +187,17 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
             }
             val javaPattern: String = requiredInlineString(definition, "java", "Inline benchmark pattern")
             val alternatesElement = definition.get("alternates")
-            require(!(alternatesElement == null || !alternatesElement.isJsonObject())) { "Inline benchmark pattern requires object: alternates" }
-            val alternates = alternatesElement.getAsJsonObject()
-            require(!alternates.isEmpty()) { "Inline benchmark pattern alternates must not be empty" }
+            require(!(alternatesElement == null || !alternatesElement.isJsonObject)) { "Inline benchmark pattern requires object: alternates" }
+            val alternates = alternatesElement.asJsonObject
+            require(!alternates.isEmpty) { "Inline benchmark pattern alternates must not be empty" }
             var definitionKind: String? = null
             for (entry in alternates.entrySet()) {
                 val profileId = entry.key
                 require(
                     PROFILE_ID.matcher(profileId).matches()
                 ) { "Invalid benchmark pattern profile ID: " + profileId }
-                require(entry.value.isJsonObject()) { "Inline benchmark pattern alternate " + profileId + " must be an object" }
-                val alternateObject = entry.value.getAsJsonObject()
+                require(entry.value.isJsonObject) { "Inline benchmark pattern alternate " + profileId + " must be an object" }
+                val alternateObject = entry.value.asJsonObject
                 for (field in alternateObject.keySet()) {
                     require(!((field != "pattern") && (field != "replacement") && (field != "unsupported") && (field != "reason") && (field != "flagSets"))) { "Inline benchmark pattern alternate " + profileId + " has unknown field: " + field }
                 }
@@ -217,8 +214,8 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
                 require(
                     !(unsupported
                             && (!alternateObject.get("unsupported")
-                        .isJsonPrimitive() || !alternateObject.getAsJsonPrimitive("unsupported")
-                        .isBoolean() || !alternateObject.get("unsupported").getAsBoolean()))
+                        .isJsonPrimitive || !alternateObject.getAsJsonPrimitive("unsupported")
+                        .isBoolean || !alternateObject.get("unsupported").asBoolean))
                 ) { "Inline benchmark pattern alternate " + profileId + " field unsupported must be true" }
                 val valueField = if (hasPattern) "pattern" else if (hasReplacement) "replacement" else null
                 val alternateKind =
@@ -251,7 +248,7 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
                     )
                 val previous =
                     (if (expectedKind == ValueKind.PATTERN) patternProfiles else replacementProfiles)!!
-                        .computeIfAbsent(profileId) { `_`: kotlin.String? -> LinkedHashMap<kotlin.String?, Alternate?>() }!!
+                        .computeIfAbsent(profileId) { `_`: String? -> LinkedHashMap<String?, Alternate?>() }!!
                         .putIfAbsent(javaPattern, alternate)
                 require(!(previous != null && previous != alternate)) {
                     ("Conflicting "
@@ -268,9 +265,9 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
         private fun requiredInlineString(`object`: JsonObject, field: String?, description: String?): String {
             val value = `object`.get(field)
             require(
-                !(value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+                !(value == null || !value.isJsonPrimitive || !value.asJsonPrimitive.isString)
             ) { description + " requires string: " + field }
-            val string = value.getAsString()
+            val string = value.asString
             require(!string.isBlank()) { description + " field must not be blank: " + field }
             return string
         }
@@ -304,17 +301,17 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
             if (element == null) {
                 return PatternProfiles(Map.of<String?, MutableMap<String?, Selection?>?>())
             }
-            require(element.isJsonObject()) { "patternProfiles must be an object" }
+            require(element.isJsonObject) { "patternProfiles must be an object" }
             val profiles: MutableMap<String?, MutableMap<String?, Selection?>?> =
                 LinkedHashMap<String?, MutableMap<String?, Selection?>?>()
-            for (profileEntry in element.getAsJsonObject().entrySet()) {
+            for (profileEntry in element.asJsonObject.entrySet()) {
                 val profileId = profileEntry.key
                 require(
                     PROFILE_ID.matcher(profileId).matches()
                 ) { "Invalid benchmark pattern profile ID: " + profileId }
-                require(profileEntry.value.isJsonArray()) { "Pattern profile " + profileId + " must be an array" }
+                require(profileEntry.value.isJsonArray) { "Pattern profile " + profileId + " must be an array" }
                 val alternatives: MutableMap<String?, Selection?> =
-                    parseProfile(profileId, profileEntry.value.getAsJsonArray())
+                    parseProfile(profileId, profileEntry.value.asJsonArray)
                 profiles.put(profileId, Collections.unmodifiableMap<String?, Selection?>(alternatives))
             }
             return PatternProfiles(profiles)
@@ -323,17 +320,17 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
         private fun parseProfile(profileId: String?, entries: JsonArray): MutableMap<String?, Selection?> {
             val alternatives: MutableMap<String?, Selection?> = LinkedHashMap<String?, Selection?>()
             for (element in entries) {
-                require(element.isJsonObject()) { "Pattern profile " + profileId + " entries must be objects" }
-                val entry = element.getAsJsonObject()
+                require(element.isJsonObject) { "Pattern profile " + profileId + " entries must be objects" }
+                val entry = element.asJsonObject
                 for (field in entry.keySet()) {
                     require(!((field != "java") && (field != "alternate") && (field != "unsupported") && (field != "reason") && (field != "flagSets"))) { "Pattern profile " + profileId + " entry has unknown field: " + field }
                 }
                 val javaPattern: String = requiredString(entry, profileId, "java")
                 val unsupported =
                     entry.has("unsupported")
-                            && entry.get("unsupported").isJsonPrimitive()
-                            && entry.getAsJsonPrimitive("unsupported").isBoolean()
-                            && entry.get("unsupported").getAsBoolean()
+                            && entry.get("unsupported").isJsonPrimitive
+                            && entry.getAsJsonPrimitive("unsupported").isBoolean
+                            && entry.get("unsupported").asBoolean
                 require(entry.has("alternate") != unsupported) {
                     ("Pattern profile "
                             + profileId
@@ -362,9 +359,9 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
         private fun requiredString(entry: JsonObject, profileId: String?, field: String?): String {
             val value = entry.get(field)
             require(
-                !(value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+                !(value == null || !value.isJsonPrimitive || !value.asJsonPrimitive.isString)
             ) { "Pattern profile " + profileId + " entry requires string field: " + field }
-            val string = value.getAsString()
+            val string = value.asString
             require(!string.isBlank()) { "Pattern profile " + profileId + " entry field must not be blank: " + field }
             return string
         }
@@ -375,14 +372,14 @@ internal class PatternProfiles private constructor(profiles: MutableMap<String?,
                 return mutableSetOf<String?>()
             }
             require(
-                !(!value.isJsonArray() || value.getAsJsonArray().isEmpty())
+                !(!value.isJsonArray || value.asJsonArray.isEmpty)
             ) { description + " field flagSets must be a nonempty array" }
             val result: MutableSet<String?> = LinkedHashSet<String?>()
-            for (element in value.getAsJsonArray()) {
+            for (element in value.asJsonArray) {
                 require(
-                    !(!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString())
+                    !(!element.isJsonPrimitive || !element.asJsonPrimitive.isString)
                 ) { description + " flagSets must contain strings" }
-                val flagSet = element.getAsString()
+                val flagSet = element.asString
                 require(FLAG_SETS.contains(flagSet)) { description + " has unknown flag set: " + flagSet }
                 require(result.add(flagSet)) { description + " repeats flag set: " + flagSet }
             }

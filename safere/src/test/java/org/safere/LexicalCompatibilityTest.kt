@@ -72,7 +72,7 @@ internal class LexicalCompatibilityTest {
                 Pattern.CASE_INSENSITIVE,
                 Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
             )) {
-                Companion.assertSame(regex!!, flags, inputs)
+                assertSame(regex!!, flags, inputs)
             }
         }
     }
@@ -218,8 +218,8 @@ internal class LexicalCompatibilityTest {
     fun rangeEndpointControlsKeepDelimiterRolesAndValidation() {
         val inputs: MutableList<String> = mutableListOf<String?>("!", "-", "A", "]", "a", "!]", "-]", "A]", "]]")
         for (regex in mutableListOf<String?>("[!-]]", "[!-\\Q\\E]]", "[!-\\]]", "[!-\\Q]\\E]")) {
-            Companion.assertSame(regex!!, 0, inputs)
-            Companion.assertSame(regex, Pattern.COMMENTS, inputs)
+            assertSame(regex!!, 0, inputs)
+            assertSame(regex, Pattern.COMMENTS, inputs)
         }
     }
 
@@ -291,8 +291,8 @@ internal class LexicalCompatibilityTest {
             Pattern.compile(regex)
             throw AssertionError("expected syntax error")
         } catch (e: PatternSyntaxException) {
-            Assertions.assertThat(e.getPattern()).isEqualTo(regex)
-            Assertions.assertThat(e.getIndex()).isEqualTo(regex.indexOf("\\p"))
+            Assertions.assertThat(e.pattern).isEqualTo(regex)
+            Assertions.assertThat(e.index).isEqualTo(regex.indexOf("\\p"))
         }
     }
 

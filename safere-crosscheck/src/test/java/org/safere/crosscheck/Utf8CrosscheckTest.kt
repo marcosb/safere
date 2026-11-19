@@ -136,8 +136,8 @@ internal class Utf8CrosscheckTest {
 
         val matcher = compile(".").matcher(malformed)
         while (matcher.find()) {
-            Assertions.assertThat(matcher.start()).isBetween(0, malformed.length())
-            Assertions.assertThat(matcher.end()).isBetween(matcher.start(), malformed.length())
+            Assertions.assertThat(matcher.start()).isBetween(0, malformed.length)
+            Assertions.assertThat(matcher.end()).isBetween(matcher.start(), malformed.length)
         }
         compile("a").find(malformed)
     }

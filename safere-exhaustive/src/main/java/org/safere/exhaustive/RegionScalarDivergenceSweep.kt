@@ -16,6 +16,9 @@ import java.util.List
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import kotlin.collections.MutableList
+import kotlin.collections.first
+import kotlin.collections.mutableSetOf
 import kotlin.math.min
 
 /** Offline differential sweep for ordinary scalar-consuming atoms under matcher regions.  */
@@ -151,7 +154,7 @@ object RegionScalarDivergenceSweep {
     @JvmStatic
     fun main(args: Array<String>) {
         val options: SweepOptions =
-            SweepOptions.Companion.parse(
+            SweepOptions.parse(
                 args,
                 Path.of("target", "exhaustive-reports", "region-scalar-sweep"),
                 "region-scalar-divergences.jsonl",
@@ -224,7 +227,7 @@ object RegionScalarDivergenceSweep {
                             && textRegion.start == start && textRegion.end == end
                         ) {
                             return CaseSpec(
-                                atomCase, wrapperCase, flagMode, textRegion, BOUNDS_MODES.getFirst()
+                                atomCase, wrapperCase, flagMode, textRegion, BOUNDS_MODES.first()
                             )
                         }
                     }
@@ -314,7 +317,7 @@ object RegionScalarDivergenceSweep {
 
     private fun classifyDivergence(spec: CaseSpec): DivergenceClass {
         if (REGION_LOCAL_SCALAR_WRAPPERS.contains(spec.wrapperCase!!.label)
-            && RegionScalarDivergenceSweep.regionEndsInsideSurrogatePair(spec.textRegion!!)
+            && regionEndsInsideSurrogatePair(spec.textRegion!!)
         ) {
             return DivergenceClass.REGION_LOCAL_SCALAR_CONSUMPTION_AT_SPLIT_SURROGATE_END
         }
@@ -334,7 +337,7 @@ object RegionScalarDivergenceSweep {
                 Pattern.compile(spec.regex(), spec.flagMode!!.flags)
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: StackOverflowError) {
             return Outcome(false, "", "StackOverflowError")
         } catch (e: RuntimeException) {
@@ -348,7 +351,7 @@ object RegionScalarDivergenceSweep {
                 org.safere.Pattern.compile(spec.regex(), spec.flagMode!!.flags)
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: StackOverflowError) {
             return Outcome(false, "", "StackOverflowError")
         } catch (e: RuntimeException) {
@@ -661,8 +664,7 @@ object RegionScalarDivergenceSweep {
     private fun escape(value: String): String {
         val result = StringBuilder()
         for (i in 0..<value.length) {
-            val c = value.get(i)
-            when (c) {
+            when (val c = value.get(i)) {
                 '\\' -> result.append("\\\\")
                 '\n' -> result.append("\\n")
                 '\r' -> result.append("\\r")
@@ -731,7 +733,7 @@ object RegionScalarDivergenceSweep {
     ) {
         fun toJson(): String {
             val `object` = SweepJson.`object`()
-            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.add("case", caseJson(spec!!))
             `object`.addProperty("bucket", bucket())
             `object`.addProperty("classification", classification!!.name)
             `object`.addProperty("classificationStatus", classification.status()!!.name)

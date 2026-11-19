@@ -20,7 +20,7 @@ internal object UnicodeProperties {
      * 
      * @return the range table, or `null` if not a recognized binary property
      */
-    fun lookupBinaryProperty(name: String): Array<IntArray?>? {
+    fun lookupBinaryProperty(name: String): Array<IntArray>? {
         val table = UnicodeGeneratedTables.BINARY_PROPERTIES.get(name)
         if (table != null) {
             return table
@@ -35,7 +35,7 @@ internal object UnicodeProperties {
      * 
      * @return the range table, or `null` if not a recognized block
      */
-    fun lookupBlock(name: String): Array<IntArray?>? {
+    fun lookupBlock(name: String): Array<IntArray>? {
         val table = UnicodeGeneratedTables.BLOCKS.get(name)
         if (table != null) {
             return table
@@ -58,7 +58,7 @@ internal object UnicodeProperties {
      * 
      * @return the range table, or `null` if not a recognized script
      */
-    fun lookupScript(name: String): Array<IntArray?>? {
+    fun lookupScript(name: String): Array<IntArray>? {
         val table = UnicodeGeneratedTables.SCRIPTS.get(name)
         if (table != null) {
             return table
@@ -80,7 +80,7 @@ internal object UnicodeProperties {
      * 
      * @return the range table, or `null` if not a recognized category
      */
-    fun lookupCategory(name: String): Array<IntArray?>? {
+    fun lookupCategory(name: String): Array<IntArray>? {
         return when (name) {
             "L", "M", "N", "P", "S", "Z", "C", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Me", "Mc", "Nd", "Nl", "No", "Zs", "Zl", "Zp", "Cc", "Cn", "Cf", "Co", "Cs", "Pd", "Ps", "Pe", "Pc", "Po", "Pi", "Pf", "Sm", "Sc", "Sk", "So" -> UnicodeGeneratedTables.CATEGORIES.get(
                 name
@@ -96,7 +96,7 @@ internal object UnicodeProperties {
      * 
      * @return the range table, or `null` if not found
      */
-    fun lookupScriptOrCategory(name: String): Array<IntArray?>? {
+    fun lookupScriptOrCategory(name: String): Array<IntArray>? {
         val table = UnicodeTables.UNICODE_GROUPS.get(name)
         if (table != null) {
             return table
@@ -110,12 +110,12 @@ internal object UnicodeProperties {
      * hyphens, and spaces.
      */
     private fun normalize(name: String): String {
-        return name.toUpperCase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "")
+        return name.uppercase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "")
     }
 
-    private fun buildNormalizedKeys(tables: MutableMap<String, Array<IntArray?>?>): MutableMap<String?, String?> {
+    private fun buildNormalizedKeys(tables: Map<String, out Array<IntArray>?>): MutableMap<String?, String?> {
         val map: MutableMap<String?, String?> = HashMap<String?, String?>()
-        for (key in tables.keySet()) {
+        for (key in tables.keys) {
             map.put(normalize(key), key)
         }
         return map
@@ -125,18 +125,18 @@ internal object UnicodeProperties {
         if (script == Character.UnicodeScript.SIGNWRITING) {
             return "SignWriting"
         }
-        return toTitleSnake(script.name())
+        return toTitleSnake(script.name)
     }
 
     private fun toTitleSnake(upperSnake: String): String {
-        val result: StringBuilder = StringBuilder(upperSnake.length())
-        for (part in upperSnake.split("_", -1)) {
+        val result: StringBuilder = StringBuilder(upperSnake.length)
+        for (part in upperSnake.split("_")) {
             if (!result.isEmpty()) {
                 result.append('_')
             }
-            result.append(Character.toUpperCase(part.charAt(0)))
-            if (part.length() > 1) {
-                result.append(part.substring(1).toLowerCase(Locale.ROOT))
+            result.append(Character.toUpperCase(part[0]))
+            if (part.length > 1) {
+                result.append(part.substring(1).lowercase(Locale.ROOT))
             }
         }
         return result.toString()

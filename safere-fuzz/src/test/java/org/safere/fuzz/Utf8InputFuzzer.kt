@@ -101,7 +101,7 @@ class Utf8InputFuzzer {
                 data.pickValue<String?>(mutableListOf<String?>("qz", "jq", "xz")) + "a".repeat(data.consumeInt(8, 40))
             val candidate = if (data.consumeBoolean()) literal.uppercase() else literal
             val input = ".".repeat(data.consumeInt(0, 32)) + candidate
-            val length = input.length - data.consumeInt(0, literal.length)
+            val length = input.length - data.consumeInt(0, literal.size)
             val padding = ".".repeat(data.consumeInt(0, 7))
             val padded = data.consumeBoolean()
             val bytes =
@@ -271,7 +271,7 @@ class Utf8InputFuzzer {
             val longWidth = data.consumeInt(6, 16)
             val literal = data.pickValue<String>(mutableListOf<String?>("z", "tag"))
             val regex = "(aq|b[a-z]{" + longWidth + "})" + literal
-            val body = "xax" + literal + "x".repeat(longWidth - literal.length - 3)
+            val body = "xax" + literal + "x".repeat(longWidth - literal.size - 3)
             // The branches place the literal at two widely separated offsets, so the starts an
             // occurrence implies are not ordered by the occurrence: an earlier occurrence can imply
             // only a later start while a later one begins the leftmost match. A multibyte prefix keeps

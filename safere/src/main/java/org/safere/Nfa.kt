@@ -60,23 +60,21 @@ internal class Nfa {
     }
 
     private class QueueState(progSize: Int, hasGraphemeSemantics: Boolean) {
-        val threads: Array<NfaThread>
+        val threads: Array<NfaThread?>
         var size: Int = 0
-
         val visitedInst: IntArray
         var visitedGeneration: Int = 1
         val visitedGrapheme: MutableSet<Long?>?
         val hasGraphemeSemantics: Boolean
 
         init {
-            this.threads = arrayOfNulls<NfaThread>(progSize + 1)
+            this.threads = arrayOfNulls<NfaThread?>(progSize + 1)
             this.visitedInst = IntArray(progSize + 1)
             this.visitedGrapheme = if (hasGraphemeSemantics) HashSet<Long?>() else null
             this.hasGraphemeSemantics = hasGraphemeSemantics
         }
 
-        val isEmpty: Boolean
-            get() = size == 0
+        fun isEmpty(): Boolean = size == 0
 
         fun clear() {
             size = 0
@@ -102,8 +100,7 @@ internal class Nfa {
             size = 0
         }
 
-        val isEmpty: Boolean
-            get() = size == 0
+        fun isEmpty(): Boolean = size == 0
 
         fun pushInstruction(id: Int, consumedInput: Boolean) {
             ensureCapacity(size + 1)
@@ -125,10 +122,10 @@ internal class Nfa {
         }
 
         fun ensureCapacity(minCapacity: Int) {
-            if (minCapacity <= frames.length) {
+            if (minCapacity <= frames.size) {
                 return
             }
-            var newCapacity: Int = frames.length * 2
+            var newCapacity: Int = frames.size * 2
             while (newCapacity < minCapacity) {
                 newCapacity *= 2
             }
@@ -145,13 +142,12 @@ internal class Nfa {
     private var longest = false
     private var endmatch = false
     private var context: EngineContext? = null
-
     private var matched = false
-    private var bestMatch: IntArray
+    private lateinit var bestMatch: IntArray
     private val addToThreadqStack = AddToThreadqStack()
 
     // NfaThread pool
-    private var threadPool: Array<NfaThread> = arrayOfNulls<NfaThread>(16)
+    private var threadPool: Array<NfaThread?> = arrayOfNulls<NfaThread?>(16)
     private var threadPoolSize = 0
 
     // QueueState pool
@@ -161,7 +157,7 @@ internal class Nfa {
         val t: NfaThread
         if (threadPoolSize > 0) {
             threadPoolSize--
-            t = threadPool[threadPoolSize]
+            t = threadPool[threadPoolSize]!!
             threadPool[threadPoolSize] = null
         } else {
             t = NfaThread(threadArraySize)
@@ -177,8 +173,8 @@ internal class Nfa {
     }
 
     private fun freeThread(t: NfaThread?) {
-        if (threadPool.length <= threadPoolSize) {
-            threadPool = Arrays.copyOf<NfaThread?>(threadPool, threadPool.length * 2)
+        if (threadPool.size <= threadPoolSize) {
+            threadPool = Arrays.copyOf<NfaThread?>(threadPool, threadPool.size * 2)
         }
         threadPool[threadPoolSize] = t!!
         threadPoolSize++
@@ -186,7 +182,7 @@ internal class Nfa {
 
     private fun freeQueue(q: QueueState) {
         for (i in 0..<q.size) {
-            freeThread(q.threads[i])
+            freeThread(q.threads[i]!!)
             q.threads[i] = null
         }
         q.clear()
@@ -194,9 +190,9 @@ internal class Nfa {
 
     private fun allocQueueState(): QueueState {
         if (!queueStatePool.isEmpty()) {
-            return queueStatePool.remove(queueStatePool.size() - 1)
+            return queueStatePool.removeAt(queueStatePool.size - 1)
         }
-        return QueueState(prog!!.size(), prog!!.hasGraphemeSemantics())
+        return QueueState(prog!!.size, prog!!.hasGraphemeSemantics())
     }
 
     private fun freeQueueState(q: QueueState) {
@@ -217,7 +213,7 @@ internal class Nfa {
 
     private fun canReuse(prog: Prog, ncapture: Int): Boolean {
         val requiredThreadArraySize = ncapture + prog.numLoopRegs()
-        return this.threadArraySize >= requiredThreadArraySize && this.bestMatch.length >= ncapture && this.prog!!.size() >= prog.size() && this.prog!!.hasGraphemeSemantics() == prog.hasGraphemeSemantics()
+        return this.threadArraySize >= requiredThreadArraySize && this.bestMatch.size >= ncapture && this.prog!!.size >= prog.size && this.prog!!.hasGraphemeSemantics() == prog.hasGraphemeSemantics()
     }
 
     private fun reset(
@@ -230,7 +226,7 @@ internal class Nfa {
         this.endmatch = endmatch
         this.context = context
         this.matched = false
-        if (this.bestMatch.length < ncapture) {
+        if (this.bestMatch.size < ncapture) {
             this.bestMatch = IntArray(ncapture)
         }
         Arrays.fill(this.bestMatch, 0, ncapture, -1)
@@ -263,11 +259,11 @@ internal class Nfa {
         }
 
         val nlen = 2 * nsubmatch
-        val result = if (reuseGroups != null && reuseGroups.length >= nlen) reuseGroups else IntArray(nlen)
-        val ncopy = Math.min(ncapture, result.length)
+        val result = if (reuseGroups != null && reuseGroups.size >= nlen) reuseGroups else IntArray(nlen)
+        val ncopy = Math.min(ncapture, result.size)
         System.arraycopy(bestMatch, 0, result, 0, ncopy)
-        if (ncopy < result.length) {
-            Arrays.fill(result, ncopy, result.length, -1)
+        if (ncopy < result.size) {
+            Arrays.fill(result, ncopy, result.size, -1)
         }
         return result
     }
@@ -280,7 +276,7 @@ internal class Nfa {
      * @param anchored whether to anchor the search at the context start
      */
     private fun doSearch(anchored: Boolean) {
-        val text = context!!.text
+        val text = context!!.text!!
         val startPos = context!!.searchStart
         val searchLimit = context!!.searchLimit
         val endPos = context!!.endPos
@@ -291,9 +287,9 @@ internal class Nfa {
 
         var pos = startPos
         while (true) {
-            val decoded = decodeAtConsumeBoundary(text, pos)
-            val cp: Int = InputScanner.Companion.codePoint(decoded)
-            val nextPos: Int = InputScanner.Companion.position(decoded)
+            val decoded = decodeAtConsumeBoundary(text!!, pos, endPos)
+            val cp: Int = InputScanner.codePoint(decoded)
+            val nextPos: Int = InputScanner.position(decoded)
 
             // Start a new thread if there have not been any matches
             // (no point starting new threads to the right of an existing match).
@@ -310,7 +306,7 @@ internal class Nfa {
 
             // If all threads have died, stop if anchored or we already have a match.
             // For unanchored searches without a match, keep trying new positions.
-            if (runq.isEmpty) {
+            if (runq.isEmpty()) {
                 if (anchored || matched) {
                     break
                 }
@@ -356,7 +352,7 @@ internal class Nfa {
      * programs containing only scalar consumers and `\b{g}` use [.doSearch].
      */
     private fun doSearchEveryCharPosition(anchored: Boolean) {
-        val text = context!!.text
+        val text = context!!.text!!
         val startPos = context!!.searchStart
         val searchLimit = context!!.searchLimit
         val start = Math.max(0, startPos)
@@ -377,7 +373,7 @@ internal class Nfa {
         var pos = start
         while (pos < endPos + 2) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             if (prog!!.hasGraphemeSemantics()) {
                 mergeDelayedQueue(delayedGrapheme!!, pos, runq)
@@ -391,7 +387,7 @@ internal class Nfa {
             }
 
             val nextBoundaryPos: Int
-            if (!runq.isEmpty) {
+            if (!runq.isEmpty()) {
                 val stepResult = inputStep(text, pos)
                 val cp = (stepResult ushr 32).toInt()
                 val nextPos = stepResult.toInt()
@@ -401,17 +397,17 @@ internal class Nfa {
                 freeQueue(runq)
                 if (isUtf8 && pos < endPos) {
                     val decoded = text.decodeForward(pos)
-                    nextBoundaryPos = Math.max(pos + 1, InputScanner.Companion.position(decoded))
+                    nextBoundaryPos = Math.max(pos + 1, InputScanner.position(decoded))
                 } else {
                     nextBoundaryPos = pos + 1
                 }
             }
             if (matched
-                && runq.isEmpty
+                && runq.isEmpty()
                 && (if (prog!!.hasGraphemeSemantics())
                     delayedGrapheme!!.isEmpty()
                 else
-                    Companion.isDelayedBufferEmpty(delayedBuffer!!))
+                    isDelayedBufferEmpty(delayedBuffer!!))
             ) {
                 break
             }
@@ -424,7 +420,7 @@ internal class Nfa {
 
         freeQueueState(runq)
         if (prog!!.hasGraphemeSemantics()) {
-            for (q in delayedGrapheme.values()) {
+            for (q in delayedGrapheme!!.values) {
                 freeQueueState(q)
             }
             delayedGrapheme!!.clear()
@@ -439,7 +435,7 @@ internal class Nfa {
     }
 
     private fun mergeDelayedQueue(delayedBuffer: Array<QueueState?>, pos: Int, destination: QueueState) {
-        val idx: Int = pos % delayedBuffer.length
+        val idx: Int = pos % delayedBuffer.size
         val source = delayedBuffer[idx]
         if (source == null) {
             return
@@ -452,7 +448,7 @@ internal class Nfa {
     private fun mergeDelayedQueue(
         delayedGrapheme: MutableMap<Int?, QueueState>, pos: Int, destination: QueueState
     ) {
-        val source = delayedGrapheme.remove(pos)
+        val source: QueueState? = delayedGrapheme.remove(pos)
         if (source == null) {
             return
         }
@@ -461,12 +457,12 @@ internal class Nfa {
     }
 
     private fun mergeQueues(source: QueueState, destination: QueueState, pos: Int) {
-        val text = context!!.text
+        val text = context!!.text!!
         for (i in 0..<source.size) {
-            val t = source.threads[i]
+            val t = source.threads[i]!!
             val visited: Boolean
             if (destination.hasGraphemeSemantics) {
-                val key = visitKey(prog!!.inst(t.id), t.id, text, pos, t.graphemeStart)
+                val key = visitKey(prog!!.inst(t.id), t.id, text, pos, t!!.graphemeStart)
                 visited = !destination.visitedGrapheme!!.add(key)
             } else {
                 visited = destination.visitedInst[t.id] == destination.visitedGeneration
@@ -475,15 +471,15 @@ internal class Nfa {
             if (visited) {
                 freeThread(t)
             } else {
-                destination.threads[destination.size++] = t
+                destination.threads[destination.size++] = t!!
             }
             source.threads[i] = null
         }
         source.size = 0
     }
 
-    private fun delayedQueueAt(delayedBuffer: Array<QueueState?>, pos: Int): QueueState? {
-        val idx: Int = pos % delayedBuffer.length
+    private fun delayedQueueAt(delayedBuffer: Array<QueueState?>, pos: Int): QueueState {
+        val idx: Int = pos % delayedBuffer.size
         var q = delayedBuffer[idx]
         if (q == null) {
             q = allocQueueState()
@@ -500,19 +496,19 @@ internal class Nfa {
         return delayedGrapheme.computeIfAbsent(pos, Function { unused: Int? -> allocQueueState() })
     }
 
-    private fun visitKey(ip: Inst, id: Int, text: InputScanner?, pos: Int, graphemeStart: Int): Long {
-        val instructionKey = (id.toLong()) shl GraphemeSupport.Companion.visitKeyVariantBits()
+    private fun visitKey(ip: Inst, id: Int, text: InputScanner, pos: Int, graphemeStart: Int): Long {
+        val instructionKey = (id.toLong()) shl GraphemeSupport.visitKeyVariantBits()
         if (ip.op != InstOp.GRAPHEME_CLUSTER) {
             return instructionKey
         }
         return (instructionKey
-                or GraphemeSupport.Companion.visitVariant(
+                or GraphemeSupport.visitVariant(
             text,
             pos,
             graphemeStart,
             context!!.consumeRegionStart,
             context!!.endPos,
-            context!!.graphemeContext
+            context!!.graphemeContext!!
         ).toLong())
     }
 
@@ -521,7 +517,7 @@ internal class Nfa {
     }
 
     private fun graphemeNextPos(text: InputScanner?, pos: Int): Int {
-        return GraphemeSupport.Companion.graphemeNextPos(text, pos, context!!.endPos)
+        return GraphemeSupport.graphemeNextPos(text!!, pos, context!!.endPos)
     }
 
     /**
@@ -536,7 +532,7 @@ internal class Nfa {
     private fun acceptMatch(capture: IntArray, pos: Int): Boolean {
         if (endmatch
             && !(if (prog!!.anchorEnd())
-                matchesEndPosition(context!!.text, pos)
+                matchesEndPosition(context!!.text!!, pos)
             else
                 pos == context!!.endPos)
         ) {
@@ -572,9 +568,9 @@ internal class Nfa {
 
         // Follow the next instruction directly. Only deferred alternatives and unwind actions need
         // stack frames; their LIFO order still determines branch priority and register restoration.
-        while (id != 0 || !stack.isEmpty) {
+        while (id != 0 || !stack.isEmpty()) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
             if (id == 0) {
                 val frame = stack.pop()
@@ -727,6 +723,8 @@ internal class Nfa {
                     q.threads[q.size++] =
                         allocThread(instructionId, t0, if (ip.op == InstOp.GRAPHEME_CLUSTER) pos else -1)
                 }
+
+                else -> {}
             }
         }
     }
@@ -734,7 +732,7 @@ internal class Nfa {
     private fun isExpansionComplete(q: QueueState, instructionId: Int, text: InputScanner?, pos: Int): Boolean {
         if (q.hasGraphemeSemantics) {
             return q.visitedGrapheme!!.contains(
-                visitKey(prog!!.inst(instructionId), instructionId, text, pos, pos)
+                visitKey(prog!!.inst(instructionId), instructionId, text!!, pos, pos)
             )
         }
         return q.visitedInst[instructionId] == q.visitedGeneration
@@ -742,7 +740,7 @@ internal class Nfa {
 
     private fun markExpansionComplete(q: QueueState, instructionId: Int, text: InputScanner?, pos: Int) {
         if (q.hasGraphemeSemantics) {
-            q.visitedGrapheme!!.add(visitKey(prog!!.inst(instructionId), instructionId, text, pos, pos))
+            q.visitedGrapheme!!.add(visitKey(prog!!.inst(instructionId), instructionId, text!!, pos, pos))
         } else {
             q.visitedInst[instructionId] = q.visitedGeneration
         }
@@ -766,9 +764,9 @@ internal class Nfa {
     ): Boolean {
         for (threadIndex in 0..<rq.size) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val t = rq.threads[threadIndex]
+            val t = rq.threads[threadIndex]!!
             val id = t.id
             val capture = t.capture
 
@@ -822,7 +820,7 @@ internal class Nfa {
                                 delayedQueueAt(delayedBuffer, scalarEnd)
                         if (destination != null) {
                             if (scalarEnd == context!!.endPos
-                                || GraphemeSupport.Companion.isGraphemeClusterBoundary(
+                                || GraphemeSupport.isGraphemeClusterBoundary(
                                     text, scalarEnd, graphemeStart, context!!.graphemeContext
                                 )
                             ) {
@@ -874,9 +872,9 @@ internal class Nfa {
 
         for (threadIndex in 0..<rq.size) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val t = rq.threads[threadIndex]
+            val t = rq.threads[threadIndex]!!
             val id = t.id
             val capture = t.capture
 
@@ -938,9 +936,6 @@ internal class Nfa {
         )
     }
 
-    private constructor() {
-        throw AssertionError("non-instantiable")
-    }
 
     companion object {
         fun getOrCreate(
@@ -971,7 +966,7 @@ internal class Nfa {
          * is the end. -1 means the group did not participate.
          */
         fun search(prog: Prog, text: String, anchor: Anchor?, kind: MatchKind?, nsubmatch: Int): IntArray? {
-            return search(prog, text, 0, text.length(), text.length(), anchor, kind, nsubmatch)
+            return search(prog, text, 0, text.length, text.length, anchor, kind, nsubmatch)
         }
 
         /**
@@ -989,7 +984,7 @@ internal class Nfa {
         fun search(
             prog: Prog, text: String, startPos: Int, anchor: Anchor?, kind: MatchKind?, nsubmatch: Int
         ): IntArray? {
-            return search(prog, text, startPos, text.length(), text.length(), anchor, kind, nsubmatch)
+            return search(prog, text, startPos, text.length, text.length, anchor, kind, nsubmatch)
         }
 
         /**
@@ -1000,7 +995,7 @@ internal class Nfa {
          * @param startPos the char index in `text` at which to begin searching
          * @param searchLimit upper bound on where to try new thread starts; only positions up to this
          * index start new NFA threads. Active threads may still advance beyond this position. Use
-         * `text.length()` for unbounded search.
+         * `text.length` for unbounded search.
          * @param anchor whether to anchor the match at `startPos`
          * @param kind the match semantics (first, longest, or full)
          * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
@@ -1016,7 +1011,7 @@ internal class Nfa {
             kind: MatchKind?,
             nsubmatch: Int
         ): IntArray? {
-            return search(prog, text, startPos, searchLimit, text.length(), anchor, kind, nsubmatch)
+            return search(prog, text, startPos, searchLimit, text.length, anchor, kind, nsubmatch)
         }
 
         fun search(
@@ -1147,7 +1142,7 @@ internal class Nfa {
         ): IntArray? {
             return search(
                 prog,
-                StringInputScanner(text),
+                StringInputScanner(text!!),
                 startPos,
                 searchLimit,
                 endPos,
@@ -1202,7 +1197,7 @@ internal class Nfa {
             val ncapture = 2 * Math.max(nsubmatch, 1)
 
             val context: EngineContext =
-                EngineContext.Companion.create(
+                EngineContext.create(
                     prog,
                     text,
                     startPos,
@@ -1222,19 +1217,19 @@ internal class Nfa {
 
         private fun isDelayedBufferEmpty(delayedBuffer: Array<QueueState?>): Boolean {
             for (q in delayedBuffer) {
-                if (q != null && !q.isEmpty) {
+                if (q != null && !q.isEmpty()) {
                     return false
                 }
             }
             return true
         }
 
-        private fun decodeAtConsumeBoundary(text: InputScanner, pos: Int, limit: Int = context.endPos): Long {
+        private fun decodeAtConsumeBoundary(text: InputScanner, pos: Int, limit: Int): Long {
             if (pos < 0 || pos >= limit) {
-                return InputScanner.Companion.decoded(-1, nextBoundaryPosition(pos, limit))
+                return InputScanner.decoded(-1, nextBoundaryPosition(pos, limit))
             }
             val decoded = text.decodeForward(pos)
-            return if (InputScanner.Companion.position(decoded) <= limit) decoded else text.decodeForward(pos, limit)
+            return if (InputScanner.position(decoded) <= limit) decoded else text.decodeForward(pos, limit)
         }
 
         private fun nextBoundaryPosition(pos: Int, endPos: Int): Int {
@@ -1260,7 +1255,7 @@ internal class Nfa {
          * @param unixLines if true, only `'\n'` is recognized as a line terminator
          */
         fun isAtTrailingLineTerminator(text: InputScanner, pos: Int, unixLines: Boolean): Boolean {
-            return isAtTrailingLineTerminator(text, pos, unixLines, text.length())
+            return isAtTrailingLineTerminator(text, pos, unixLines, text.length)
         }
 
         fun isAtTrailingLineTerminator(
@@ -1285,7 +1280,7 @@ internal class Nfa {
          * @return a bitmask of [EmptyOp] flags
          */
         fun emptyFlags(text: String?, pos: Int): Int {
-            return emptyFlags(StringInputScanner(text), pos)
+            return emptyFlags(StringInputScanner(text!!), pos)
         }
 
         @JvmOverloads
@@ -1313,9 +1308,9 @@ internal class Nfa {
                 0,
                 false,
                 0,
-                text.length(),
-                text.length(),
-                text.length(),
+                text.length,
+                text.length,
+                text.length,
                 hasWordBoundary,
                 hasTextAnchor
             )
@@ -1365,9 +1360,9 @@ internal class Nfa {
                 regionStart,
                 consumedInput,
                 0,
-                text.length(),
-                text.length(),
-                text.length(),
+                text.length,
+                text.length,
+                text.length,
                 true,
                 true
             )
@@ -1427,7 +1422,7 @@ internal class Nfa {
             // \b and \B
             if (hasWordBoundary) {
                 val prevCp =
-                    if (pos > regionStart) InputScanner.Companion.codePoint(
+                    if (pos > regionStart) InputScanner.codePoint(
                         text.decodeBackward(
                             pos,
                             regionStart
@@ -1436,7 +1431,7 @@ internal class Nfa {
                 val prevWord = prevCp >= 0 && isWordChar(prevCp)
                 val nextCp =
                     if (pos < wordBoundaryEndPos)
-                        InputScanner.Companion.codePoint(text.decodeForward(pos, wordBoundaryEndPos))
+                        InputScanner.codePoint(text.decodeForward(pos, wordBoundaryEndPos))
                     else
                         -1
                 val nextWord = nextCp >= 0 && isWordChar(nextCp)
@@ -1460,7 +1455,7 @@ internal class Nfa {
 
             if (includeGraphemeClusterBoundary) {
                 flags = flags or
-                        GraphemeSupport.Companion.boundaryFlags(
+                        GraphemeSupport.boundaryFlags(
                             text, pos, graphemeContext, matchStart, regionStart, consumedInput, boundaryEndPos
                         )
             }
@@ -1526,27 +1521,27 @@ internal class Nfa {
          * of JDK `\X`.
          */
         fun isGraphemeClusterBoundary(text: String?, pos: Int): Boolean {
-            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos)
+            return GraphemeSupport.isGraphemeClusterBoundary(text!!, pos)
         }
 
         fun isGraphemeClusterBoundary(
             text: String?, pos: Int, graphemeContext: GraphemeSupport.Context?
         ): Boolean {
-            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos, graphemeContext)
+            return GraphemeSupport.isGraphemeClusterBoundary(text!!, pos, graphemeContext)
         }
 
         fun isGraphemeClusterBoundary(
             text: String?, pos: Int, regionStart: Int, graphemeContext: GraphemeSupport.Context?
         ): Boolean {
-            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos, regionStart, graphemeContext)
+            return GraphemeSupport.isGraphemeClusterBoundary(text!!, pos, regionStart, graphemeContext)
         }
 
         fun hasGraphemeExtendAt(text: String?, pos: Int): Boolean {
-            return GraphemeSupport.Companion.hasGraphemeExtendAt(text, pos)
+            return GraphemeSupport.hasGraphemeExtendAt(text!!, pos)
         }
 
         fun isExtendedPictographicAt(text: String?, pos: Int): Boolean {
-            return GraphemeSupport.Companion.isExtendedPictographicAt(text, pos)
+            return GraphemeSupport.isExtendedPictographicAt(text!!, pos)
         }
 
         /** Returns true if the code point is a word character (`[A-Za-z0-9_]`).  */

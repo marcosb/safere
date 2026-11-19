@@ -19,7 +19,7 @@ object CompactDivergenceExpander {
     @Throws(IOException::class)
     @JvmStatic
     fun main(args: Array<String>) {
-        val options: Options = Options.Companion.parse(args)
+        val options: Options = Options.parse(args)
         val manifest: CompactDivergenceLogs.Manifest =
             CompactDivergenceLogs.Companion.readManifest(options.inputDir)
         val sweep = sweepDefinition(manifest.sweep)
@@ -93,8 +93,8 @@ object CompactDivergenceExpander {
 
         writeCounts(expandedDir.resolve("class-counts.tsv"), reservoirs)
         for (entry in reservoirs.entries) {
-            CompactDivergenceExpander.writeExamples(
-                expandedDir.resolve(CompactDivergenceExpander.fileName(entry.key!!) + "-sample.jsonl"),
+            writeExamples(
+                expandedDir.resolve(fileName(entry.key!!) + "-sample.jsonl"),
                 entry.key,
                 entry.value!!.samples(),
                 sweep.exampleWriter!!
@@ -162,7 +162,7 @@ object CompactDivergenceExpander {
                     continue
                 }
                 val classification = manifest.classifications.get(i)
-                CompactDivergenceExpander.writeExamples(
+                writeExamples(
                     expandedDir.resolve(fileName(classification) + "-sample.jsonl"),
                     classification,
                     reservoirs.get(classification)!!.samples(),
@@ -359,8 +359,6 @@ object CompactDivergenceExpander {
 
         companion object {
             fun parse(args: Array<String>): Options {
-                var inputDir: Path? = null
-                var sampleLimit: Int? = null
                 for (arg in args) {
                     if (arg.startsWith("--input-dir=")) {
                         inputDir = Path.of(arg.substring("--input-dir=".length))

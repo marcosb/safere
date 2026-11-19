@@ -19,7 +19,7 @@ internal object BenchmarkDataSchema {
 
     fun validate(source: JsonObject) {
         requireOnly(source, "benchmark-data.json", ROOT_FIELDS)
-        val `_` = required(source, "schemaVersion").getAsInt()
+        required(source, "schemaVersion").asInt
         requiredArray(source, "inputs")
         if (source.has("workloads")) {
             requiredArray(source, "workloads")
@@ -31,7 +31,7 @@ internal object BenchmarkDataSchema {
 
     fun requireWorkloads(source: JsonObject) {
         val workloads = requiredArray(source, "workloads")
-        require(!workloads.isEmpty()) { "benchmark-data.json workloads must not be empty" }
+        require(!workloads.isEmpty) { "benchmark-data.json workloads must not be empty" }
     }
 
     private fun validateConfiguration(configuration: JsonObject) {
@@ -45,7 +45,7 @@ internal object BenchmarkDataSchema {
             val prefixes = requiredArray(collection, "allocationWorkloadPrefixes")
             for (prefix in prefixes) {
                 require(
-                    !(!prefix.isJsonPrimitive() || !prefix.getAsJsonPrimitive().isString() || prefix.getAsString()
+                    !(!prefix.isJsonPrimitive || !prefix.asJsonPrimitive.isString || prefix.asString
                         .isBlank())
                 ) { "benchmark-data.json allocation workload prefixes must be nonblank strings" }
             }
@@ -70,10 +70,10 @@ internal object BenchmarkDataSchema {
 
     private fun validateNonblankStrings(`object`: JsonObject, field: String?, description: String?) {
         val values = requiredArray(`object`, field)
-        require(!values.isEmpty()) { description + " must not be empty" }
+        require(!values.isEmpty) { description + " must not be empty" }
         for (value in values) {
             require(
-                !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || value.getAsString().isBlank())
+                !(!value.isJsonPrimitive || !value.asJsonPrimitive.isString || value.asString.isBlank())
             ) { description + " must be nonblank strings" }
         }
     }
@@ -86,27 +86,27 @@ internal object BenchmarkDataSchema {
 
     private fun required(`object`: JsonObject, field: String?): JsonElement {
         val value = `object`.get(field)
-        require(!(value == null || value.isJsonNull())) { "benchmark-data.json requires " + field }
+        require(!(value == null || value.isJsonNull)) { "benchmark-data.json requires " + field }
         return value
     }
 
     private fun requiredObject(`object`: JsonObject, field: String?): JsonObject {
         val value = required(`object`, field)
-        require(value.isJsonObject()) { "benchmark-data.json field must be an object: " + field }
-        return value.getAsJsonObject()
+        require(value.isJsonObject) { "benchmark-data.json field must be an object: " + field }
+        return value.asJsonObject
     }
 
     private fun requiredArray(`object`: JsonObject, field: String?): JsonArray {
         val value = required(`object`, field)
-        require(value.isJsonArray()) { "benchmark-data.json field must be an array: " + field }
-        return value.getAsJsonArray()
+        require(value.isJsonArray) { "benchmark-data.json field must be an array: " + field }
+        return value.asJsonArray
     }
 
     private fun requiredString(`object`: JsonObject, field: String?): String? {
         val value = required(`object`, field)
         require(
-            !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || value.getAsString().isBlank())
+            !(!value.isJsonPrimitive || !value.asJsonPrimitive.isString || value.asString.isBlank())
         ) { "benchmark-data.json field must be a nonblank string: " + field }
-        return value.getAsString()
+        return value.asString
     }
 }

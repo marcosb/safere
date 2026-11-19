@@ -45,7 +45,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
     fun find(input: Utf8Input?): Boolean {
         Objects.requireNonNull<Utf8Input?>(input, "input")
         val result = saferePattern.find(input!!.delegate())
-        Utf8Matcher.Companion.crosscheckFind(this, input, result)
+        Utf8Matcher.crosscheckFind(this, input, result)
         return result
     }
 
@@ -71,7 +71,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
      * @throws CrosscheckException if the engines produce different split results
      */
     @JvmOverloads
-    fun split(input: CharSequence?, limit: Int = 0): Array<String?>? {
+    fun split(input: CharSequence?, limit: Int = 0): Array<String?> {
         val sr = saferePattern.split(input, limit)
         val jr = jdkPattern.split(input, limit)
         if (!sr.contentEquals(jr)) {
@@ -99,7 +99,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
      * @throws CrosscheckException if the engines produce different split results
      */
     @JvmOverloads
-    fun splitWithDelimiters(input: CharSequence?, limit: Int = 0): Array<String?>? {
+    fun splitWithDelimiters(input: CharSequence?, limit: Int = 0): Array<String?> {
         val sr = saferePattern.splitWithDelimiters(input, limit)
         val jr = jdkPattern.splitWithDelimiters(input, limit)
         if (!sr.contentEquals(jr)) {
@@ -130,7 +130,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
     }
 
     /** Returns the named capturing groups in this pattern.  */
-    fun namedGroups(): MutableMap<String?, Int?>? {
+    fun namedGroups(): MutableMap<String?, Int?> {
         val sr = saferePattern.namedGroups()
         val jr = jdkPattern.namedGroups()
         if (sr != jr) {
@@ -174,7 +174,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
     private data class SerializedForm(val regex: String?, val flags: Int) : Serializable {
         @Throws(ObjectStreamException::class)
         fun readResolve(): Any {
-            return org.safere.crosscheck.Pattern.Companion.compile(regex!!, flags)
+            return compile(regex!!, flags)
         }
 
         companion object {
@@ -187,6 +187,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
 
         // Flag constants — identical to java.util.regex.Pattern and org.safere.Pattern.
         val UNIX_LINES: Int = java.util.regex.Pattern.UNIX_LINES
+
         @JvmField
         val CASE_INSENSITIVE: Int = java.util.regex.Pattern.CASE_INSENSITIVE
         val COMMENTS: Int = java.util.regex.Pattern.COMMENTS
@@ -237,12 +238,12 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
                 throw safereEx
             } else if (safereEx != null) {
                 // SafeRE rejected, JDK accepted — unsupported feature.
-                throw UnsupportedPatternException.Companion.fromCause(safereEx)
+                throw UnsupportedPatternException.fromCause(safereEx)
             } else {
                 // JDK rejected, SafeRE accepted — unexpected divergence.
                 throw CrosscheckException(
                     "Pattern.compile",
-                    Companion.quote(regex) + ", " + flags,
+                    quote(regex) + ", " + flags,
                     "compiled successfully",
                     "PatternSyntaxException: " + jdkEx!!.message,
                     "(no trace — divergence during compilation)"
@@ -261,7 +262,7 @@ class Pattern private constructor(private val saferePattern: Pattern, private va
             if (sr != jr) {
                 throw CrosscheckException(
                     "Pattern.matches",
-                    Companion.quote(regex) + ", " + quote(input),
+                    quote(regex) + ", " + quote(input),
                     sr.toString(),
                     jr.toString(),
                     "(no trace — static method)"

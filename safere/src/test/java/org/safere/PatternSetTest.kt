@@ -170,7 +170,7 @@ internal class PatternSetTest {
             val b = PatternSet.Builder(PatternSet.Anchor.UNANCHORED)
             val patterns: MutableList<String?> = ArrayList<String?>()
             patterns.add("\\X")
-            b.add(patterns.getFirst())
+            b.add(patterns.first())
             for (i in 0..63) {
                 val pattern = "literal" + i
                 patterns.add(pattern)
@@ -297,7 +297,7 @@ internal class PatternSetTest {
             b.add("c")
             val set = b.compile()
 
-            Assertions.assertThat(set.size()).isEqualTo(3)
+            Assertions.assertThat(set.size).isEqualTo(3)
         }
 
         @Test
@@ -462,7 +462,7 @@ internal class PatternSetTest {
             b.add("beta")
             val set = b.compile()
 
-            Assertions.assertThat(set.size()).isEqualTo(2)
+            Assertions.assertThat(set.size).isEqualTo(2)
             Assertions.assertThat(set.pattern(0)).isEqualTo("alpha")
             Assertions.assertThat(set.pattern(1)).isEqualTo("beta")
         }
@@ -661,7 +661,7 @@ internal class PatternSetTest {
                     allocationBeanClass.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
 
                 Assumptions.assumeTrue((supportedMethod.invoke(threadBean) as Boolean?)!!)
-                if (!enabledMethod.invoke(threadBean) as Boolean?) {
+                if ((enabledMethod.invoke(threadBean) as Boolean?) != true) {
                     setEnabledMethod.invoke(threadBean, true)
                 }
                 return AllocationTracker(threadBean, allocatedBytesMethod)

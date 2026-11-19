@@ -59,7 +59,7 @@ internal class BitStateTest {
             )
         )) {
             for (anchored in mutableListOf<Boolean?>(false, true)) {
-                val length = scanner.length()
+                val length = scanner.length
                 val ncap = 2 * prog.numCaptures()
                 val fused = BitState.getOrCreate(null, prog, scanner, 0, length, ncap, false, false)
                 val interpreter = BitState(prog, scanner, 0, length, ncap, false, false, null)
@@ -126,8 +126,8 @@ internal class BitStateTest {
                                     prog,
                                     scanner,
                                     0,
-                                    scanner.length(),
-                                    scanner.length(),
+                                    scanner.length,
+                                    scanner.length,
                                     0,
                                     if (anchored) Nfa.Anchor.ANCHORED else Nfa.Anchor.UNANCHORED,
                                     kind,
@@ -140,14 +140,14 @@ internal class BitStateTest {
                                     prog,
                                     scanner,
                                     0,
-                                    scanner.length(),
+                                    scanner.length,
                                     2 * prog.numCaptures(),
                                     kind != Nfa.MatchKind.FIRST_MATCH,
                                     kind == Nfa.MatchKind.FULL_MATCH
                                 )
                             val actual =
                                 engine.doSearch(
-                                    0, scanner.length(), anchored || kind == Nfa.MatchKind.FULL_MATCH
+                                    0, scanner.length, anchored || kind == Nfa.MatchKind.FULL_MATCH
                                 )
                             if (engine.budgetExceeded()) {
                                 // Overlapping greedy/lazy loops can exhaust this bounded engine in longest mode.
@@ -251,8 +251,8 @@ internal class BitStateTest {
                                                 prog,
                                                 scanner,
                                                 0,
-                                                scanner.length(),
-                                                scanner.length(),
+                                                scanner.length,
+                                                scanner.length,
                                                 0,
                                                 anchor,
                                                 kind,
@@ -265,7 +265,7 @@ internal class BitStateTest {
                                                 prog,
                                                 scanner,
                                                 0,
-                                                scanner.length(),
+                                                scanner.length,
                                                 2 * max(groups, 1),
                                                 kind != Nfa.MatchKind.FIRST_MATCH,
                                                 kind == Nfa.MatchKind.FULL_MATCH
@@ -273,7 +273,7 @@ internal class BitStateTest {
                                         val actual =
                                             engine.doSearch(
                                                 0,
-                                                scanner.length(),
+                                                scanner.length,
                                                 anchor == Nfa.Anchor.ANCHORED || kind == Nfa.MatchKind.FULL_MATCH
                                             )
                                         if (engine.budgetExceeded()) {
@@ -564,7 +564,7 @@ internal class BitStateTest {
             val prefix = "x".repeat(10000)
             val shiftedText = prefix + suffix
             val shiftedStart = prefix.length
-            val shiftedEnd = shiftedText.length
+            val shiftedEnd = shiftedText.size
             val shifted =
                 BitState.getOrCreate(
                     null, prog, shiftedText, shiftedStart, shiftedEnd, ncap, false, false

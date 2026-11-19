@@ -471,8 +471,8 @@ internal class CharClassTest {
                 CharClassBuilder().addRune('a'.code).addRune('c'.code).addRune('e'.code).addRune('g'.code).build()
             )
 
-        Assertions.assertThat(smallSet.ranges()).isSameAs(smallSet.ranges())
-        Assertions.assertThat(bitmap.ranges()).isSameAs(bitmap.ranges())
+        Assertions.assertThat(smallSet.ranges).isSameAs(smallSet.ranges)
+        Assertions.assertThat(bitmap.ranges).isSameAs(bitmap.ranges)
     }
 
     @Test

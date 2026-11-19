@@ -6,18 +6,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.String
 import java.util.*
 import java.util.List
-import kotlin.Boolean
-import kotlin.BooleanArray
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.check
-import kotlin.code
-import kotlin.compareTo
-import kotlin.text.StringBuilder
-import kotlin.text.indexOf
 
 /**
  * A node in the regular expression abstract syntax tree (AST). Each node has a [RegexpOp]
@@ -49,13 +39,7 @@ import kotlin.text.indexOf
  * <tr><td>All others</td><td>No additional fields</td></tr>
 </table> * 
  */
-internal class Regexp(op: RegexpOp, flags: Int) {
-    /** The operator for this node.  */
-    val op: RegexpOp
-
-    /** Parse flags in effect for this node.  */
-    val flags: Int
-
+internal class Regexp(val op: RegexpOp, val flags: Int) {
     /**
      * Sub-expressions (children). Used by CONCAT, ALTERNATE, STAR, PLUS, QUEST, REPEAT, NON_CAPTURE,
      * and CAPTURE.
@@ -68,7 +52,7 @@ internal class Regexp(op: RegexpOp, flags: Int) {
     var rune: Int = 0
 
     /** An array of Unicode code points. Used by LITERAL_STRING.  */
-    var runes: IntArray
+    var runes: IntArray = EMPTY_RUNES
 
     /** The character class. Used by CHAR_CLASS.  */
     var charClass: CharClass? = null
@@ -87,17 +71,18 @@ internal class Regexp(op: RegexpOp, flags: Int) {
 
     /** Match ID for multi-pattern matching. Used by HAVE_MATCH.  */
     var matchId: Int = 0
-
     // --- Accessors ---
     /** Returns the single sub-expression, or throws if there isn't exactly one.  */
-    fun sub(): Regexp? {
-        check(!(subs == null || subs.size() != 1)) { op.toString() + " does not have exactly one sub-expression" }
-        return subs.getFirst()
+    fun sub(): Regexp {
+        val s = subs
+        check(!(s == null || s.size != 1)) { op.toString() + " does not have exactly one sub-expression" }
+        return s[0]!!
     }
 
     /** Returns the number of sub-expressions.  */
     fun nsub(): Int {
-        return if (subs != null) subs.size() else 0
+        val s = subs
+        return if (s != null) s.size else 0
     }
 
     /** Returns true if the [ParseFlags.NON_GREEDY] flag is set.  */
@@ -120,27 +105,18 @@ internal class Regexp(op: RegexpOp, flags: Int) {
         return sb.toString()
     }
 
-    init {
-        this.op = op
-        this.flags = flags
-    }
 
     /** Walker that generates a string representation by accumulating into a StringBuilder.  */
-    private class ToStringWalker(sb: StringBuilder) : Walker<Int?>() {
-        private val sb: StringBuilder
+    private class ToStringWalker(private val sb: StringBuilder) : Walker<Int?>() {
 
-        init {
-            this.sb = sb
-        }
 
-        override fun shortVisit(re: Regexp?, parentArg: Int?): Int {
+        override fun shortVisit(re: Regexp, parentArg: Int?): Int {
             return 0
         }
 
-        override fun preVisit(re: Regexp, parentArg: Int, stop: BooleanArray?): Int {
-            val prec = parentArg
+        override fun preVisit(re: Regexp, parentArg: Int?, stop: BooleanArray): Int {
+            val prec = parentArg ?: PREC_TOPLEVEL
             val nprec: Int
-
             nprec =
                 when (re.op) {
                     RegexpOp.NO_MATCH, RegexpOp.EMPTY_MATCH, RegexpOp.LITERAL, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER, RegexpOp.CHAR_CLASS, RegexpOp.HAVE_MATCH -> PREC_ATOM
@@ -183,9 +159,9 @@ internal class Regexp(op: RegexpOp, flags: Int) {
         }
 
         override fun postVisit(
-            re: Regexp, parentArg: Int, preArg: Int?, childArgs: MutableList<Int?>?
+            re: Regexp, parentArg: Int?, preArg: Int?, childArgs: MutableList<Int?>
         ): Int {
-            val prec = parentArg
+            val prec = parentArg ?: PREC_TOPLEVEL
             when (re.op) {
                 RegexpOp.NO_MATCH -> sb.append("[^\\x00-\\x{10ffff}]")
                 RegexpOp.EMPTY_MATCH -> {
@@ -212,8 +188,8 @@ internal class Regexp(op: RegexpOp, flags: Int) {
 
                 RegexpOp.ALTERNATE -> {
                     // Children appended '|' after themselves; remove the trailing one.
-                    if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '|') {
-                        sb.setLength(sb.length() - 1)
+                    if (sb.length > 0 && sb[sb.length - 1] == '|') {
+                        sb.setLength(sb.length - 1)
                     }
                     if (prec < PREC_ALTERNATE) {
                         sb.append(')')
@@ -283,7 +259,7 @@ internal class Regexp(op: RegexpOp, flags: Int) {
                 RegexpOp.NO_WORD_BOUNDARY -> sb.append("\\B")
                 RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> sb.append("\\b{g}")
                 RegexpOp.GRAPHEME_CLUSTER -> sb.append("\\X")
-                RegexpOp.CHAR_CLASS -> Companion.appendCharClass(sb, re.charClass!!)
+                RegexpOp.CHAR_CLASS -> appendCharClass(sb, re.charClass!!)
                 RegexpOp.NON_CAPTURE -> sb.append(')')
                 RegexpOp.CAPTURE -> sb.append(')')
                 RegexpOp.HAVE_MATCH -> sb.append("(?HaveMatch:").append(re.matchId).append(')')
@@ -298,6 +274,7 @@ internal class Regexp(op: RegexpOp, flags: Int) {
     }
 
     companion object {
+        private val EMPTY_RUNES = IntArray(0)
         // --- Factory methods ---
         /** Creates a NO_MATCH node.  */
         fun noMatch(flags: Int): Regexp {
@@ -319,36 +296,36 @@ internal class Regexp(op: RegexpOp, flags: Int) {
         /** Creates a LITERAL_STRING node matching a sequence of code points.  */
         fun literalString(runes: IntArray, flags: Int): Regexp {
             val re = Regexp(RegexpOp.LITERAL_STRING, flags)
-            re.runes = Arrays.copyOf(runes, runes.length)
+            re.runes = Arrays.copyOf(runes, runes.size)
             return re
         }
 
         /** Creates a CONCAT node matching the concatenation of the given sub-expressions in order.  */
-        fun concat(subs: MutableList<Regexp?>, flags: Int): Regexp {
+        fun concat(subs: Collection<Regexp?>, flags: Int): Regexp {
             val re = Regexp(RegexpOp.CONCAT, flags)
-            re.subs = List.copyOf<Regexp?>(subs)
+            re.subs = List.copyOf(subs)
             return re
         }
 
         /** Creates an ALTERNATE node matching any one of the given sub-expressions.  */
-        fun alternate(subs: MutableList<Regexp?>, flags: Int): Regexp {
+        fun alternate(subs: Collection<Regexp?>, flags: Int): Regexp {
             val re = Regexp(RegexpOp.ALTERNATE, flags)
-            re.subs = List.copyOf<Regexp?>(subs)
+            re.subs = List.copyOf(subs)
             return re
         }
 
         /** Creates a STAR node matching the sub-expression zero or more times.  */
-        fun star(sub: Regexp, flags: Int): Regexp {
+        fun star(sub: Regexp?, flags: Int): Regexp {
             return starPlusOrQuest(RegexpOp.STAR, sub, flags)
         }
 
         /** Creates a PLUS node matching the sub-expression one or more times.  */
-        fun plus(sub: Regexp, flags: Int): Regexp {
+        fun plus(sub: Regexp?, flags: Int): Regexp {
             return starPlusOrQuest(RegexpOp.PLUS, sub, flags)
         }
 
         /** Creates a QUEST node matching the sub-expression zero or one times.  */
-        fun quest(sub: Regexp, flags: Int): Regexp {
+        fun quest(sub: Regexp?, flags: Int): Regexp {
             return starPlusOrQuest(RegexpOp.QUEST, sub, flags)
         }
 
@@ -356,23 +333,24 @@ internal class Regexp(op: RegexpOp, flags: Int) {
          * Creates a STAR, PLUS, or QUEST node, squashing nested quantifiers when possible. Mirrors RE2's
          * `Regexp::StarPlusOrQuest()`.
          */
-        private fun starPlusOrQuest(op: RegexpOp, sub: Regexp, flags: Int): Regexp {
+        private fun starPlusOrQuest(op: RegexpOp, sub: Regexp?, flags: Int): Regexp {
+            val s = sub!!
             // Squash **, ++, ??
-            if (op == sub.op && flags == sub.flags) {
-                return sub
+            if (op == s.op && flags == s.flags) {
+                return s
             }
             // Squash *+, *?, +*, +?, ?*, ?+ — all become STAR.
-            if ((sub.op == RegexpOp.STAR || sub.op == RegexpOp.PLUS || sub.op == RegexpOp.QUEST)
-                && flags == sub.flags
+            if ((s.op == RegexpOp.STAR || s.op == RegexpOp.PLUS || s.op == RegexpOp.QUEST)
+                && flags == s.flags
             ) {
-                if (sub.op == RegexpOp.STAR) {
-                    return sub
+                if (s.op == RegexpOp.STAR) {
+                    return s
                 }
                 val re = Regexp(RegexpOp.STAR, flags)
-                re.subs = List.of<Regexp?>(sub.subs!!.get(0))
+                re.subs = List.of(s.sub())
                 return re
             }
-            return rawQuantifier(op, sub, flags)
+            return rawQuantifier(op, s, flags)
         }
 
         /**
@@ -380,9 +358,9 @@ internal class Regexp(op: RegexpOp, flags: Int) {
          * PostVisit which (like the C++ code) creates nodes directly rather than through the squashing
          * factory.
          */
-        fun rawQuantifier(op: RegexpOp, sub: Regexp, flags: Int): Regexp {
+        fun rawQuantifier(op: RegexpOp, sub: Regexp?, flags: Int): Regexp {
             val re = Regexp(op, flags)
-            re.subs = List.of<Regexp?>(sub)
+            re.subs = List.of(sub!!)
             return re
         }
 
@@ -390,18 +368,18 @@ internal class Regexp(op: RegexpOp, flags: Int) {
          * Creates a REPEAT node matching the sub-expression between `min` and `max` times. A
          * max of -1 means unbounded.
          */
-        fun repeat(sub: Regexp, flags: Int, min: Int, max: Int): Regexp {
+        fun repeat(sub: Regexp?, flags: Int, min: Int, max: Int): Regexp {
             val re = Regexp(RegexpOp.REPEAT, flags)
-            re.subs = List.of<Regexp?>(sub)
+            re.subs = List.of(sub)
             re.min = min
             re.max = max
             return re
         }
 
         /** Creates a NON_CAPTURE node preserving a source-level `(?:...)` group boundary.  */
-        fun nonCapture(sub: Regexp, flags: Int): Regexp {
+        fun nonCapture(sub: Regexp?, flags: Int): Regexp {
             val re = Regexp(RegexpOp.NON_CAPTURE, flags)
-            re.subs = List.of<Regexp?>(sub)
+            re.subs = List.of(sub)
             return re
         }
 
@@ -409,9 +387,9 @@ internal class Regexp(op: RegexpOp, flags: Int) {
          * Creates a CAPTURE node wrapping the sub-expression with capture group index `cap` and
          * optional name.
          */
-        fun capture(sub: Regexp, flags: Int, cap: Int, name: String?): Regexp {
+        fun capture(sub: Regexp?, flags: Int, cap: Int, name: String?): Regexp {
             val re = Regexp(RegexpOp.CAPTURE, flags)
-            re.subs = List.of<Regexp?>(sub)
+            re.subs = List.of(sub)
             re.cap = cap
             re.name = name
             return re
@@ -487,7 +465,7 @@ internal class Regexp(op: RegexpOp, flags: Int) {
 
         /** Appends a literal code point, escaping metacharacters as needed.  */
         private fun appendLiteral(sb: StringBuilder, r: Int, foldCase: Boolean) {
-            if (r != 0 && r < 0x80 && "(){}[]*+?|.^$\\".indexOf(r.toChar().code) >= 0) {
+            if (r != 0 && r < 0x80 && "(){}[]*+?|.^$\\".indexOf(r.toChar()) >= 0) {
                 sb.append('\\')
                 sb.appendCodePoint(r)
             } else if (foldCase && Ascii.isLower(r)) {
@@ -535,29 +513,29 @@ internal class Regexp(op: RegexpOp, flags: Int) {
         /** Appends a single code point formatted for use inside a character class.  */
         private fun appendCCChar(sb: StringBuilder, r: Int) {
             if (0x20 <= r && r <= 0x7E) {
-                if ("[]^-\\".indexOf(r.toChar().code) >= 0) {
+                if ("[]^-\\".indexOf(r.toChar()) >= 0) {
                     sb.append('\\')
                 }
                 sb.append(r.toChar())
                 return
             }
             when (r) {
-                '\r' -> {
+                0x0D -> {
                     sb.append("\\r")
                     return
                 }
 
-                '\t' -> {
+                0x09 -> {
                     sb.append("\\t")
                     return
                 }
 
-                '\n' -> {
+                0x0A -> {
                     sb.append("\\n")
                     return
                 }
 
-                '\f' -> {
+                0x0C -> {
                     sb.append("\\f")
                     return
                 }

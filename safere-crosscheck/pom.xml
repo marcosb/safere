@@ -3,248 +3,264 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
                              http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
+    <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>org.safere</groupId>
-    <artifactId>safere-parent</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
-  </parent>
+    <parent>
+        <groupId>org.safere</groupId>
+        <artifactId>safere-parent</artifactId>
+        <version>1.2.0-SNAPSHOT</version>
+    </parent>
 
-  <artifactId>safere-crosscheck</artifactId>
-  <packaging>jar</packaging>
+    <artifactId>safere-crosscheck</artifactId>
+    <packaging>jar</packaging>
 
-  <name>SafeRE Crosscheck</name>
-  <description>Differential-testing facade that runs both SafeRE and java.util.regex,
-    comparing results and flagging divergences</description>
+    <name>SafeRE Crosscheck</name>
+    <description>Differential-testing facade that runs both SafeRE and java.util.regex,
+        comparing results and flagging divergences
+    </description>
 
     <properties>
         <kotlin.version>2.2.20</kotlin.version>
     </properties>
 
     <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
-      <dependency>
-        <groupId>org.junit</groupId>
-        <artifactId>junit-bom</artifactId>
-        <version>${junit.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
-  <dependencies>
-    <dependency>
-      <groupId>org.safere</groupId>
-      <artifactId>safere</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.assertj</groupId>
-      <artifactId>assertj-core</artifactId>
-      <version>3.27.7</version>
-      <scope>test</scope>
-    </dependency>
-    <!-- The crosscheck generator type-checks the original tests, including ICU4J oracles. -->
-    <dependency>
-      <groupId>com.ibm.icu</groupId>
-      <artifactId>icu4j</artifactId>
-      <version>${icu4j.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <!-- Selecting the crosscheck tests compiles all of safere's tests, including the ones that use
-         ASM. -->
-    <dependency>
-      <groupId>org.ow2.asm</groupId>
-      <artifactId>asm</artifactId>
-      <version>${asm.version}</version>
-      <scope>test</scope>
-    </dependency>
-      <dependency>
-          <groupId>org.jetbrains.kotlin</groupId>
-          <artifactId>kotlin-stdlib-jdk8</artifactId>
-          <version>${kotlin.version}</version>
-      </dependency>
-      <dependency>
-          <groupId>org.jetbrains.kotlin</groupId>
-          <artifactId>kotlin-test</artifactId>
-          <version>${kotlin.version}</version>
-          <scope>test</scope>
-      </dependency>
-  </dependencies>
-
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>com.diffplug.spotless</groupId>
-        <artifactId>spotless-maven-plugin</artifactId>
-        <configuration>
-          <java>
-            <includes>
-              <include>src/main/java/**/*.java</include>
-              <include>src/test/java/**/*.java</include>
-              <include>src/build/java/**/*.java</include>
-            </includes>
-          </java>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.7.0</version>
-        <executions>
-          <execution>
-            <id>test-crosscheck-build-tools</id>
-            <phase>generate-test-sources</phase>
-            <goals><goal>add-test-source</goal></goals>
-            <configuration>
-              <sources><source>${project.basedir}/src/build/java</source></sources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.6</version>
-      </plugin>
-        <plugin>
+        <dependency>
+            <groupId>org.safere</groupId>
+            <artifactId>safere</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The crosscheck generator type-checks the original tests, including ICU4J oracles. -->
+        <dependency>
+            <groupId>com.ibm.icu</groupId>
+            <artifactId>icu4j</artifactId>
+            <version>${icu4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Selecting the crosscheck tests compiles all of safere's tests, including the ones that use
+             ASM. -->
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>${asm.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-maven-plugin</artifactId>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
             <version>${kotlin.version}</version>
-            <executions>
-                <execution>
-                    <id>compile</id>
-                    <phase>compile</phase>
-                    <goals>
-                        <goal>compile</goal>
-                    </goals>
-                </execution>
-                <execution>
-                    <id>test-compile</id>
-                    <phase>test-compile</phase>
-                    <goals>
-                        <goal>test-compile</goal>
-                    </goals>
-                </execution>
-            </executions>
-            <configuration>
-                <jvmTarget>1.8</jvmTarget>
-            </configuration>
-        </plugin>
-    </plugins>
-  </build>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-  <profiles>
-    <profile>
-      <id>crosscheck-public-api-tests</id>
-      <build>
-        <testResources>
-          <testResource>
-            <directory>${project.basedir}/src/test/resources</directory>
-          </testResource>
-          <testResource>
-            <directory>${project.basedir}/../safere/src/test/resources</directory>
-          </testResource>
-        </testResources>
+    <build>
         <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>3.2.0</version>
-            <executions>
-              <execution>
-                <id>generate-crosscheck-public-api-tests</id>
-                <phase>generate-test-sources</phase>
-                <goals>
-                  <goal>run</goal>
-                </goals>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
                 <configuration>
-                  <target>
-                    <delete
-                        dir="${project.build.directory}/generated-test-sources/crosscheck"
-                        quiet="true"/>
-                    <mkdir
-                        dir="${project.build.directory}/generated-test-sources/crosscheck/org/safere/crosscheck/generated"/>
-                    <mkdir dir="${project.build.directory}/crosscheck-build-tools"/>
-                    <javac srcdir="${project.basedir}/src/build/java"
-                        destdir="${project.build.directory}/crosscheck-build-tools"
-                        release="21" includeantruntime="false">
-                      <compilerarg value="-proc:none"/>
-                    </javac>
-                    <delete dir="${project.build.directory}/crosscheck-selection"/>
-                    <mkdir dir="${project.build.directory}/crosscheck-selection"/>
-                    <javac srcdir="${project.basedir}/../safere/src/test/java"
-                        destdir="${project.build.directory}/crosscheck-selection"
-                        release="21" includeantruntime="false" fork="true">
-                      <classpath>
-                        <path refid="maven.test.classpath"/>
-                      </classpath>
-                      <compilerarg value="-proc:only"/>
-                      <compilerarg value="-processorpath"/>
-                      <compilerarg value="${project.build.directory}/crosscheck-build-tools"/>
-                      <compilerarg value="-processor"/>
-                      <compilerarg value="org.safere.crosscheck.build.ExclusionProcessor"/>
-                    </javac>
-                    <copy
-                        todir="${project.build.directory}/generated-test-sources/crosscheck/org/safere/crosscheck/generated"
-                        flatten="true"
-                        overwrite="true">
-                      <fileset dir="${project.basedir}/../safere/src/test/java/org/safere">
-                        <include name="*Test.java"/>
-                        <include name="DisabledForCrosscheck.java"/>
-                        <include name="ExhaustiveUtils.java"/>
-                        <include name="OpaqueRegionChecks.java"/>
-                        <excludesfile name="${project.build.directory}/crosscheck-selection/crosscheck-excludes.txt"/>
-                      </fileset>
-                      <filterchain>
-                        <replaceregex
-                            pattern="package org\.safere;"
-                            replace="package org.safere.crosscheck.generated;&#10;&#10;import org.safere.crosscheck.Matcher;&#10;import org.safere.crosscheck.Pattern;&#10;import org.safere.crosscheck.Utf8Input;&#10;import org.safere.crosscheck.Utf8Matcher;&#10;import org.safere.crosscheck.Utf8Sink;"/>
-                      </filterchain>
-                    </copy>
-                  </target>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                            <include>src/build/java/**/*.java</include>
+                        </includes>
+                    </java>
                 </configuration>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>build-helper-maven-plugin</artifactId>
-            <version>3.7.0</version>
-            <executions>
-              <execution>
-                <id>add-crosscheck-public-api-tests</id>
-                <phase>generate-test-sources</phase>
-                <goals>
-                  <goal>add-test-source</goal>
-                </goals>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.7.0</version>
+                <executions>
+                    <execution>
+                        <id>test-crosscheck-build-tools</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/src/build/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.6</version>
+            </plugin>
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <version>${kotlin.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>${project.basedir}/src/main/java</sourceDir>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>${project.basedir}/src/test/java</sourceDir>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
+                </executions>
                 <configuration>
-                  <sources>
-                    <source>${project.build.directory}/generated-test-sources/crosscheck</source>
-                  </sources>
+                    <jvmTarget>21</jvmTarget>
                 </configuration>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <version>3.5.6</version>
-            <configuration>
-              <systemPropertyVariables>
-                <org.safere.crosscheck.generatedTests>true</org.safere.crosscheck.generatedTests>
-              </systemPropertyVariables>
-            </configuration>
-          </plugin>
+            </plugin>
         </plugins>
-      </build>
-    </profile>
-  </profiles>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>crosscheck-public-api-tests</id>
+            <build>
+                <testResources>
+                    <testResource>
+                        <directory>${project.basedir}/src/test/resources</directory>
+                    </testResource>
+                    <testResource>
+                        <directory>${project.basedir}/../safere/src/test/resources</directory>
+                    </testResource>
+                </testResources>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.2.0</version>
+                        <executions>
+                            <execution>
+                                <id>generate-crosscheck-public-api-tests</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete
+                                                dir="${project.build.directory}/generated-test-sources/crosscheck"
+                                                quiet="true"/>
+                                        <mkdir
+                                                dir="${project.build.directory}/generated-test-sources/crosscheck/org/safere/crosscheck/generated"/>
+                                        <mkdir dir="${project.build.directory}/crosscheck-build-tools"/>
+                                        <javac srcdir="${project.basedir}/src/build/java"
+                                               destdir="${project.build.directory}/crosscheck-build-tools"
+                                               release="21" includeantruntime="false">
+                                            <compilerarg value="-proc:none"/>
+                                        </javac>
+                                        <delete dir="${project.build.directory}/crosscheck-selection"/>
+                                        <mkdir dir="${project.build.directory}/crosscheck-selection"/>
+                                        <javac srcdir="${project.basedir}/../safere/src/test/java"
+                                               destdir="${project.build.directory}/crosscheck-selection"
+                                               release="21" includeantruntime="false" fork="true">
+                                            <classpath>
+                                                <path refid="maven.test.classpath"/>
+                                            </classpath>
+                                            <compilerarg value="-proc:only"/>
+                                            <compilerarg value="-processorpath"/>
+                                            <compilerarg value="${project.build.directory}/crosscheck-build-tools"/>
+                                            <compilerarg value="-processor"/>
+                                            <compilerarg value="org.safere.crosscheck.build.ExclusionProcessor"/>
+                                        </javac>
+                                        <copy
+                                                todir="${project.build.directory}/generated-test-sources/crosscheck/org/safere/crosscheck/generated"
+                                                flatten="true"
+                                                overwrite="true">
+                                            <fileset dir="${project.basedir}/../safere/src/test/java/org/safere">
+                                                <include name="*Test.java"/>
+                                                <include name="DisabledForCrosscheck.java"/>
+                                                <include name="ExhaustiveUtils.java"/>
+                                                <include name="OpaqueRegionChecks.java"/>
+                                                <excludesfile
+                                                        name="${project.build.directory}/crosscheck-selection/crosscheck-excludes.txt"/>
+                                            </fileset>
+                                            <filterchain>
+                                                <replaceregex
+                                                        pattern="package org\.safere;"
+                                                        replace="package org.safere.crosscheck.generated;&#10;&#10;import org.safere.crosscheck.Matcher;&#10;import org.safere.crosscheck.Pattern;&#10;import org.safere.crosscheck.Utf8Input;&#10;import org.safere.crosscheck.Utf8Matcher;&#10;import org.safere.crosscheck.Utf8Sink;"/>
+                                            </filterchain>
+                                        </copy>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.7.0</version>
+                        <executions>
+                            <execution>
+                                <id>add-crosscheck-public-api-tests</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>${project.build.directory}/generated-test-sources/crosscheck</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.6</version>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <org.safere.crosscheck.generatedTests>true</org.safere.crosscheck.generatedTests>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

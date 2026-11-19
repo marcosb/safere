@@ -24,7 +24,7 @@ internal class RegionClassSearchTest {
                             val region = StringRegionInputScanner(text, start, end)
                             val expected =
                                 (region.indexOfCodePointClass(
-                                    cc!!.ranges, cc.bitmap0, cc.bitmap1, 0, region.length()
+                                    cc!!.ranges, cc.bitmap0, cc.bitmap1, 0, region.length
                                 )
                                         >= 0)
                             Assertions.assertThat(searches.contains(cc, scanner, start, end))

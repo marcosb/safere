@@ -8,11 +8,8 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.function.Consumer
-import kotlin.arrayOf
-import kotlin.booleanArrayOf
 
 /** Linear-time regression tests for grapheme cluster matching.  */
 @DisabledForCrosscheck("java.util.regex is not the SafeRE linear-time engine")
@@ -91,14 +88,14 @@ internal class GraphemeLinearTimeTest {
                 "\r",
                 "\n"
             )
-        for (regex in arrayOf<kotlin.String>("\\X", "(?s).\\b{g}", "\\b{g}\\X\\b{g}")) {
+        for (regex in arrayOf<String>("\\X", "(?s).\\b{g}", "\\b{g}\\X\\b{g}")) {
             val pattern = Pattern.compile(regex)
             for (utf8 in booleanArrayOf(false, true)) {
                 assertFourXInputStaysNearLinear(
                     "mixed Unicode rules " + regex + ", UTF-8=" + utf8,
                     unit.repeat(500),
                     unit.repeat(2000),
-                    Consumer { text: kotlin.String ->
+                    Consumer { text: String ->
                         if (utf8) {
                             val matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
                             while (matcher.find()) {
@@ -117,12 +114,12 @@ internal class GraphemeLinearTimeTest {
 
     @Test
     fun cachedContextQueriesWithChangingVisibleStartsStayLinear() {
-        for (unit in arrayOf<kotlin.String>("🇦", "\u094D", "\u0300")) {
+        for (unit in arrayOf<String>("🇦", "\u094D", "\u0300")) {
             assertFourXInputStaysNearLinear(
                 "cached context for " + unit,
                 unit.repeat(2000),
                 unit.repeat(8000),
-                Consumer { middle: kotlin.String ->
+                Consumer { middle: String ->
                     val text = "👩\u0915" + middle + "\u200D\u0915"
                     for (scanner in arrayOf<InputScanner>(
                         StringInputScanner(text), Utf8InputScanner(
@@ -132,7 +129,7 @@ internal class GraphemeLinearTimeTest {
                         )
                     )) {
                         val context = GraphemeSupport.Context.create(scanner, true)
-                        val pos = InputScanner.position(scanner.decodeBackward(scanner.length()))
+                        val pos = InputScanner.position(scanner.decodeBackward(scanner.length))
                         // Each query changes the clipping threshold, but the caches are built once.
                         var start = 0
                         while (start < pos
@@ -155,7 +152,7 @@ internal class GraphemeLinearTimeTest {
         val large = "a".repeat(65536)
         for (find in booleanArrayOf(false, true)) {
             val match =
-                Consumer { input: kotlin.String? ->
+                Consumer { input: String? ->
                     val matcher = pattern.matcher(input).region(1, input!!.length)
                     Assertions.assertThat(if (find) matcher.find() else matcher.lookingAt()).isTrue()
                     Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -172,14 +169,14 @@ internal class GraphemeLinearTimeTest {
 
     @Test
     fun opaqueFindSequencesReuseTheirRegionAndGraphemeContext() {
-        for (regex in arrayOf<kotlin.String>("\\X", "\\b{g}\\X\\b{g}", "\\X(?m:$)?")) {
+        for (regex in arrayOf<String>("\\X", "\\b{g}\\X\\b{g}", "\\X(?m:$)?")) {
             val pattern = Pattern.compile(regex)
             for (anchoring in booleanArrayOf(true, false)) {
                 assertFourXInputStaysNearLinear(
                     "opaque repeated find: " + regex + " anchoring=" + anchoring,
                     "\uD83C\uDDE6\uD83C\uDDE7".repeat(500),
                     "\uD83C\uDDE6\uD83C\uDDE7".repeat(2000),
-                    Consumer { middle: kotlin.String ->
+                    Consumer { middle: String ->
                         val matcher =
                             pattern
                                 .matcher("x" + middle + "y")
@@ -199,10 +196,10 @@ internal class GraphemeLinearTimeTest {
 
     companion object {
         private fun assertFourXInputStaysNearLinear(
-            scenario: kotlin.String?,
-            smallerInput: kotlin.String?,
-            largerInput: kotlin.String?,
-            task: Consumer<kotlin.String>
+            scenario: String?,
+            smallerInput: String?,
+            largerInput: String?,
+            task: Consumer<String>
         ) {
             task.accept(smallerInput!!)
             task.accept(largerInput!!)

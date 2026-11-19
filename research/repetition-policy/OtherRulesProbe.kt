@@ -66,7 +66,7 @@ object OtherRulesProbe {
         val result: List<String?> = ArrayList()
         var previous = 0
         for (match in matches) {
-            if (limit > 0 && result.size() === limit - 1) {
+            if (limit > 0 && result.length() === limit - 1) {
                 break
             }
             if (previous == 0 && match.start() === 0 && match.end() === 0) {

@@ -7,7 +7,6 @@ package org.safere.exhaustive
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.safere.exhaustive.SweepOptions.jsonlPath
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
@@ -111,7 +110,7 @@ internal class SweepRunStateTest {
     }
 
     private fun options(rangeStartInclusive: Long = 0): SweepOptions {
-        return SweepOptions(rangeStartInclusive, Long.Companion.MAX_VALUE, tempDir, 10, 1, null, "out.jsonl")
+        return SweepOptions(rangeStartInclusive, Long.MAX_VALUE, tempDir, 10, 1, null, "out.jsonl")
     }
 
     private class TestClock {

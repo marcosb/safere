@@ -140,8 +140,8 @@ internal class RarityOracleTest {
 
     @Test
     fun rarestAsciiOffsetIgnoresNonAsciiCharacters() {
-        // '\u03B1' (Greek alpha, c >= 256) defaults to byteRarity 255, which would erroneously
-        // preempt ASCII characters if not strictly filtered to c < 128.
+        // '\u03B1' (Greek alpha, c.code >= 256) defaults to byteRarity 255, which would erroneously
+        // preempt ASCII characters if not strictly filtered to c.code < 128.
         val mixedGreek = "c\u03B1b"
         Assertions.assertThat(RarityOracle.rarestAsciiOffset(mixedGreek, mixedGreek.length, false))
             .isEqualTo(2) // 'b' (offset 2, rank 39), not '\u03B1' (offset 1, rank 255)
@@ -154,7 +154,7 @@ internal class RarityOracleTest {
         Assertions.assertThat(RarityOracle.rarestAsciiOffset(leadingNonAscii, leadingNonAscii.length, true))
             .isEqualTo(leadingNonAscii.indexOf('q')) // 'q' (offset 5), not '\u03B1' (offset 0)
 
-        // Latin-1 characters (c >= 128) such as '\u00E9' (0xE9 = 233) or '\u00A9' (0xA9 = 169)
+        // Latin-1 characters (c.code >= 128) such as '\u00E9' (0xE9 = 233) or '\u00A9' (0xA9 = 169)
         // must not be chosen as ASCII anchors.
         val mixedLatin1 = "caf\u00E9"
         Assertions.assertThat(RarityOracle.rarestAsciiOffset(mixedLatin1, mixedLatin1.length, false))
@@ -191,7 +191,7 @@ internal class RarityOracleTest {
                 .`as`("caseFoldedByteRarity for UTF-8 lead byte 0x%02X", b)
                 .isEqualTo(0)
         }
-        // Out-of-byte-range code units (c >= 256 or c < 0) default to 255.
+        // Out-of-byte-range code units (c.code >= 256 or c.code < 0) default to 255.
         Assertions.assertThat(RarityOracle.exactByteRarity(256)).isEqualTo(255)
         Assertions.assertThat(RarityOracle.exactByteRarity(-1)).isEqualTo(255)
         Assertions.assertThat(RarityOracle.caseFoldedByteRarity(256)).isEqualTo(255)

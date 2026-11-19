@@ -15,6 +15,14 @@ import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
 import java.util.regex.Pattern
+import kotlin.collections.find
+import kotlin.collections.mutableListOf
+import kotlin.sequences.find
+import kotlin.text.StringBuilder
+import kotlin.text.find
+import kotlin.text.repeat
+import kotlin.text.substring
+import kotlin.text.toByteArray
 
 @DisabledForCrosscheck("compares String and UTF-8 entry points with diagnostics enabled and disabled")
 @Isolated

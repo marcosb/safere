@@ -40,7 +40,7 @@ internal abstract class Walker<T> {
      * @param stop single-element array; set `stop[0] = true` to skip children
      * @return the value to pass to children and to postVisit
      */
-    protected open fun preVisit(re: Regexp?, parentArg: T?, stop: BooleanArray?): T? {
+    protected open fun preVisit(re: Regexp, parentArg: T?, stop: BooleanArray): T? {
         return parentArg
     }
 
@@ -54,7 +54,7 @@ internal abstract class Walker<T> {
      * children. Mutable — implementations may modify it (e.g., for coalescing).
      * @return the result for this node
      */
-    protected open fun postVisit(re: Regexp?, parentArg: T?, preArg: T?, childArgs: MutableList<T?>?): T? {
+    protected open fun postVisit(re: Regexp, parentArg: T?, preArg: T?, childArgs: MutableList<T>): T? {
         return preArg
     }
 
@@ -70,7 +70,7 @@ internal abstract class Walker<T> {
      * Called to do a quick visit of a node (but not its children) when the visit budget has been
      * exhausted. Should return a value that makes sense for the remaining parent postVisits.
      */
-    protected abstract fun shortVisit(re: Regexp?, parentArg: T?): T?
+    protected abstract fun shortVisit(re: Regexp, parentArg: T?): T?
 
     /** Returns how many copies of a counted operand to visit; structural analyses need only one.  */
     protected open fun repeatVisits(re: Regexp?): Int {
@@ -102,7 +102,6 @@ internal abstract class Walker<T> {
     }
 
     private fun walkInternal(re: Regexp?, topArg: T?, useCopy: Boolean): T? {
-        var re = re
         stoppedEarly = false
         stack.clear()
 
@@ -112,21 +111,75 @@ internal abstract class Walker<T> {
 
         stack.add(WalkState<T?>(re, topArg))
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (true) {
+            val s = stack[stack.size - 1]
+            val cur = s.re!!
+            // Keep ordinary child traversal direct: most walkers never expand counted operands.
+            val nsub = if (cur.op == RegexpOp.REPEAT) repeatVisits(cur) else if (cur.subs == null) 0 else cur.subs!!.size
+
+            if (s.n == -1) {
+                // Need to call preVisit.
+                if (--maxVisits < 0) {
+                    stoppedEarly = true
+                    val t = shortVisit(cur, s.parentArg)
+                    stack.removeAt(stack.size - 1)
+                    if (stack.size == 0) {
+                        return t
+                    }
+                    val parent = stack[stack.size - 1]
+                    parent.childArgs.add(t)
+                    parent.n++
+                    continue
+                }
+                stop[0] = false
+                s.preArg = preVisit(cur, s.parentArg, stop)
+                if (stop[0]) {
+                    val t = s.preArg
+                    stack.removeAt(stack.size - 1)
+                    if (stack.size == 0) {
+                        return t
+                    }
+                    val parent = stack[stack.size - 1]
+                    parent.childArgs.add(t)
+                    parent.n++
+                    continue
+                }
+                s.n = 0
+                s.childArgs = ArrayList<T?>(nsub)
+                // Fall through to child processing.
+            }
+
+            // Process children.
+            if (nsub > 0 && s.n < nsub) {
+                if (useCopy
+                    && s.n > 0
+                    && (cur.op == RegexpOp.REPEAT || cur.subs!![s.n - 1] === cur.subs!![s.n])
+                ) {
+                    val prev = s.childArgs[s.n - 1]
+                    s.childArgs.add(copy(prev))
+                    s.n++
+                    continue
+                }
+                stack.add(WalkState<T?>(cur.subs!![if (cur.op == RegexpOp.REPEAT) 0 else s.n], s.preArg))
+                continue
+            }
+
+            // All children done (or no children). Call postVisit.
+            val t = postVisit(cur, s.parentArg, s.preArg, s.childArgs as MutableList<T>)
+            stack.removeAt(stack.size - 1)
+            if (stack.size == 0) {
+                return t
+            }
+            val parent = stack[stack.size - 1]
+            parent.childArgs.add(t)
+            parent.n++
+        }
     }
 
     /** State for a single level in the traversal.  */
-    private class WalkState<T>(re: Regexp?, parentArg: T?) {
-        val re: Regexp?
-        var n: Int // -1 means need preVisit; >= 0 is index of next child to process
-        val parentArg: T?
+    private class WalkState<T>(val re: Regexp?, val parentArg: T?) {
+        var n: Int = -1 // -1 means need preVisit; >= 0 is index of next child to process
         var preArg: T? = null
         var childArgs: MutableList<T?> = Collections.emptyList<T?>()
-
-        init {
-            this.re = re
-            this.n = -1
-            this.parentArg = parentArg
-        }
     }
 }

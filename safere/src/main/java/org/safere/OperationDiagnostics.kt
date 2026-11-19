@@ -20,44 +20,22 @@ import java.util.Set
  */
 @JvmRecord
 data class OperationDiagnostics(
-    pattern: PatternDescriptor?,
-    operation: MatchOperation?,
-    outcome: MatchOutcome?,
-    boundaryStrategy: MatchStrategy?,
-    captureStrategy: MatchStrategy?,
-    auxiliaryStrategies: MutableList<StrategyParticipation?>?,
-    strategyDecisions: MutableSet<StrategyDecision?>?,
-    forwardDfaSearchCount: Int,
-    reverseDfaSearchCount: Int,
-    captureMode: CaptureMode?,
-    inputLength: Int,
-    matchCount: Int
-) {
-    val pattern: PatternDescriptor?
-    val operation: MatchOperation?
-    val outcome: MatchOutcome?
-    val boundaryStrategy: MatchStrategy?
-    val captureStrategy: MatchStrategy?
-    val auxiliaryStrategies: MutableList<StrategyParticipation?>?
-    val strategyDecisions: MutableSet<StrategyDecision?>?
-    val forwardDfaSearchCount: Int
-    val reverseDfaSearchCount: Int
-    val captureMode: CaptureMode?
-    val inputLength: Int
+    val pattern: PatternDescriptor?,
+    val operation: MatchOperation?,
+    val outcome: MatchOutcome?,
+    val boundaryStrategy: MatchStrategy?,
+    val captureStrategy: MatchStrategy?,
+    val auxiliaryStrategies: MutableList<StrategyParticipation?>?,
+    val strategyDecisions: MutableSet<StrategyDecision?>?,
+    val forwardDfaSearchCount: Int,
+    val reverseDfaSearchCount: Int,
+    val captureMode: CaptureMode?,
+    val inputLength: Int,
     val matchCount: Int
+) {
 
     /** Creates an immutable operation summary.  */
     init {
-        this.matchCount = matchCount
-        this.inputLength = inputLength
-        this.captureMode = captureMode
-        this.reverseDfaSearchCount = reverseDfaSearchCount
-        this.forwardDfaSearchCount = forwardDfaSearchCount
-        this.captureStrategy = captureStrategy
-        this.boundaryStrategy = boundaryStrategy
-        this.outcome = outcome
-        this.operation = operation
-        this.pattern = pattern
         var auxiliaryStrategies = auxiliaryStrategies
         var strategyDecisions = strategyDecisions
         Objects.requireNonNull<PatternDescriptor?>(pattern, "pattern")
@@ -69,7 +47,5 @@ data class OperationDiagnostics(
         strategyDecisions = Set.copyOf<StrategyDecision?>(strategyDecisions)
         Objects.requireNonNull<CaptureMode?>(captureMode, "captureMode")
         require(!(forwardDfaSearchCount < 0 || reverseDfaSearchCount < 0 || inputLength < 0 || matchCount < 0)) { "counts and lengths must be non-negative" }
-        this.auxiliaryStrategies = auxiliaryStrategies
-        this.strategyDecisions = strategyDecisions
     }
 }

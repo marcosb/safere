@@ -14,26 +14,26 @@ internal class IntArrayListTest {
     fun basicOperations() {
         val list = IntArrayList(4)
         Assertions.assertThat(list.isEmpty()).isTrue()
-        Assertions.assertThat(list.size()).isEqualTo(0)
+        Assertions.assertThat(list.size).isEqualTo(0)
 
         list.add(10)
         list.add(20)
         list.add(30)
 
         Assertions.assertThat(list.isEmpty()).isFalse()
-        Assertions.assertThat(list.size()).isEqualTo(3)
+        Assertions.assertThat(list.size).isEqualTo(3)
         Assertions.assertThat(list.get(0)).isEqualTo(10)
         Assertions.assertThat(list.get(1)).isEqualTo(20)
         Assertions.assertThat(list.get(2)).isEqualTo(30)
 
         Assertions.assertThat(list.removeLast()).isEqualTo(30)
-        Assertions.assertThat(list.size()).isEqualTo(2)
+        Assertions.assertThat(list.size).isEqualTo(2)
 
         Assertions.assertThat(list.toArray()).containsExactly(10, 20)
 
         list.clear()
         Assertions.assertThat(list.isEmpty()).isTrue()
-        Assertions.assertThat(list.size()).isEqualTo(0)
+        Assertions.assertThat(list.size).isEqualTo(0)
         Assertions.assertThat(list.toArray()).isEmpty()
     }
 
@@ -43,7 +43,7 @@ internal class IntArrayListTest {
         for (i in 0..99) {
             list.add(i)
         }
-        Assertions.assertThat(list.size()).isEqualTo(100)
+        Assertions.assertThat(list.size).isEqualTo(100)
         for (i in 0..99) {
             Assertions.assertThat(list.get(i)).isEqualTo(i)
         }

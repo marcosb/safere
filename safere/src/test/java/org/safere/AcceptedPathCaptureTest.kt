@@ -25,7 +25,7 @@ internal class AcceptedPathCaptureTest {
         for (region in booleanArrayOf(false, true)) {
             val prefix = if (region) "😀#" else ""
             val input = prefix + testCase.input + (if (region) "!" else "")
-            val offset = prefix.length
+            val offset = prefix.size
             for (operation in 0..2) {
                 if (testCase.fullMatchOnly && operation != 1) {
                     continue
@@ -42,7 +42,7 @@ internal class AcceptedPathCaptureTest {
                     .`as`("operation %d for %s", operation, testCase)
                     .isTrue()
                 Assertions.assertThat(match(utf8, operation)).isTrue()
-                Companion.assertCaptures(matcher, input, offset, testCase.groups!!)
+                assertCaptures(matcher, input, offset, testCase.groups!!)
                 Assertions.assertThat(utf8.groupCount()).isEqualTo(testCase.groups.size - 1)
                 for (group in testCase.groups.indices) {
                     val bounds = testCase.groups.get(group)
@@ -171,7 +171,7 @@ internal class AcceptedPathCaptureTest {
             // Expected results are independent of the JDK's wrapper-dependent nested-repeat captures.
             val cases: MutableList<CaptureCase?> =
                 List.of<CaptureCase?>(
-                    capture("(?:(a){0,2})*", "aaaa", Bounds(3, 4)),
+                    capture("(?:(a) {0,2})*", "aaaa", Bounds(3, 4)),
                     capture("(?:(?:(a)){0,2})*", "aaaa", Bounds(3, 4)),
                     capture("(?:(a){1,2}b)*", "aabab", Bounds(3, 4)),
                     capture("(?:(a)+){2}", "aaa", Bounds(2, 3)),

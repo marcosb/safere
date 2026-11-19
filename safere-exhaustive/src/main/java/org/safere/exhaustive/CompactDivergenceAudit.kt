@@ -174,8 +174,6 @@ object CompactDivergenceAudit {
     private data class Options(val inputDir: Path?, val outputDir: Path, val sampleLimit: Int) {
         companion object {
             fun parse(args: Array<String>): Options {
-                var inputDir: Path? = null
-                var outputDir: Path? = null
                 var sampleLimit = DEFAULT_SAMPLE_LIMIT
                 for (arg in args) {
                     if (arg.startsWith("--input-dir=")) {

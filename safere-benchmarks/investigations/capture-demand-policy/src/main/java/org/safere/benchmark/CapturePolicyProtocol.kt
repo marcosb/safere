@@ -110,7 +110,7 @@ internal object CapturePolicyProtocol {
         var hits = 0
         for (phase in 0..2) {
             for (round in 0..<rounds) {
-                for (i in 0..<inputs.size()) {
+                for (i in 0..<inputs.size) {
                     val matcher: Cursor = (if (retained == null) pattern.matcher(inputs.get(i)) else retained.get(i))!!
                     if (retained != null) {
                         matcher.reset()

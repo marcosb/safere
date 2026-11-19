@@ -4,15 +4,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.String
 import java.util.*
-import kotlin.Boolean
-import kotlin.IllegalStateException
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Long
-import kotlin.check
-import kotlin.text.StringBuilder
 
 /**
  * A single instruction in a compiled regular expression program. Each instruction has an [ ] and opcode-specific data.
@@ -40,12 +32,12 @@ import kotlin.text.StringBuilder
  */
 internal class Inst {
     /** The opcode for this instruction.  */
-    var op: InstOp?
+    var op: InstOp? = null
 
     /**
      * Cached `op.ordinal()` for use in hot-loop switches, avoiding the overhead of `Enum.ordinal()` and the synthetic switch-map array lookup on every iteration.
      */
-    var opCode: Int
+    var opCode: Int = 0
 
     /** Primary successor instruction index. Used by all opcodes except MATCH and FAIL.  */
     var out: Int = 0
@@ -85,7 +77,7 @@ internal class Inst {
      * Flat array of [lo0, hi0, lo1, hi1, ...] range pairs for [InstOp.CHAR_CLASS]. Each pair
      * defines an inclusive Unicode code point range.
      */
-    var ranges: IntArray
+    var ranges: IntArray = IntArray(0)
 
     /**
      * ASCII bitmap for [InstOp.CHAR_CLASS]: bit `i` is set if code point `i`
@@ -102,7 +94,7 @@ internal class Inst {
     /** Creates an uninitialized instruction (defaults to FAIL).  */
     constructor() {
         this.op = InstOp.FAIL
-        this.opCode = InstOp.Companion.OP_FAIL
+        this.opCode = InstOp.OP_FAIL
     }
 
     /** Creates a copy of another instruction.  */
@@ -124,7 +116,7 @@ internal class Inst {
     /** Initializes as an ALT instruction branching to `out` or `out1`.  */
     fun initAlt(out: Int, out1: Int) {
         this.op = InstOp.ALT
-        this.opCode = InstOp.Companion.OP_ALT
+        this.opCode = InstOp.OP_ALT
         this.out = out
         this.out1 = out1
     }
@@ -132,7 +124,7 @@ internal class Inst {
     /** Initializes as a CHAR_RANGE instruction matching code points in `[lo, hi]`.  */
     fun initCharRange(lo: Int, hi: Int, foldCase: Boolean, out: Int) {
         this.op = InstOp.CHAR_RANGE
-        this.opCode = InstOp.Companion.OP_CHAR_RANGE
+        this.opCode = InstOp.OP_CHAR_RANGE
         this.lo = lo
         this.hi = hi
         this.foldCase = foldCase
@@ -142,7 +134,7 @@ internal class Inst {
     /** Initializes as a CAPTURE instruction for capture register `cap`.  */
     fun initCapture(cap: Int, out: Int) {
         this.op = InstOp.CAPTURE
-        this.opCode = InstOp.Companion.OP_CAPTURE
+        this.opCode = InstOp.OP_CAPTURE
         this.arg = cap
         this.out = out
     }
@@ -150,7 +142,7 @@ internal class Inst {
     /** Initializes as an EMPTY_WIDTH instruction with the given [EmptyOp] flags.  */
     fun initEmptyWidth(emptyFlags: Int, out: Int) {
         this.op = InstOp.EMPTY_WIDTH
-        this.opCode = InstOp.Companion.OP_EMPTY_WIDTH
+        this.opCode = InstOp.OP_EMPTY_WIDTH
         this.arg = emptyFlags
         this.out = out
     }
@@ -158,21 +150,21 @@ internal class Inst {
     /** Initializes as a MATCH instruction with the given match ID.  */
     fun initMatch(matchId: Int) {
         this.op = InstOp.MATCH
-        this.opCode = InstOp.Companion.OP_MATCH
+        this.opCode = InstOp.OP_MATCH
         this.arg = matchId
     }
 
     /** Initializes as a NOP instruction continuing to `out`.  */
     fun initNop(out: Int) {
         this.op = InstOp.NOP
-        this.opCode = InstOp.Companion.OP_NOP
+        this.opCode = InstOp.OP_NOP
         this.out = out
     }
 
     /** Initializes as a FAIL instruction.  */
     fun initFail() {
         this.op = InstOp.FAIL
-        this.opCode = InstOp.Companion.OP_FAIL
+        this.opCode = InstOp.OP_FAIL
     }
 
     /**
@@ -203,7 +195,7 @@ internal class Inst {
      */
     fun initProgressCheck(loopReg: Int, bodyOut: Int, exitOut: Int, nonGreedy: Boolean) {
         this.op = InstOp.PROGRESS_CHECK
-        this.opCode = InstOp.Companion.OP_PROGRESS_CHECK
+        this.opCode = InstOp.OP_PROGRESS_CHECK
         this.arg = loopReg
         this.out = bodyOut
         this.out1 = exitOut
@@ -213,7 +205,7 @@ internal class Inst {
     /** Initializes a fresh loop entry resetting `loopReg` before continuing to `out`.  */
     fun initLoopEnter(loopReg: Int, out: Int) {
         this.op = InstOp.LOOP_ENTER
-        this.opCode = InstOp.Companion.OP_LOOP_ENTER
+        this.opCode = InstOp.OP_LOOP_ENTER
         this.arg = loopReg
         this.out = out
     }
@@ -226,14 +218,14 @@ internal class Inst {
      */
     fun initCharClass(out: Int, ranges: IntArray) {
         this.op = InstOp.CHAR_CLASS
-        this.opCode = InstOp.Companion.OP_CHAR_CLASS
+        this.opCode = InstOp.OP_CHAR_CLASS
         this.out = out
         this.ranges = ranges
         // Precompute ASCII bitmap for O(1) lookup of code points 0-127.
         var b0: Long = 0
         var b1: Long = 0
         var i = 0
-        while (i < ranges.length) {
+        while (i < ranges.size) {
             val lo = ranges[i]
             val hi = ranges[i + 1]
             val start = Math.max(lo, 0)
@@ -254,7 +246,7 @@ internal class Inst {
     /** Initializes as a GRAPHEME_CLUSTER instruction.  */
     fun initGraphemeCluster(out: Int) {
         this.op = InstOp.GRAPHEME_CLUSTER
-        this.opCode = InstOp.Companion.OP_GRAPHEME_CLUSTER
+        this.opCode = InstOp.OP_GRAPHEME_CLUSTER
         this.out = out
     }
 
@@ -271,7 +263,7 @@ internal class Inst {
         }
         // Binary search for non-ASCII code points.
         var lo = 0
-        var hi: Int = (ranges.length ushr 1) - 1
+        var hi: Int = (ranges.size ushr 1) - 1
         while (lo <= hi) {
             val mid = (lo + hi) ushr 1
             val rLo = ranges[mid * 2]
@@ -311,7 +303,7 @@ internal class Inst {
     }
 
     override fun toString(): String {
-        return when (op) {
+        return when (op!!) {
             InstOp.ALT -> String.format(Locale.ROOT, "alt -> %d | %d", out, out1)
             InstOp.ALT_MATCH -> String.format(Locale.ROOT, "altmatch -> %d | %d", out, out1)
             InstOp.CHAR_RANGE -> String.format(
@@ -342,7 +334,7 @@ internal class Inst {
             InstOp.CHAR_CLASS -> {
                 val sb = StringBuilder("charclass [")
                 var i = 0
-                while (i < ranges.length) {
+                while (i < ranges.size) {
                     if (i > 0) {
                         sb.append(',')
                     }
@@ -352,6 +344,8 @@ internal class Inst {
                 sb.append(String.format(Locale.ROOT, "] -> %d", out))
                 sb.toString()
             }
+
+            else -> "inst"
         }
     }
 

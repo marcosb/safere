@@ -50,13 +50,13 @@ internal class UnicodeCaseIndexInitializationTest {
             val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
             val pathSeparator: String = java.lang.System.getProperty("path.separator")
             val classPath =
-                (java.nio.file.Path.of(Pattern::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
+                (java.nio.file.Path.of(Pattern::class.java.getProtectionDomain().codeSource.location.toURI())
                     .toString() + pathSeparator
                         + java.nio.file.Path.of(
                     UnicodeCaseIndexInitializationTest::class.java
                         .getProtectionDomain()
-                        .getCodeSource()
-                        .getLocation()
+                        .codeSource
+                        .location
                         .toURI()
                 ))
             // Process arguments use the platform's native encoding, which may be ASCII in isolation.
@@ -77,7 +77,7 @@ internal class UnicodeCaseIndexInitializationTest {
                 processBuilder.environment().put("LC_ALL", locale)
             }
             val process = processBuilder.start()
-            val output = String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+            val output = String(process.inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
             Assertions.assertThat(process.waitFor()).`as`(output).isZero()
             return output
         }

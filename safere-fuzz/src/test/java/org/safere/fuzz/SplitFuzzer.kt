@@ -75,7 +75,7 @@ class SplitFuzzer {
             data.pickValue<Int?>(
                 List.of<Int?>(Pattern.CASE_INSENSITIVE, 0, Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE)
             )
-        val prefixLength = data.consumeInt(0, literal.codePointCount(0, literal.length))
+        val prefixLength = data.consumeInt(0, literal.codePointCount(0, literal.size))
         var input: String? = literal.substring(0, literal.offsetByCodePoints(0, prefixLength))
         if (data.consumeBoolean()) {
             input = input!!.uppercase()
@@ -125,7 +125,7 @@ class SplitFuzzer {
         private val ADJACENT_CRLF_INPUTS = mutableListOf<String?>("#\r\n\r\n$", "\r\n\r\n", "a\r\n\r\nb")
         private val SPLIT_LIMITS: MutableList<Int?> = List.of<Int?>(-1, 0, 2)
         private val LARGE_POSITIVE_LIMITS: MutableList<Int?> =
-            List.of<Int?>(Int.Companion.MAX_VALUE, Int.Companion.MAX_VALUE / 2 + 1)
+            List.of<Int?>(Int.MAX_VALUE, Int.MAX_VALUE / 2 + 1)
 
         private val UNASSIGNED_GRAPHEME_CONTROLS: MutableList<CodePointRange?> = List.of<CodePointRange?>(
             CodePointRange(0x2065, 0x2065),

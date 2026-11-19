@@ -37,7 +37,7 @@ internal class Utf8ReplacementTest {
         val literal = ranges.get(1)
         Assertions.assertThat(literal.bytes()).isSameAs(bytes)
         Assertions.assertThat(literal.offset()).isEqualTo(6)
-        Assertions.assertThat(literal.length()).isEqualTo(text.toByteArray(StandardCharsets.UTF_8).size)
+        Assertions.assertThat(literal.length).isEqualTo(text.toByteArray(StandardCharsets.UTF_8).size)
     }
 
     @Test
@@ -157,7 +157,7 @@ internal class Utf8ReplacementTest {
     @DisabledForCrosscheck("SafeRE intentionally invalidates match state after terminal empty matches")
     fun replaceAllInvalidatesTerminalEmptyMatch() {
         for (source in mutableListOf<String?>("", "é😀")) {
-            val matcher: Utf8Matcher = Companion.matcher("", source!!)
+            val matcher: Utf8Matcher = matcher("", source!!)
 
             matcher.replaceAll(CollectingSink(), input("x"))
 
@@ -200,7 +200,7 @@ internal class Utf8ReplacementTest {
             .singleElement()
             .satisfies(ThrowingConsumer { range: Range? -> Assertions.assertThat(range!!.bytes()).isSameAs(source) })
         Assertions.assertThat<Range?>(ranges)
-            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length() })
+            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length })
             .containsExactly(
                 Assertions.tuple(6, 6)
             )
@@ -260,7 +260,7 @@ internal class Utf8ReplacementTest {
     fun invalidNumberedReferencesRemainLazyWithoutMatches(all: Boolean) {
         for (replacement in mutableListOf<String?>("$1", "[$9]", "é😀$0-$2")) {
             val sink = CollectingSink()
-            replace(matcher("b", "前é😀a後"), sink, Companion.input(replacement!!), all)
+            replace(matcher("b", "前é😀a後"), sink, input(replacement!!), all)
             Assertions.assertThat(sink.toString()).isEqualTo("前é😀a後")
         }
     }
@@ -289,7 +289,7 @@ internal class Utf8ReplacementTest {
             val sink = CollectingSink()
 
             val utf8: Utf8Matcher = matcher(regex, subject)
-            replace(utf8, sink, Companion.input(c.replacement!!), operation)
+            replace(utf8, sink, input(c.replacement!!), operation)
             if (operation == ReplacementOperation.APPEND) {
                 utf8.appendTail(sink)
             }
@@ -315,7 +315,7 @@ internal class Utf8ReplacementTest {
                     all
                 )
             })
-            .isInstanceOf(SinkFailure::class.java)
+            .isInstanceOf(SinkFailure()::class.java)
         Assertions.assertThat(sink.toString()).isEqualTo("x")
         Assertions.assertThat(matcher.start()).isEqualTo(1)
         Assertions.assertThat(matcher.end()).isEqualTo(2)
@@ -448,7 +448,7 @@ internal class Utf8ReplacementTest {
                     input("$1")
                 )
             })
-            .isInstanceOf(SinkFailure::class.java)
+            .isInstanceOf(SinkFailure()::class.java)
         Assertions.assertThat(matcher.start()).isZero()
         Assertions.assertThat(matcher.end()).isEqualTo(1)
         Assertions.assertThatThrownBy(ThrowingCallable { matcher.appendTail(CollectingSink()) })
@@ -507,7 +507,7 @@ internal class Utf8ReplacementTest {
             Assertions.assertThat(range.bytes()).isSameAs(storage)
         }
         Assertions.assertThat<Range?>(ranges)
-            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length() })
+            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length })
             .containsExactly(Assertions.tuple(3, 1), Assertions.tuple(4, 2), Assertions.tuple(6, 1))
     }
 
@@ -584,7 +584,7 @@ internal class Utf8ReplacementTest {
 
         Assertions.assertThat<ByteArray?>(literalStorages).hasSize(3)
         for (literalStorage in literalStorages) {
-            Assertions.assertThat(literalStorage).isSameAs(literalStorages.getFirst())
+            Assertions.assertThat(literalStorage).isSameAs(literalStorages.first())
         }
     }
 
@@ -660,7 +660,7 @@ internal class Utf8ReplacementTest {
         }
     }
 
-    private object SinkFailure : RuntimeException() {
+    private class SinkFailure : RuntimeException() {
         private const val serialVersionUID = 1L
     }
 
@@ -710,7 +710,7 @@ internal class Utf8ReplacementTest {
             }
         }
 
-        private fun replace(pattern: String?, source: String, replacement: String): String? {
+        private fun replace(pattern: String?, source: String, replacement: String): String {
             val matcher: Utf8Matcher = matcher(pattern, source)
             val sink = CollectingSink()
             while (matcher.find()) {

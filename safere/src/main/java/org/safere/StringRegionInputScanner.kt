@@ -8,19 +8,16 @@ import org.safere.Pattern.CharClassMatchInfo
 import java.util.*
 
 /** An opaque, region-relative String view. Construction never copies the backing text.  */
-internal class StringRegionInputScanner(text: String, start: Int, end: Int) : InputScanner, CharSequence {
-    private val text: String
-    private val base: Int
-    private val length: Int
+internal class StringRegionInputScanner(
+    private val text: String,
+    start: Int,
+    end: Int,
+) : InputScanner, CharSequence {
+    private val base: Int = start
+    override val length: Int = end - start
 
-    init {
-        this.text = text
-        this.base = start
-        this.length = end - start
-    }
-
-    override fun charAt(index: Int): Char {
-        return text.charAt(base + Objects.checkIndex(index, length))
+    override fun get(index: Int): Char {
+        return text[base + Objects.checkIndex(index, length)]
     }
 
     override fun subSequence(start: Int, end: Int): StringRegionInputScanner {
@@ -34,18 +31,18 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
 
     fun startsWith(literal: String, from: Int, foldCase: Boolean): Boolean {
         if (WorkCounterConfig.ENABLED) {
-            WorkCounter.record(literal.length().toLong())
+            WorkCounter.record(literal.length.toLong())
         }
-        return from >= 0 && from <= length - literal.length() && (if (foldCase)
-            Ascii.regionMatchesIgnoreCase(text, base + from, literal, literal.length())
+        return from >= 0 && from <= length - literal.length && (if (foldCase)
+            Ascii.regionMatchesIgnoreCase(text, base + from, literal, literal.length)
         else
             text.startsWith(literal, base + from))
     }
 
     fun endsWith(suffix: String, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
-        val suffixLength: Int = suffix.length()
+        val suffixLength = suffix.length
         if (length >= suffixLength
-            && text.regionMatches(foldCase, base + length - suffixLength, suffix, 0, suffixLength)
+            && text.regionMatches(base + length - suffixLength, suffix, 0, suffixLength, foldCase)
         ) {
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record(suffixLength.toLong())
@@ -57,7 +54,7 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
         }
         val trailing = trailingLineTerminatorStart(unixLines, length)
         if (trailing >= suffixLength
-            && text.regionMatches(foldCase, base + trailing - suffixLength, suffix, 0, suffixLength)
+            && text.regionMatches(base + trailing - suffixLength, suffix, 0, suffixLength, foldCase)
         ) {
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record(suffixLength.toLong())
@@ -70,12 +67,12 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
     fun indexOf(literal: String, from: Int, limit: Int): Int {
         val start = Math.max(0, from)
         val end = Math.min(length, limit)
-        if (start > end - literal.length()) {
+        if (start > end - literal.length) {
             return -1
         }
-        val found: Int = text.indexOf(literal, base + start, base + end)
+        val found = text.indexOfBounded(literal, base + start, base + end)
         if (WorkCounterConfig.ENABLED) {
-            WorkCounter.record((if (found < 0) end - start else found - base - start + literal.length()).toLong())
+            WorkCounter.record((if (found < 0) end - start else found - base - start + literal.length).toLong())
         }
         return if (found < 0) -1 else found - base
     }
@@ -83,7 +80,7 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
     /** Bounded ASCII-folded search with an input-sized verification budget and KMP fallback.  */
     fun indexOfIgnoreCase(literal: String, anchorOffset: Int, low: Char, high: Char, from: Int): Int {
         var pos = Math.max(0, from)
-        val literalLength: Int = literal.length()
+        val literalLength = literal.length
         if (literalLength == 0) {
             return Math.min(pos, length)
         }
@@ -116,7 +113,16 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
         var pos = from
         // Preserve the existing case-insensitive String search's scalar prologue.
         val scalarEnd = pos + Math.min(32, limit - pos)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos < scalarEnd) {
+            if (WorkCounterConfig.ENABLED) {
+                WorkCounter.record()
+            }
+            val c = text[base + pos]
+            if (c == low || c == high) {
+                return pos
+            }
+            pos++
+        }
         // As in StringInputScanner's small-set search, cap and grow disjoint windows. Searching
         // both cases to the end of the region on every find would repeatedly rescan an absent case.
         var window = 64
@@ -138,23 +144,29 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
         if (length == 0) {
             return info.allowEmpty
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        var pos = 0
+        while (pos < length) {
+            if (WorkCounterConfig.ENABLED) {
+                WorkCounter.record()
+            }
+            val cp = codePointAt(pos)
+            if (!InputScanner.classContains(info.ranges!!, info.bitmap0, info.bitmap1, cp)) {
+                return false
+            }
+            pos += Character.charCount(cp)
+        }
         return true
     }
 
-    override fun length(): Int {
-        return length
-    }
-
     override fun asciiAt(pos: Int): Int {
-        val c: Char = text.charAt(base + Objects.checkIndex(pos, length))
+        val c = text[base + Objects.checkIndex(pos, length)]
         return if (c.code < 128) c.code else -1
     }
 
     override fun singleUnitCodePointAt(pos: Int): Int {
-        val c: Char = text.charAt(base + Objects.checkIndex(pos, length))
+        val c = text[base + Objects.checkIndex(pos, length)]
         return if (Character.isHighSurrogate(c)
-            && pos + 1 < length && Character.isLowSurrogate(text.charAt(base + pos + 1))
+            && pos + 1 < length && Character.isLowSurrogate(text[base + pos + 1])
         )
             -1
         else
@@ -162,9 +174,9 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
     }
 
     override fun singleUnitCodePointBefore(pos: Int): Int {
-        val c: Char = text.charAt(base + Objects.checkIndex(pos - 1, length))
+        val c = text[base + Objects.checkIndex(pos - 1, length)]
         return if (Character.isLowSurrogate(c)
-            && pos >= 2 && Character.isHighSurrogate(text.charAt(base + pos - 2))
+            && pos >= 2 && Character.isHighSurrogate(text[base + pos - 2])
         )
             -1
         else
@@ -173,59 +185,59 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
 
     override fun decodeForward(pos: Int): Long {
         if (pos >= length) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, length)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, length)
         }
         val cp = codePointAt(pos)
-        return InputScanner.Companion.decoded(cp, pos + Character.charCount(cp))
+        return InputScanner.decoded(cp, pos + Character.charCount(cp))
     }
 
     override fun decodeForward(pos: Int, limit: Int): Long {
         val end = Math.min(length, limit)
         if (pos >= end) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, end)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, end)
         }
-        val first: Char = text.charAt(base + Objects.checkIndex(pos, length))
+        val first = text[base + Objects.checkIndex(pos, length)]
         val cp =
             if (Character.isHighSurrogate(first)
-                && pos + 1 < end && Character.isLowSurrogate(text.charAt(base + pos + 1))
+                && pos + 1 < end && Character.isLowSurrogate(text[base + pos + 1])
             )
-                Character.toCodePoint(first, text.charAt(base + pos + 1))
+                Character.toCodePoint(first, text[base + pos + 1])
             else
                 first.code
-        return InputScanner.Companion.decoded(cp, pos + Character.charCount(cp))
+        return InputScanner.decoded(cp, pos + Character.charCount(cp))
     }
 
     override fun decodeBackward(pos: Int): Long {
         if (pos <= 0) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, 0)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, 0)
         }
         val cp = codePointBefore(pos)
-        return InputScanner.Companion.decoded(cp, pos - Character.charCount(cp))
+        return InputScanner.decoded(cp, pos - Character.charCount(cp))
     }
 
     override fun decodeBackward(pos: Int, start: Int): Long {
         val lower = Math.max(0, start)
         if (pos <= lower) {
-            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, lower)
+            return InputScanner.decoded(InputScanner.END_OF_INPUT, lower)
         }
-        val last: Char = text.charAt(base + Objects.checkIndex(pos - 1, length))
+        val last = text[base + Objects.checkIndex(pos - 1, length)]
         val cp =
             if (Character.isLowSurrogate(last)
-                && pos - 2 >= lower && Character.isHighSurrogate(text.charAt(base + pos - 2))
+                && pos - 2 >= lower && Character.isHighSurrogate(text[base + pos - 2])
             )
-                Character.toCodePoint(text.charAt(base + pos - 2), last)
+                Character.toCodePoint(text[base + pos - 2], last)
             else
                 last.code
-        return InputScanner.Companion.decoded(cp, pos - Character.charCount(cp))
+        return InputScanner.decoded(cp, pos - Character.charCount(cp))
     }
 
     override fun codePointAt(pos: Int): Int {
         if (pos >= length) {
-            return InputScanner.Companion.END_OF_INPUT
+            return InputScanner.END_OF_INPUT
         }
-        val c: Char = text.charAt(base + Objects.checkIndex(pos, length))
+        val c = text[base + Objects.checkIndex(pos, length)]
         if (Character.isHighSurrogate(c) && pos + 1 < length) {
-            val next: Char = text.charAt(base + pos + 1)
+            val next = text[base + pos + 1]
             if (Character.isLowSurrogate(next)) {
                 return Character.toCodePoint(c, next)
             }
@@ -235,11 +247,11 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
 
     override fun codePointBefore(pos: Int): Int {
         if (pos <= 0) {
-            return InputScanner.Companion.END_OF_INPUT
+            return InputScanner.END_OF_INPUT
         }
-        val c: Char = text.charAt(base + Objects.checkIndex(pos - 1, length))
+        val c = text[base + Objects.checkIndex(pos - 1, length)]
         if (Character.isLowSurrogate(c) && pos >= 2) {
-            val previous: Char = text.charAt(base + pos - 2)
+            val previous = text[base + pos - 2]
             if (Character.isHighSurrogate(previous)) {
                 return Character.toCodePoint(previous, c)
             }
@@ -248,19 +260,29 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
     }
 
     override fun isCodePointBoundary(pos: Int): Boolean {
-        return pos >= 0 && pos <= length && (pos == 0 || pos == length || !Character.isLowSurrogate(text.charAt(base + pos)) || !Character.isHighSurrogate(
-            text.charAt(base + pos - 1)
-        ))
+        return pos >= 0 && pos <= length && (pos == 0 || pos == length || !Character.isLowSurrogate(text[base + pos])
+                || !Character.isHighSurrogate(text[base + pos - 1]))
     }
 
     override fun indexOfCodePointClass(ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {
         val bound = Math.min(limit, length)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        var pos = Math.max(0, start)
+        while (pos < bound) {
+            if (WorkCounterConfig.ENABLED) {
+                WorkCounter.record()
+            }
+            val cp = codePointAt(pos)
+            if (InputScanner.classContains(ranges!!, bitmap0, bitmap1, cp)) {
+                return pos
+            }
+            pos += Character.charCount(cp)
+        }
         return -1
     }
 
-    override fun indexOfCharClass(info: CharClassScanInfo, start: Int): Int {
-        return indexOfCodePointClass(info.ranges(), info.bitmap0(), info.bitmap1(), start, length)
+    override fun indexOfCharClass(scanInfo: CharClassScanInfo?, start: Int): Int {
+        val info = scanInfo!!
+        return indexOfCodePointClass(info.ranges, info.bitmap0, info.bitmap1, start, length)
     }
 
     override fun indexOfAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
@@ -269,7 +291,7 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
         if (start >= end) {
             return -1
         }
-        val found: Int = text.indexOf(ascii, base + start, base + end)
+        val found = text.indexOfCodePointBounded(ascii, base + start, base + end)
         if (WorkCounterConfig.ENABLED) {
             WorkCounter.record((if (found < 0) end - start else found - base - start + 1).toLong())
         }
@@ -298,7 +320,15 @@ internal class StringRegionInputScanner(text: String, start: Int, end: Int) : In
 
     private fun indexOfAsciiSet(c1: Int, c2: Int, c3: Int, nonAscii: Boolean, from: Int, limit: Int): Int {
         val end = Math.min(limit, length)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (pos in Math.max(0, from) until end) {
+            if (WorkCounterConfig.ENABLED) {
+                WorkCounter.record()
+            }
+            val c = text[base + Objects.checkIndex(pos, length)]
+            if (c.code == c1 || c.code == c2 || c.code == c3 || (nonAscii && c.code >= 128)) {
+                return pos
+            }
+        }
         return -1
     }
 

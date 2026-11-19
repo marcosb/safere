@@ -17,7 +17,7 @@ object BenchmarkProviderCheck {
         val provider = System.getProperty("org.safere.experimental.vectorScanProvider", "default")
         check(
             !(provider == "vector"
-                    && ModuleLayer.boot().findModule("jdk.incubator.vector").isEmpty())
+                    && ModuleLayer.boot().findModule("jdk.incubator.vector").isEmpty)
         ) {
             ("Could not enable the experimental Vector UTF-8 scanner; add "
                     + "--add-modules=jdk.incubator.vector")
@@ -25,12 +25,12 @@ object BenchmarkProviderCheck {
         val bytes = ByteArray(2048)
         Arrays.fill(bytes, 'b'.code.toByte())
         val pattern: Pattern = compile("(?:xyz|uvw)[0-9]+")
-        if (pattern.find(Utf8Input.Companion.trusted(bytes))) {
+        if (pattern.find(Utf8Input.trusted(bytes))) {
             throw AssertionError("Unexpected match during provider startup check")
         }
         val suffix = byteArrayOf('x'.code.toByte(), 'y'.code.toByte(), 'z'.code.toByte(), '7'.code.toByte())
         System.arraycopy(suffix, 0, bytes, bytes.size - suffix.size, suffix.size)
-        if (!pattern.find(Utf8Input.Companion.trusted(bytes))) {
+        if (!pattern.find(Utf8Input.trusted(bytes))) {
             throw AssertionError("Missing late match during provider startup check")
         }
         println("UTF-8 scan provider startup check passed: " + provider)

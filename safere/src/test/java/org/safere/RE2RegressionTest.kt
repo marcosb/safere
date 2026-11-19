@@ -431,7 +431,7 @@ internal class RE2RegressionTest {
             val pattern = Pattern.compile(regex)
             val matcher = pattern.matcher(input)
             while (matcher.find()) {
-                val unused = matcher.group()
+                matcher.group()
                 for (i in 0..matcher.groupCount()) {
                     matcher.start(i)
                     matcher.end(i)

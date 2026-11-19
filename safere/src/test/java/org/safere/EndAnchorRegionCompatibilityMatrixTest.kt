@@ -258,12 +258,12 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         }
 
         private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String?> {
-            return matcher.results().map<String?> { result: MatchResult? -> Companion.matchResultTrace(result!!) }
+            return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 
         private fun resultsTrace(matcher: Matcher): MutableList<String?> {
-            return matcher.results().map<String?> { result: MatchResult? -> Companion.matchResultTrace(result!!) }
+            return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 

@@ -56,881 +56,881 @@ internal object UnicodeGeneratedTables {
     const val UNICODE_DATA_VERSION: String = "17.0.0"
 
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val CATEGORIES: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("Cn", category_Cn()),
-        Map.entry<String?, Array<IntArray?>?>("Lu", category_Lu()),
-        Map.entry<String?, Array<IntArray?>?>("Ll", category_Ll()),
-        Map.entry<String?, Array<IntArray?>?>("Lt", category_Lt()),
-        Map.entry<String?, Array<IntArray?>?>("Lm", category_Lm()),
-        Map.entry<String?, Array<IntArray?>?>("Lo", category_Lo()),
-        Map.entry<String?, Array<IntArray?>?>("Mn", category_Mn()),
-        Map.entry<String?, Array<IntArray?>?>("Me", category_Me()),
-        Map.entry<String?, Array<IntArray?>?>("Mc", category_Mc()),
-        Map.entry<String?, Array<IntArray?>?>("Nd", category_Nd()),
-        Map.entry<String?, Array<IntArray?>?>("Nl", category_Nl()),
-        Map.entry<String?, Array<IntArray?>?>("No", category_No()),
-        Map.entry<String?, Array<IntArray?>?>("Zs", category_Zs()),
-        Map.entry<String?, Array<IntArray?>?>("Zl", category_Zl()),
-        Map.entry<String?, Array<IntArray?>?>("Zp", category_Zp()),
-        Map.entry<String?, Array<IntArray?>?>("Cc", category_Cc()),
-        Map.entry<String?, Array<IntArray?>?>("Cf", category_Cf()),
-        Map.entry<String?, Array<IntArray?>?>("Co", category_Co()),
-        Map.entry<String?, Array<IntArray?>?>("Cs", category_Cs()),
-        Map.entry<String?, Array<IntArray?>?>("Pd", category_Pd()),
-        Map.entry<String?, Array<IntArray?>?>("Ps", category_Ps()),
-        Map.entry<String?, Array<IntArray?>?>("Pe", category_Pe()),
-        Map.entry<String?, Array<IntArray?>?>("Pc", category_Pc()),
-        Map.entry<String?, Array<IntArray?>?>("Po", category_Po()),
-        Map.entry<String?, Array<IntArray?>?>("Sm", category_Sm()),
-        Map.entry<String?, Array<IntArray?>?>("Sc", category_Sc()),
-        Map.entry<String?, Array<IntArray?>?>("Sk", category_Sk()),
-        Map.entry<String?, Array<IntArray?>?>("So", category_So()),
-        Map.entry<String?, Array<IntArray?>?>("Pi", category_Pi()),
-        Map.entry<String?, Array<IntArray?>?>("Pf", category_Pf()),
-        Map.entry<String?, Array<IntArray?>?>("L", category_L()),
-        Map.entry<String?, Array<IntArray?>?>("M", category_M()),
-        Map.entry<String?, Array<IntArray?>?>("N", category_N()),
-        Map.entry<String?, Array<IntArray?>?>("P", category_P()),
-        Map.entry<String?, Array<IntArray?>?>("S", category_S()),
-        Map.entry<String?, Array<IntArray?>?>("Z", category_Z()),
-        Map.entry<String?, Array<IntArray?>?>("C", category_C())
+    val CATEGORIES: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("Cn", category_Cn()),
+        Map.entry<String, Array<IntArray>>("Lu", category_Lu()),
+        Map.entry<String, Array<IntArray>>("Ll", category_Ll()),
+        Map.entry<String, Array<IntArray>>("Lt", category_Lt()),
+        Map.entry<String, Array<IntArray>>("Lm", category_Lm()),
+        Map.entry<String, Array<IntArray>>("Lo", category_Lo()),
+        Map.entry<String, Array<IntArray>>("Mn", category_Mn()),
+        Map.entry<String, Array<IntArray>>("Me", category_Me()),
+        Map.entry<String, Array<IntArray>>("Mc", category_Mc()),
+        Map.entry<String, Array<IntArray>>("Nd", category_Nd()),
+        Map.entry<String, Array<IntArray>>("Nl", category_Nl()),
+        Map.entry<String, Array<IntArray>>("No", category_No()),
+        Map.entry<String, Array<IntArray>>("Zs", category_Zs()),
+        Map.entry<String, Array<IntArray>>("Zl", category_Zl()),
+        Map.entry<String, Array<IntArray>>("Zp", category_Zp()),
+        Map.entry<String, Array<IntArray>>("Cc", category_Cc()),
+        Map.entry<String, Array<IntArray>>("Cf", category_Cf()),
+        Map.entry<String, Array<IntArray>>("Co", category_Co()),
+        Map.entry<String, Array<IntArray>>("Cs", category_Cs()),
+        Map.entry<String, Array<IntArray>>("Pd", category_Pd()),
+        Map.entry<String, Array<IntArray>>("Ps", category_Ps()),
+        Map.entry<String, Array<IntArray>>("Pe", category_Pe()),
+        Map.entry<String, Array<IntArray>>("Pc", category_Pc()),
+        Map.entry<String, Array<IntArray>>("Po", category_Po()),
+        Map.entry<String, Array<IntArray>>("Sm", category_Sm()),
+        Map.entry<String, Array<IntArray>>("Sc", category_Sc()),
+        Map.entry<String, Array<IntArray>>("Sk", category_Sk()),
+        Map.entry<String, Array<IntArray>>("So", category_So()),
+        Map.entry<String, Array<IntArray>>("Pi", category_Pi()),
+        Map.entry<String, Array<IntArray>>("Pf", category_Pf()),
+        Map.entry<String, Array<IntArray>>("L", category_L()),
+        Map.entry<String, Array<IntArray>>("M", category_M()),
+        Map.entry<String, Array<IntArray>>("N", category_N()),
+        Map.entry<String, Array<IntArray>>("P", category_P()),
+        Map.entry<String, Array<IntArray>>("S", category_S()),
+        Map.entry<String, Array<IntArray>>("Z", category_Z()),
+        Map.entry<String, Array<IntArray>>("C", category_C())
     )
 
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val SCRIPTS: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("Common", script_Common()),
-        Map.entry<String?, Array<IntArray?>?>("Latin", script_Latin()),
-        Map.entry<String?, Array<IntArray?>?>("Greek", script_Greek()),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic", script_Cyrillic()),
-        Map.entry<String?, Array<IntArray?>?>("Armenian", script_Armenian()),
-        Map.entry<String?, Array<IntArray?>?>("Hebrew", script_Hebrew()),
-        Map.entry<String?, Array<IntArray?>?>("Arabic", script_Arabic()),
-        Map.entry<String?, Array<IntArray?>?>("Syriac", script_Syriac()),
-        Map.entry<String?, Array<IntArray?>?>("Thaana", script_Thaana()),
-        Map.entry<String?, Array<IntArray?>?>("Devanagari", script_Devanagari()),
-        Map.entry<String?, Array<IntArray?>?>("Bengali", script_Bengali()),
-        Map.entry<String?, Array<IntArray?>?>("Gurmukhi", script_Gurmukhi()),
-        Map.entry<String?, Array<IntArray?>?>("Gujarati", script_Gujarati()),
-        Map.entry<String?, Array<IntArray?>?>("Oriya", script_Oriya()),
-        Map.entry<String?, Array<IntArray?>?>("Tamil", script_Tamil()),
-        Map.entry<String?, Array<IntArray?>?>("Telugu", script_Telugu()),
-        Map.entry<String?, Array<IntArray?>?>("Kannada", script_Kannada()),
-        Map.entry<String?, Array<IntArray?>?>("Malayalam", script_Malayalam()),
-        Map.entry<String?, Array<IntArray?>?>("Sinhala", script_Sinhala()),
-        Map.entry<String?, Array<IntArray?>?>("Thai", script_Thai()),
-        Map.entry<String?, Array<IntArray?>?>("Lao", script_Lao()),
-        Map.entry<String?, Array<IntArray?>?>("Tibetan", script_Tibetan()),
-        Map.entry<String?, Array<IntArray?>?>("Myanmar", script_Myanmar()),
-        Map.entry<String?, Array<IntArray?>?>("Georgian", script_Georgian()),
-        Map.entry<String?, Array<IntArray?>?>("Hangul", script_Hangul()),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic", script_Ethiopic()),
-        Map.entry<String?, Array<IntArray?>?>("Cherokee", script_Cherokee()),
-        Map.entry<String?, Array<IntArray?>?>("Canadian_Aboriginal", script_Canadian_Aboriginal()),
-        Map.entry<String?, Array<IntArray?>?>("Ogham", script_Ogham()),
-        Map.entry<String?, Array<IntArray?>?>("Runic", script_Runic()),
-        Map.entry<String?, Array<IntArray?>?>("Khmer", script_Khmer()),
-        Map.entry<String?, Array<IntArray?>?>("Mongolian", script_Mongolian()),
-        Map.entry<String?, Array<IntArray?>?>("Hiragana", script_Hiragana()),
-        Map.entry<String?, Array<IntArray?>?>("Katakana", script_Katakana()),
-        Map.entry<String?, Array<IntArray?>?>("Bopomofo", script_Bopomofo()),
-        Map.entry<String?, Array<IntArray?>?>("Han", script_Han()),
-        Map.entry<String?, Array<IntArray?>?>("Yi", script_Yi()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Italic", script_Old_Italic()),
-        Map.entry<String?, Array<IntArray?>?>("Gothic", script_Gothic()),
-        Map.entry<String?, Array<IntArray?>?>("Deseret", script_Deseret()),
-        Map.entry<String?, Array<IntArray?>?>("Inherited", script_Inherited()),
-        Map.entry<String?, Array<IntArray?>?>("Tagalog", script_Tagalog()),
-        Map.entry<String?, Array<IntArray?>?>("Hanunoo", script_Hanunoo()),
-        Map.entry<String?, Array<IntArray?>?>("Buhid", script_Buhid()),
-        Map.entry<String?, Array<IntArray?>?>("Tagbanwa", script_Tagbanwa()),
-        Map.entry<String?, Array<IntArray?>?>("Limbu", script_Limbu()),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Le", script_Tai_Le()),
-        Map.entry<String?, Array<IntArray?>?>("Linear_B", script_Linear_B()),
-        Map.entry<String?, Array<IntArray?>?>("Ugaritic", script_Ugaritic()),
-        Map.entry<String?, Array<IntArray?>?>("Shavian", script_Shavian()),
-        Map.entry<String?, Array<IntArray?>?>("Osmanya", script_Osmanya()),
-        Map.entry<String?, Array<IntArray?>?>("Cypriot", script_Cypriot()),
-        Map.entry<String?, Array<IntArray?>?>("Braille", script_Braille()),
-        Map.entry<String?, Array<IntArray?>?>("Buginese", script_Buginese()),
-        Map.entry<String?, Array<IntArray?>?>("Coptic", script_Coptic()),
-        Map.entry<String?, Array<IntArray?>?>("New_Tai_Lue", script_New_Tai_Lue()),
-        Map.entry<String?, Array<IntArray?>?>("Glagolitic", script_Glagolitic()),
-        Map.entry<String?, Array<IntArray?>?>("Tifinagh", script_Tifinagh()),
-        Map.entry<String?, Array<IntArray?>?>("Syloti_Nagri", script_Syloti_Nagri()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Persian", script_Old_Persian()),
-        Map.entry<String?, Array<IntArray?>?>("Kharoshthi", script_Kharoshthi()),
-        Map.entry<String?, Array<IntArray?>?>("Balinese", script_Balinese()),
-        Map.entry<String?, Array<IntArray?>?>("Cuneiform", script_Cuneiform()),
-        Map.entry<String?, Array<IntArray?>?>("Phoenician", script_Phoenician()),
-        Map.entry<String?, Array<IntArray?>?>("Phags_Pa", script_Phags_Pa()),
-        Map.entry<String?, Array<IntArray?>?>("Nko", script_Nko()),
-        Map.entry<String?, Array<IntArray?>?>("Sundanese", script_Sundanese()),
-        Map.entry<String?, Array<IntArray?>?>("Batak", script_Batak()),
-        Map.entry<String?, Array<IntArray?>?>("Lepcha", script_Lepcha()),
-        Map.entry<String?, Array<IntArray?>?>("Ol_Chiki", script_Ol_Chiki()),
-        Map.entry<String?, Array<IntArray?>?>("Vai", script_Vai()),
-        Map.entry<String?, Array<IntArray?>?>("Saurashtra", script_Saurashtra()),
-        Map.entry<String?, Array<IntArray?>?>("Kayah_Li", script_Kayah_Li()),
-        Map.entry<String?, Array<IntArray?>?>("Rejang", script_Rejang()),
-        Map.entry<String?, Array<IntArray?>?>("Lycian", script_Lycian()),
-        Map.entry<String?, Array<IntArray?>?>("Carian", script_Carian()),
-        Map.entry<String?, Array<IntArray?>?>("Lydian", script_Lydian()),
-        Map.entry<String?, Array<IntArray?>?>("Cham", script_Cham()),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Tham", script_Tai_Tham()),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Viet", script_Tai_Viet()),
-        Map.entry<String?, Array<IntArray?>?>("Avestan", script_Avestan()),
-        Map.entry<String?, Array<IntArray?>?>("Egyptian_Hieroglyphs", script_Egyptian_Hieroglyphs()),
-        Map.entry<String?, Array<IntArray?>?>("Samaritan", script_Samaritan()),
-        Map.entry<String?, Array<IntArray?>?>("Mandaic", script_Mandaic()),
-        Map.entry<String?, Array<IntArray?>?>("Lisu", script_Lisu()),
-        Map.entry<String?, Array<IntArray?>?>("Bamum", script_Bamum()),
-        Map.entry<String?, Array<IntArray?>?>("Javanese", script_Javanese()),
-        Map.entry<String?, Array<IntArray?>?>("Meetei_Mayek", script_Meetei_Mayek()),
-        Map.entry<String?, Array<IntArray?>?>("Imperial_Aramaic", script_Imperial_Aramaic()),
-        Map.entry<String?, Array<IntArray?>?>("Old_South_Arabian", script_Old_South_Arabian()),
-        Map.entry<String?, Array<IntArray?>?>("Inscriptional_Parthian", script_Inscriptional_Parthian()),
-        Map.entry<String?, Array<IntArray?>?>("Inscriptional_Pahlavi", script_Inscriptional_Pahlavi()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Turkic", script_Old_Turkic()),
-        Map.entry<String?, Array<IntArray?>?>("Brahmi", script_Brahmi()),
-        Map.entry<String?, Array<IntArray?>?>("Kaithi", script_Kaithi()),
-        Map.entry<String?, Array<IntArray?>?>("Meroitic_Hieroglyphs", script_Meroitic_Hieroglyphs()),
-        Map.entry<String?, Array<IntArray?>?>("Meroitic_Cursive", script_Meroitic_Cursive()),
-        Map.entry<String?, Array<IntArray?>?>("Sora_Sompeng", script_Sora_Sompeng()),
-        Map.entry<String?, Array<IntArray?>?>("Chakma", script_Chakma()),
-        Map.entry<String?, Array<IntArray?>?>("Sharada", script_Sharada()),
-        Map.entry<String?, Array<IntArray?>?>("Takri", script_Takri()),
-        Map.entry<String?, Array<IntArray?>?>("Miao", script_Miao()),
-        Map.entry<String?, Array<IntArray?>?>("Caucasian_Albanian", script_Caucasian_Albanian()),
-        Map.entry<String?, Array<IntArray?>?>("Bassa_Vah", script_Bassa_Vah()),
-        Map.entry<String?, Array<IntArray?>?>("Duployan", script_Duployan()),
-        Map.entry<String?, Array<IntArray?>?>("Elbasan", script_Elbasan()),
-        Map.entry<String?, Array<IntArray?>?>("Grantha", script_Grantha()),
-        Map.entry<String?, Array<IntArray?>?>("Pahawh_Hmong", script_Pahawh_Hmong()),
-        Map.entry<String?, Array<IntArray?>?>("Khojki", script_Khojki()),
-        Map.entry<String?, Array<IntArray?>?>("Linear_A", script_Linear_A()),
-        Map.entry<String?, Array<IntArray?>?>("Mahajani", script_Mahajani()),
-        Map.entry<String?, Array<IntArray?>?>("Manichaean", script_Manichaean()),
-        Map.entry<String?, Array<IntArray?>?>("Mende_Kikakui", script_Mende_Kikakui()),
-        Map.entry<String?, Array<IntArray?>?>("Modi", script_Modi()),
-        Map.entry<String?, Array<IntArray?>?>("Mro", script_Mro()),
-        Map.entry<String?, Array<IntArray?>?>("Old_North_Arabian", script_Old_North_Arabian()),
-        Map.entry<String?, Array<IntArray?>?>("Nabataean", script_Nabataean()),
-        Map.entry<String?, Array<IntArray?>?>("Palmyrene", script_Palmyrene()),
-        Map.entry<String?, Array<IntArray?>?>("Pau_Cin_Hau", script_Pau_Cin_Hau()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Permic", script_Old_Permic()),
-        Map.entry<String?, Array<IntArray?>?>("Psalter_Pahlavi", script_Psalter_Pahlavi()),
-        Map.entry<String?, Array<IntArray?>?>("Siddham", script_Siddham()),
-        Map.entry<String?, Array<IntArray?>?>("Khudawadi", script_Khudawadi()),
-        Map.entry<String?, Array<IntArray?>?>("Tirhuta", script_Tirhuta()),
-        Map.entry<String?, Array<IntArray?>?>("Warang_Citi", script_Warang_Citi()),
-        Map.entry<String?, Array<IntArray?>?>("Ahom", script_Ahom()),
-        Map.entry<String?, Array<IntArray?>?>("Anatolian_Hieroglyphs", script_Anatolian_Hieroglyphs()),
-        Map.entry<String?, Array<IntArray?>?>("Hatran", script_Hatran()),
-        Map.entry<String?, Array<IntArray?>?>("Multani", script_Multani()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Hungarian", script_Old_Hungarian()),
-        Map.entry<String?, Array<IntArray?>?>("SignWriting", script_SignWriting()),
-        Map.entry<String?, Array<IntArray?>?>("Adlam", script_Adlam()),
-        Map.entry<String?, Array<IntArray?>?>("Bhaiksuki", script_Bhaiksuki()),
-        Map.entry<String?, Array<IntArray?>?>("Marchen", script_Marchen()),
-        Map.entry<String?, Array<IntArray?>?>("Newa", script_Newa()),
-        Map.entry<String?, Array<IntArray?>?>("Osage", script_Osage()),
-        Map.entry<String?, Array<IntArray?>?>("Tangut", script_Tangut()),
-        Map.entry<String?, Array<IntArray?>?>("Masaram_Gondi", script_Masaram_Gondi()),
-        Map.entry<String?, Array<IntArray?>?>("Nushu", script_Nushu()),
-        Map.entry<String?, Array<IntArray?>?>("Soyombo", script_Soyombo()),
-        Map.entry<String?, Array<IntArray?>?>("Zanabazar_Square", script_Zanabazar_Square()),
-        Map.entry<String?, Array<IntArray?>?>("Hanifi_Rohingya", script_Hanifi_Rohingya()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Sogdian", script_Old_Sogdian()),
-        Map.entry<String?, Array<IntArray?>?>("Sogdian", script_Sogdian()),
-        Map.entry<String?, Array<IntArray?>?>("Dogra", script_Dogra()),
-        Map.entry<String?, Array<IntArray?>?>("Gunjala_Gondi", script_Gunjala_Gondi()),
-        Map.entry<String?, Array<IntArray?>?>("Makasar", script_Makasar()),
-        Map.entry<String?, Array<IntArray?>?>("Medefaidrin", script_Medefaidrin()),
-        Map.entry<String?, Array<IntArray?>?>("Elymaic", script_Elymaic()),
-        Map.entry<String?, Array<IntArray?>?>("Nandinagari", script_Nandinagari()),
-        Map.entry<String?, Array<IntArray?>?>("Nyiakeng_Puachue_Hmong", script_Nyiakeng_Puachue_Hmong()),
-        Map.entry<String?, Array<IntArray?>?>("Wancho", script_Wancho()),
-        Map.entry<String?, Array<IntArray?>?>("Yezidi", script_Yezidi()),
-        Map.entry<String?, Array<IntArray?>?>("Chorasmian", script_Chorasmian()),
-        Map.entry<String?, Array<IntArray?>?>("Dives_Akuru", script_Dives_Akuru()),
-        Map.entry<String?, Array<IntArray?>?>("Khitan_Small_Script", script_Khitan_Small_Script()),
-        Map.entry<String?, Array<IntArray?>?>("Vithkuqi", script_Vithkuqi()),
-        Map.entry<String?, Array<IntArray?>?>("Old_Uyghur", script_Old_Uyghur()),
-        Map.entry<String?, Array<IntArray?>?>("Cypro_Minoan", script_Cypro_Minoan()),
-        Map.entry<String?, Array<IntArray?>?>("Tangsa", script_Tangsa()),
-        Map.entry<String?, Array<IntArray?>?>("Toto", script_Toto()),
-        Map.entry<String?, Array<IntArray?>?>("Kawi", script_Kawi()),
-        Map.entry<String?, Array<IntArray?>?>("Nag_Mundari", script_Nag_Mundari()),
-        Map.entry<String?, Array<IntArray?>?>("Todhri", script_Todhri()),
-        Map.entry<String?, Array<IntArray?>?>("Garay", script_Garay()),
-        Map.entry<String?, Array<IntArray?>?>("Tulu_Tigalari", script_Tulu_Tigalari()),
-        Map.entry<String?, Array<IntArray?>?>("Sunuwar", script_Sunuwar()),
-        Map.entry<String?, Array<IntArray?>?>("Gurung_Khema", script_Gurung_Khema()),
-        Map.entry<String?, Array<IntArray?>?>("Kirat_Rai", script_Kirat_Rai()),
-        Map.entry<String?, Array<IntArray?>?>("Ol_Onal", script_Ol_Onal()),
-        Map.entry<String?, Array<IntArray?>?>("Sidetic", script_Sidetic()),
-        Map.entry<String?, Array<IntArray?>?>("Tolong_Siki", script_Tolong_Siki()),
-        Map.entry<String?, Array<IntArray?>?>("Beria_Erfe", script_Beria_Erfe()),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Yo", script_Tai_Yo()),
-        Map.entry<String?, Array<IntArray?>?>("Unknown", script_Unknown())
+    val SCRIPTS: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("Common", script_Common()),
+        Map.entry<String, Array<IntArray>>("Latin", script_Latin()),
+        Map.entry<String, Array<IntArray>>("Greek", script_Greek()),
+        Map.entry<String, Array<IntArray>>("Cyrillic", script_Cyrillic()),
+        Map.entry<String, Array<IntArray>>("Armenian", script_Armenian()),
+        Map.entry<String, Array<IntArray>>("Hebrew", script_Hebrew()),
+        Map.entry<String, Array<IntArray>>("Arabic", script_Arabic()),
+        Map.entry<String, Array<IntArray>>("Syriac", script_Syriac()),
+        Map.entry<String, Array<IntArray>>("Thaana", script_Thaana()),
+        Map.entry<String, Array<IntArray>>("Devanagari", script_Devanagari()),
+        Map.entry<String, Array<IntArray>>("Bengali", script_Bengali()),
+        Map.entry<String, Array<IntArray>>("Gurmukhi", script_Gurmukhi()),
+        Map.entry<String, Array<IntArray>>("Gujarati", script_Gujarati()),
+        Map.entry<String, Array<IntArray>>("Oriya", script_Oriya()),
+        Map.entry<String, Array<IntArray>>("Tamil", script_Tamil()),
+        Map.entry<String, Array<IntArray>>("Telugu", script_Telugu()),
+        Map.entry<String, Array<IntArray>>("Kannada", script_Kannada()),
+        Map.entry<String, Array<IntArray>>("Malayalam", script_Malayalam()),
+        Map.entry<String, Array<IntArray>>("Sinhala", script_Sinhala()),
+        Map.entry<String, Array<IntArray>>("Thai", script_Thai()),
+        Map.entry<String, Array<IntArray>>("Lao", script_Lao()),
+        Map.entry<String, Array<IntArray>>("Tibetan", script_Tibetan()),
+        Map.entry<String, Array<IntArray>>("Myanmar", script_Myanmar()),
+        Map.entry<String, Array<IntArray>>("Georgian", script_Georgian()),
+        Map.entry<String, Array<IntArray>>("Hangul", script_Hangul()),
+        Map.entry<String, Array<IntArray>>("Ethiopic", script_Ethiopic()),
+        Map.entry<String, Array<IntArray>>("Cherokee", script_Cherokee()),
+        Map.entry<String, Array<IntArray>>("Canadian_Aboriginal", script_Canadian_Aboriginal()),
+        Map.entry<String, Array<IntArray>>("Ogham", script_Ogham()),
+        Map.entry<String, Array<IntArray>>("Runic", script_Runic()),
+        Map.entry<String, Array<IntArray>>("Khmer", script_Khmer()),
+        Map.entry<String, Array<IntArray>>("Mongolian", script_Mongolian()),
+        Map.entry<String, Array<IntArray>>("Hiragana", script_Hiragana()),
+        Map.entry<String, Array<IntArray>>("Katakana", script_Katakana()),
+        Map.entry<String, Array<IntArray>>("Bopomofo", script_Bopomofo()),
+        Map.entry<String, Array<IntArray>>("Han", script_Han()),
+        Map.entry<String, Array<IntArray>>("Yi", script_Yi()),
+        Map.entry<String, Array<IntArray>>("Old_Italic", script_Old_Italic()),
+        Map.entry<String, Array<IntArray>>("Gothic", script_Gothic()),
+        Map.entry<String, Array<IntArray>>("Deseret", script_Deseret()),
+        Map.entry<String, Array<IntArray>>("Inherited", script_Inherited()),
+        Map.entry<String, Array<IntArray>>("Tagalog", script_Tagalog()),
+        Map.entry<String, Array<IntArray>>("Hanunoo", script_Hanunoo()),
+        Map.entry<String, Array<IntArray>>("Buhid", script_Buhid()),
+        Map.entry<String, Array<IntArray>>("Tagbanwa", script_Tagbanwa()),
+        Map.entry<String, Array<IntArray>>("Limbu", script_Limbu()),
+        Map.entry<String, Array<IntArray>>("Tai_Le", script_Tai_Le()),
+        Map.entry<String, Array<IntArray>>("Linear_B", script_Linear_B()),
+        Map.entry<String, Array<IntArray>>("Ugaritic", script_Ugaritic()),
+        Map.entry<String, Array<IntArray>>("Shavian", script_Shavian()),
+        Map.entry<String, Array<IntArray>>("Osmanya", script_Osmanya()),
+        Map.entry<String, Array<IntArray>>("Cypriot", script_Cypriot()),
+        Map.entry<String, Array<IntArray>>("Braille", script_Braille()),
+        Map.entry<String, Array<IntArray>>("Buginese", script_Buginese()),
+        Map.entry<String, Array<IntArray>>("Coptic", script_Coptic()),
+        Map.entry<String, Array<IntArray>>("New_Tai_Lue", script_New_Tai_Lue()),
+        Map.entry<String, Array<IntArray>>("Glagolitic", script_Glagolitic()),
+        Map.entry<String, Array<IntArray>>("Tifinagh", script_Tifinagh()),
+        Map.entry<String, Array<IntArray>>("Syloti_Nagri", script_Syloti_Nagri()),
+        Map.entry<String, Array<IntArray>>("Old_Persian", script_Old_Persian()),
+        Map.entry<String, Array<IntArray>>("Kharoshthi", script_Kharoshthi()),
+        Map.entry<String, Array<IntArray>>("Balinese", script_Balinese()),
+        Map.entry<String, Array<IntArray>>("Cuneiform", script_Cuneiform()),
+        Map.entry<String, Array<IntArray>>("Phoenician", script_Phoenician()),
+        Map.entry<String, Array<IntArray>>("Phags_Pa", script_Phags_Pa()),
+        Map.entry<String, Array<IntArray>>("Nko", script_Nko()),
+        Map.entry<String, Array<IntArray>>("Sundanese", script_Sundanese()),
+        Map.entry<String, Array<IntArray>>("Batak", script_Batak()),
+        Map.entry<String, Array<IntArray>>("Lepcha", script_Lepcha()),
+        Map.entry<String, Array<IntArray>>("Ol_Chiki", script_Ol_Chiki()),
+        Map.entry<String, Array<IntArray>>("Vai", script_Vai()),
+        Map.entry<String, Array<IntArray>>("Saurashtra", script_Saurashtra()),
+        Map.entry<String, Array<IntArray>>("Kayah_Li", script_Kayah_Li()),
+        Map.entry<String, Array<IntArray>>("Rejang", script_Rejang()),
+        Map.entry<String, Array<IntArray>>("Lycian", script_Lycian()),
+        Map.entry<String, Array<IntArray>>("Carian", script_Carian()),
+        Map.entry<String, Array<IntArray>>("Lydian", script_Lydian()),
+        Map.entry<String, Array<IntArray>>("Cham", script_Cham()),
+        Map.entry<String, Array<IntArray>>("Tai_Tham", script_Tai_Tham()),
+        Map.entry<String, Array<IntArray>>("Tai_Viet", script_Tai_Viet()),
+        Map.entry<String, Array<IntArray>>("Avestan", script_Avestan()),
+        Map.entry<String, Array<IntArray>>("Egyptian_Hieroglyphs", script_Egyptian_Hieroglyphs()),
+        Map.entry<String, Array<IntArray>>("Samaritan", script_Samaritan()),
+        Map.entry<String, Array<IntArray>>("Mandaic", script_Mandaic()),
+        Map.entry<String, Array<IntArray>>("Lisu", script_Lisu()),
+        Map.entry<String, Array<IntArray>>("Bamum", script_Bamum()),
+        Map.entry<String, Array<IntArray>>("Javanese", script_Javanese()),
+        Map.entry<String, Array<IntArray>>("Meetei_Mayek", script_Meetei_Mayek()),
+        Map.entry<String, Array<IntArray>>("Imperial_Aramaic", script_Imperial_Aramaic()),
+        Map.entry<String, Array<IntArray>>("Old_South_Arabian", script_Old_South_Arabian()),
+        Map.entry<String, Array<IntArray>>("Inscriptional_Parthian", script_Inscriptional_Parthian()),
+        Map.entry<String, Array<IntArray>>("Inscriptional_Pahlavi", script_Inscriptional_Pahlavi()),
+        Map.entry<String, Array<IntArray>>("Old_Turkic", script_Old_Turkic()),
+        Map.entry<String, Array<IntArray>>("Brahmi", script_Brahmi()),
+        Map.entry<String, Array<IntArray>>("Kaithi", script_Kaithi()),
+        Map.entry<String, Array<IntArray>>("Meroitic_Hieroglyphs", script_Meroitic_Hieroglyphs()),
+        Map.entry<String, Array<IntArray>>("Meroitic_Cursive", script_Meroitic_Cursive()),
+        Map.entry<String, Array<IntArray>>("Sora_Sompeng", script_Sora_Sompeng()),
+        Map.entry<String, Array<IntArray>>("Chakma", script_Chakma()),
+        Map.entry<String, Array<IntArray>>("Sharada", script_Sharada()),
+        Map.entry<String, Array<IntArray>>("Takri", script_Takri()),
+        Map.entry<String, Array<IntArray>>("Miao", script_Miao()),
+        Map.entry<String, Array<IntArray>>("Caucasian_Albanian", script_Caucasian_Albanian()),
+        Map.entry<String, Array<IntArray>>("Bassa_Vah", script_Bassa_Vah()),
+        Map.entry<String, Array<IntArray>>("Duployan", script_Duployan()),
+        Map.entry<String, Array<IntArray>>("Elbasan", script_Elbasan()),
+        Map.entry<String, Array<IntArray>>("Grantha", script_Grantha()),
+        Map.entry<String, Array<IntArray>>("Pahawh_Hmong", script_Pahawh_Hmong()),
+        Map.entry<String, Array<IntArray>>("Khojki", script_Khojki()),
+        Map.entry<String, Array<IntArray>>("Linear_A", script_Linear_A()),
+        Map.entry<String, Array<IntArray>>("Mahajani", script_Mahajani()),
+        Map.entry<String, Array<IntArray>>("Manichaean", script_Manichaean()),
+        Map.entry<String, Array<IntArray>>("Mende_Kikakui", script_Mende_Kikakui()),
+        Map.entry<String, Array<IntArray>>("Modi", script_Modi()),
+        Map.entry<String, Array<IntArray>>("Mro", script_Mro()),
+        Map.entry<String, Array<IntArray>>("Old_North_Arabian", script_Old_North_Arabian()),
+        Map.entry<String, Array<IntArray>>("Nabataean", script_Nabataean()),
+        Map.entry<String, Array<IntArray>>("Palmyrene", script_Palmyrene()),
+        Map.entry<String, Array<IntArray>>("Pau_Cin_Hau", script_Pau_Cin_Hau()),
+        Map.entry<String, Array<IntArray>>("Old_Permic", script_Old_Permic()),
+        Map.entry<String, Array<IntArray>>("Psalter_Pahlavi", script_Psalter_Pahlavi()),
+        Map.entry<String, Array<IntArray>>("Siddham", script_Siddham()),
+        Map.entry<String, Array<IntArray>>("Khudawadi", script_Khudawadi()),
+        Map.entry<String, Array<IntArray>>("Tirhuta", script_Tirhuta()),
+        Map.entry<String, Array<IntArray>>("Warang_Citi", script_Warang_Citi()),
+        Map.entry<String, Array<IntArray>>("Ahom", script_Ahom()),
+        Map.entry<String, Array<IntArray>>("Anatolian_Hieroglyphs", script_Anatolian_Hieroglyphs()),
+        Map.entry<String, Array<IntArray>>("Hatran", script_Hatran()),
+        Map.entry<String, Array<IntArray>>("Multani", script_Multani()),
+        Map.entry<String, Array<IntArray>>("Old_Hungarian", script_Old_Hungarian()),
+        Map.entry<String, Array<IntArray>>("SignWriting", script_SignWriting()),
+        Map.entry<String, Array<IntArray>>("Adlam", script_Adlam()),
+        Map.entry<String, Array<IntArray>>("Bhaiksuki", script_Bhaiksuki()),
+        Map.entry<String, Array<IntArray>>("Marchen", script_Marchen()),
+        Map.entry<String, Array<IntArray>>("Newa", script_Newa()),
+        Map.entry<String, Array<IntArray>>("Osage", script_Osage()),
+        Map.entry<String, Array<IntArray>>("Tangut", script_Tangut()),
+        Map.entry<String, Array<IntArray>>("Masaram_Gondi", script_Masaram_Gondi()),
+        Map.entry<String, Array<IntArray>>("Nushu", script_Nushu()),
+        Map.entry<String, Array<IntArray>>("Soyombo", script_Soyombo()),
+        Map.entry<String, Array<IntArray>>("Zanabazar_Square", script_Zanabazar_Square()),
+        Map.entry<String, Array<IntArray>>("Hanifi_Rohingya", script_Hanifi_Rohingya()),
+        Map.entry<String, Array<IntArray>>("Old_Sogdian", script_Old_Sogdian()),
+        Map.entry<String, Array<IntArray>>("Sogdian", script_Sogdian()),
+        Map.entry<String, Array<IntArray>>("Dogra", script_Dogra()),
+        Map.entry<String, Array<IntArray>>("Gunjala_Gondi", script_Gunjala_Gondi()),
+        Map.entry<String, Array<IntArray>>("Makasar", script_Makasar()),
+        Map.entry<String, Array<IntArray>>("Medefaidrin", script_Medefaidrin()),
+        Map.entry<String, Array<IntArray>>("Elymaic", script_Elymaic()),
+        Map.entry<String, Array<IntArray>>("Nandinagari", script_Nandinagari()),
+        Map.entry<String, Array<IntArray>>("Nyiakeng_Puachue_Hmong", script_Nyiakeng_Puachue_Hmong()),
+        Map.entry<String, Array<IntArray>>("Wancho", script_Wancho()),
+        Map.entry<String, Array<IntArray>>("Yezidi", script_Yezidi()),
+        Map.entry<String, Array<IntArray>>("Chorasmian", script_Chorasmian()),
+        Map.entry<String, Array<IntArray>>("Dives_Akuru", script_Dives_Akuru()),
+        Map.entry<String, Array<IntArray>>("Khitan_Small_Script", script_Khitan_Small_Script()),
+        Map.entry<String, Array<IntArray>>("Vithkuqi", script_Vithkuqi()),
+        Map.entry<String, Array<IntArray>>("Old_Uyghur", script_Old_Uyghur()),
+        Map.entry<String, Array<IntArray>>("Cypro_Minoan", script_Cypro_Minoan()),
+        Map.entry<String, Array<IntArray>>("Tangsa", script_Tangsa()),
+        Map.entry<String, Array<IntArray>>("Toto", script_Toto()),
+        Map.entry<String, Array<IntArray>>("Kawi", script_Kawi()),
+        Map.entry<String, Array<IntArray>>("Nag_Mundari", script_Nag_Mundari()),
+        Map.entry<String, Array<IntArray>>("Todhri", script_Todhri()),
+        Map.entry<String, Array<IntArray>>("Garay", script_Garay()),
+        Map.entry<String, Array<IntArray>>("Tulu_Tigalari", script_Tulu_Tigalari()),
+        Map.entry<String, Array<IntArray>>("Sunuwar", script_Sunuwar()),
+        Map.entry<String, Array<IntArray>>("Gurung_Khema", script_Gurung_Khema()),
+        Map.entry<String, Array<IntArray>>("Kirat_Rai", script_Kirat_Rai()),
+        Map.entry<String, Array<IntArray>>("Ol_Onal", script_Ol_Onal()),
+        Map.entry<String, Array<IntArray>>("Sidetic", script_Sidetic()),
+        Map.entry<String, Array<IntArray>>("Tolong_Siki", script_Tolong_Siki()),
+        Map.entry<String, Array<IntArray>>("Beria_Erfe", script_Beria_Erfe()),
+        Map.entry<String, Array<IntArray>>("Tai_Yo", script_Tai_Yo()),
+        Map.entry<String, Array<IntArray>>("Unknown", script_Unknown())
     )
 
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val BLOCKS: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("Adlam", arrayOf<IntArray?>(intArrayOf(0x1e900, 0x1e95f))),
-        Map.entry<String?, Array<IntArray?>?>("Aegean_Numbers", arrayOf<IntArray?>(intArrayOf(0x10100, 0x1013f))),
-        Map.entry<String?, Array<IntArray?>?>("Ahom", arrayOf<IntArray?>(intArrayOf(0x11700, 0x1174f))),
-        Map.entry<String?, Array<IntArray?>?>("Alchemical_Symbols", arrayOf<IntArray?>(intArrayOf(0x1f700, 0x1f77f))),
-        Map.entry<String?, Array<IntArray?>?>(
+    val BLOCKS: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("Adlam", arrayOf<IntArray>(intArrayOf(0x1e900, 0x1e95f))),
+        Map.entry<String, Array<IntArray>>("Aegean_Numbers", arrayOf<IntArray>(intArrayOf(0x10100, 0x1013f))),
+        Map.entry<String, Array<IntArray>>("Ahom", arrayOf<IntArray>(intArrayOf(0x11700, 0x1174f))),
+        Map.entry<String, Array<IntArray>>("Alchemical_Symbols", arrayOf<IntArray>(intArrayOf(0x1f700, 0x1f77f))),
+        Map.entry<String, Array<IntArray>>(
             "Alphabetic_Presentation_Forms",
-            arrayOf<IntArray?>(intArrayOf(0xfb00, 0xfb4f))
+            arrayOf<IntArray>(intArrayOf(0xfb00, 0xfb4f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Anatolian_Hieroglyphs",
-            arrayOf<IntArray?>(intArrayOf(0x14400, 0x1467f))
+            arrayOf<IntArray>(intArrayOf(0x14400, 0x1467f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Ancient_Greek_Musical_Notation",
-            arrayOf<IntArray?>(intArrayOf(0x1d200, 0x1d24f))
+            arrayOf<IntArray>(intArrayOf(0x1d200, 0x1d24f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Ancient_Greek_Numbers",
-            arrayOf<IntArray?>(intArrayOf(0x10140, 0x1018f))
+            arrayOf<IntArray>(intArrayOf(0x10140, 0x1018f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Ancient_Symbols", arrayOf<IntArray?>(intArrayOf(0x10190, 0x101cf))),
-        Map.entry<String?, Array<IntArray?>?>("Arabic", arrayOf<IntArray?>(intArrayOf(0x600, 0x6ff))),
-        Map.entry<String?, Array<IntArray?>?>("Arabic_Extended_A", arrayOf<IntArray?>(intArrayOf(0x8a0, 0x8ff))),
-        Map.entry<String?, Array<IntArray?>?>("Arabic_Extended_B", arrayOf<IntArray?>(intArrayOf(0x870, 0x89f))),
-        Map.entry<String?, Array<IntArray?>?>("Arabic_Extended_C", arrayOf<IntArray?>(intArrayOf(0x10ec0, 0x10eff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Ancient_Symbols", arrayOf<IntArray>(intArrayOf(0x10190, 0x101cf))),
+        Map.entry<String, Array<IntArray>>("Arabic", arrayOf<IntArray>(intArrayOf(0x600, 0x6ff))),
+        Map.entry<String, Array<IntArray>>("Arabic_Extended_A", arrayOf<IntArray>(intArrayOf(0x8a0, 0x8ff))),
+        Map.entry<String, Array<IntArray>>("Arabic_Extended_B", arrayOf<IntArray>(intArrayOf(0x870, 0x89f))),
+        Map.entry<String, Array<IntArray>>("Arabic_Extended_C", arrayOf<IntArray>(intArrayOf(0x10ec0, 0x10eff))),
+        Map.entry<String, Array<IntArray>>(
             "Arabic_Mathematical_Alphabetic_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x1ee00, 0x1eeff))
+            arrayOf<IntArray>(intArrayOf(0x1ee00, 0x1eeff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Arabic_Presentation_Forms_A",
-            arrayOf<IntArray?>(intArrayOf(0xfb50, 0xfdff))
+            arrayOf<IntArray>(intArrayOf(0xfb50, 0xfdff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Arabic_Presentation_Forms_B",
-            arrayOf<IntArray?>(intArrayOf(0xfe70, 0xfeff))
+            arrayOf<IntArray>(intArrayOf(0xfe70, 0xfeff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Arabic_Supplement", arrayOf<IntArray?>(intArrayOf(0x750, 0x77f))),
-        Map.entry<String?, Array<IntArray?>?>("Armenian", arrayOf<IntArray?>(intArrayOf(0x530, 0x58f))),
-        Map.entry<String?, Array<IntArray?>?>("Arrows", arrayOf<IntArray?>(intArrayOf(0x2190, 0x21ff))),
-        Map.entry<String?, Array<IntArray?>?>("Avestan", arrayOf<IntArray?>(intArrayOf(0x10b00, 0x10b3f))),
-        Map.entry<String?, Array<IntArray?>?>("Balinese", arrayOf<IntArray?>(intArrayOf(0x1b00, 0x1b7f))),
-        Map.entry<String?, Array<IntArray?>?>("Bamum", arrayOf<IntArray?>(intArrayOf(0xa6a0, 0xa6ff))),
-        Map.entry<String?, Array<IntArray?>?>("Bamum_Supplement", arrayOf<IntArray?>(intArrayOf(0x16800, 0x16a3f))),
-        Map.entry<String?, Array<IntArray?>?>("Basic_Latin", arrayOf<IntArray?>(intArrayOf(0x0, 0x7f))),
-        Map.entry<String?, Array<IntArray?>?>("Bassa_Vah", arrayOf<IntArray?>(intArrayOf(0x16ad0, 0x16aff))),
-        Map.entry<String?, Array<IntArray?>?>("Batak", arrayOf<IntArray?>(intArrayOf(0x1bc0, 0x1bff))),
-        Map.entry<String?, Array<IntArray?>?>("Bengali", arrayOf<IntArray?>(intArrayOf(0x980, 0x9ff))),
-        Map.entry<String?, Array<IntArray?>?>("Beria_Erfe", arrayOf<IntArray?>(intArrayOf(0x16ea0, 0x16edf))),
-        Map.entry<String?, Array<IntArray?>?>("Bhaiksuki", arrayOf<IntArray?>(intArrayOf(0x11c00, 0x11c6f))),
-        Map.entry<String?, Array<IntArray?>?>("Block_Elements", arrayOf<IntArray?>(intArrayOf(0x2580, 0x259f))),
-        Map.entry<String?, Array<IntArray?>?>("Bopomofo", arrayOf<IntArray?>(intArrayOf(0x3100, 0x312f))),
-        Map.entry<String?, Array<IntArray?>?>("Bopomofo_Extended", arrayOf<IntArray?>(intArrayOf(0x31a0, 0x31bf))),
-        Map.entry<String?, Array<IntArray?>?>("Box_Drawing", arrayOf<IntArray?>(intArrayOf(0x2500, 0x257f))),
-        Map.entry<String?, Array<IntArray?>?>("Brahmi", arrayOf<IntArray?>(intArrayOf(0x11000, 0x1107f))),
-        Map.entry<String?, Array<IntArray?>?>("Braille_Patterns", arrayOf<IntArray?>(intArrayOf(0x2800, 0x28ff))),
-        Map.entry<String?, Array<IntArray?>?>("Buginese", arrayOf<IntArray?>(intArrayOf(0x1a00, 0x1a1f))),
-        Map.entry<String?, Array<IntArray?>?>("Buhid", arrayOf<IntArray?>(intArrayOf(0x1740, 0x175f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Arabic_Supplement", arrayOf<IntArray>(intArrayOf(0x750, 0x77f))),
+        Map.entry<String, Array<IntArray>>("Armenian", arrayOf<IntArray>(intArrayOf(0x530, 0x58f))),
+        Map.entry<String, Array<IntArray>>("Arrows", arrayOf<IntArray>(intArrayOf(0x2190, 0x21ff))),
+        Map.entry<String, Array<IntArray>>("Avestan", arrayOf<IntArray>(intArrayOf(0x10b00, 0x10b3f))),
+        Map.entry<String, Array<IntArray>>("Balinese", arrayOf<IntArray>(intArrayOf(0x1b00, 0x1b7f))),
+        Map.entry<String, Array<IntArray>>("Bamum", arrayOf<IntArray>(intArrayOf(0xa6a0, 0xa6ff))),
+        Map.entry<String, Array<IntArray>>("Bamum_Supplement", arrayOf<IntArray>(intArrayOf(0x16800, 0x16a3f))),
+        Map.entry<String, Array<IntArray>>("Basic_Latin", arrayOf<IntArray>(intArrayOf(0x0, 0x7f))),
+        Map.entry<String, Array<IntArray>>("Bassa_Vah", arrayOf<IntArray>(intArrayOf(0x16ad0, 0x16aff))),
+        Map.entry<String, Array<IntArray>>("Batak", arrayOf<IntArray>(intArrayOf(0x1bc0, 0x1bff))),
+        Map.entry<String, Array<IntArray>>("Bengali", arrayOf<IntArray>(intArrayOf(0x980, 0x9ff))),
+        Map.entry<String, Array<IntArray>>("Beria_Erfe", arrayOf<IntArray>(intArrayOf(0x16ea0, 0x16edf))),
+        Map.entry<String, Array<IntArray>>("Bhaiksuki", arrayOf<IntArray>(intArrayOf(0x11c00, 0x11c6f))),
+        Map.entry<String, Array<IntArray>>("Block_Elements", arrayOf<IntArray>(intArrayOf(0x2580, 0x259f))),
+        Map.entry<String, Array<IntArray>>("Bopomofo", arrayOf<IntArray>(intArrayOf(0x3100, 0x312f))),
+        Map.entry<String, Array<IntArray>>("Bopomofo_Extended", arrayOf<IntArray>(intArrayOf(0x31a0, 0x31bf))),
+        Map.entry<String, Array<IntArray>>("Box_Drawing", arrayOf<IntArray>(intArrayOf(0x2500, 0x257f))),
+        Map.entry<String, Array<IntArray>>("Brahmi", arrayOf<IntArray>(intArrayOf(0x11000, 0x1107f))),
+        Map.entry<String, Array<IntArray>>("Braille_Patterns", arrayOf<IntArray>(intArrayOf(0x2800, 0x28ff))),
+        Map.entry<String, Array<IntArray>>("Buginese", arrayOf<IntArray>(intArrayOf(0x1a00, 0x1a1f))),
+        Map.entry<String, Array<IntArray>>("Buhid", arrayOf<IntArray>(intArrayOf(0x1740, 0x175f))),
+        Map.entry<String, Array<IntArray>>(
             "Byzantine_Musical_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x1d000, 0x1d0ff))
+            arrayOf<IntArray>(intArrayOf(0x1d000, 0x1d0ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Carian", arrayOf<IntArray?>(intArrayOf(0x102a0, 0x102df))),
-        Map.entry<String?, Array<IntArray?>?>("Caucasian_Albanian", arrayOf<IntArray?>(intArrayOf(0x10530, 0x1056f))),
-        Map.entry<String?, Array<IntArray?>?>("Chakma", arrayOf<IntArray?>(intArrayOf(0x11100, 0x1114f))),
-        Map.entry<String?, Array<IntArray?>?>("Cham", arrayOf<IntArray?>(intArrayOf(0xaa00, 0xaa5f))),
-        Map.entry<String?, Array<IntArray?>?>("Cherokee", arrayOf<IntArray?>(intArrayOf(0x13a0, 0x13ff))),
-        Map.entry<String?, Array<IntArray?>?>("Cherokee_Supplement", arrayOf<IntArray?>(intArrayOf(0xab70, 0xabbf))),
-        Map.entry<String?, Array<IntArray?>?>("Chess_Symbols", arrayOf<IntArray?>(intArrayOf(0x1fa00, 0x1fa6f))),
-        Map.entry<String?, Array<IntArray?>?>("Chorasmian", arrayOf<IntArray?>(intArrayOf(0x10fb0, 0x10fdf))),
-        Map.entry<String?, Array<IntArray?>?>("Cjk_Compatibility", arrayOf<IntArray?>(intArrayOf(0x3300, 0x33ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Carian", arrayOf<IntArray>(intArrayOf(0x102a0, 0x102df))),
+        Map.entry<String, Array<IntArray>>("Caucasian_Albanian", arrayOf<IntArray>(intArrayOf(0x10530, 0x1056f))),
+        Map.entry<String, Array<IntArray>>("Chakma", arrayOf<IntArray>(intArrayOf(0x11100, 0x1114f))),
+        Map.entry<String, Array<IntArray>>("Cham", arrayOf<IntArray>(intArrayOf(0xaa00, 0xaa5f))),
+        Map.entry<String, Array<IntArray>>("Cherokee", arrayOf<IntArray>(intArrayOf(0x13a0, 0x13ff))),
+        Map.entry<String, Array<IntArray>>("Cherokee_Supplement", arrayOf<IntArray>(intArrayOf(0xab70, 0xabbf))),
+        Map.entry<String, Array<IntArray>>("Chess_Symbols", arrayOf<IntArray>(intArrayOf(0x1fa00, 0x1fa6f))),
+        Map.entry<String, Array<IntArray>>("Chorasmian", arrayOf<IntArray>(intArrayOf(0x10fb0, 0x10fdf))),
+        Map.entry<String, Array<IntArray>>("Cjk_Compatibility", arrayOf<IntArray>(intArrayOf(0x3300, 0x33ff))),
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Compatibility_Forms",
-            arrayOf<IntArray?>(intArrayOf(0xfe30, 0xfe4f))
+            arrayOf<IntArray>(intArrayOf(0xfe30, 0xfe4f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Compatibility_Ideographs",
-            arrayOf<IntArray?>(intArrayOf(0xf900, 0xfaff))
+            arrayOf<IntArray>(intArrayOf(0xf900, 0xfaff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Compatibility_Ideographs_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x2f800, 0x2fa1f))
+            arrayOf<IntArray>(intArrayOf(0x2f800, 0x2fa1f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Radicals_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x2e80, 0x2eff))
+            arrayOf<IntArray>(intArrayOf(0x2e80, 0x2eff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Cjk_Strokes", arrayOf<IntArray?>(intArrayOf(0x31c0, 0x31ef))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Cjk_Strokes", arrayOf<IntArray>(intArrayOf(0x31c0, 0x31ef))),
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Symbols_And_Punctuation",
-            arrayOf<IntArray?>(intArrayOf(0x3000, 0x303f))
+            arrayOf<IntArray>(intArrayOf(0x3000, 0x303f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Cjk_Unified_Ideographs", arrayOf<IntArray?>(intArrayOf(0x4e00, 0x9fff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Cjk_Unified_Ideographs", arrayOf<IntArray>(intArrayOf(0x4e00, 0x9fff))),
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_A",
-            arrayOf<IntArray?>(intArrayOf(0x3400, 0x4dbf))
+            arrayOf<IntArray>(intArrayOf(0x3400, 0x4dbf))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_B",
-            arrayOf<IntArray?>(intArrayOf(0x20000, 0x2a6df))
+            arrayOf<IntArray>(intArrayOf(0x20000, 0x2a6df))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_C",
-            arrayOf<IntArray?>(intArrayOf(0x2a700, 0x2b73f))
+            arrayOf<IntArray>(intArrayOf(0x2a700, 0x2b73f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_D",
-            arrayOf<IntArray?>(intArrayOf(0x2b740, 0x2b81f))
+            arrayOf<IntArray>(intArrayOf(0x2b740, 0x2b81f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_E",
-            arrayOf<IntArray?>(intArrayOf(0x2b820, 0x2ceaf))
+            arrayOf<IntArray>(intArrayOf(0x2b820, 0x2ceaf))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_F",
-            arrayOf<IntArray?>(intArrayOf(0x2ceb0, 0x2ebef))
+            arrayOf<IntArray>(intArrayOf(0x2ceb0, 0x2ebef))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_G",
-            arrayOf<IntArray?>(intArrayOf(0x30000, 0x3134f))
+            arrayOf<IntArray>(intArrayOf(0x30000, 0x3134f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_H",
-            arrayOf<IntArray?>(intArrayOf(0x31350, 0x323af))
+            arrayOf<IntArray>(intArrayOf(0x31350, 0x323af))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_I",
-            arrayOf<IntArray?>(intArrayOf(0x2ebf0, 0x2ee5f))
+            arrayOf<IntArray>(intArrayOf(0x2ebf0, 0x2ee5f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Cjk_Unified_Ideographs_Extension_J",
-            arrayOf<IntArray?>(intArrayOf(0x323b0, 0x3347f))
+            arrayOf<IntArray>(intArrayOf(0x323b0, 0x3347f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Combining_Diacritical_Marks",
-            arrayOf<IntArray?>(intArrayOf(0x300, 0x36f))
+            arrayOf<IntArray>(intArrayOf(0x300, 0x36f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Combining_Diacritical_Marks_Extended",
-            arrayOf<IntArray?>(intArrayOf(0x1ab0, 0x1aff))
+            arrayOf<IntArray>(intArrayOf(0x1ab0, 0x1aff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Combining_Diacritical_Marks_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1dc0, 0x1dff))
+            arrayOf<IntArray>(intArrayOf(0x1dc0, 0x1dff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Combining_Half_Marks", arrayOf<IntArray?>(intArrayOf(0xfe20, 0xfe2f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Combining_Half_Marks", arrayOf<IntArray>(intArrayOf(0xfe20, 0xfe2f))),
+        Map.entry<String, Array<IntArray>>(
             "Combining_Marks_For_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x20d0, 0x20ff))
+            arrayOf<IntArray>(intArrayOf(0x20d0, 0x20ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Common_Indic_Number_Forms",
-            arrayOf<IntArray?>(intArrayOf(0xa830, 0xa83f))
+            arrayOf<IntArray>(intArrayOf(0xa830, 0xa83f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Control_Pictures", arrayOf<IntArray?>(intArrayOf(0x2400, 0x243f))),
-        Map.entry<String?, Array<IntArray?>?>("Coptic", arrayOf<IntArray?>(intArrayOf(0x2c80, 0x2cff))),
-        Map.entry<String?, Array<IntArray?>?>("Coptic_Epact_Numbers", arrayOf<IntArray?>(intArrayOf(0x102e0, 0x102ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Control_Pictures", arrayOf<IntArray>(intArrayOf(0x2400, 0x243f))),
+        Map.entry<String, Array<IntArray>>("Coptic", arrayOf<IntArray>(intArrayOf(0x2c80, 0x2cff))),
+        Map.entry<String, Array<IntArray>>("Coptic_Epact_Numbers", arrayOf<IntArray>(intArrayOf(0x102e0, 0x102ff))),
+        Map.entry<String, Array<IntArray>>(
             "Counting_Rod_Numerals",
-            arrayOf<IntArray?>(intArrayOf(0x1d360, 0x1d37f))
+            arrayOf<IntArray>(intArrayOf(0x1d360, 0x1d37f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Cuneiform", arrayOf<IntArray?>(intArrayOf(0x12000, 0x123ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Cuneiform", arrayOf<IntArray>(intArrayOf(0x12000, 0x123ff))),
+        Map.entry<String, Array<IntArray>>(
             "Cuneiform_Numbers_And_Punctuation",
-            arrayOf<IntArray?>(intArrayOf(0x12400, 0x1247f))
+            arrayOf<IntArray>(intArrayOf(0x12400, 0x1247f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Currency_Symbols", arrayOf<IntArray?>(intArrayOf(0x20a0, 0x20cf))),
-        Map.entry<String?, Array<IntArray?>?>("Cypriot_Syllabary", arrayOf<IntArray?>(intArrayOf(0x10800, 0x1083f))),
-        Map.entry<String?, Array<IntArray?>?>("Cypro_Minoan", arrayOf<IntArray?>(intArrayOf(0x12f90, 0x12fff))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic", arrayOf<IntArray?>(intArrayOf(0x400, 0x4ff))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic_Extended_A", arrayOf<IntArray?>(intArrayOf(0x2de0, 0x2dff))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic_Extended_B", arrayOf<IntArray?>(intArrayOf(0xa640, 0xa69f))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic_Extended_C", arrayOf<IntArray?>(intArrayOf(0x1c80, 0x1c8f))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic_Extended_D", arrayOf<IntArray?>(intArrayOf(0x1e030, 0x1e08f))),
-        Map.entry<String?, Array<IntArray?>?>("Cyrillic_Supplementary", arrayOf<IntArray?>(intArrayOf(0x500, 0x52f))),
-        Map.entry<String?, Array<IntArray?>?>("Deseret", arrayOf<IntArray?>(intArrayOf(0x10400, 0x1044f))),
-        Map.entry<String?, Array<IntArray?>?>("Devanagari", arrayOf<IntArray?>(intArrayOf(0x900, 0x97f))),
-        Map.entry<String?, Array<IntArray?>?>("Devanagari_Extended", arrayOf<IntArray?>(intArrayOf(0xa8e0, 0xa8ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Currency_Symbols", arrayOf<IntArray>(intArrayOf(0x20a0, 0x20cf))),
+        Map.entry<String, Array<IntArray>>("Cypriot_Syllabary", arrayOf<IntArray>(intArrayOf(0x10800, 0x1083f))),
+        Map.entry<String, Array<IntArray>>("Cypro_Minoan", arrayOf<IntArray>(intArrayOf(0x12f90, 0x12fff))),
+        Map.entry<String, Array<IntArray>>("Cyrillic", arrayOf<IntArray>(intArrayOf(0x400, 0x4ff))),
+        Map.entry<String, Array<IntArray>>("Cyrillic_Extended_A", arrayOf<IntArray>(intArrayOf(0x2de0, 0x2dff))),
+        Map.entry<String, Array<IntArray>>("Cyrillic_Extended_B", arrayOf<IntArray>(intArrayOf(0xa640, 0xa69f))),
+        Map.entry<String, Array<IntArray>>("Cyrillic_Extended_C", arrayOf<IntArray>(intArrayOf(0x1c80, 0x1c8f))),
+        Map.entry<String, Array<IntArray>>("Cyrillic_Extended_D", arrayOf<IntArray>(intArrayOf(0x1e030, 0x1e08f))),
+        Map.entry<String, Array<IntArray>>("Cyrillic_Supplementary", arrayOf<IntArray>(intArrayOf(0x500, 0x52f))),
+        Map.entry<String, Array<IntArray>>("Deseret", arrayOf<IntArray>(intArrayOf(0x10400, 0x1044f))),
+        Map.entry<String, Array<IntArray>>("Devanagari", arrayOf<IntArray>(intArrayOf(0x900, 0x97f))),
+        Map.entry<String, Array<IntArray>>("Devanagari_Extended", arrayOf<IntArray>(intArrayOf(0xa8e0, 0xa8ff))),
+        Map.entry<String, Array<IntArray>>(
             "Devanagari_Extended_A",
-            arrayOf<IntArray?>(intArrayOf(0x11b00, 0x11b5f))
+            arrayOf<IntArray>(intArrayOf(0x11b00, 0x11b5f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Dingbats", arrayOf<IntArray?>(intArrayOf(0x2700, 0x27bf))),
-        Map.entry<String?, Array<IntArray?>?>("Dives_Akuru", arrayOf<IntArray?>(intArrayOf(0x11900, 0x1195f))),
-        Map.entry<String?, Array<IntArray?>?>("Dogra", arrayOf<IntArray?>(intArrayOf(0x11800, 0x1184f))),
-        Map.entry<String?, Array<IntArray?>?>("Domino_Tiles", arrayOf<IntArray?>(intArrayOf(0x1f030, 0x1f09f))),
-        Map.entry<String?, Array<IntArray?>?>("Duployan", arrayOf<IntArray?>(intArrayOf(0x1bc00, 0x1bc9f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Dingbats", arrayOf<IntArray>(intArrayOf(0x2700, 0x27bf))),
+        Map.entry<String, Array<IntArray>>("Dives_Akuru", arrayOf<IntArray>(intArrayOf(0x11900, 0x1195f))),
+        Map.entry<String, Array<IntArray>>("Dogra", arrayOf<IntArray>(intArrayOf(0x11800, 0x1184f))),
+        Map.entry<String, Array<IntArray>>("Domino_Tiles", arrayOf<IntArray>(intArrayOf(0x1f030, 0x1f09f))),
+        Map.entry<String, Array<IntArray>>("Duployan", arrayOf<IntArray>(intArrayOf(0x1bc00, 0x1bc9f))),
+        Map.entry<String, Array<IntArray>>(
             "Early_Dynastic_Cuneiform",
-            arrayOf<IntArray?>(intArrayOf(0x12480, 0x1254f))
+            arrayOf<IntArray>(intArrayOf(0x12480, 0x1254f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Egyptian_Hieroglyph_Format_Controls",
-            arrayOf<IntArray?>(intArrayOf(0x13430, 0x1345f))
+            arrayOf<IntArray>(intArrayOf(0x13430, 0x1345f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Egyptian_Hieroglyphs", arrayOf<IntArray?>(intArrayOf(0x13000, 0x1342f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Egyptian_Hieroglyphs", arrayOf<IntArray>(intArrayOf(0x13000, 0x1342f))),
+        Map.entry<String, Array<IntArray>>(
             "Egyptian_Hieroglyphs_Extended_A",
-            arrayOf<IntArray?>(intArrayOf(0x13460, 0x143ff))
+            arrayOf<IntArray>(intArrayOf(0x13460, 0x143ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Elbasan", arrayOf<IntArray?>(intArrayOf(0x10500, 0x1052f))),
-        Map.entry<String?, Array<IntArray?>?>("Elymaic", arrayOf<IntArray?>(intArrayOf(0x10fe0, 0x10fff))),
-        Map.entry<String?, Array<IntArray?>?>("Emoticons", arrayOf<IntArray?>(intArrayOf(0x1f600, 0x1f64f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Elbasan", arrayOf<IntArray>(intArrayOf(0x10500, 0x1052f))),
+        Map.entry<String, Array<IntArray>>("Elymaic", arrayOf<IntArray>(intArrayOf(0x10fe0, 0x10fff))),
+        Map.entry<String, Array<IntArray>>("Emoticons", arrayOf<IntArray>(intArrayOf(0x1f600, 0x1f64f))),
+        Map.entry<String, Array<IntArray>>(
             "Enclosed_Alphanumeric_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1f100, 0x1f1ff))
+            arrayOf<IntArray>(intArrayOf(0x1f100, 0x1f1ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Enclosed_Alphanumerics", arrayOf<IntArray?>(intArrayOf(0x2460, 0x24ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Enclosed_Alphanumerics", arrayOf<IntArray>(intArrayOf(0x2460, 0x24ff))),
+        Map.entry<String, Array<IntArray>>(
             "Enclosed_Cjk_Letters_And_Months",
-            arrayOf<IntArray?>(intArrayOf(0x3200, 0x32ff))
+            arrayOf<IntArray>(intArrayOf(0x3200, 0x32ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Enclosed_Ideographic_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1f200, 0x1f2ff))
+            arrayOf<IntArray>(intArrayOf(0x1f200, 0x1f2ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic", arrayOf<IntArray?>(intArrayOf(0x1200, 0x137f))),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic_Extended", arrayOf<IntArray?>(intArrayOf(0x2d80, 0x2ddf))),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic_Extended_A", arrayOf<IntArray?>(intArrayOf(0xab00, 0xab2f))),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic_Extended_B", arrayOf<IntArray?>(intArrayOf(0x1e7e0, 0x1e7ff))),
-        Map.entry<String?, Array<IntArray?>?>("Ethiopic_Supplement", arrayOf<IntArray?>(intArrayOf(0x1380, 0x139f))),
-        Map.entry<String?, Array<IntArray?>?>("Garay", arrayOf<IntArray?>(intArrayOf(0x10d40, 0x10d8f))),
-        Map.entry<String?, Array<IntArray?>?>("General_Punctuation", arrayOf<IntArray?>(intArrayOf(0x2000, 0x206f))),
-        Map.entry<String?, Array<IntArray?>?>("Geometric_Shapes", arrayOf<IntArray?>(intArrayOf(0x25a0, 0x25ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Ethiopic", arrayOf<IntArray>(intArrayOf(0x1200, 0x137f))),
+        Map.entry<String, Array<IntArray>>("Ethiopic_Extended", arrayOf<IntArray>(intArrayOf(0x2d80, 0x2ddf))),
+        Map.entry<String, Array<IntArray>>("Ethiopic_Extended_A", arrayOf<IntArray>(intArrayOf(0xab00, 0xab2f))),
+        Map.entry<String, Array<IntArray>>("Ethiopic_Extended_B", arrayOf<IntArray>(intArrayOf(0x1e7e0, 0x1e7ff))),
+        Map.entry<String, Array<IntArray>>("Ethiopic_Supplement", arrayOf<IntArray>(intArrayOf(0x1380, 0x139f))),
+        Map.entry<String, Array<IntArray>>("Garay", arrayOf<IntArray>(intArrayOf(0x10d40, 0x10d8f))),
+        Map.entry<String, Array<IntArray>>("General_Punctuation", arrayOf<IntArray>(intArrayOf(0x2000, 0x206f))),
+        Map.entry<String, Array<IntArray>>("Geometric_Shapes", arrayOf<IntArray>(intArrayOf(0x25a0, 0x25ff))),
+        Map.entry<String, Array<IntArray>>(
             "Geometric_Shapes_Extended",
-            arrayOf<IntArray?>(intArrayOf(0x1f780, 0x1f7ff))
+            arrayOf<IntArray>(intArrayOf(0x1f780, 0x1f7ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Georgian", arrayOf<IntArray?>(intArrayOf(0x10a0, 0x10ff))),
-        Map.entry<String?, Array<IntArray?>?>("Georgian_Extended", arrayOf<IntArray?>(intArrayOf(0x1c90, 0x1cbf))),
-        Map.entry<String?, Array<IntArray?>?>("Georgian_Supplement", arrayOf<IntArray?>(intArrayOf(0x2d00, 0x2d2f))),
-        Map.entry<String?, Array<IntArray?>?>("Glagolitic", arrayOf<IntArray?>(intArrayOf(0x2c00, 0x2c5f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Georgian", arrayOf<IntArray>(intArrayOf(0x10a0, 0x10ff))),
+        Map.entry<String, Array<IntArray>>("Georgian_Extended", arrayOf<IntArray>(intArrayOf(0x1c90, 0x1cbf))),
+        Map.entry<String, Array<IntArray>>("Georgian_Supplement", arrayOf<IntArray>(intArrayOf(0x2d00, 0x2d2f))),
+        Map.entry<String, Array<IntArray>>("Glagolitic", arrayOf<IntArray>(intArrayOf(0x2c00, 0x2c5f))),
+        Map.entry<String, Array<IntArray>>(
             "Glagolitic_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1e000, 0x1e02f))
+            arrayOf<IntArray>(intArrayOf(0x1e000, 0x1e02f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Gothic", arrayOf<IntArray?>(intArrayOf(0x10330, 0x1034f))),
-        Map.entry<String?, Array<IntArray?>?>("Grantha", arrayOf<IntArray?>(intArrayOf(0x11300, 0x1137f))),
-        Map.entry<String?, Array<IntArray?>?>("Greek", arrayOf<IntArray?>(intArrayOf(0x370, 0x3ff))),
-        Map.entry<String?, Array<IntArray?>?>("Greek_Extended", arrayOf<IntArray?>(intArrayOf(0x1f00, 0x1fff))),
-        Map.entry<String?, Array<IntArray?>?>("Gujarati", arrayOf<IntArray?>(intArrayOf(0xa80, 0xaff))),
-        Map.entry<String?, Array<IntArray?>?>("Gunjala_Gondi", arrayOf<IntArray?>(intArrayOf(0x11d60, 0x11daf))),
-        Map.entry<String?, Array<IntArray?>?>("Gurmukhi", arrayOf<IntArray?>(intArrayOf(0xa00, 0xa7f))),
-        Map.entry<String?, Array<IntArray?>?>("Gurung_Khema", arrayOf<IntArray?>(intArrayOf(0x16100, 0x1613f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Gothic", arrayOf<IntArray>(intArrayOf(0x10330, 0x1034f))),
+        Map.entry<String, Array<IntArray>>("Grantha", arrayOf<IntArray>(intArrayOf(0x11300, 0x1137f))),
+        Map.entry<String, Array<IntArray>>("Greek", arrayOf<IntArray>(intArrayOf(0x370, 0x3ff))),
+        Map.entry<String, Array<IntArray>>("Greek_Extended", arrayOf<IntArray>(intArrayOf(0x1f00, 0x1fff))),
+        Map.entry<String, Array<IntArray>>("Gujarati", arrayOf<IntArray>(intArrayOf(0xa80, 0xaff))),
+        Map.entry<String, Array<IntArray>>("Gunjala_Gondi", arrayOf<IntArray>(intArrayOf(0x11d60, 0x11daf))),
+        Map.entry<String, Array<IntArray>>("Gurmukhi", arrayOf<IntArray>(intArrayOf(0xa00, 0xa7f))),
+        Map.entry<String, Array<IntArray>>("Gurung_Khema", arrayOf<IntArray>(intArrayOf(0x16100, 0x1613f))),
+        Map.entry<String, Array<IntArray>>(
             "Halfwidth_And_Fullwidth_Forms",
-            arrayOf<IntArray?>(intArrayOf(0xff00, 0xffef))
+            arrayOf<IntArray>(intArrayOf(0xff00, 0xffef))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Hangul_Compatibility_Jamo",
-            arrayOf<IntArray?>(intArrayOf(0x3130, 0x318f))
+            arrayOf<IntArray>(intArrayOf(0x3130, 0x318f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Hangul_Jamo", arrayOf<IntArray?>(intArrayOf(0x1100, 0x11ff))),
-        Map.entry<String?, Array<IntArray?>?>("Hangul_Jamo_Extended_A", arrayOf<IntArray?>(intArrayOf(0xa960, 0xa97f))),
-        Map.entry<String?, Array<IntArray?>?>("Hangul_Jamo_Extended_B", arrayOf<IntArray?>(intArrayOf(0xd7b0, 0xd7ff))),
-        Map.entry<String?, Array<IntArray?>?>("Hangul_Syllables", arrayOf<IntArray?>(intArrayOf(0xac00, 0xd7af))),
-        Map.entry<String?, Array<IntArray?>?>("Hanifi_Rohingya", arrayOf<IntArray?>(intArrayOf(0x10d00, 0x10d3f))),
-        Map.entry<String?, Array<IntArray?>?>("Hanunoo", arrayOf<IntArray?>(intArrayOf(0x1720, 0x173f))),
-        Map.entry<String?, Array<IntArray?>?>("Hatran", arrayOf<IntArray?>(intArrayOf(0x108e0, 0x108ff))),
-        Map.entry<String?, Array<IntArray?>?>("Hebrew", arrayOf<IntArray?>(intArrayOf(0x590, 0x5ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Hangul_Jamo", arrayOf<IntArray>(intArrayOf(0x1100, 0x11ff))),
+        Map.entry<String, Array<IntArray>>("Hangul_Jamo_Extended_A", arrayOf<IntArray>(intArrayOf(0xa960, 0xa97f))),
+        Map.entry<String, Array<IntArray>>("Hangul_Jamo_Extended_B", arrayOf<IntArray>(intArrayOf(0xd7b0, 0xd7ff))),
+        Map.entry<String, Array<IntArray>>("Hangul_Syllables", arrayOf<IntArray>(intArrayOf(0xac00, 0xd7af))),
+        Map.entry<String, Array<IntArray>>("Hanifi_Rohingya", arrayOf<IntArray>(intArrayOf(0x10d00, 0x10d3f))),
+        Map.entry<String, Array<IntArray>>("Hanunoo", arrayOf<IntArray>(intArrayOf(0x1720, 0x173f))),
+        Map.entry<String, Array<IntArray>>("Hatran", arrayOf<IntArray>(intArrayOf(0x108e0, 0x108ff))),
+        Map.entry<String, Array<IntArray>>("Hebrew", arrayOf<IntArray>(intArrayOf(0x590, 0x5ff))),
+        Map.entry<String, Array<IntArray>>(
             "High_Private_Use_Surrogates",
-            arrayOf<IntArray?>(intArrayOf(0xdb80, 0xdbff))
+            arrayOf<IntArray>(intArrayOf(0xdb80, 0xdbff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("High_Surrogates", arrayOf<IntArray?>(intArrayOf(0xd800, 0xdb7f))),
-        Map.entry<String?, Array<IntArray?>?>("Hiragana", arrayOf<IntArray?>(intArrayOf(0x3040, 0x309f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("High_Surrogates", arrayOf<IntArray>(intArrayOf(0xd800, 0xdb7f))),
+        Map.entry<String, Array<IntArray>>("Hiragana", arrayOf<IntArray>(intArrayOf(0x3040, 0x309f))),
+        Map.entry<String, Array<IntArray>>(
             "Ideographic_Description_Characters",
-            arrayOf<IntArray?>(intArrayOf(0x2ff0, 0x2fff))
+            arrayOf<IntArray>(intArrayOf(0x2ff0, 0x2fff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Ideographic_Symbols_And_Punctuation",
-            arrayOf<IntArray?>(intArrayOf(0x16fe0, 0x16fff))
+            arrayOf<IntArray>(intArrayOf(0x16fe0, 0x16fff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Imperial_Aramaic", arrayOf<IntArray?>(intArrayOf(0x10840, 0x1085f))),
-        Map.entry<String?, Array<IntArray?>?>("Indic_Siyaq_Numbers", arrayOf<IntArray?>(intArrayOf(0x1ec70, 0x1ecbf))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Imperial_Aramaic", arrayOf<IntArray>(intArrayOf(0x10840, 0x1085f))),
+        Map.entry<String, Array<IntArray>>("Indic_Siyaq_Numbers", arrayOf<IntArray>(intArrayOf(0x1ec70, 0x1ecbf))),
+        Map.entry<String, Array<IntArray>>(
             "Inscriptional_Pahlavi",
-            arrayOf<IntArray?>(intArrayOf(0x10b60, 0x10b7f))
+            arrayOf<IntArray>(intArrayOf(0x10b60, 0x10b7f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Inscriptional_Parthian",
-            arrayOf<IntArray?>(intArrayOf(0x10b40, 0x10b5f))
+            arrayOf<IntArray>(intArrayOf(0x10b40, 0x10b5f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Ipa_Extensions", arrayOf<IntArray?>(intArrayOf(0x250, 0x2af))),
-        Map.entry<String?, Array<IntArray?>?>("Javanese", arrayOf<IntArray?>(intArrayOf(0xa980, 0xa9df))),
-        Map.entry<String?, Array<IntArray?>?>("Kaithi", arrayOf<IntArray?>(intArrayOf(0x11080, 0x110cf))),
-        Map.entry<String?, Array<IntArray?>?>("Kaktovik_Numerals", arrayOf<IntArray?>(intArrayOf(0x1d2c0, 0x1d2df))),
-        Map.entry<String?, Array<IntArray?>?>("Kana_Extended_A", arrayOf<IntArray?>(intArrayOf(0x1b100, 0x1b12f))),
-        Map.entry<String?, Array<IntArray?>?>("Kana_Extended_B", arrayOf<IntArray?>(intArrayOf(0x1aff0, 0x1afff))),
-        Map.entry<String?, Array<IntArray?>?>("Kana_Supplement", arrayOf<IntArray?>(intArrayOf(0x1b000, 0x1b0ff))),
-        Map.entry<String?, Array<IntArray?>?>("Kanbun", arrayOf<IntArray?>(intArrayOf(0x3190, 0x319f))),
-        Map.entry<String?, Array<IntArray?>?>("Kangxi_Radicals", arrayOf<IntArray?>(intArrayOf(0x2f00, 0x2fdf))),
-        Map.entry<String?, Array<IntArray?>?>("Kannada", arrayOf<IntArray?>(intArrayOf(0xc80, 0xcff))),
-        Map.entry<String?, Array<IntArray?>?>("Katakana", arrayOf<IntArray?>(intArrayOf(0x30a0, 0x30ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Ipa_Extensions", arrayOf<IntArray>(intArrayOf(0x250, 0x2af))),
+        Map.entry<String, Array<IntArray>>("Javanese", arrayOf<IntArray>(intArrayOf(0xa980, 0xa9df))),
+        Map.entry<String, Array<IntArray>>("Kaithi", arrayOf<IntArray>(intArrayOf(0x11080, 0x110cf))),
+        Map.entry<String, Array<IntArray>>("Kaktovik_Numerals", arrayOf<IntArray>(intArrayOf(0x1d2c0, 0x1d2df))),
+        Map.entry<String, Array<IntArray>>("Kana_Extended_A", arrayOf<IntArray>(intArrayOf(0x1b100, 0x1b12f))),
+        Map.entry<String, Array<IntArray>>("Kana_Extended_B", arrayOf<IntArray>(intArrayOf(0x1aff0, 0x1afff))),
+        Map.entry<String, Array<IntArray>>("Kana_Supplement", arrayOf<IntArray>(intArrayOf(0x1b000, 0x1b0ff))),
+        Map.entry<String, Array<IntArray>>("Kanbun", arrayOf<IntArray>(intArrayOf(0x3190, 0x319f))),
+        Map.entry<String, Array<IntArray>>("Kangxi_Radicals", arrayOf<IntArray>(intArrayOf(0x2f00, 0x2fdf))),
+        Map.entry<String, Array<IntArray>>("Kannada", arrayOf<IntArray>(intArrayOf(0xc80, 0xcff))),
+        Map.entry<String, Array<IntArray>>("Katakana", arrayOf<IntArray>(intArrayOf(0x30a0, 0x30ff))),
+        Map.entry<String, Array<IntArray>>(
             "Katakana_Phonetic_Extensions",
-            arrayOf<IntArray?>(intArrayOf(0x31f0, 0x31ff))
+            arrayOf<IntArray>(intArrayOf(0x31f0, 0x31ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Kawi", arrayOf<IntArray?>(intArrayOf(0x11f00, 0x11f5f))),
-        Map.entry<String?, Array<IntArray?>?>("Kayah_Li", arrayOf<IntArray?>(intArrayOf(0xa900, 0xa92f))),
-        Map.entry<String?, Array<IntArray?>?>("Kharoshthi", arrayOf<IntArray?>(intArrayOf(0x10a00, 0x10a5f))),
-        Map.entry<String?, Array<IntArray?>?>("Khitan_Small_Script", arrayOf<IntArray?>(intArrayOf(0x18b00, 0x18cff))),
-        Map.entry<String?, Array<IntArray?>?>("Khmer", arrayOf<IntArray?>(intArrayOf(0x1780, 0x17ff))),
-        Map.entry<String?, Array<IntArray?>?>("Khmer_Symbols", arrayOf<IntArray?>(intArrayOf(0x19e0, 0x19ff))),
-        Map.entry<String?, Array<IntArray?>?>("Khojki", arrayOf<IntArray?>(intArrayOf(0x11200, 0x1124f))),
-        Map.entry<String?, Array<IntArray?>?>("Khudawadi", arrayOf<IntArray?>(intArrayOf(0x112b0, 0x112ff))),
-        Map.entry<String?, Array<IntArray?>?>("Kirat_Rai", arrayOf<IntArray?>(intArrayOf(0x16d40, 0x16d7f))),
-        Map.entry<String?, Array<IntArray?>?>("Lao", arrayOf<IntArray?>(intArrayOf(0xe80, 0xeff))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_1_Supplement", arrayOf<IntArray?>(intArrayOf(0x80, 0xff))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_A", arrayOf<IntArray?>(intArrayOf(0x100, 0x17f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Kawi", arrayOf<IntArray>(intArrayOf(0x11f00, 0x11f5f))),
+        Map.entry<String, Array<IntArray>>("Kayah_Li", arrayOf<IntArray>(intArrayOf(0xa900, 0xa92f))),
+        Map.entry<String, Array<IntArray>>("Kharoshthi", arrayOf<IntArray>(intArrayOf(0x10a00, 0x10a5f))),
+        Map.entry<String, Array<IntArray>>("Khitan_Small_Script", arrayOf<IntArray>(intArrayOf(0x18b00, 0x18cff))),
+        Map.entry<String, Array<IntArray>>("Khmer", arrayOf<IntArray>(intArrayOf(0x1780, 0x17ff))),
+        Map.entry<String, Array<IntArray>>("Khmer_Symbols", arrayOf<IntArray>(intArrayOf(0x19e0, 0x19ff))),
+        Map.entry<String, Array<IntArray>>("Khojki", arrayOf<IntArray>(intArrayOf(0x11200, 0x1124f))),
+        Map.entry<String, Array<IntArray>>("Khudawadi", arrayOf<IntArray>(intArrayOf(0x112b0, 0x112ff))),
+        Map.entry<String, Array<IntArray>>("Kirat_Rai", arrayOf<IntArray>(intArrayOf(0x16d40, 0x16d7f))),
+        Map.entry<String, Array<IntArray>>("Lao", arrayOf<IntArray>(intArrayOf(0xe80, 0xeff))),
+        Map.entry<String, Array<IntArray>>("Latin_1_Supplement", arrayOf<IntArray>(intArrayOf(0x80, 0xff))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_A", arrayOf<IntArray>(intArrayOf(0x100, 0x17f))),
+        Map.entry<String, Array<IntArray>>(
             "Latin_Extended_Additional",
-            arrayOf<IntArray?>(intArrayOf(0x1e00, 0x1eff))
+            arrayOf<IntArray>(intArrayOf(0x1e00, 0x1eff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_B", arrayOf<IntArray?>(intArrayOf(0x180, 0x24f))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_C", arrayOf<IntArray?>(intArrayOf(0x2c60, 0x2c7f))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_D", arrayOf<IntArray?>(intArrayOf(0xa720, 0xa7ff))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_E", arrayOf<IntArray?>(intArrayOf(0xab30, 0xab6f))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_F", arrayOf<IntArray?>(intArrayOf(0x10780, 0x107bf))),
-        Map.entry<String?, Array<IntArray?>?>("Latin_Extended_G", arrayOf<IntArray?>(intArrayOf(0x1df00, 0x1dfff))),
-        Map.entry<String?, Array<IntArray?>?>("Lepcha", arrayOf<IntArray?>(intArrayOf(0x1c00, 0x1c4f))),
-        Map.entry<String?, Array<IntArray?>?>("Letterlike_Symbols", arrayOf<IntArray?>(intArrayOf(0x2100, 0x214f))),
-        Map.entry<String?, Array<IntArray?>?>("Limbu", arrayOf<IntArray?>(intArrayOf(0x1900, 0x194f))),
-        Map.entry<String?, Array<IntArray?>?>("Linear_A", arrayOf<IntArray?>(intArrayOf(0x10600, 0x1077f))),
-        Map.entry<String?, Array<IntArray?>?>("Linear_B_Ideograms", arrayOf<IntArray?>(intArrayOf(0x10080, 0x100ff))),
-        Map.entry<String?, Array<IntArray?>?>("Linear_B_Syllabary", arrayOf<IntArray?>(intArrayOf(0x10000, 0x1007f))),
-        Map.entry<String?, Array<IntArray?>?>("Lisu", arrayOf<IntArray?>(intArrayOf(0xa4d0, 0xa4ff))),
-        Map.entry<String?, Array<IntArray?>?>("Lisu_Supplement", arrayOf<IntArray?>(intArrayOf(0x11fb0, 0x11fbf))),
-        Map.entry<String?, Array<IntArray?>?>("Low_Surrogates", arrayOf<IntArray?>(intArrayOf(0xdc00, 0xdfff))),
-        Map.entry<String?, Array<IntArray?>?>("Lycian", arrayOf<IntArray?>(intArrayOf(0x10280, 0x1029f))),
-        Map.entry<String?, Array<IntArray?>?>("Lydian", arrayOf<IntArray?>(intArrayOf(0x10920, 0x1093f))),
-        Map.entry<String?, Array<IntArray?>?>("Mahajani", arrayOf<IntArray?>(intArrayOf(0x11150, 0x1117f))),
-        Map.entry<String?, Array<IntArray?>?>("Mahjong_Tiles", arrayOf<IntArray?>(intArrayOf(0x1f000, 0x1f02f))),
-        Map.entry<String?, Array<IntArray?>?>("Makasar", arrayOf<IntArray?>(intArrayOf(0x11ee0, 0x11eff))),
-        Map.entry<String?, Array<IntArray?>?>("Malayalam", arrayOf<IntArray?>(intArrayOf(0xd00, 0xd7f))),
-        Map.entry<String?, Array<IntArray?>?>("Mandaic", arrayOf<IntArray?>(intArrayOf(0x840, 0x85f))),
-        Map.entry<String?, Array<IntArray?>?>("Manichaean", arrayOf<IntArray?>(intArrayOf(0x10ac0, 0x10aff))),
-        Map.entry<String?, Array<IntArray?>?>("Marchen", arrayOf<IntArray?>(intArrayOf(0x11c70, 0x11cbf))),
-        Map.entry<String?, Array<IntArray?>?>("Masaram_Gondi", arrayOf<IntArray?>(intArrayOf(0x11d00, 0x11d5f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Latin_Extended_B", arrayOf<IntArray>(intArrayOf(0x180, 0x24f))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_C", arrayOf<IntArray>(intArrayOf(0x2c60, 0x2c7f))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_D", arrayOf<IntArray>(intArrayOf(0xa720, 0xa7ff))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_E", arrayOf<IntArray>(intArrayOf(0xab30, 0xab6f))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_F", arrayOf<IntArray>(intArrayOf(0x10780, 0x107bf))),
+        Map.entry<String, Array<IntArray>>("Latin_Extended_G", arrayOf<IntArray>(intArrayOf(0x1df00, 0x1dfff))),
+        Map.entry<String, Array<IntArray>>("Lepcha", arrayOf<IntArray>(intArrayOf(0x1c00, 0x1c4f))),
+        Map.entry<String, Array<IntArray>>("Letterlike_Symbols", arrayOf<IntArray>(intArrayOf(0x2100, 0x214f))),
+        Map.entry<String, Array<IntArray>>("Limbu", arrayOf<IntArray>(intArrayOf(0x1900, 0x194f))),
+        Map.entry<String, Array<IntArray>>("Linear_A", arrayOf<IntArray>(intArrayOf(0x10600, 0x1077f))),
+        Map.entry<String, Array<IntArray>>("Linear_B_Ideograms", arrayOf<IntArray>(intArrayOf(0x10080, 0x100ff))),
+        Map.entry<String, Array<IntArray>>("Linear_B_Syllabary", arrayOf<IntArray>(intArrayOf(0x10000, 0x1007f))),
+        Map.entry<String, Array<IntArray>>("Lisu", arrayOf<IntArray>(intArrayOf(0xa4d0, 0xa4ff))),
+        Map.entry<String, Array<IntArray>>("Lisu_Supplement", arrayOf<IntArray>(intArrayOf(0x11fb0, 0x11fbf))),
+        Map.entry<String, Array<IntArray>>("Low_Surrogates", arrayOf<IntArray>(intArrayOf(0xdc00, 0xdfff))),
+        Map.entry<String, Array<IntArray>>("Lycian", arrayOf<IntArray>(intArrayOf(0x10280, 0x1029f))),
+        Map.entry<String, Array<IntArray>>("Lydian", arrayOf<IntArray>(intArrayOf(0x10920, 0x1093f))),
+        Map.entry<String, Array<IntArray>>("Mahajani", arrayOf<IntArray>(intArrayOf(0x11150, 0x1117f))),
+        Map.entry<String, Array<IntArray>>("Mahjong_Tiles", arrayOf<IntArray>(intArrayOf(0x1f000, 0x1f02f))),
+        Map.entry<String, Array<IntArray>>("Makasar", arrayOf<IntArray>(intArrayOf(0x11ee0, 0x11eff))),
+        Map.entry<String, Array<IntArray>>("Malayalam", arrayOf<IntArray>(intArrayOf(0xd00, 0xd7f))),
+        Map.entry<String, Array<IntArray>>("Mandaic", arrayOf<IntArray>(intArrayOf(0x840, 0x85f))),
+        Map.entry<String, Array<IntArray>>("Manichaean", arrayOf<IntArray>(intArrayOf(0x10ac0, 0x10aff))),
+        Map.entry<String, Array<IntArray>>("Marchen", arrayOf<IntArray>(intArrayOf(0x11c70, 0x11cbf))),
+        Map.entry<String, Array<IntArray>>("Masaram_Gondi", arrayOf<IntArray>(intArrayOf(0x11d00, 0x11d5f))),
+        Map.entry<String, Array<IntArray>>(
             "Mathematical_Alphanumeric_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x1d400, 0x1d7ff))
+            arrayOf<IntArray>(intArrayOf(0x1d400, 0x1d7ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Mathematical_Operators", arrayOf<IntArray?>(intArrayOf(0x2200, 0x22ff))),
-        Map.entry<String?, Array<IntArray?>?>("Mayan_Numerals", arrayOf<IntArray?>(intArrayOf(0x1d2e0, 0x1d2ff))),
-        Map.entry<String?, Array<IntArray?>?>("Medefaidrin", arrayOf<IntArray?>(intArrayOf(0x16e40, 0x16e9f))),
-        Map.entry<String?, Array<IntArray?>?>("Meetei_Mayek", arrayOf<IntArray?>(intArrayOf(0xabc0, 0xabff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Mathematical_Operators", arrayOf<IntArray>(intArrayOf(0x2200, 0x22ff))),
+        Map.entry<String, Array<IntArray>>("Mayan_Numerals", arrayOf<IntArray>(intArrayOf(0x1d2e0, 0x1d2ff))),
+        Map.entry<String, Array<IntArray>>("Medefaidrin", arrayOf<IntArray>(intArrayOf(0x16e40, 0x16e9f))),
+        Map.entry<String, Array<IntArray>>("Meetei_Mayek", arrayOf<IntArray>(intArrayOf(0xabc0, 0xabff))),
+        Map.entry<String, Array<IntArray>>(
             "Meetei_Mayek_Extensions",
-            arrayOf<IntArray?>(intArrayOf(0xaae0, 0xaaff))
+            arrayOf<IntArray>(intArrayOf(0xaae0, 0xaaff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Mende_Kikakui", arrayOf<IntArray?>(intArrayOf(0x1e800, 0x1e8df))),
-        Map.entry<String?, Array<IntArray?>?>("Meroitic_Cursive", arrayOf<IntArray?>(intArrayOf(0x109a0, 0x109ff))),
-        Map.entry<String?, Array<IntArray?>?>("Meroitic_Hieroglyphs", arrayOf<IntArray?>(intArrayOf(0x10980, 0x1099f))),
-        Map.entry<String?, Array<IntArray?>?>("Miao", arrayOf<IntArray?>(intArrayOf(0x16f00, 0x16f9f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Mende_Kikakui", arrayOf<IntArray>(intArrayOf(0x1e800, 0x1e8df))),
+        Map.entry<String, Array<IntArray>>("Meroitic_Cursive", arrayOf<IntArray>(intArrayOf(0x109a0, 0x109ff))),
+        Map.entry<String, Array<IntArray>>("Meroitic_Hieroglyphs", arrayOf<IntArray>(intArrayOf(0x10980, 0x1099f))),
+        Map.entry<String, Array<IntArray>>("Miao", arrayOf<IntArray>(intArrayOf(0x16f00, 0x16f9f))),
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Mathematical_Symbols_A",
-            arrayOf<IntArray?>(intArrayOf(0x27c0, 0x27ef))
+            arrayOf<IntArray>(intArrayOf(0x27c0, 0x27ef))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Mathematical_Symbols_B",
-            arrayOf<IntArray?>(intArrayOf(0x2980, 0x29ff))
+            arrayOf<IntArray>(intArrayOf(0x2980, 0x29ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Miscellaneous_Symbols", arrayOf<IntArray?>(intArrayOf(0x2600, 0x26ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Miscellaneous_Symbols", arrayOf<IntArray>(intArrayOf(0x2600, 0x26ff))),
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Symbols_And_Arrows",
-            arrayOf<IntArray?>(intArrayOf(0x2b00, 0x2bff))
+            arrayOf<IntArray>(intArrayOf(0x2b00, 0x2bff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Symbols_And_Pictographs",
-            arrayOf<IntArray?>(intArrayOf(0x1f300, 0x1f5ff))
+            arrayOf<IntArray>(intArrayOf(0x1f300, 0x1f5ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Symbols_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1cec0, 0x1ceff))
+            arrayOf<IntArray>(intArrayOf(0x1cec0, 0x1ceff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Miscellaneous_Technical",
-            arrayOf<IntArray?>(intArrayOf(0x2300, 0x23ff))
+            arrayOf<IntArray>(intArrayOf(0x2300, 0x23ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Modi", arrayOf<IntArray?>(intArrayOf(0x11600, 0x1165f))),
-        Map.entry<String?, Array<IntArray?>?>("Modifier_Tone_Letters", arrayOf<IntArray?>(intArrayOf(0xa700, 0xa71f))),
-        Map.entry<String?, Array<IntArray?>?>("Mongolian", arrayOf<IntArray?>(intArrayOf(0x1800, 0x18af))),
-        Map.entry<String?, Array<IntArray?>?>("Mongolian_Supplement", arrayOf<IntArray?>(intArrayOf(0x11660, 0x1167f))),
-        Map.entry<String?, Array<IntArray?>?>("Mro", arrayOf<IntArray?>(intArrayOf(0x16a40, 0x16a6f))),
-        Map.entry<String?, Array<IntArray?>?>("Multani", arrayOf<IntArray?>(intArrayOf(0x11280, 0x112af))),
-        Map.entry<String?, Array<IntArray?>?>("Musical_Symbols", arrayOf<IntArray?>(intArrayOf(0x1d100, 0x1d1ff))),
-        Map.entry<String?, Array<IntArray?>?>("Myanmar", arrayOf<IntArray?>(intArrayOf(0x1000, 0x109f))),
-        Map.entry<String?, Array<IntArray?>?>("Myanmar_Extended_A", arrayOf<IntArray?>(intArrayOf(0xaa60, 0xaa7f))),
-        Map.entry<String?, Array<IntArray?>?>("Myanmar_Extended_B", arrayOf<IntArray?>(intArrayOf(0xa9e0, 0xa9ff))),
-        Map.entry<String?, Array<IntArray?>?>("Myanmar_Extended_C", arrayOf<IntArray?>(intArrayOf(0x116d0, 0x116ff))),
-        Map.entry<String?, Array<IntArray?>?>("Nabataean", arrayOf<IntArray?>(intArrayOf(0x10880, 0x108af))),
-        Map.entry<String?, Array<IntArray?>?>("Nag_Mundari", arrayOf<IntArray?>(intArrayOf(0x1e4d0, 0x1e4ff))),
-        Map.entry<String?, Array<IntArray?>?>("Nandinagari", arrayOf<IntArray?>(intArrayOf(0x119a0, 0x119ff))),
-        Map.entry<String?, Array<IntArray?>?>("New_Tai_Lue", arrayOf<IntArray?>(intArrayOf(0x1980, 0x19df))),
-        Map.entry<String?, Array<IntArray?>?>("Newa", arrayOf<IntArray?>(intArrayOf(0x11400, 0x1147f))),
-        Map.entry<String?, Array<IntArray?>?>("Nko", arrayOf<IntArray?>(intArrayOf(0x7c0, 0x7ff))),
-        Map.entry<String?, Array<IntArray?>?>("Number_Forms", arrayOf<IntArray?>(intArrayOf(0x2150, 0x218f))),
-        Map.entry<String?, Array<IntArray?>?>("Nushu", arrayOf<IntArray?>(intArrayOf(0x1b170, 0x1b2ff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Modi", arrayOf<IntArray>(intArrayOf(0x11600, 0x1165f))),
+        Map.entry<String, Array<IntArray>>("Modifier_Tone_Letters", arrayOf<IntArray>(intArrayOf(0xa700, 0xa71f))),
+        Map.entry<String, Array<IntArray>>("Mongolian", arrayOf<IntArray>(intArrayOf(0x1800, 0x18af))),
+        Map.entry<String, Array<IntArray>>("Mongolian_Supplement", arrayOf<IntArray>(intArrayOf(0x11660, 0x1167f))),
+        Map.entry<String, Array<IntArray>>("Mro", arrayOf<IntArray>(intArrayOf(0x16a40, 0x16a6f))),
+        Map.entry<String, Array<IntArray>>("Multani", arrayOf<IntArray>(intArrayOf(0x11280, 0x112af))),
+        Map.entry<String, Array<IntArray>>("Musical_Symbols", arrayOf<IntArray>(intArrayOf(0x1d100, 0x1d1ff))),
+        Map.entry<String, Array<IntArray>>("Myanmar", arrayOf<IntArray>(intArrayOf(0x1000, 0x109f))),
+        Map.entry<String, Array<IntArray>>("Myanmar_Extended_A", arrayOf<IntArray>(intArrayOf(0xaa60, 0xaa7f))),
+        Map.entry<String, Array<IntArray>>("Myanmar_Extended_B", arrayOf<IntArray>(intArrayOf(0xa9e0, 0xa9ff))),
+        Map.entry<String, Array<IntArray>>("Myanmar_Extended_C", arrayOf<IntArray>(intArrayOf(0x116d0, 0x116ff))),
+        Map.entry<String, Array<IntArray>>("Nabataean", arrayOf<IntArray>(intArrayOf(0x10880, 0x108af))),
+        Map.entry<String, Array<IntArray>>("Nag_Mundari", arrayOf<IntArray>(intArrayOf(0x1e4d0, 0x1e4ff))),
+        Map.entry<String, Array<IntArray>>("Nandinagari", arrayOf<IntArray>(intArrayOf(0x119a0, 0x119ff))),
+        Map.entry<String, Array<IntArray>>("New_Tai_Lue", arrayOf<IntArray>(intArrayOf(0x1980, 0x19df))),
+        Map.entry<String, Array<IntArray>>("Newa", arrayOf<IntArray>(intArrayOf(0x11400, 0x1147f))),
+        Map.entry<String, Array<IntArray>>("Nko", arrayOf<IntArray>(intArrayOf(0x7c0, 0x7ff))),
+        Map.entry<String, Array<IntArray>>("Number_Forms", arrayOf<IntArray>(intArrayOf(0x2150, 0x218f))),
+        Map.entry<String, Array<IntArray>>("Nushu", arrayOf<IntArray>(intArrayOf(0x1b170, 0x1b2ff))),
+        Map.entry<String, Array<IntArray>>(
             "Nyiakeng_Puachue_Hmong",
-            arrayOf<IntArray?>(intArrayOf(0x1e100, 0x1e14f))
+            arrayOf<IntArray>(intArrayOf(0x1e100, 0x1e14f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Ogham", arrayOf<IntArray?>(intArrayOf(0x1680, 0x169f))),
-        Map.entry<String?, Array<IntArray?>?>("Ol_Chiki", arrayOf<IntArray?>(intArrayOf(0x1c50, 0x1c7f))),
-        Map.entry<String?, Array<IntArray?>?>("Ol_Onal", arrayOf<IntArray?>(intArrayOf(0x1e5d0, 0x1e5ff))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Hungarian", arrayOf<IntArray?>(intArrayOf(0x10c80, 0x10cff))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Italic", arrayOf<IntArray?>(intArrayOf(0x10300, 0x1032f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_North_Arabian", arrayOf<IntArray?>(intArrayOf(0x10a80, 0x10a9f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Permic", arrayOf<IntArray?>(intArrayOf(0x10350, 0x1037f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Persian", arrayOf<IntArray?>(intArrayOf(0x103a0, 0x103df))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Sogdian", arrayOf<IntArray?>(intArrayOf(0x10f00, 0x10f2f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_South_Arabian", arrayOf<IntArray?>(intArrayOf(0x10a60, 0x10a7f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Turkic", arrayOf<IntArray?>(intArrayOf(0x10c00, 0x10c4f))),
-        Map.entry<String?, Array<IntArray?>?>("Old_Uyghur", arrayOf<IntArray?>(intArrayOf(0x10f70, 0x10faf))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Ogham", arrayOf<IntArray>(intArrayOf(0x1680, 0x169f))),
+        Map.entry<String, Array<IntArray>>("Ol_Chiki", arrayOf<IntArray>(intArrayOf(0x1c50, 0x1c7f))),
+        Map.entry<String, Array<IntArray>>("Ol_Onal", arrayOf<IntArray>(intArrayOf(0x1e5d0, 0x1e5ff))),
+        Map.entry<String, Array<IntArray>>("Old_Hungarian", arrayOf<IntArray>(intArrayOf(0x10c80, 0x10cff))),
+        Map.entry<String, Array<IntArray>>("Old_Italic", arrayOf<IntArray>(intArrayOf(0x10300, 0x1032f))),
+        Map.entry<String, Array<IntArray>>("Old_North_Arabian", arrayOf<IntArray>(intArrayOf(0x10a80, 0x10a9f))),
+        Map.entry<String, Array<IntArray>>("Old_Permic", arrayOf<IntArray>(intArrayOf(0x10350, 0x1037f))),
+        Map.entry<String, Array<IntArray>>("Old_Persian", arrayOf<IntArray>(intArrayOf(0x103a0, 0x103df))),
+        Map.entry<String, Array<IntArray>>("Old_Sogdian", arrayOf<IntArray>(intArrayOf(0x10f00, 0x10f2f))),
+        Map.entry<String, Array<IntArray>>("Old_South_Arabian", arrayOf<IntArray>(intArrayOf(0x10a60, 0x10a7f))),
+        Map.entry<String, Array<IntArray>>("Old_Turkic", arrayOf<IntArray>(intArrayOf(0x10c00, 0x10c4f))),
+        Map.entry<String, Array<IntArray>>("Old_Uyghur", arrayOf<IntArray>(intArrayOf(0x10f70, 0x10faf))),
+        Map.entry<String, Array<IntArray>>(
             "Optical_Character_Recognition",
-            arrayOf<IntArray?>(intArrayOf(0x2440, 0x245f))
+            arrayOf<IntArray>(intArrayOf(0x2440, 0x245f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Oriya", arrayOf<IntArray?>(intArrayOf(0xb00, 0xb7f))),
-        Map.entry<String?, Array<IntArray?>?>("Ornamental_Dingbats", arrayOf<IntArray?>(intArrayOf(0x1f650, 0x1f67f))),
-        Map.entry<String?, Array<IntArray?>?>("Osage", arrayOf<IntArray?>(intArrayOf(0x104b0, 0x104ff))),
-        Map.entry<String?, Array<IntArray?>?>("Osmanya", arrayOf<IntArray?>(intArrayOf(0x10480, 0x104af))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Oriya", arrayOf<IntArray>(intArrayOf(0xb00, 0xb7f))),
+        Map.entry<String, Array<IntArray>>("Ornamental_Dingbats", arrayOf<IntArray>(intArrayOf(0x1f650, 0x1f67f))),
+        Map.entry<String, Array<IntArray>>("Osage", arrayOf<IntArray>(intArrayOf(0x104b0, 0x104ff))),
+        Map.entry<String, Array<IntArray>>("Osmanya", arrayOf<IntArray>(intArrayOf(0x10480, 0x104af))),
+        Map.entry<String, Array<IntArray>>(
             "Ottoman_Siyaq_Numbers",
-            arrayOf<IntArray?>(intArrayOf(0x1ed00, 0x1ed4f))
+            arrayOf<IntArray>(intArrayOf(0x1ed00, 0x1ed4f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Pahawh_Hmong", arrayOf<IntArray?>(intArrayOf(0x16b00, 0x16b8f))),
-        Map.entry<String?, Array<IntArray?>?>("Palmyrene", arrayOf<IntArray?>(intArrayOf(0x10860, 0x1087f))),
-        Map.entry<String?, Array<IntArray?>?>("Pau_Cin_Hau", arrayOf<IntArray?>(intArrayOf(0x11ac0, 0x11aff))),
-        Map.entry<String?, Array<IntArray?>?>("Phags_Pa", arrayOf<IntArray?>(intArrayOf(0xa840, 0xa87f))),
-        Map.entry<String?, Array<IntArray?>?>("Phaistos_Disc", arrayOf<IntArray?>(intArrayOf(0x101d0, 0x101ff))),
-        Map.entry<String?, Array<IntArray?>?>("Phoenician", arrayOf<IntArray?>(intArrayOf(0x10900, 0x1091f))),
-        Map.entry<String?, Array<IntArray?>?>("Phonetic_Extensions", arrayOf<IntArray?>(intArrayOf(0x1d00, 0x1d7f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Pahawh_Hmong", arrayOf<IntArray>(intArrayOf(0x16b00, 0x16b8f))),
+        Map.entry<String, Array<IntArray>>("Palmyrene", arrayOf<IntArray>(intArrayOf(0x10860, 0x1087f))),
+        Map.entry<String, Array<IntArray>>("Pau_Cin_Hau", arrayOf<IntArray>(intArrayOf(0x11ac0, 0x11aff))),
+        Map.entry<String, Array<IntArray>>("Phags_Pa", arrayOf<IntArray>(intArrayOf(0xa840, 0xa87f))),
+        Map.entry<String, Array<IntArray>>("Phaistos_Disc", arrayOf<IntArray>(intArrayOf(0x101d0, 0x101ff))),
+        Map.entry<String, Array<IntArray>>("Phoenician", arrayOf<IntArray>(intArrayOf(0x10900, 0x1091f))),
+        Map.entry<String, Array<IntArray>>("Phonetic_Extensions", arrayOf<IntArray>(intArrayOf(0x1d00, 0x1d7f))),
+        Map.entry<String, Array<IntArray>>(
             "Phonetic_Extensions_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1d80, 0x1dbf))
+            arrayOf<IntArray>(intArrayOf(0x1d80, 0x1dbf))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Playing_Cards", arrayOf<IntArray?>(intArrayOf(0x1f0a0, 0x1f0ff))),
-        Map.entry<String?, Array<IntArray?>?>("Private_Use_Area", arrayOf<IntArray?>(intArrayOf(0xe000, 0xf8ff))),
-        Map.entry<String?, Array<IntArray?>?>("Psalter_Pahlavi", arrayOf<IntArray?>(intArrayOf(0x10b80, 0x10baf))),
-        Map.entry<String?, Array<IntArray?>?>("Rejang", arrayOf<IntArray?>(intArrayOf(0xa930, 0xa95f))),
-        Map.entry<String?, Array<IntArray?>?>("Rumi_Numeral_Symbols", arrayOf<IntArray?>(intArrayOf(0x10e60, 0x10e7f))),
-        Map.entry<String?, Array<IntArray?>?>("Runic", arrayOf<IntArray?>(intArrayOf(0x16a0, 0x16ff))),
-        Map.entry<String?, Array<IntArray?>?>("Samaritan", arrayOf<IntArray?>(intArrayOf(0x800, 0x83f))),
-        Map.entry<String?, Array<IntArray?>?>("Saurashtra", arrayOf<IntArray?>(intArrayOf(0xa880, 0xa8df))),
-        Map.entry<String?, Array<IntArray?>?>("Sharada", arrayOf<IntArray?>(intArrayOf(0x11180, 0x111df))),
-        Map.entry<String?, Array<IntArray?>?>("Sharada_Supplement", arrayOf<IntArray?>(intArrayOf(0x11b60, 0x11b7f))),
-        Map.entry<String?, Array<IntArray?>?>("Shavian", arrayOf<IntArray?>(intArrayOf(0x10450, 0x1047f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Playing_Cards", arrayOf<IntArray>(intArrayOf(0x1f0a0, 0x1f0ff))),
+        Map.entry<String, Array<IntArray>>("Private_Use_Area", arrayOf<IntArray>(intArrayOf(0xe000, 0xf8ff))),
+        Map.entry<String, Array<IntArray>>("Psalter_Pahlavi", arrayOf<IntArray>(intArrayOf(0x10b80, 0x10baf))),
+        Map.entry<String, Array<IntArray>>("Rejang", arrayOf<IntArray>(intArrayOf(0xa930, 0xa95f))),
+        Map.entry<String, Array<IntArray>>("Rumi_Numeral_Symbols", arrayOf<IntArray>(intArrayOf(0x10e60, 0x10e7f))),
+        Map.entry<String, Array<IntArray>>("Runic", arrayOf<IntArray>(intArrayOf(0x16a0, 0x16ff))),
+        Map.entry<String, Array<IntArray>>("Samaritan", arrayOf<IntArray>(intArrayOf(0x800, 0x83f))),
+        Map.entry<String, Array<IntArray>>("Saurashtra", arrayOf<IntArray>(intArrayOf(0xa880, 0xa8df))),
+        Map.entry<String, Array<IntArray>>("Sharada", arrayOf<IntArray>(intArrayOf(0x11180, 0x111df))),
+        Map.entry<String, Array<IntArray>>("Sharada_Supplement", arrayOf<IntArray>(intArrayOf(0x11b60, 0x11b7f))),
+        Map.entry<String, Array<IntArray>>("Shavian", arrayOf<IntArray>(intArrayOf(0x10450, 0x1047f))),
+        Map.entry<String, Array<IntArray>>(
             "Shorthand_Format_Controls",
-            arrayOf<IntArray?>(intArrayOf(0x1bca0, 0x1bcaf))
+            arrayOf<IntArray>(intArrayOf(0x1bca0, 0x1bcaf))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Siddham", arrayOf<IntArray?>(intArrayOf(0x11580, 0x115ff))),
-        Map.entry<String?, Array<IntArray?>?>("Sidetic", arrayOf<IntArray?>(intArrayOf(0x10940, 0x1095f))),
-        Map.entry<String?, Array<IntArray?>?>("Sinhala", arrayOf<IntArray?>(intArrayOf(0xd80, 0xdff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Siddham", arrayOf<IntArray>(intArrayOf(0x11580, 0x115ff))),
+        Map.entry<String, Array<IntArray>>("Sidetic", arrayOf<IntArray>(intArrayOf(0x10940, 0x1095f))),
+        Map.entry<String, Array<IntArray>>("Sinhala", arrayOf<IntArray>(intArrayOf(0xd80, 0xdff))),
+        Map.entry<String, Array<IntArray>>(
             "Sinhala_Archaic_Numbers",
-            arrayOf<IntArray?>(intArrayOf(0x111e0, 0x111ff))
+            arrayOf<IntArray>(intArrayOf(0x111e0, 0x111ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Small_Form_Variants", arrayOf<IntArray?>(intArrayOf(0xfe50, 0xfe6f))),
-        Map.entry<String?, Array<IntArray?>?>("Small_Kana_Extension", arrayOf<IntArray?>(intArrayOf(0x1b130, 0x1b16f))),
-        Map.entry<String?, Array<IntArray?>?>("Sogdian", arrayOf<IntArray?>(intArrayOf(0x10f30, 0x10f6f))),
-        Map.entry<String?, Array<IntArray?>?>("Sora_Sompeng", arrayOf<IntArray?>(intArrayOf(0x110d0, 0x110ff))),
-        Map.entry<String?, Array<IntArray?>?>("Soyombo", arrayOf<IntArray?>(intArrayOf(0x11a50, 0x11aaf))),
-        Map.entry<String?, Array<IntArray?>?>("Spacing_Modifier_Letters", arrayOf<IntArray?>(intArrayOf(0x2b0, 0x2ff))),
-        Map.entry<String?, Array<IntArray?>?>("Specials", arrayOf<IntArray?>(intArrayOf(0xfff0, 0xffff))),
-        Map.entry<String?, Array<IntArray?>?>("Sundanese", arrayOf<IntArray?>(intArrayOf(0x1b80, 0x1bbf))),
-        Map.entry<String?, Array<IntArray?>?>("Sundanese_Supplement", arrayOf<IntArray?>(intArrayOf(0x1cc0, 0x1ccf))),
-        Map.entry<String?, Array<IntArray?>?>("Sunuwar", arrayOf<IntArray?>(intArrayOf(0x11bc0, 0x11bff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Small_Form_Variants", arrayOf<IntArray>(intArrayOf(0xfe50, 0xfe6f))),
+        Map.entry<String, Array<IntArray>>("Small_Kana_Extension", arrayOf<IntArray>(intArrayOf(0x1b130, 0x1b16f))),
+        Map.entry<String, Array<IntArray>>("Sogdian", arrayOf<IntArray>(intArrayOf(0x10f30, 0x10f6f))),
+        Map.entry<String, Array<IntArray>>("Sora_Sompeng", arrayOf<IntArray>(intArrayOf(0x110d0, 0x110ff))),
+        Map.entry<String, Array<IntArray>>("Soyombo", arrayOf<IntArray>(intArrayOf(0x11a50, 0x11aaf))),
+        Map.entry<String, Array<IntArray>>("Spacing_Modifier_Letters", arrayOf<IntArray>(intArrayOf(0x2b0, 0x2ff))),
+        Map.entry<String, Array<IntArray>>("Specials", arrayOf<IntArray>(intArrayOf(0xfff0, 0xffff))),
+        Map.entry<String, Array<IntArray>>("Sundanese", arrayOf<IntArray>(intArrayOf(0x1b80, 0x1bbf))),
+        Map.entry<String, Array<IntArray>>("Sundanese_Supplement", arrayOf<IntArray>(intArrayOf(0x1cc0, 0x1ccf))),
+        Map.entry<String, Array<IntArray>>("Sunuwar", arrayOf<IntArray>(intArrayOf(0x11bc0, 0x11bff))),
+        Map.entry<String, Array<IntArray>>(
             "Superscripts_And_Subscripts",
-            arrayOf<IntArray?>(intArrayOf(0x2070, 0x209f))
+            arrayOf<IntArray>(intArrayOf(0x2070, 0x209f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Supplemental_Arrows_A", arrayOf<IntArray?>(intArrayOf(0x27f0, 0x27ff))),
-        Map.entry<String?, Array<IntArray?>?>("Supplemental_Arrows_B", arrayOf<IntArray?>(intArrayOf(0x2900, 0x297f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Supplemental_Arrows_A", arrayOf<IntArray>(intArrayOf(0x27f0, 0x27ff))),
+        Map.entry<String, Array<IntArray>>("Supplemental_Arrows_B", arrayOf<IntArray>(intArrayOf(0x2900, 0x297f))),
+        Map.entry<String, Array<IntArray>>(
             "Supplemental_Arrows_C",
-            arrayOf<IntArray?>(intArrayOf(0x1f800, 0x1f8ff))
+            arrayOf<IntArray>(intArrayOf(0x1f800, 0x1f8ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Supplemental_Mathematical_Operators",
-            arrayOf<IntArray?>(intArrayOf(0x2a00, 0x2aff))
+            arrayOf<IntArray>(intArrayOf(0x2a00, 0x2aff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Supplemental_Punctuation",
-            arrayOf<IntArray?>(intArrayOf(0x2e00, 0x2e7f))
+            arrayOf<IntArray>(intArrayOf(0x2e00, 0x2e7f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Supplemental_Symbols_And_Pictographs",
-            arrayOf<IntArray?>(intArrayOf(0x1f900, 0x1f9ff))
+            arrayOf<IntArray>(intArrayOf(0x1f900, 0x1f9ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Supplementary_Private_Use_Area_A",
-            arrayOf<IntArray?>(intArrayOf(0xf0000, 0xfffff))
+            arrayOf<IntArray>(intArrayOf(0xf0000, 0xfffff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Supplementary_Private_Use_Area_B",
-            arrayOf<IntArray?>(intArrayOf(0x100000, 0x10ffff))
+            arrayOf<IntArray>(intArrayOf(0x100000, 0x10ffff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Sutton_Signwriting", arrayOf<IntArray?>(intArrayOf(0x1d800, 0x1daaf))),
-        Map.entry<String?, Array<IntArray?>?>("Syloti_Nagri", arrayOf<IntArray?>(intArrayOf(0xa800, 0xa82f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Sutton_Signwriting", arrayOf<IntArray>(intArrayOf(0x1d800, 0x1daaf))),
+        Map.entry<String, Array<IntArray>>("Syloti_Nagri", arrayOf<IntArray>(intArrayOf(0xa800, 0xa82f))),
+        Map.entry<String, Array<IntArray>>(
             "Symbols_And_Pictographs_Extended_A",
-            arrayOf<IntArray?>(intArrayOf(0x1fa70, 0x1faff))
+            arrayOf<IntArray>(intArrayOf(0x1fa70, 0x1faff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Symbols_For_Legacy_Computing",
-            arrayOf<IntArray?>(intArrayOf(0x1fb00, 0x1fbff))
+            arrayOf<IntArray>(intArrayOf(0x1fb00, 0x1fbff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "Symbols_For_Legacy_Computing_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x1cc00, 0x1cebf))
+            arrayOf<IntArray>(intArrayOf(0x1cc00, 0x1cebf))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Syriac", arrayOf<IntArray?>(intArrayOf(0x700, 0x74f))),
-        Map.entry<String?, Array<IntArray?>?>("Syriac_Supplement", arrayOf<IntArray?>(intArrayOf(0x860, 0x86f))),
-        Map.entry<String?, Array<IntArray?>?>("Tagalog", arrayOf<IntArray?>(intArrayOf(0x1700, 0x171f))),
-        Map.entry<String?, Array<IntArray?>?>("Tagbanwa", arrayOf<IntArray?>(intArrayOf(0x1760, 0x177f))),
-        Map.entry<String?, Array<IntArray?>?>("Tags", arrayOf<IntArray?>(intArrayOf(0xe0000, 0xe007f))),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Le", arrayOf<IntArray?>(intArrayOf(0x1950, 0x197f))),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Tham", arrayOf<IntArray?>(intArrayOf(0x1a20, 0x1aaf))),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Viet", arrayOf<IntArray?>(intArrayOf(0xaa80, 0xaadf))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Syriac", arrayOf<IntArray>(intArrayOf(0x700, 0x74f))),
+        Map.entry<String, Array<IntArray>>("Syriac_Supplement", arrayOf<IntArray>(intArrayOf(0x860, 0x86f))),
+        Map.entry<String, Array<IntArray>>("Tagalog", arrayOf<IntArray>(intArrayOf(0x1700, 0x171f))),
+        Map.entry<String, Array<IntArray>>("Tagbanwa", arrayOf<IntArray>(intArrayOf(0x1760, 0x177f))),
+        Map.entry<String, Array<IntArray>>("Tags", arrayOf<IntArray>(intArrayOf(0xe0000, 0xe007f))),
+        Map.entry<String, Array<IntArray>>("Tai_Le", arrayOf<IntArray>(intArrayOf(0x1950, 0x197f))),
+        Map.entry<String, Array<IntArray>>("Tai_Tham", arrayOf<IntArray>(intArrayOf(0x1a20, 0x1aaf))),
+        Map.entry<String, Array<IntArray>>("Tai_Viet", arrayOf<IntArray>(intArrayOf(0xaa80, 0xaadf))),
+        Map.entry<String, Array<IntArray>>(
             "Tai_Xuan_Jing_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x1d300, 0x1d35f))
+            arrayOf<IntArray>(intArrayOf(0x1d300, 0x1d35f))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Tai_Yo", arrayOf<IntArray?>(intArrayOf(0x1e6c0, 0x1e6ff))),
-        Map.entry<String?, Array<IntArray?>?>("Takri", arrayOf<IntArray?>(intArrayOf(0x11680, 0x116cf))),
-        Map.entry<String?, Array<IntArray?>?>("Tamil", arrayOf<IntArray?>(intArrayOf(0xb80, 0xbff))),
-        Map.entry<String?, Array<IntArray?>?>("Tamil_Supplement", arrayOf<IntArray?>(intArrayOf(0x11fc0, 0x11fff))),
-        Map.entry<String?, Array<IntArray?>?>("Tangsa", arrayOf<IntArray?>(intArrayOf(0x16a70, 0x16acf))),
-        Map.entry<String?, Array<IntArray?>?>("Tangut", arrayOf<IntArray?>(intArrayOf(0x17000, 0x187ff))),
-        Map.entry<String?, Array<IntArray?>?>("Tangut_Components", arrayOf<IntArray?>(intArrayOf(0x18800, 0x18aff))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Tai_Yo", arrayOf<IntArray>(intArrayOf(0x1e6c0, 0x1e6ff))),
+        Map.entry<String, Array<IntArray>>("Takri", arrayOf<IntArray>(intArrayOf(0x11680, 0x116cf))),
+        Map.entry<String, Array<IntArray>>("Tamil", arrayOf<IntArray>(intArrayOf(0xb80, 0xbff))),
+        Map.entry<String, Array<IntArray>>("Tamil_Supplement", arrayOf<IntArray>(intArrayOf(0x11fc0, 0x11fff))),
+        Map.entry<String, Array<IntArray>>("Tangsa", arrayOf<IntArray>(intArrayOf(0x16a70, 0x16acf))),
+        Map.entry<String, Array<IntArray>>("Tangut", arrayOf<IntArray>(intArrayOf(0x17000, 0x187ff))),
+        Map.entry<String, Array<IntArray>>("Tangut_Components", arrayOf<IntArray>(intArrayOf(0x18800, 0x18aff))),
+        Map.entry<String, Array<IntArray>>(
             "Tangut_Components_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0x18d80, 0x18dff))
+            arrayOf<IntArray>(intArrayOf(0x18d80, 0x18dff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Tangut_Supplement", arrayOf<IntArray?>(intArrayOf(0x18d00, 0x18d7f))),
-        Map.entry<String?, Array<IntArray?>?>("Telugu", arrayOf<IntArray?>(intArrayOf(0xc00, 0xc7f))),
-        Map.entry<String?, Array<IntArray?>?>("Thaana", arrayOf<IntArray?>(intArrayOf(0x780, 0x7bf))),
-        Map.entry<String?, Array<IntArray?>?>("Thai", arrayOf<IntArray?>(intArrayOf(0xe00, 0xe7f))),
-        Map.entry<String?, Array<IntArray?>?>("Tibetan", arrayOf<IntArray?>(intArrayOf(0xf00, 0xfff))),
-        Map.entry<String?, Array<IntArray?>?>("Tifinagh", arrayOf<IntArray?>(intArrayOf(0x2d30, 0x2d7f))),
-        Map.entry<String?, Array<IntArray?>?>("Tirhuta", arrayOf<IntArray?>(intArrayOf(0x11480, 0x114df))),
-        Map.entry<String?, Array<IntArray?>?>("Todhri", arrayOf<IntArray?>(intArrayOf(0x105c0, 0x105ff))),
-        Map.entry<String?, Array<IntArray?>?>("Tolong_Siki", arrayOf<IntArray?>(intArrayOf(0x11db0, 0x11def))),
-        Map.entry<String?, Array<IntArray?>?>("Toto", arrayOf<IntArray?>(intArrayOf(0x1e290, 0x1e2bf))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Tangut_Supplement", arrayOf<IntArray>(intArrayOf(0x18d00, 0x18d7f))),
+        Map.entry<String, Array<IntArray>>("Telugu", arrayOf<IntArray>(intArrayOf(0xc00, 0xc7f))),
+        Map.entry<String, Array<IntArray>>("Thaana", arrayOf<IntArray>(intArrayOf(0x780, 0x7bf))),
+        Map.entry<String, Array<IntArray>>("Thai", arrayOf<IntArray>(intArrayOf(0xe00, 0xe7f))),
+        Map.entry<String, Array<IntArray>>("Tibetan", arrayOf<IntArray>(intArrayOf(0xf00, 0xfff))),
+        Map.entry<String, Array<IntArray>>("Tifinagh", arrayOf<IntArray>(intArrayOf(0x2d30, 0x2d7f))),
+        Map.entry<String, Array<IntArray>>("Tirhuta", arrayOf<IntArray>(intArrayOf(0x11480, 0x114df))),
+        Map.entry<String, Array<IntArray>>("Todhri", arrayOf<IntArray>(intArrayOf(0x105c0, 0x105ff))),
+        Map.entry<String, Array<IntArray>>("Tolong_Siki", arrayOf<IntArray>(intArrayOf(0x11db0, 0x11def))),
+        Map.entry<String, Array<IntArray>>("Toto", arrayOf<IntArray>(intArrayOf(0x1e290, 0x1e2bf))),
+        Map.entry<String, Array<IntArray>>(
             "Transport_And_Map_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x1f680, 0x1f6ff))
+            arrayOf<IntArray>(intArrayOf(0x1f680, 0x1f6ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Tulu_Tigalari", arrayOf<IntArray?>(intArrayOf(0x11380, 0x113ff))),
-        Map.entry<String?, Array<IntArray?>?>("Ugaritic", arrayOf<IntArray?>(intArrayOf(0x10380, 0x1039f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Tulu_Tigalari", arrayOf<IntArray>(intArrayOf(0x11380, 0x113ff))),
+        Map.entry<String, Array<IntArray>>("Ugaritic", arrayOf<IntArray>(intArrayOf(0x10380, 0x1039f))),
+        Map.entry<String, Array<IntArray>>(
             "Unified_Canadian_Aboriginal_Syllabics",
-            arrayOf<IntArray?>(intArrayOf(0x1400, 0x167f))
+            arrayOf<IntArray>(intArrayOf(0x1400, 0x167f))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
-            "Unified_Canadian_Aboriginal_Syllabics_Extended", arrayOf<IntArray?>(intArrayOf(0x18b0, 0x18ff))
+        Map.entry<String, Array<IntArray>>(
+            "Unified_Canadian_Aboriginal_Syllabics_Extended", arrayOf<IntArray>(intArrayOf(0x18b0, 0x18ff))
         ),
-        Map.entry<String?, Array<IntArray?>?>(
-            "Unified_Canadian_Aboriginal_Syllabics_Extended_A", arrayOf<IntArray?>(intArrayOf(0x11ab0, 0x11abf))
+        Map.entry<String, Array<IntArray>>(
+            "Unified_Canadian_Aboriginal_Syllabics_Extended_A", arrayOf<IntArray>(intArrayOf(0x11ab0, 0x11abf))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Vai", arrayOf<IntArray?>(intArrayOf(0xa500, 0xa63f))),
-        Map.entry<String?, Array<IntArray?>?>("Variation_Selectors", arrayOf<IntArray?>(intArrayOf(0xfe00, 0xfe0f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Vai", arrayOf<IntArray>(intArrayOf(0xa500, 0xa63f))),
+        Map.entry<String, Array<IntArray>>("Variation_Selectors", arrayOf<IntArray>(intArrayOf(0xfe00, 0xfe0f))),
+        Map.entry<String, Array<IntArray>>(
             "Variation_Selectors_Supplement",
-            arrayOf<IntArray?>(intArrayOf(0xe0100, 0xe01ef))
+            arrayOf<IntArray>(intArrayOf(0xe0100, 0xe01ef))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Vedic_Extensions", arrayOf<IntArray?>(intArrayOf(0x1cd0, 0x1cff))),
-        Map.entry<String?, Array<IntArray?>?>("Vertical_Forms", arrayOf<IntArray?>(intArrayOf(0xfe10, 0xfe1f))),
-        Map.entry<String?, Array<IntArray?>?>("Vithkuqi", arrayOf<IntArray?>(intArrayOf(0x10570, 0x105bf))),
-        Map.entry<String?, Array<IntArray?>?>("Wancho", arrayOf<IntArray?>(intArrayOf(0x1e2c0, 0x1e2ff))),
-        Map.entry<String?, Array<IntArray?>?>("Warang_Citi", arrayOf<IntArray?>(intArrayOf(0x118a0, 0x118ff))),
-        Map.entry<String?, Array<IntArray?>?>("Yezidi", arrayOf<IntArray?>(intArrayOf(0x10e80, 0x10ebf))),
-        Map.entry<String?, Array<IntArray?>?>("Yi_Radicals", arrayOf<IntArray?>(intArrayOf(0xa490, 0xa4cf))),
-        Map.entry<String?, Array<IntArray?>?>("Yi_Syllables", arrayOf<IntArray?>(intArrayOf(0xa000, 0xa48f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Vedic_Extensions", arrayOf<IntArray>(intArrayOf(0x1cd0, 0x1cff))),
+        Map.entry<String, Array<IntArray>>("Vertical_Forms", arrayOf<IntArray>(intArrayOf(0xfe10, 0xfe1f))),
+        Map.entry<String, Array<IntArray>>("Vithkuqi", arrayOf<IntArray>(intArrayOf(0x10570, 0x105bf))),
+        Map.entry<String, Array<IntArray>>("Wancho", arrayOf<IntArray>(intArrayOf(0x1e2c0, 0x1e2ff))),
+        Map.entry<String, Array<IntArray>>("Warang_Citi", arrayOf<IntArray>(intArrayOf(0x118a0, 0x118ff))),
+        Map.entry<String, Array<IntArray>>("Yezidi", arrayOf<IntArray>(intArrayOf(0x10e80, 0x10ebf))),
+        Map.entry<String, Array<IntArray>>("Yi_Radicals", arrayOf<IntArray>(intArrayOf(0xa490, 0xa4cf))),
+        Map.entry<String, Array<IntArray>>("Yi_Syllables", arrayOf<IntArray>(intArrayOf(0xa000, 0xa48f))),
+        Map.entry<String, Array<IntArray>>(
             "Yijing_Hexagram_Symbols",
-            arrayOf<IntArray?>(intArrayOf(0x4dc0, 0x4dff))
+            arrayOf<IntArray>(intArrayOf(0x4dc0, 0x4dff))
         ),
-        Map.entry<String?, Array<IntArray?>?>("Zanabazar_Square", arrayOf<IntArray?>(intArrayOf(0x11a00, 0x11a4f))),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>("Zanabazar_Square", arrayOf<IntArray>(intArrayOf(0x11a00, 0x11a4f))),
+        Map.entry<String, Array<IntArray>>(
             "Znamenny_Musical_Notation",
-            arrayOf<IntArray?>(intArrayOf(0x1cf00, 0x1cfcf))
+            arrayOf<IntArray>(intArrayOf(0x1cf00, 0x1cfcf))
         )
     )
 
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val BINARY_PROPERTIES: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("Alphabetic", property_Alphabetic()),
-        Map.entry<String?, Array<IntArray?>?>("Ideographic", property_Ideographic()),
-        Map.entry<String?, Array<IntArray?>?>("Letter", property_Letter()),
-        Map.entry<String?, Array<IntArray?>?>("Lowercase", property_Lowercase()),
-        Map.entry<String?, Array<IntArray?>?>("Uppercase", property_Uppercase()),
-        Map.entry<String?, Array<IntArray?>?>("Titlecase", property_Titlecase()),
-        Map.entry<String?, Array<IntArray?>?>("Punctuation", property_Punctuation()),
-        Map.entry<String?, Array<IntArray?>?>("Control", property_Control()),
-        Map.entry<String?, Array<IntArray?>?>("White_Space", property_White_Space()),
-        Map.entry<String?, Array<IntArray?>?>("Digit", property_Digit()),
-        Map.entry<String?, Array<IntArray?>?>("Hex_Digit", property_Hex_Digit()),
-        Map.entry<String?, Array<IntArray?>?>("Join_Control", property_Join_Control()),
-        Map.entry<String?, Array<IntArray?>?>("Noncharacter_Code_Point", property_Noncharacter_Code_Point()),
-        Map.entry<String?, Array<IntArray?>?>("Assigned", property_Assigned()),
-        Map.entry<String?, Array<IntArray?>?>("Emoji", property_Emoji()),
-        Map.entry<String?, Array<IntArray?>?>("Emoji_Presentation", property_Emoji_Presentation()),
-        Map.entry<String?, Array<IntArray?>?>("Emoji_Modifier", property_Emoji_Modifier()),
-        Map.entry<String?, Array<IntArray?>?>("Emoji_Modifier_Base", property_Emoji_Modifier_Base()),
-        Map.entry<String?, Array<IntArray?>?>("Emoji_Component", property_Emoji_Component()),
-        Map.entry<String?, Array<IntArray?>?>("Extended_Pictographic", property_Extended_Pictographic())
+    val BINARY_PROPERTIES: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("Alphabetic", property_Alphabetic()),
+        Map.entry<String, Array<IntArray>>("Ideographic", property_Ideographic()),
+        Map.entry<String, Array<IntArray>>("Letter", property_Letter()),
+        Map.entry<String, Array<IntArray>>("Lowercase", property_Lowercase()),
+        Map.entry<String, Array<IntArray>>("Uppercase", property_Uppercase()),
+        Map.entry<String, Array<IntArray>>("Titlecase", property_Titlecase()),
+        Map.entry<String, Array<IntArray>>("Punctuation", property_Punctuation()),
+        Map.entry<String, Array<IntArray>>("Control", property_Control()),
+        Map.entry<String, Array<IntArray>>("White_Space", property_White_Space()),
+        Map.entry<String, Array<IntArray>>("Digit", property_Digit()),
+        Map.entry<String, Array<IntArray>>("Hex_Digit", property_Hex_Digit()),
+        Map.entry<String, Array<IntArray>>("Join_Control", property_Join_Control()),
+        Map.entry<String, Array<IntArray>>("Noncharacter_Code_Point", property_Noncharacter_Code_Point()),
+        Map.entry<String, Array<IntArray>>("Assigned", property_Assigned()),
+        Map.entry<String, Array<IntArray>>("Emoji", property_Emoji()),
+        Map.entry<String, Array<IntArray>>("Emoji_Presentation", property_Emoji_Presentation()),
+        Map.entry<String, Array<IntArray>>("Emoji_Modifier", property_Emoji_Modifier()),
+        Map.entry<String, Array<IntArray>>("Emoji_Modifier_Base", property_Emoji_Modifier_Base()),
+        Map.entry<String, Array<IntArray>>("Emoji_Component", property_Emoji_Component()),
+        Map.entry<String, Array<IntArray>>("Extended_Pictographic", property_Extended_Pictographic())
     )
 
     // Grapheme segmentation classes; internal only, not exposed as \p{...} names.
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val GRAPHEME_PROPERTIES: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("Control", grapheme_Control()),
-        Map.entry<String?, Array<IntArray?>?>("Extend", grapheme_Extend()),
-        Map.entry<String?, Array<IntArray?>?>("Prepend", grapheme_Prepend()),
-        Map.entry<String?, Array<IntArray?>?>("SpacingMark", grapheme_SpacingMark()),
-        Map.entry<String?, Array<IntArray?>?>("L", grapheme_L()),
-        Map.entry<String?, Array<IntArray?>?>("V", grapheme_V()),
-        Map.entry<String?, Array<IntArray?>?>("T", grapheme_T()),
-        Map.entry<String?, Array<IntArray?>?>("LV", grapheme_LV()),
-        Map.entry<String?, Array<IntArray?>?>("LVT", grapheme_LVT()),
-        Map.entry<String?, Array<IntArray?>?>("InCB_Linker", grapheme_InCB_Linker()),
-        Map.entry<String?, Array<IntArray?>?>("InCB_Consonant", grapheme_InCB_Consonant()),
-        Map.entry<String?, Array<IntArray?>?>("InCB_Extend", grapheme_InCB_Extend())
+    val GRAPHEME_PROPERTIES: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("Control", grapheme_Control()),
+        Map.entry<String, Array<IntArray>>("Extend", grapheme_Extend()),
+        Map.entry<String, Array<IntArray>>("Prepend", grapheme_Prepend()),
+        Map.entry<String, Array<IntArray>>("SpacingMark", grapheme_SpacingMark()),
+        Map.entry<String, Array<IntArray>>("L", grapheme_L()),
+        Map.entry<String, Array<IntArray>>("V", grapheme_V()),
+        Map.entry<String, Array<IntArray>>("T", grapheme_T()),
+        Map.entry<String, Array<IntArray>>("LV", grapheme_LV()),
+        Map.entry<String, Array<IntArray>>("LVT", grapheme_LVT()),
+        Map.entry<String, Array<IntArray>>("InCB_Linker", grapheme_InCB_Linker()),
+        Map.entry<String, Array<IntArray>>("InCB_Consonant", grapheme_InCB_Consonant()),
+        Map.entry<String, Array<IntArray>>("InCB_Extend", grapheme_InCB_Extend())
     )
 
     // java* classes that can't be composed from the tables above; internal only, looked up by
     // JavaCharacterClasses.
     // Include explicit type arguments to ofEntries to avoid JDK-8221301
-    val JAVA_CHARACTER_CLASSES: MutableMap<String?, Array<IntArray?>?> = Map.ofEntries<String?, Array<IntArray?>?>(
-        Map.entry<String?, Array<IntArray?>?>("javaMirrored", javaClass_javaMirrored()),
-        Map.entry<String?, Array<IntArray?>?>(
+    val JAVA_CHARACTER_CLASSES: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
+        Map.entry<String, Array<IntArray>>("javaMirrored", javaClass_javaMirrored()),
+        Map.entry<String, Array<IntArray>>(
             "javaUnicodeIdentifierStartExtra",
             javaClass_javaUnicodeIdentifierStartExtra()
         ),
-        Map.entry<String?, Array<IntArray?>?>(
+        Map.entry<String, Array<IntArray>>(
             "javaUnicodeIdentifierPartExtra",
             javaClass_javaUnicodeIdentifierPartExtra()
         )
     )
 
-    fun unicodeGroups(): MutableMap<String?, Array<IntArray?>?> {
-        val groups: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
+    fun unicodeGroups(): MutableMap<String, Array<IntArray>> {
+        val groups: MutableMap<String, Array<IntArray>> = LinkedHashMap<String, Array<IntArray>>()
         groups.putAll(CATEGORIES)
         groups.putAll(SCRIPTS)
-        return Collections.unmodifiableMap<String?, Array<IntArray?>?>(groups)
+        return Collections.unmodifiableMap<String, Array<IntArray>>(groups)
     }
 
-    private fun category_Cn(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Cn(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x378, 0x379),
             intArrayOf(0x380, 0x383),
             intArrayOf(0x38b, 0x38b),
@@ -1669,8 +1669,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Lu(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Lu(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0xc0, 0xd6),
             intArrayOf(0xd8, 0xde),
@@ -2329,8 +2329,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Ll(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Ll(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xb5, 0xb5),
             intArrayOf(0xdf, 0xf6),
@@ -2998,8 +2998,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Lt(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Lt(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1c5, 0x1c5),
             intArrayOf(0x1c8, 0x1c8),
             intArrayOf(0x1cb, 0x1cb),
@@ -3013,8 +3013,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Lm(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Lm(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2b0, 0x2c1),
             intArrayOf(0x2c6, 0x2d1),
             intArrayOf(0x2e0, 0x2e4),
@@ -3097,8 +3097,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Lo(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Lo(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xaa, 0xaa),
             intArrayOf(0xba, 0xba),
             intArrayOf(0x1bb, 0x1bb),
@@ -3639,8 +3639,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Mn(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Mn(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x300, 0x36f),
             intArrayOf(0x483, 0x487),
             intArrayOf(0x591, 0x5bd),
@@ -4009,8 +4009,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Me(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Me(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x488, 0x489),
             intArrayOf(0x1abe, 0x1abe),
             intArrayOf(0x20dd, 0x20e0),
@@ -4019,8 +4019,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Mc(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Mc(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x903, 0x903),
             intArrayOf(0x93b, 0x93b),
             intArrayOf(0x93e, 0x940),
@@ -4217,8 +4217,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Nd(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Nd(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x30, 0x39),
             intArrayOf(0x660, 0x669),
             intArrayOf(0x6f0, 0x6f9),
@@ -4294,8 +4294,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Nl(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Nl(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16ee, 0x16f0),
             intArrayOf(0x2160, 0x2182),
             intArrayOf(0x2185, 0x2188),
@@ -4312,8 +4312,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_No(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_No(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xb2, 0xb3),
             intArrayOf(0xb9, 0xb9),
             intArrayOf(0xbc, 0xbe),
@@ -4389,8 +4389,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Zs(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Zs(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x20, 0x20),
             intArrayOf(0xa0, 0xa0),
             intArrayOf(0x1680, 0x1680),
@@ -4401,27 +4401,27 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Zl(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Zl(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2028, 0x2028),
         )
     }
 
-    private fun category_Zp(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Zp(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2029, 0x2029),
         )
     }
 
-    private fun category_Cc(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Cc(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x1f),
             intArrayOf(0x7f, 0x9f),
         )
     }
 
-    private fun category_Cf(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Cf(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xad, 0xad),
             intArrayOf(0x600, 0x605),
             intArrayOf(0x61c, 0x61c),
@@ -4446,22 +4446,22 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Co(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Co(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xe000, 0xf8ff),
             intArrayOf(0xf0000, 0xffffd),
             intArrayOf(0x100000, 0x10fffd),
         )
     }
 
-    private fun category_Cs(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Cs(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xd800, 0xdfff),
         )
     }
 
-    private fun category_Pd(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Pd(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2d, 0x2d),
             intArrayOf(0x58a, 0x58a),
             intArrayOf(0x5be, 0x5be),
@@ -4485,8 +4485,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Ps(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Ps(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x28, 0x28),
             intArrayOf(0x5b, 0x5b),
             intArrayOf(0x7b, 0x7b),
@@ -4569,8 +4569,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Pe(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Pe(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x29, 0x29),
             intArrayOf(0x5d, 0x5d),
             intArrayOf(0x7d, 0x7d),
@@ -4650,8 +4650,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Pc(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Pc(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x5f, 0x5f),
             intArrayOf(0x203f, 0x2040),
             intArrayOf(0x2054, 0x2054),
@@ -4661,8 +4661,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Po(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Po(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x21, 0x23),
             intArrayOf(0x25, 0x27),
             intArrayOf(0x2a, 0x2a),
@@ -4860,8 +4860,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Sm(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Sm(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2b, 0x2b),
             intArrayOf(0x3c, 0x3e),
             intArrayOf(0x7c, 0x7c),
@@ -4932,8 +4932,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Sc(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Sc(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x24, 0x24),
             intArrayOf(0xa2, 0xa5),
             intArrayOf(0x58f, 0x58f),
@@ -4958,8 +4958,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Sk(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Sk(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x5e, 0x5e),
             intArrayOf(0x60, 0x60),
             intArrayOf(0xa8, 0xa8),
@@ -4994,8 +4994,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_So(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_So(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa6, 0xa6),
             intArrayOf(0xa9, 0xa9),
             intArrayOf(0xae, 0xae),
@@ -5192,8 +5192,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Pi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Pi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xab, 0xab),
             intArrayOf(0x2018, 0x2018),
             intArrayOf(0x201b, 0x201c),
@@ -5208,8 +5208,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Pf(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Pf(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xbb, 0xbb),
             intArrayOf(0x2019, 0x2019),
             intArrayOf(0x201d, 0x201d),
@@ -5223,8 +5223,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_L(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_L(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xaa, 0xaa),
@@ -5912,8 +5912,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_M(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_M(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x300, 0x36f),
             intArrayOf(0x483, 0x489),
             intArrayOf(0x591, 0x5bd),
@@ -6244,8 +6244,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_N(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_N(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x30, 0x39),
             intArrayOf(0xb2, 0xb3),
             intArrayOf(0xb9, 0xb9),
@@ -6395,8 +6395,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_P(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_P(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x21, 0x23),
             intArrayOf(0x25, 0x2a),
             intArrayOf(0x2c, 0x2f),
@@ -6599,8 +6599,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_S(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_S(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x24, 0x24),
             intArrayOf(0x2b, 0x2b),
             intArrayOf(0x3c, 0x3e),
@@ -6846,8 +6846,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_Z(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_Z(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x20, 0x20),
             intArrayOf(0xa0, 0xa0),
             intArrayOf(0x1680, 0x1680),
@@ -6859,8 +6859,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun category_C(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun category_C(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x1f),
             intArrayOf(0x7f, 0x9f),
             intArrayOf(0xad, 0xad),
@@ -7605,8 +7605,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Common(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Common(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x40),
             intArrayOf(0x5b, 0x60),
             intArrayOf(0x7b, 0xa9),
@@ -7786,8 +7786,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Latin(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Latin(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xaa, 0xaa),
@@ -7827,8 +7827,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Greek(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Greek(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x370, 0x373),
             intArrayOf(0x375, 0x377),
             intArrayOf(0x37a, 0x37d),
@@ -7868,8 +7868,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Cyrillic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cyrillic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x400, 0x484),
             intArrayOf(0x487, 0x52f),
             intArrayOf(0x1c80, 0x1c8a),
@@ -7883,8 +7883,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Armenian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Armenian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x531, 0x556),
             intArrayOf(0x559, 0x58a),
             intArrayOf(0x58d, 0x58f),
@@ -7892,8 +7892,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Hebrew(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hebrew(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x591, 0x5c7),
             intArrayOf(0x5d0, 0x5ea),
             intArrayOf(0x5ef, 0x5f4),
@@ -7906,8 +7906,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Arabic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Arabic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x600, 0x604),
             intArrayOf(0x606, 0x60b),
             intArrayOf(0x60d, 0x61a),
@@ -7967,8 +7967,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Syriac(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Syriac(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x700, 0x70d),
             intArrayOf(0x70f, 0x74a),
             intArrayOf(0x74d, 0x74f),
@@ -7976,14 +7976,14 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Thaana(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Thaana(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x780, 0x7b1),
         )
     }
 
-    private fun script_Devanagari(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Devanagari(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x900, 0x950),
             intArrayOf(0x955, 0x963),
             intArrayOf(0x966, 0x97f),
@@ -7992,8 +7992,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Bengali(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Bengali(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x980, 0x983),
             intArrayOf(0x985, 0x98c),
             intArrayOf(0x98f, 0x990),
@@ -8011,8 +8011,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Gurmukhi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Gurmukhi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa01, 0xa03),
             intArrayOf(0xa05, 0xa0a),
             intArrayOf(0xa0f, 0xa10),
@@ -8032,8 +8032,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Gujarati(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Gujarati(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa81, 0xa83),
             intArrayOf(0xa85, 0xa8d),
             intArrayOf(0xa8f, 0xa91),
@@ -8051,8 +8051,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Oriya(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Oriya(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xb01, 0xb03),
             intArrayOf(0xb05, 0xb0c),
             intArrayOf(0xb0f, 0xb10),
@@ -8070,8 +8070,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tamil(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tamil(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xb82, 0xb83),
             intArrayOf(0xb85, 0xb8a),
             intArrayOf(0xb8e, 0xb90),
@@ -8093,8 +8093,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Telugu(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Telugu(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xc00, 0xc0c),
             intArrayOf(0xc0e, 0xc10),
             intArrayOf(0xc12, 0xc28),
@@ -8111,8 +8111,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Kannada(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kannada(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xc80, 0xc8c),
             intArrayOf(0xc8e, 0xc90),
             intArrayOf(0xc92, 0xca8),
@@ -8129,8 +8129,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Malayalam(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Malayalam(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xd00, 0xd0c),
             intArrayOf(0xd0e, 0xd10),
             intArrayOf(0xd12, 0xd44),
@@ -8141,8 +8141,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Sinhala(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sinhala(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xd81, 0xd83),
             intArrayOf(0xd85, 0xd96),
             intArrayOf(0xd9a, 0xdb1),
@@ -8159,15 +8159,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Thai(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Thai(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xe01, 0xe3a),
             intArrayOf(0xe40, 0xe5b),
         )
     }
 
-    private fun script_Lao(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Lao(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xe81, 0xe82),
             intArrayOf(0xe84, 0xe84),
             intArrayOf(0xe86, 0xe8a),
@@ -8182,8 +8182,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tibetan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tibetan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xf00, 0xf47),
             intArrayOf(0xf49, 0xf6c),
             intArrayOf(0xf71, 0xf97),
@@ -8194,8 +8194,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Myanmar(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Myanmar(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1000, 0x109f),
             intArrayOf(0xa9e0, 0xa9fe),
             intArrayOf(0xaa60, 0xaa7f),
@@ -8203,8 +8203,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Georgian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Georgian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10a0, 0x10c5),
             intArrayOf(0x10c7, 0x10c7),
             intArrayOf(0x10cd, 0x10cd),
@@ -8218,8 +8218,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Hangul(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hangul(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1100, 0x11ff),
             intArrayOf(0x302e, 0x302f),
             intArrayOf(0x3131, 0x318e),
@@ -8237,8 +8237,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Ethiopic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ethiopic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1200, 0x1248),
             intArrayOf(0x124a, 0x124d),
             intArrayOf(0x1250, 0x1256),
@@ -8278,37 +8278,37 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Cherokee(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cherokee(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x13a0, 0x13f5),
             intArrayOf(0x13f8, 0x13fd),
             intArrayOf(0xab70, 0xabbf),
         )
     }
 
-    private fun script_Canadian_Aboriginal(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Canadian_Aboriginal(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1400, 0x167f),
             intArrayOf(0x18b0, 0x18f5),
             intArrayOf(0x11ab0, 0x11abf),
         )
     }
 
-    private fun script_Ogham(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ogham(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1680, 0x169c),
         )
     }
 
-    private fun script_Runic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Runic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16a0, 0x16ea),
             intArrayOf(0x16ee, 0x16f8),
         )
     }
 
-    private fun script_Khmer(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Khmer(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1780, 0x17dd),
             intArrayOf(0x17e0, 0x17e9),
             intArrayOf(0x17f0, 0x17f9),
@@ -8316,8 +8316,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Mongolian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Mongolian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1800, 0x1801),
             intArrayOf(0x1804, 0x1804),
             intArrayOf(0x1806, 0x1819),
@@ -8327,8 +8327,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Hiragana(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hiragana(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x3041, 0x3096),
             intArrayOf(0x309d, 0x309f),
             intArrayOf(0x1b001, 0x1b11f),
@@ -8338,8 +8338,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Katakana(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Katakana(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x30a1, 0x30fa),
             intArrayOf(0x30fd, 0x30ff),
             intArrayOf(0x31f0, 0x31ff),
@@ -8357,16 +8357,16 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Bopomofo(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Bopomofo(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2ea, 0x2eb),
             intArrayOf(0x3105, 0x312f),
             intArrayOf(0x31a0, 0x31bf),
         )
     }
 
-    private fun script_Han(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Han(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2e80, 0x2e99),
             intArrayOf(0x2e9b, 0x2ef3),
             intArrayOf(0x2f00, 0x2fd5),
@@ -8391,34 +8391,34 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Yi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Yi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa000, 0xa48c),
             intArrayOf(0xa490, 0xa4c6),
         )
     }
 
-    private fun script_Old_Italic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Italic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10300, 0x10323),
             intArrayOf(0x1032d, 0x1032f),
         )
     }
 
-    private fun script_Gothic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Gothic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10330, 0x1034a),
         )
     }
 
-    private fun script_Deseret(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Deseret(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10400, 0x1044f),
         )
     }
 
-    private fun script_Inherited(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Inherited(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x300, 0x36f),
             intArrayOf(0x485, 0x486),
             intArrayOf(0x64b, 0x655),
@@ -8452,35 +8452,35 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tagalog(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tagalog(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1700, 0x1715),
             intArrayOf(0x171f, 0x171f),
         )
     }
 
-    private fun script_Hanunoo(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hanunoo(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1720, 0x1734),
         )
     }
 
-    private fun script_Buhid(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Buhid(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1740, 0x1753),
         )
     }
 
-    private fun script_Tagbanwa(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tagbanwa(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1760, 0x176c),
             intArrayOf(0x176e, 0x1770),
             intArrayOf(0x1772, 0x1773),
         )
     }
 
-    private fun script_Limbu(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Limbu(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1900, 0x191e),
             intArrayOf(0x1920, 0x192b),
             intArrayOf(0x1930, 0x193b),
@@ -8489,15 +8489,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tai_Le(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tai_Le(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1950, 0x196d),
             intArrayOf(0x1970, 0x1974),
         )
     }
 
-    private fun script_Linear_B(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Linear_B(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10000, 0x1000b),
             intArrayOf(0x1000d, 0x10026),
             intArrayOf(0x10028, 0x1003a),
@@ -8508,28 +8508,28 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Ugaritic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ugaritic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10380, 0x1039d),
             intArrayOf(0x1039f, 0x1039f),
         )
     }
 
-    private fun script_Shavian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Shavian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10450, 0x1047f),
         )
     }
 
-    private fun script_Osmanya(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Osmanya(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10480, 0x1049d),
             intArrayOf(0x104a0, 0x104a9),
         )
     }
 
-    private fun script_Cypriot(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cypriot(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10800, 0x10805),
             intArrayOf(0x10808, 0x10808),
             intArrayOf(0x1080a, 0x10835),
@@ -8539,29 +8539,29 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Braille(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Braille(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2800, 0x28ff),
         )
     }
 
-    private fun script_Buginese(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Buginese(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1a00, 0x1a1b),
             intArrayOf(0x1a1e, 0x1a1f),
         )
     }
 
-    private fun script_Coptic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Coptic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x3e2, 0x3ef),
             intArrayOf(0x2c80, 0x2cf3),
             intArrayOf(0x2cf9, 0x2cff),
         )
     }
 
-    private fun script_New_Tai_Lue(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_New_Tai_Lue(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1980, 0x19ab),
             intArrayOf(0x19b0, 0x19c9),
             intArrayOf(0x19d0, 0x19da),
@@ -8569,8 +8569,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Glagolitic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Glagolitic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2c00, 0x2c5f),
             intArrayOf(0x1e000, 0x1e006),
             intArrayOf(0x1e008, 0x1e018),
@@ -8580,29 +8580,29 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tifinagh(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tifinagh(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x2d30, 0x2d67),
             intArrayOf(0x2d6f, 0x2d70),
             intArrayOf(0x2d7f, 0x2d7f),
         )
     }
 
-    private fun script_Syloti_Nagri(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Syloti_Nagri(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa800, 0xa82c),
         )
     }
 
-    private fun script_Old_Persian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Persian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x103a0, 0x103c3),
             intArrayOf(0x103c8, 0x103d5),
         )
     }
 
-    private fun script_Kharoshthi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kharoshthi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10a00, 0x10a03),
             intArrayOf(0x10a05, 0x10a06),
             intArrayOf(0x10a0c, 0x10a13),
@@ -8614,15 +8614,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Balinese(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Balinese(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1b00, 0x1b4c),
             intArrayOf(0x1b4e, 0x1b7f),
         )
     }
 
-    private fun script_Cuneiform(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cuneiform(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x12000, 0x12399),
             intArrayOf(0x12400, 0x1246e),
             intArrayOf(0x12470, 0x12474),
@@ -8630,102 +8630,102 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Phoenician(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Phoenician(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10900, 0x1091b),
             intArrayOf(0x1091f, 0x1091f),
         )
     }
 
-    private fun script_Phags_Pa(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Phags_Pa(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa840, 0xa877),
         )
     }
 
-    private fun script_Nko(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nko(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x7c0, 0x7fa),
             intArrayOf(0x7fd, 0x7ff),
         )
     }
 
-    private fun script_Sundanese(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sundanese(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1b80, 0x1bbf),
             intArrayOf(0x1cc0, 0x1cc7),
         )
     }
 
-    private fun script_Batak(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Batak(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1bc0, 0x1bf3),
             intArrayOf(0x1bfc, 0x1bff),
         )
     }
 
-    private fun script_Lepcha(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Lepcha(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1c00, 0x1c37),
             intArrayOf(0x1c3b, 0x1c49),
             intArrayOf(0x1c4d, 0x1c4f),
         )
     }
 
-    private fun script_Ol_Chiki(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ol_Chiki(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1c50, 0x1c7f),
         )
     }
 
-    private fun script_Vai(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Vai(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa500, 0xa62b),
         )
     }
 
-    private fun script_Saurashtra(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Saurashtra(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa880, 0xa8c5),
             intArrayOf(0xa8ce, 0xa8d9),
         )
     }
 
-    private fun script_Kayah_Li(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kayah_Li(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa900, 0xa92d),
             intArrayOf(0xa92f, 0xa92f),
         )
     }
 
-    private fun script_Rejang(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Rejang(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa930, 0xa953),
             intArrayOf(0xa95f, 0xa95f),
         )
     }
 
-    private fun script_Lycian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Lycian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10280, 0x1029c),
         )
     }
 
-    private fun script_Carian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Carian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x102a0, 0x102d0),
         )
     }
 
-    private fun script_Lydian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Lydian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10920, 0x10939),
             intArrayOf(0x1093f, 0x1093f),
         )
     }
 
-    private fun script_Cham(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cham(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xaa00, 0xaa36),
             intArrayOf(0xaa40, 0xaa4d),
             intArrayOf(0xaa50, 0xaa59),
@@ -8733,8 +8733,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tai_Tham(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tai_Tham(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1a20, 0x1a5e),
             intArrayOf(0x1a60, 0x1a7c),
             intArrayOf(0x1a7f, 0x1a89),
@@ -8743,185 +8743,185 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Tai_Viet(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tai_Viet(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xaa80, 0xaac2),
             intArrayOf(0xaadb, 0xaadf),
         )
     }
 
-    private fun script_Avestan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Avestan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10b00, 0x10b35),
             intArrayOf(0x10b39, 0x10b3f),
         )
     }
 
-    private fun script_Egyptian_Hieroglyphs(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Egyptian_Hieroglyphs(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x13000, 0x13455),
             intArrayOf(0x13460, 0x143fa),
         )
     }
 
-    private fun script_Samaritan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Samaritan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x800, 0x82d),
             intArrayOf(0x830, 0x83e),
         )
     }
 
-    private fun script_Mandaic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Mandaic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x840, 0x85b),
             intArrayOf(0x85e, 0x85e),
         )
     }
 
-    private fun script_Lisu(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Lisu(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa4d0, 0xa4ff),
             intArrayOf(0x11fb0, 0x11fb0),
         )
     }
 
-    private fun script_Bamum(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Bamum(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa6a0, 0xa6f7),
             intArrayOf(0x16800, 0x16a38),
         )
     }
 
-    private fun script_Javanese(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Javanese(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa980, 0xa9cd),
             intArrayOf(0xa9d0, 0xa9d9),
             intArrayOf(0xa9de, 0xa9df),
         )
     }
 
-    private fun script_Meetei_Mayek(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Meetei_Mayek(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xaae0, 0xaaf6),
             intArrayOf(0xabc0, 0xabed),
             intArrayOf(0xabf0, 0xabf9),
         )
     }
 
-    private fun script_Imperial_Aramaic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Imperial_Aramaic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10840, 0x10855),
             intArrayOf(0x10857, 0x1085f),
         )
     }
 
-    private fun script_Old_South_Arabian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_South_Arabian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10a60, 0x10a7f),
         )
     }
 
-    private fun script_Inscriptional_Parthian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Inscriptional_Parthian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10b40, 0x10b55),
             intArrayOf(0x10b58, 0x10b5f),
         )
     }
 
-    private fun script_Inscriptional_Pahlavi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Inscriptional_Pahlavi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10b60, 0x10b72),
             intArrayOf(0x10b78, 0x10b7f),
         )
     }
 
-    private fun script_Old_Turkic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Turkic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10c00, 0x10c48),
         )
     }
 
-    private fun script_Brahmi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Brahmi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11000, 0x1104d),
             intArrayOf(0x11052, 0x11075),
             intArrayOf(0x1107f, 0x1107f),
         )
     }
 
-    private fun script_Kaithi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kaithi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11080, 0x110c2),
             intArrayOf(0x110cd, 0x110cd),
         )
     }
 
-    private fun script_Meroitic_Hieroglyphs(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Meroitic_Hieroglyphs(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10980, 0x1099f),
         )
     }
 
-    private fun script_Meroitic_Cursive(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Meroitic_Cursive(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x109a0, 0x109b7),
             intArrayOf(0x109bc, 0x109cf),
             intArrayOf(0x109d2, 0x109ff),
         )
     }
 
-    private fun script_Sora_Sompeng(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sora_Sompeng(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x110d0, 0x110e8),
             intArrayOf(0x110f0, 0x110f9),
         )
     }
 
-    private fun script_Chakma(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Chakma(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11100, 0x11134),
             intArrayOf(0x11136, 0x11147),
         )
     }
 
-    private fun script_Sharada(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sharada(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11180, 0x111df),
             intArrayOf(0x11b60, 0x11b67),
         )
     }
 
-    private fun script_Takri(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Takri(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11680, 0x116b9),
             intArrayOf(0x116c0, 0x116c9),
         )
     }
 
-    private fun script_Miao(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Miao(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16f00, 0x16f4a),
             intArrayOf(0x16f4f, 0x16f87),
             intArrayOf(0x16f8f, 0x16f9f),
         )
     }
 
-    private fun script_Caucasian_Albanian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Caucasian_Albanian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10530, 0x10563),
             intArrayOf(0x1056f, 0x1056f),
         )
     }
 
-    private fun script_Bassa_Vah(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Bassa_Vah(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16ad0, 0x16aed),
             intArrayOf(0x16af0, 0x16af5),
         )
     }
 
-    private fun script_Duployan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Duployan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1bc00, 0x1bc6a),
             intArrayOf(0x1bc70, 0x1bc7c),
             intArrayOf(0x1bc80, 0x1bc88),
@@ -8930,14 +8930,14 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Elbasan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Elbasan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10500, 0x10527),
         )
     }
 
-    private fun script_Grantha(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Grantha(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11300, 0x11303),
             intArrayOf(0x11305, 0x1130c),
             intArrayOf(0x1130f, 0x11310),
@@ -8956,8 +8956,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Pahawh_Hmong(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Pahawh_Hmong(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16b00, 0x16b45),
             intArrayOf(0x16b50, 0x16b59),
             intArrayOf(0x16b5b, 0x16b61),
@@ -8966,147 +8966,147 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Khojki(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Khojki(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11200, 0x11211),
             intArrayOf(0x11213, 0x11241),
         )
     }
 
-    private fun script_Linear_A(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Linear_A(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10600, 0x10736),
             intArrayOf(0x10740, 0x10755),
             intArrayOf(0x10760, 0x10767),
         )
     }
 
-    private fun script_Mahajani(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Mahajani(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11150, 0x11176),
         )
     }
 
-    private fun script_Manichaean(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Manichaean(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10ac0, 0x10ae6),
             intArrayOf(0x10aeb, 0x10af6),
         )
     }
 
-    private fun script_Mende_Kikakui(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Mende_Kikakui(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e800, 0x1e8c4),
             intArrayOf(0x1e8c7, 0x1e8d6),
         )
     }
 
-    private fun script_Modi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Modi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11600, 0x11644),
             intArrayOf(0x11650, 0x11659),
         )
     }
 
-    private fun script_Mro(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Mro(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16a40, 0x16a5e),
             intArrayOf(0x16a60, 0x16a69),
             intArrayOf(0x16a6e, 0x16a6f),
         )
     }
 
-    private fun script_Old_North_Arabian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_North_Arabian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10a80, 0x10a9f),
         )
     }
 
-    private fun script_Nabataean(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nabataean(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10880, 0x1089e),
             intArrayOf(0x108a7, 0x108af),
         )
     }
 
-    private fun script_Palmyrene(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Palmyrene(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10860, 0x1087f),
         )
     }
 
-    private fun script_Pau_Cin_Hau(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Pau_Cin_Hau(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11ac0, 0x11af8),
         )
     }
 
-    private fun script_Old_Permic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Permic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10350, 0x1037a),
         )
     }
 
-    private fun script_Psalter_Pahlavi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Psalter_Pahlavi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10b80, 0x10b91),
             intArrayOf(0x10b99, 0x10b9c),
             intArrayOf(0x10ba9, 0x10baf),
         )
     }
 
-    private fun script_Siddham(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Siddham(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11580, 0x115b5),
             intArrayOf(0x115b8, 0x115dd),
         )
     }
 
-    private fun script_Khudawadi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Khudawadi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x112b0, 0x112ea),
             intArrayOf(0x112f0, 0x112f9),
         )
     }
 
-    private fun script_Tirhuta(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tirhuta(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11480, 0x114c7),
             intArrayOf(0x114d0, 0x114d9),
         )
     }
 
-    private fun script_Warang_Citi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Warang_Citi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x118a0, 0x118f2),
             intArrayOf(0x118ff, 0x118ff),
         )
     }
 
-    private fun script_Ahom(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ahom(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11700, 0x1171a),
             intArrayOf(0x1171d, 0x1172b),
             intArrayOf(0x11730, 0x11746),
         )
     }
 
-    private fun script_Anatolian_Hieroglyphs(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Anatolian_Hieroglyphs(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x14400, 0x14646),
         )
     }
 
-    private fun script_Hatran(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hatran(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x108e0, 0x108f2),
             intArrayOf(0x108f4, 0x108f5),
             intArrayOf(0x108fb, 0x108ff),
         )
     }
 
-    private fun script_Multani(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Multani(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11280, 0x11286),
             intArrayOf(0x11288, 0x11288),
             intArrayOf(0x1128a, 0x1128d),
@@ -9115,32 +9115,32 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Old_Hungarian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Hungarian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10c80, 0x10cb2),
             intArrayOf(0x10cc0, 0x10cf2),
             intArrayOf(0x10cfa, 0x10cff),
         )
     }
 
-    private fun script_SignWriting(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_SignWriting(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1d800, 0x1da8b),
             intArrayOf(0x1da9b, 0x1da9f),
             intArrayOf(0x1daa1, 0x1daaf),
         )
     }
 
-    private fun script_Adlam(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Adlam(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e900, 0x1e94b),
             intArrayOf(0x1e950, 0x1e959),
             intArrayOf(0x1e95e, 0x1e95f),
         )
     }
 
-    private fun script_Bhaiksuki(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Bhaiksuki(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11c00, 0x11c08),
             intArrayOf(0x11c0a, 0x11c36),
             intArrayOf(0x11c38, 0x11c45),
@@ -9148,30 +9148,30 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Marchen(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Marchen(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11c70, 0x11c8f),
             intArrayOf(0x11c92, 0x11ca7),
             intArrayOf(0x11ca9, 0x11cb6),
         )
     }
 
-    private fun script_Newa(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Newa(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11400, 0x1145b),
             intArrayOf(0x1145d, 0x11461),
         )
     }
 
-    private fun script_Osage(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Osage(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x104b0, 0x104d3),
             intArrayOf(0x104d8, 0x104fb),
         )
     }
 
-    private fun script_Tangut(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tangut(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16fe0, 0x16fe0),
             intArrayOf(0x17000, 0x18aff),
             intArrayOf(0x18d00, 0x18d1e),
@@ -9179,8 +9179,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Masaram_Gondi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Masaram_Gondi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11d00, 0x11d06),
             intArrayOf(0x11d08, 0x11d09),
             intArrayOf(0x11d0b, 0x11d36),
@@ -9191,52 +9191,52 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Nushu(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nushu(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16fe1, 0x16fe1),
             intArrayOf(0x1b170, 0x1b2fb),
         )
     }
 
-    private fun script_Soyombo(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Soyombo(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11a50, 0x11aa2),
         )
     }
 
-    private fun script_Zanabazar_Square(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Zanabazar_Square(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11a00, 0x11a47),
         )
     }
 
-    private fun script_Hanifi_Rohingya(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Hanifi_Rohingya(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10d00, 0x10d27),
             intArrayOf(0x10d30, 0x10d39),
         )
     }
 
-    private fun script_Old_Sogdian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Sogdian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10f00, 0x10f27),
         )
     }
 
-    private fun script_Sogdian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sogdian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10f30, 0x10f59),
         )
     }
 
-    private fun script_Dogra(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Dogra(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11800, 0x1183b),
         )
     }
 
-    private fun script_Gunjala_Gondi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Gunjala_Gondi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11d60, 0x11d65),
             intArrayOf(0x11d67, 0x11d68),
             intArrayOf(0x11d6a, 0x11d8e),
@@ -9246,34 +9246,34 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Makasar(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Makasar(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11ee0, 0x11ef8),
         )
     }
 
-    private fun script_Medefaidrin(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Medefaidrin(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16e40, 0x16e9a),
         )
     }
 
-    private fun script_Elymaic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Elymaic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10fe0, 0x10ff6),
         )
     }
 
-    private fun script_Nandinagari(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nandinagari(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x119a0, 0x119a7),
             intArrayOf(0x119aa, 0x119d7),
             intArrayOf(0x119da, 0x119e4),
         )
     }
 
-    private fun script_Nyiakeng_Puachue_Hmong(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nyiakeng_Puachue_Hmong(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e100, 0x1e12c),
             intArrayOf(0x1e130, 0x1e13d),
             intArrayOf(0x1e140, 0x1e149),
@@ -9281,29 +9281,29 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Wancho(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Wancho(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e2c0, 0x1e2f9),
             intArrayOf(0x1e2ff, 0x1e2ff),
         )
     }
 
-    private fun script_Yezidi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Yezidi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10e80, 0x10ea9),
             intArrayOf(0x10eab, 0x10ead),
             intArrayOf(0x10eb0, 0x10eb1),
         )
     }
 
-    private fun script_Chorasmian(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Chorasmian(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10fb0, 0x10fcb),
         )
     }
 
-    private fun script_Dives_Akuru(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Dives_Akuru(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11900, 0x11906),
             intArrayOf(0x11909, 0x11909),
             intArrayOf(0x1190c, 0x11913),
@@ -9315,16 +9315,16 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Khitan_Small_Script(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Khitan_Small_Script(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16fe4, 0x16fe4),
             intArrayOf(0x18b00, 0x18cd5),
             intArrayOf(0x18cff, 0x18cff),
         )
     }
 
-    private fun script_Vithkuqi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Vithkuqi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10570, 0x1057a),
             intArrayOf(0x1057c, 0x1058a),
             intArrayOf(0x1058c, 0x10592),
@@ -9336,61 +9336,61 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Old_Uyghur(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Old_Uyghur(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10f70, 0x10f89),
         )
     }
 
-    private fun script_Cypro_Minoan(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Cypro_Minoan(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x12f90, 0x12ff2),
         )
     }
 
-    private fun script_Tangsa(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tangsa(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16a70, 0x16abe),
             intArrayOf(0x16ac0, 0x16ac9),
         )
     }
 
-    private fun script_Toto(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Toto(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e290, 0x1e2ae),
         )
     }
 
-    private fun script_Kawi(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kawi(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11f00, 0x11f10),
             intArrayOf(0x11f12, 0x11f3a),
             intArrayOf(0x11f3e, 0x11f5a),
         )
     }
 
-    private fun script_Nag_Mundari(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Nag_Mundari(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e4d0, 0x1e4f9),
         )
     }
 
-    private fun script_Todhri(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Todhri(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x105c0, 0x105f3),
         )
     }
 
-    private fun script_Garay(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Garay(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10d40, 0x10d65),
             intArrayOf(0x10d69, 0x10d85),
             intArrayOf(0x10d8e, 0x10d8f),
         )
     }
 
-    private fun script_Tulu_Tigalari(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tulu_Tigalari(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11380, 0x11389),
             intArrayOf(0x1138b, 0x1138b),
             intArrayOf(0x1138e, 0x1138e),
@@ -9405,62 +9405,62 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun script_Sunuwar(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sunuwar(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11bc0, 0x11be1),
             intArrayOf(0x11bf0, 0x11bf9),
         )
     }
 
-    private fun script_Gurung_Khema(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Gurung_Khema(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16100, 0x16139),
         )
     }
 
-    private fun script_Kirat_Rai(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Kirat_Rai(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16d40, 0x16d79),
         )
     }
 
-    private fun script_Ol_Onal(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Ol_Onal(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e5d0, 0x1e5fa),
             intArrayOf(0x1e5ff, 0x1e5ff),
         )
     }
 
-    private fun script_Sidetic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Sidetic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x10940, 0x10959),
         )
     }
 
-    private fun script_Tolong_Siki(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tolong_Siki(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11db0, 0x11ddb),
             intArrayOf(0x11de0, 0x11de9),
         )
     }
 
-    private fun script_Beria_Erfe(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Beria_Erfe(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x16ea0, 0x16eb8),
             intArrayOf(0x16ebb, 0x16ed3),
         )
     }
 
-    private fun script_Tai_Yo(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Tai_Yo(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1e6c0, 0x1e6de),
             intArrayOf(0x1e6e0, 0x1e6f5),
             intArrayOf(0x1e6fe, 0x1e6ff),
         )
     }
 
-    private fun script_Unknown(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun script_Unknown(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x378, 0x379),
             intArrayOf(0x380, 0x383),
             intArrayOf(0x38b, 0x38b),
@@ -10197,8 +10197,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Alphabetic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Alphabetic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xaa, 0xaa),
@@ -10963,8 +10963,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Ideographic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Ideographic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x3006, 0x3007),
             intArrayOf(0x3021, 0x3029),
             intArrayOf(0x3038, 0x303a),
@@ -10989,8 +10989,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Letter(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Letter(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xaa, 0xaa),
@@ -11678,8 +11678,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Lowercase(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Lowercase(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x61, 0x7a),
             intArrayOf(0xaa, 0xaa),
             intArrayOf(0xb5, 0xb5),
@@ -12360,8 +12360,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Uppercase(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Uppercase(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x41, 0x5a),
             intArrayOf(0xc0, 0xd6),
             intArrayOf(0xd8, 0xde),
@@ -13025,8 +13025,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Titlecase(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Titlecase(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1c5, 0x1c5),
             intArrayOf(0x1c8, 0x1c8),
             intArrayOf(0x1cb, 0x1cb),
@@ -13040,8 +13040,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Punctuation(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Punctuation(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x21, 0x23),
             intArrayOf(0x25, 0x2a),
             intArrayOf(0x2c, 0x2f),
@@ -13244,15 +13244,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Control(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Control(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x1f),
             intArrayOf(0x7f, 0x9f),
         )
     }
 
-    private fun property_White_Space(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_White_Space(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x9, 0xd),
             intArrayOf(0x20, 0x20),
             intArrayOf(0x85, 0x85),
@@ -13266,8 +13266,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Digit(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Digit(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x30, 0x39),
             intArrayOf(0x660, 0x669),
             intArrayOf(0x6f0, 0x6f9),
@@ -13343,8 +13343,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Hex_Digit(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Hex_Digit(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x30, 0x39),
             intArrayOf(0x41, 0x46),
             intArrayOf(0x61, 0x66),
@@ -13354,14 +13354,14 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Join_Control(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Join_Control(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x200c, 0x200d),
         )
     }
 
-    private fun property_Noncharacter_Code_Point(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Noncharacter_Code_Point(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xfdd0, 0xfdef),
             intArrayOf(0xfffe, 0xffff),
             intArrayOf(0x1fffe, 0x1ffff),
@@ -13383,8 +13383,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Assigned(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Assigned(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x377),
             intArrayOf(0x37a, 0x37f),
             intArrayOf(0x384, 0x38a),
@@ -14123,8 +14123,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Emoji(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Emoji(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x23, 0x23),
             intArrayOf(0x2a, 0x2a),
             intArrayOf(0x30, 0x39),
@@ -14279,8 +14279,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Emoji_Presentation(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Emoji_Presentation(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x231a, 0x231b),
             intArrayOf(0x23e9, 0x23ec),
             intArrayOf(0x23f0, 0x23f0),
@@ -14365,14 +14365,14 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Emoji_Modifier(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Emoji_Modifier(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1f3fb, 0x1f3ff),
         )
     }
 
-    private fun property_Emoji_Modifier_Base(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Emoji_Modifier_Base(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x261d, 0x261d),
             intArrayOf(0x26f9, 0x26f9),
             intArrayOf(0x270a, 0x270d),
@@ -14416,8 +14416,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Emoji_Component(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Emoji_Component(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x23, 0x23),
             intArrayOf(0x2a, 0x2a),
             intArrayOf(0x30, 0x39),
@@ -14431,8 +14431,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun property_Extended_Pictographic(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun property_Extended_Pictographic(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xa9, 0xa9),
             intArrayOf(0xae, 0xae),
             intArrayOf(0x203c, 0x203c),
@@ -14592,8 +14592,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_Control(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_Control(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x0, 0x1f),
             intArrayOf(0x7f, 0x9f),
             intArrayOf(0xad, 0xad),
@@ -14614,8 +14614,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_Extend(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_Extend(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x300, 0x36f),
             intArrayOf(0x483, 0x489),
             intArrayOf(0x591, 0x5bd),
@@ -15003,8 +15003,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_Prepend(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_Prepend(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x600, 0x605),
             intArrayOf(0x6dd, 0x6dd),
             intArrayOf(0x70f, 0x70f),
@@ -15023,8 +15023,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_SpacingMark(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_SpacingMark(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x903, 0x903),
             intArrayOf(0x93b, 0x93b),
             intArrayOf(0x93e, 0x940),
@@ -15186,15 +15186,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_L(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_L(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1100, 0x115f),
             intArrayOf(0xa960, 0xa97c),
         )
     }
 
-    private fun grapheme_V(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_V(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1160, 0x11a7),
             intArrayOf(0xd7b0, 0xd7c6),
             intArrayOf(0x16d63, 0x16d63),
@@ -15202,15 +15202,15 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_T(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_T(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x11a8, 0x11ff),
             intArrayOf(0xd7cb, 0xd7fb),
         )
     }
 
-    private fun grapheme_LV(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_LV(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xac00, 0xac00),
             intArrayOf(0xac1c, 0xac1c),
             intArrayOf(0xac38, 0xac38),
@@ -15613,8 +15613,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_LVT(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_LVT(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xac01, 0xac1b),
             intArrayOf(0xac1d, 0xac37),
             intArrayOf(0xac39, 0xac53),
@@ -16017,8 +16017,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_InCB_Linker(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_InCB_Linker(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x94d, 0x94d),
             intArrayOf(0x9cd, 0x9cd),
             intArrayOf(0xacd, 0xacd),
@@ -16042,8 +16042,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_InCB_Consonant(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_InCB_Consonant(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x915, 0x939),
             intArrayOf(0x958, 0x95f),
             intArrayOf(0x978, 0x97f),
@@ -16123,8 +16123,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun grapheme_InCB_Extend(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun grapheme_InCB_Extend(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x300, 0x36f),
             intArrayOf(0x483, 0x489),
             intArrayOf(0x591, 0x5bd),
@@ -16505,8 +16505,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun javaClass_javaMirrored(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun javaClass_javaMirrored(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x28, 0x29),
             intArrayOf(0x3c, 0x3c),
             intArrayOf(0x3e, 0x3e),
@@ -16624,8 +16624,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun javaClass_javaUnicodeIdentifierStartExtra(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun javaClass_javaUnicodeIdentifierStartExtra(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0x1885, 0x1886),
             intArrayOf(0x2118, 0x2118),
             intArrayOf(0x212e, 0x212e),
@@ -16633,8 +16633,8 @@ internal object UnicodeGeneratedTables {
         )
     }
 
-    private fun javaClass_javaUnicodeIdentifierPartExtra(): Array<IntArray?> {
-        return arrayOf<IntArray?>(
+    private fun javaClass_javaUnicodeIdentifierPartExtra(): Array<IntArray> {
+        return arrayOf<IntArray>(
             intArrayOf(0xb7, 0xb7),
             intArrayOf(0x387, 0x387),
             intArrayOf(0x1369, 0x1371),

@@ -8,14 +8,10 @@ import java.util.*
 
 /** A strategy performing an auxiliary role during an operation.  */
 @JvmRecord
-data class StrategyParticipation(strategy: MatchStrategy?, role: StrategyRole?) {
-    val strategy: MatchStrategy?
-    val role: StrategyRole?
+data class StrategyParticipation(val strategy: MatchStrategy?, val role: StrategyRole?) {
 
     /** Creates a participation pair.  */
     init {
-        this.role = role
-        this.strategy = strategy
         Objects.requireNonNull<MatchStrategy?>(strategy, "strategy")
         Objects.requireNonNull<StrategyRole?>(role, "role")
     }

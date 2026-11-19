@@ -21,6 +21,13 @@ import java.util.Map
 import java.util.function.IntPredicate
 import java.util.regex.Pattern
 import java.util.stream.Stream
+import kotlin.collections.ArrayList
+import kotlin.collections.HashSet
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.MutableSet
+import kotlin.collections.containsKey
+import kotlin.collections.get
 
 /**
  * Canary tests for SafeRE Unicode tables against pinned ICU4J data and the running JDK's [ ] implementation. Version-sensitive JDK comparisons require a matching Unicode
@@ -116,7 +123,7 @@ internal class UnicodeJdkConsistencyTest {
         for (s in samples) {
             val ranges = groups.get(s.expectedCategory)
             Assertions.assertThat(ranges).`as`("Category %s should exist", s.expectedCategory).isNotNull()
-            Assertions.assertThat(Companion.containsCodePoint(ranges!!, s.cp))
+            Assertions.assertThat(containsCodePoint(ranges!!, s.cp))
                 .`as`(
                     "U+%04X should be in category %s (getType=%d)",
                     s.cp, s.expectedCategory, Character.getType(s.cp)

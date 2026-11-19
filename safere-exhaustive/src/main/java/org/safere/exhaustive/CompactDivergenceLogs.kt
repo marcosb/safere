@@ -30,6 +30,9 @@ import kotlin.Throwable
 import kotlin.Throws
 import kotlin.addSuppressed
 import kotlin.arrayOfNulls
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.indices
 import kotlin.plus
 import kotlin.require
 
@@ -275,12 +278,13 @@ internal class CompactDivergenceLogs(
     private data class WorkerSnapshot(val nextCaseIndex: Long, val durableBytes: Long, val classCounts: LongArray?)
     companion object {
         const val FORMAT_VERSION: Int = 2
+
         @JvmField
         val RECORD_SIZE: Int = java.lang.Long.BYTES + Byte.BYTES
 
         @Throws(IOException::class)
         private fun atomicWrite(path: Path, value: String?) {
-            val temporary = path.resolveSibling(path.getFileName().toString() + ".tmp")
+            val temporary = path.resolveSibling(path.fileName.toString() + ".tmp")
             Files.writeString(
                 temporary,
                 value + System.lineSeparator(),
@@ -302,11 +306,11 @@ internal class CompactDivergenceLogs(
             require(!(formatVersion != FORMAT_VERSION || recordSize != RECORD_SIZE)) { "unsupported compact divergence log format" }
             val classifications: MutableList<String?> = ArrayList<String?>()
             for (element in SweepJson.array(`object`, "classifications")) {
-                classifications.add(element.getAsString())
+                classifications.add(element.asString)
             }
             val classificationStatuses: MutableList<DivergenceStatus?> = ArrayList<DivergenceStatus?>()
             for (element in SweepJson.array(`object`, "classificationStatuses")) {
-                classificationStatuses.add(DivergenceStatus.valueOf(element.getAsString()))
+                classificationStatuses.add(DivergenceStatus.valueOf(element.asString))
             }
             require(classifications.size == classificationStatuses.size) { "classification names and statuses must have equal sizes" }
             return Manifest(

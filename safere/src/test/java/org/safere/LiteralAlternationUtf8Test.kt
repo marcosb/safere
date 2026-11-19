@@ -96,13 +96,13 @@ internal class LiteralAlternationUtf8Test {
             operations.clear()
             val utf8 = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
             Assertions.assertThat(utf8.find()).isTrue()
-            val utf8Event: OperationDiagnostics = operations.getLast()
+            val utf8Event: OperationDiagnostics = operations.last()
             operations.clear()
             Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
-            val matcherFreeEvent: OperationDiagnostics = operations.getLast()
+            val matcherFreeEvent: OperationDiagnostics = operations.last()
             operations.clear()
             Assertions.assertThat(pattern.matcher(text).find()).isTrue()
-            val stringEvent: OperationDiagnostics = operations.getLast()
+            val stringEvent: OperationDiagnostics = operations.last()
             if (VectorScanProviders.vectorProviderAvailable()) {
                 // The vector multi-literal start search is faster than one byte scan per literal.
                 Assertions.assertThat<MatchStrategy?>(utf8Event.boundaryStrategy)
@@ -137,7 +137,7 @@ internal class LiteralAlternationUtf8Test {
             // Six first bytes are too many for a first-byte scan, so the existing DFA path runs.
             val literalSearch =
                 !regexAndText[0]!!.startsWith("red") && !VectorScanProviders.vectorProviderAvailable()
-            Assertions.assertThat(operations.getLast().boundaryStrategy == MatchStrategy.LITERAL_ALTERNATION)
+            Assertions.assertThat(operations.last().boundaryStrategy == MatchStrategy.LITERAL_ALTERNATION)
                 .`as`(regexAndText[0])
                 .isEqualTo(literalSearch)
         }

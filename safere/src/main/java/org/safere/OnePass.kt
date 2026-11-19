@@ -56,7 +56,6 @@ internal class OnePass {
      * trailing line terminator at end of text. Only meaningful when [.anchorEnd] is true.
      */
     private val dollarAnchorEnd: Boolean
-
     private val dollarAnchorUnixLines: Boolean
 
     /** Whether empty-width checks need the grapheme-cluster boundary flag.  */
@@ -81,18 +80,12 @@ internal class OnePass {
         this.hasGraphemeSemantics = hasGraphemeSemantics
     }
 
-    private class BuildTables(numClasses: Int, maxStates: Int) {
-        private val numClasses: Int
-        private val maxStates: Int
+    private class BuildTables(private val numClasses: Int, private val maxStates: Int) {
         private var actions = LongArray(0)
         private var matchActions = LongArray(0)
         private var allocatedStates = 0
         private var stateCount = 0
 
-        init {
-            this.numClasses = numClasses
-            this.maxStates = maxStates
-        }
 
         fun stateCount(): Int {
             return stateCount
@@ -156,29 +149,29 @@ internal class OnePass {
      * @return submatch positions as `int[2*nsubmatch]`, or null if no match
      */
     fun search(text: String, endMatch: Boolean, nsubmatch: Int): IntArray? {
-        return search(StringInputScanner(text), 0, text.length(), endMatch, nsubmatch)
+        return search(StringInputScanner(text!!), 0, text.length, endMatch, nsubmatch)
     }
 
     fun search(text: InputScanner, endMatch: Boolean, nsubmatch: Int): IntArray? {
-        return search(text, 0, text.length(), endMatch, nsubmatch)
+        return search(text, 0, text.length, endMatch, nsubmatch)
     }
 
     fun search(text: InputScanner, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?): IntArray? {
-        return search(text, 0, text.length(), endMatch, nsubmatch, reuseGroups)
+        return search(text, 0, text.length, endMatch, nsubmatch, reuseGroups)
     }
 
     fun search(text: String, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?): IntArray? {
-        return search(StringInputScanner(text), 0, text.length(), endMatch, nsubmatch, reuseGroups)
+        return search(StringInputScanner(text!!), 0, text.length, endMatch, nsubmatch, reuseGroups)
     }
 
     fun search(text: String?, startPos: Int, endPos: Int, endMatch: Boolean, nsubmatch: Int): IntArray? {
-        return search(StringInputScanner(text), startPos, endPos, endMatch, nsubmatch)
+        return search(StringInputScanner(text!!), startPos, endPos, endMatch, nsubmatch)
     }
 
     fun search(
         text: String?, startPos: Int, endPos: Int, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?
     ): IntArray? {
-        return search(StringInputScanner(text), startPos, endPos, endMatch, nsubmatch, reuseGroups)
+        return search(StringInputScanner(text!!), startPos, endPos, endMatch, nsubmatch, reuseGroups)
     }
 
     @JvmOverloads
@@ -191,8 +184,8 @@ internal class OnePass {
         reuseGroups: IntArray? = null,
         scratchCap: IntArray? = null
     ): IntArray? {
-        val graphemeContext: GraphemeSupport.Context? =
-            GraphemeSupport.Context.Companion.create(text, hasGraphemeSemantics)
+        val graphemeContext: GraphemeSupport.Context =
+            GraphemeSupport.Context.create(text, hasGraphemeSemantics)
         return search(
             text, startPos, endPos, endMatch, nsubmatch, reuseGroups, scratchCap, graphemeContext
         )
@@ -209,13 +202,13 @@ internal class OnePass {
         graphemeContext: GraphemeSupport.Context?
     ): IntArray? {
         val ncap = 2 * Math.max(nsubmatch, 1)
-        val cap = if (scratchCap != null && scratchCap.length >= ncap) scratchCap else IntArray(ncap)
+        val cap = if (scratchCap != null && scratchCap.size >= ncap) scratchCap else IntArray(ncap)
         Arrays.fill(cap, 0, ncap, -1)
         cap[0] = startPos
 
         var stateOffset = 0
         var matched = false
-        val bestCap = if (reuseGroups != null && reuseGroups.length >= ncap) reuseGroups else IntArray(ncap)
+        val bestCap = if (reuseGroups != null && reuseGroups.size >= ncap) reuseGroups else IntArray(ncap)
 
         val fa = flatActions
         val ma = matchAction
@@ -234,7 +227,7 @@ internal class OnePass {
                 if (matchAct != NO_ACTION) {
                     val reqEmpty = (matchAct and EMPTY_MASK).toInt()
                     if (reqEmpty == 0
-                        || ((reqEmpty and emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
+                        || ((reqEmpty and Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
                                 == 0)
                     ) {
                         val capMask = ((matchAct ushr CAP_SHIFT) and CAP_REG_MASK).toInt()
@@ -254,15 +247,15 @@ internal class OnePass {
             val nextPos: Int
             val cls: Int
             if (stringText != null) {
-                val ch: Char = stringText.charAt(pos)
+                val ch: Char = stringText[pos]
                 if (ch.code < 128) {
                     nextPos = pos + 1
                     cls = ascMap[ch.code]
                 } else if (Character.isHighSurrogate(ch)
-                    && pos + 1 < endPos && Character.isLowSurrogate(stringText.charAt(pos + 1))
+                    && pos + 1 < endPos && Character.isLowSurrogate(stringText[pos + 1])
                 ) {
                     nextPos = pos + 2
-                    cls = classOf(Character.toCodePoint(ch, stringText.charAt(pos + 1)))
+                    cls = classOf(Character.toCodePoint(ch, stringText[pos + 1]))
                 } else {
                     nextPos = pos + 1
                     cls = classOf(ch.code)
@@ -274,8 +267,8 @@ internal class OnePass {
                     cls = ascMap[c]
                 } else {
                     val decoded = text.decodeForward(pos)
-                    val cp: Int = InputScanner.Companion.codePoint(decoded)
-                    nextPos = InputScanner.Companion.position(decoded)
+                    val cp: Int = InputScanner.codePoint(decoded)
+                    nextPos = InputScanner.position(decoded)
                     cls = classOf(cp)
                 }
             }
@@ -310,7 +303,7 @@ internal class OnePass {
             if (conditions != 0L) {
                 val reqEmpty = (conditions and EMPTY_MASK).toInt()
                 if (reqEmpty != 0) {
-                    val curEmpty: Int = emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext)
+                    val curEmpty: Int = Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext)
                     if ((reqEmpty and curEmpty.inv()) != 0) {
                         break
                     }
@@ -330,7 +323,7 @@ internal class OnePass {
             if (matchAct != NO_ACTION) {
                 val reqEmpty = (matchAct and EMPTY_MASK).toInt()
                 if (reqEmpty == 0
-                    || ((reqEmpty and emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
+                    || ((reqEmpty and Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
                             == 0)
                 ) {
                     val capMask = ((matchAct ushr CAP_SHIFT) and CAP_REG_MASK).toInt()
@@ -355,7 +348,7 @@ internal class OnePass {
         if (anchorEnd && bestCap[1] != endPos) {
             // $ (dollarAnchorEnd) allows the match to end before a trailing line terminator.
             if (!dollarAnchorEnd
-                || !Nfa.Companion.isAtTrailingLineTerminator(text, bestCap[1], dollarAnchorUnixLines)
+                || !Nfa.isAtTrailingLineTerminator(text, bestCap[1], dollarAnchorUnixLines)
             ) {
                 return null
             }
@@ -375,14 +368,14 @@ internal class OnePass {
      * @return submatch positions relative to `text`, or null if no match
      */
     fun searchUnanchored(text: String?, startPos: Int, searchLimit: Int, nsubmatch: Int): IntArray? {
-        return searchUnanchored(StringInputScanner(text), startPos, searchLimit, nsubmatch)
+        return searchUnanchored(StringInputScanner(text!!), startPos, searchLimit, nsubmatch)
     }
 
     fun searchUnanchored(text: InputScanner, startPos: Int, searchLimit: Int, nsubmatch: Int): IntArray? {
-        val textLen = text.length()
+        val textLen = text.length
         val limit = Math.min(searchLimit, textLen) + 1
-        val graphemeContext: GraphemeSupport.Context? =
-            GraphemeSupport.Context.Companion.create(text, hasGraphemeSemantics)
+        val graphemeContext: GraphemeSupport.Context =
+            GraphemeSupport.Context.create(text, hasGraphemeSemantics)
         var start = startPos
         while (start < limit) {
             val result = search(text, start, textLen, false, nsubmatch, null, null, graphemeContext)
@@ -391,7 +384,7 @@ internal class OnePass {
             }
             // Advance to next code point boundary.
             if (start < textLen) {
-                start = InputScanner.Companion.position(text.decodeForward(start)) - 1
+                start = InputScanner.position(text.decodeForward(start)) - 1
             }
             start++
         }
@@ -408,9 +401,6 @@ internal class OnePass {
     }
 
     /** Prevents instantiation via no-arg constructor.  */
-    private constructor() {
-        throw AssertionError("non-instantiable")
-    }
 
     companion object {
         /**
@@ -483,7 +473,7 @@ internal class OnePass {
 
             // Case-folding CHAR_RANGE instructions are supported via case-fold boundary expansion.
             val boundaries: IntArray = buildBoundaries(prog)
-            val numClasses: Int = boundaries.length
+            val numClasses: Int = boundaries.size
 
             val maxStates: Int = maxOnePassStates(prog)
             if (maxStates > MAX_STATES || exceedsActionBudget(maxStates, numClasses)) {
@@ -492,7 +482,7 @@ internal class OnePass {
 
             // State table. States are identified by instruction IDs.
             // nodeMap: instruction ID -> state index (-1 if unallocated).
-            val nodeMap = IntArray(prog.size())
+            val nodeMap = IntArray(prog.size)
             Arrays.fill(nodeMap, -1)
             val tables = BuildTables(numClasses, maxStates)
 
@@ -506,11 +496,11 @@ internal class OnePass {
             worklist[workTail++] = startInst
 
             // Scratch buffers for BFS and epsilon closure traversal.
-            val visitedEpoch = IntArray(prog.size())
+            val visitedEpoch = IntArray(prog.size)
             var currentEpoch = 0
 
             // Stack entries: triplets of (instId, capMask, emptyFlags).
-            var stack = IntArray(prog.size() * 3)
+            var stack = IntArray(prog.size * 3)
 
             val nextStates = IntArray(numClasses)
             val capMasks = IntArray(numClasses)
@@ -534,7 +524,7 @@ internal class OnePass {
                     val capMask = stack[--stackTop]
                     val id = stack[--stackTop]
 
-                    if (id == 0 || id >= prog.size()) {
+                    if (id == 0 || id >= prog.size) {
                         continue
                     }
                     if (visitedEpoch[id] == currentEpoch) {
@@ -547,8 +537,8 @@ internal class OnePass {
                     when (ip.op) {
                         InstOp.FAIL -> {}
                         InstOp.ALT, InstOp.ALT_MATCH -> {
-                            if (stackTop + 6 > stack.length) {
-                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            if (stackTop + 6 > stack.size) {
+                                stack = Arrays.copyOf(stack, stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -559,8 +549,8 @@ internal class OnePass {
                         }
 
                         InstOp.NOP, InstOp.LOOP_ENTER -> {
-                            if (stackTop + 3 > stack.length) {
-                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            if (stackTop + 3 > stack.size) {
+                                stack = Arrays.copyOf(stack, stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -568,8 +558,8 @@ internal class OnePass {
                         }
 
                         InstOp.PROGRESS_CHECK -> {
-                            if (stackTop + 6 > stack.length) {
-                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            if (stackTop + 6 > stack.size) {
+                                stack = Arrays.copyOf(stack, stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -580,8 +570,8 @@ internal class OnePass {
                         }
 
                         InstOp.CAPTURE -> {
-                            if (stackTop + 3 > stack.length) {
-                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            if (stackTop + 3 > stack.size) {
+                                stack = Arrays.copyOf(stack, stack.size * 2)
                             }
                             val reg = ip.arg
                             val newCapMask = if (reg < MAX_CAP_REGS) (capMask or (1 shl reg)) else capMask
@@ -591,8 +581,8 @@ internal class OnePass {
                         }
 
                         InstOp.EMPTY_WIDTH -> {
-                            if (stackTop + 3 > stack.length) {
-                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            if (stackTop + 3 > stack.size) {
+                                stack = Arrays.copyOf(stack, stack.size * 2)
                             }
                             val newEmpty = emptyFlags or ip.arg
                             stack[stackTop++] = ip.out
@@ -637,7 +627,7 @@ internal class OnePass {
                             // endpoint, so its lower bound determines membership.
                             var cls = 0
                             var ri = 0
-                            while (ri < ip.ranges.length) {
+                            while (ri < ip.ranges.size) {
                                 val rLo = ip.ranges[ri]
                                 val rHi = ip.ranges[ri + 1]
                                 while (cls < numClasses && boundaries[cls] < rLo) {
@@ -718,7 +708,7 @@ internal class OnePass {
 
         private fun maxOnePassStates(prog: Prog): Int {
             var maxStates = 1 // start state
-            for (i in 0..<prog.size()) {
+            for (i in 0..<prog.size) {
                 val inst = prog.inst(i)
                 if (inst.op == InstOp.CHAR_RANGE || inst.op == InstOp.CHAR_CLASS) {
                     maxStates++
@@ -732,7 +722,7 @@ internal class OnePass {
             val bounds = IntArrayList()
             bounds.add(0)
             bounds.add(Utils.MAX_RUNE + 1)
-            for (i in 0..<prog.size()) {
+            for (i in 0..<prog.size) {
                 val inst = prog.inst(i)
                 if (inst.op == InstOp.CHAR_RANGE) {
                     bounds.add(inst.lo)
@@ -741,19 +731,19 @@ internal class OnePass {
                     }
                     if (inst.foldCase) {
                         for (r in inst.lo..inst.hi) {
-                            var folded: Int = Inst.Companion.simpleFold(r)
+                            var folded: Int = Inst.simpleFold(r)
                             while (folded != r) {
                                 bounds.add(folded)
                                 if (folded < Utils.MAX_RUNE) {
                                     bounds.add(folded + 1)
                                 }
-                                folded = Inst.Companion.simpleFold(folded)
+                                folded = Inst.simpleFold(folded)
                             }
                         }
                     }
                 } else if (inst.op == InstOp.CHAR_CLASS) {
                     var j = 0
-                    while (j < inst.ranges.length) {
+                    while (j < inst.ranges.size) {
                         bounds.add(inst.ranges[j])
                         if (inst.ranges[j + 1] < Utils.MAX_RUNE) {
                             bounds.add(inst.ranges[j + 1] + 1)
@@ -783,7 +773,7 @@ internal class OnePass {
             var mask = mask
             while (mask != 0) {
                 val reg = Integer.numberOfTrailingZeros(mask)
-                if (reg >= cap.length) {
+                if (reg >= cap.size) {
                     break
                 }
                 cap[reg] = pos

@@ -313,7 +313,7 @@ internal class SearchScalingRegressionTest {
                         WorkCounter.countForTesting(
                             Runnable {
                                 val result =
-                                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64)
+                                    reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)
                                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
                                 Assertions.assertThat(result!!.scanLimitReached).isTrue()
                             })
@@ -642,7 +642,7 @@ internal class SearchScalingRegressionTest {
             WorkCounter.countForTesting(
                 Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue() })
 
-        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.size.toLong())
+        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.length.toLong())
     }
 
     @Test
@@ -756,8 +756,8 @@ internal class SearchScalingRegressionTest {
                 val captureWork =
                     WorkCounter.countForTesting(
                         Runnable {
-                            Assertions.assertThat(captureStart.getAsInt()).isEqualTo(1024)
-                            Assertions.assertThat(captureEnd.getAsInt()).isEqualTo(1024)
+                            Assertions.assertThat(captureStart.asInt).isEqualTo(1024)
+                            Assertions.assertThat(captureEnd.asInt).isEqualTo(1024)
                         })
                 Assertions.assertThat(captureWork)
                     .`as`("Known-demand captures should already be available after exact fallback")
@@ -1998,13 +1998,13 @@ internal class SearchScalingRegressionTest {
             WorkCounter.countForTesting(
                 Runnable {
                     val res =
-                        dfa.doSearch(Utf8InputScanner(input, 0, input.size), 0, false, false)
+                        dfa.doSearch(Utf8InputScanner(input, 0, input.length), 0, false, false)
                     Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
                     Assertions.assertThat(res!!.matched).isTrue()
                 })
         Assertions.assertThat(work)
             .`as`("Direct DFA start state acceleration on UTF-8 must scan input linearly")
-            .isLessThanOrEqualTo((input.size + 20).toLong())
+            .isLessThanOrEqualTo((input.length + 20).toLong())
     }
 
     @Test
@@ -2192,8 +2192,8 @@ internal class SearchScalingRegressionTest {
         private fun assertFindAllWorkIsLinear(
             matcher: IntFunction<FindIterator?>, inputKind: String?
         ) {
-            val smallerWork = WorkCounter.countForTesting(Runnable { Companion.consumeMatches(matcher.apply(200)!!) })
-            val largerWork = WorkCounter.countForTesting(Runnable { Companion.consumeMatches(matcher.apply(1000)!!) })
+            val smallerWork = WorkCounter.countForTesting(Runnable { consumeMatches(matcher.apply(200)!!) })
+            val largerWork = WorkCounter.countForTesting(Runnable { consumeMatches(matcher.apply(1000)!!) })
 
             Assertions.assertThat(smallerWork).`as`("%s find-all work must be observed", inputKind).isPositive()
             Assertions.assertThat(largerWork)
@@ -2246,8 +2246,8 @@ internal class SearchScalingRegressionTest {
         private fun assertRepeatedFindWorkIsLinear(
             matcherFactory: IntFunction<FindIterator?>, description: String?
         ) {
-            val smallerWork: Long = Companion.countAllMatches(matcherFactory.apply(500)!!, 500)
-            val largerWork: Long = Companion.countAllMatches(matcherFactory.apply(2000)!!, 2000)
+            val smallerWork: Long = countAllMatches(matcherFactory.apply(500)!!, 500)
+            val largerWork: Long = countAllMatches(matcherFactory.apply(2000)!!, 2000)
 
             Assertions.assertThat(largerWork)
                 .`as`("%s repeated find work should scale linearly", description)

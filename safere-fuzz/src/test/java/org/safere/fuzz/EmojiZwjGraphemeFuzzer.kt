@@ -12,7 +12,6 @@ import org.safere.Pattern
 import org.safere.Utf8Input
 import org.safere.Utf8Matcher
 import java.lang.Byte
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
@@ -20,14 +19,16 @@ import java.util.stream.IntStream
 import kotlin.AssertionError
 import kotlin.Int
 import kotlin.IntArray
+import kotlin.String
 import kotlin.collections.ArrayList
 import kotlin.collections.MutableList
 import kotlin.collections.contentToString
+import kotlin.collections.first
 import kotlin.collections.indices
-import kotlin.collections.minus
+import kotlin.collections.last
 import kotlin.intArrayOf
-import kotlin.sequences.minus
-import kotlin.text.isEmpty
+
+()
 import kotlin.text.toByteArray
 
 /** ICU4J-based Unicode grapheme conformance; the historical name preserves saved fuzz seeds.  */
@@ -151,13 +152,13 @@ class EmojiZwjGraphemeFuzzer {
             }
             val quantified: Matcher = QUANTIFIED.matcher(input)
             if (!quantified.matches()
-                || quantified.group(1) != if (expected.isEmpty()) null else expected.getLast()
+                || quantified.group(1) != if (expected.isEmpty()) null else expected.last()
             ) {
                 throw AssertionError("Quantified grapheme capture on " + codePoints.contentToString())
             }
             if (!expected.isEmpty()) {
                 val composed: Matcher = FIRST_AND_REST.matcher(input)
-                if (!composed.matches() || (composed.group(1) != expected.getFirst()) || (composed.group(2) != String.join(
+                if (!composed.matches() || (composed.group(1) != expected.first()) || (composed.group(2) != String.join(
                         "",
                         expected.subList(1, expected.size)
                     ))
@@ -171,7 +172,7 @@ class EmojiZwjGraphemeFuzzer {
                 throw AssertionError("UTF-8 quantified clusters on " + codePoints.contentToString())
             }
             val expectedLastStart =
-                if (expected.isEmpty()) -1 else encoded.size - expected.getLast()
+                if (expected.isEmpty()) -1 else encoded.size - expected.last()
                     .toByteArray(StandardCharsets.UTF_8).size
             if (utf8Quantified.start(1) != expectedLastStart
                 || utf8Quantified.end(1) != (if (expected.isEmpty()) -1 else encoded.size)
@@ -180,7 +181,7 @@ class EmojiZwjGraphemeFuzzer {
             }
             if (!expected.isEmpty()) {
                 val utf8Composed: Utf8Matcher = FIRST_AND_REST.matcher(Utf8Input.validated(encoded))
-                val firstEnd = expected.getFirst().toByteArray(StandardCharsets.UTF_8).size
+                val firstEnd = expected.first().toByteArray(StandardCharsets.UTF_8).size
                 if (!utf8Composed.matches() || utf8Composed.start(1) != 0 || utf8Composed.end(1) != firstEnd || utf8Composed.start(
                         2
                     ) != firstEnd || utf8Composed.end(2) != encoded.size
@@ -211,14 +212,14 @@ class EmojiZwjGraphemeFuzzer {
             }
             // split("") returns one empty string; there are no clusters in empty text.
             if (!input.isEmpty()) {
-                check("split", codePoints, Arrays.asList<kotlin.String?>(*BOUNDARY.split(input)), expected)
+                check("split", codePoints, Arrays.asList<String?>(*BOUNDARY.split(input)), expected)
             }
         }
 
         private fun checkFinds(
-            pattern: Pattern, input: kotlin.String, codePoints: IntArray?, expected: MutableList<kotlin.String>?
+            pattern: Pattern, input: String, codePoints: IntArray?, expected: MutableList<String>?
         ) {
-            val actual: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+            val actual: MutableList<String?> = ArrayList<String?>()
             val scalar = pattern.matcher(input)
             while (scalar.find()) {
                 actual.add(scalar.group())
@@ -234,10 +235,10 @@ class EmojiZwjGraphemeFuzzer {
         }
 
         private fun check(
-            operation: kotlin.String?,
+            operation: String?,
             codePoints: IntArray?,
-            actual: MutableList<kotlin.String?>,
-            expected: MutableList<kotlin.String>?
+            actual: MutableList<String?>,
+            expected: MutableList<String>?
         ) {
             if (actual != expected) {
                 throw AssertionError(

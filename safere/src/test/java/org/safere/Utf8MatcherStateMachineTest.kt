@@ -409,7 +409,7 @@ internal class Utf8MatcherStateMachineTest {
             Assertions.assertThat<MutableList<Int?>?>(actual).`as`("repeated UTF-8 find for /%s/", regex)
                 .isEqualTo(expected)
 
-            utf8Matcher.region(2, input.length())
+            utf8Matcher.region(2, input.length)
             Assertions.assertThat(utf8Matcher.find()).`as`("region find for /%s/", regex).isTrue()
             utf8Matcher.reset()
             Assertions.assertThat<MutableList<Int?>?>(findTrace(utf8Matcher)).`as`("reset find trace for /%s/", regex)
@@ -553,7 +553,7 @@ internal class Utf8MatcherStateMachineTest {
             val byteRegionStart: Int = utf8Offset(input, regionStart)
             val utf8Input = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
             val utf8Matcher =
-                pattern.matcher(utf8Input).region(byteRegionStart, utf8Input.length())
+                pattern.matcher(utf8Input).region(byteRegionStart, utf8Input.size)
 
             val jdkFound = jdkMatcher.find()
             Assertions.assertThat(pattern.find(utf8Input)).isEqualTo(jdkFound)

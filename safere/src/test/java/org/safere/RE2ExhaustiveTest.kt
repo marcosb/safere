@@ -110,7 +110,7 @@ internal class RE2ExhaustiveTest {
                         break
                     }
                     if (line!!.startsWith("\"")) {
-                        strings.add(Companion.unescapeString(line))
+                        strings.add(unescapeString(line))
                     }
                 }
                 if (line == null) {
@@ -126,7 +126,7 @@ internal class RE2ExhaustiveTest {
                         continue
                     }
 
-                    val pattern: String = Companion.unescapeString(line)
+                    val pattern: String = unescapeString(line)
 
                     // Skip \C patterns (match-any-byte, not applicable to Java)
                     var skip = pattern.contains("\\C")
@@ -180,8 +180,8 @@ internal class RE2ExhaustiveTest {
                             continue
                         }
 
-                        val fullExpected: Array<IntArray?>? = Companion.parseResult(fields[0]!!)
-                        val findExpected: Array<IntArray?>? = Companion.parseResult(fields[1]!!)
+                        val fullExpected: Array<IntArray?>? = parseResult(fields[0]!!)
+                        val findExpected: Array<IntArray?>? = parseResult(fields[1]!!)
 
                         // Test matches() against field 0 (full match, first-match semantics)
                         totalTests++
@@ -297,7 +297,7 @@ internal class RE2ExhaustiveTest {
                     if (buf[i] == '\n') {
                         val line: String?
                         if (sb != null) {
-                            sb.append(buf, pos, i - pos)
+                            sb.appendRange(buf, pos, pos + (i - pos))
                             line = sb.toString()
                         } else {
                             line = String(buf, pos, i - pos)
@@ -310,7 +310,7 @@ internal class RE2ExhaustiveTest {
                 if (sb == null) {
                     sb = StringBuilder()
                 }
-                sb.append(buf, pos, limit - pos)
+                sb.appendRange(buf, pos, pos + (limit - pos))
                 pos = 0
                 limit = `in`.read(buf, 0, buf.size)
                 if (limit <= 0) {
@@ -334,7 +334,7 @@ internal class RE2ExhaustiveTest {
          * e.g., `$` matches before trailing `\n`).
          */
         private fun jdkAgrees(
-            pattern: String, text: String, method: String, safeReResult: Boolean, safeReMatcher: org.safere.Matcher
+            pattern: String, text: String, method: String, safeReResult: Boolean, safeReMatcher: Matcher
         ): Boolean {
             try {
                 val jdkPat = Pattern.compile(pattern)
@@ -360,7 +360,7 @@ internal class RE2ExhaustiveTest {
          * behavioral difference (not a bug).
          */
         private fun checkGroupsOrJdk(
-            m: org.safere.Matcher,
+            m: Matcher,
             expected: Array<IntArray?>,
             text: String,
             pattern: String,
@@ -407,7 +407,7 @@ internal class RE2ExhaustiveTest {
 
         /** Check if JDK's group positions agree with SafeRE's for a given match.  */
         private fun jdkAgreesOnGroups(
-            pattern: String, text: String, method: String, safeReMatcher: org.safere.Matcher
+            pattern: String, text: String, method: String, safeReMatcher: Matcher
         ): Boolean {
             try {
                 val jdkPat = Pattern.compile(pattern)
@@ -607,8 +607,7 @@ internal class RE2ExhaustiveTest {
                     i++
                     continue
                 }
-                val next = s.get(++i)
-                when (next) {
+                when (val next = s.get(++i)) {
                     'a' -> sb.append('\u0007')
                     'b' -> sb.append('\b')
                     'f' -> sb.append('\f')

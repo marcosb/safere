@@ -223,7 +223,7 @@ internal class RejectPrefilterTest {
                 MatchOperation.FIND,
                 MatchOutcome.NO_MATCH,
                 CaptureMode.NONE,
-                scanner.length()
+                scanner.length
             )
         Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
             .contains(StrategyParticipation(MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER))

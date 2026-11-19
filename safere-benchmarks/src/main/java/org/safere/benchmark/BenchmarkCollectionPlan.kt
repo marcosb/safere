@@ -9,7 +9,6 @@ import com.google.gson.GsonBuilder
 import org.safere.benchmark.CrossEngineWorkload.TimingGroup
 import org.safere.benchmark.DeclarativeBenchmarkPlan.ExecutionConstraint
 import org.safere.benchmark.DeclarativeBenchmarkPlan.MeasurementMode
-import java.lang.String
 import java.util.*
 import java.util.List
 import java.util.function.Consumer
@@ -17,30 +16,13 @@ import java.util.function.Predicate
 import java.util.function.Supplier
 import java.util.regex.Pattern
 import java.util.stream.Collectors
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.IllegalArgumentException
-import kotlin.check
 import kotlin.collections.ArrayList
 import kotlin.collections.LinkedHashSet
 import kotlin.collections.MutableList
 import kotlin.collections.MutableSet
-import kotlin.collections.contains
-import kotlin.collections.forEach
-import kotlin.collections.lastIndexOf
+import kotlin.collections.first
 import kotlin.collections.mutableListOf
 import kotlin.collections.mutableSetOf
-import kotlin.collections.plus
-import kotlin.plus
-import kotlin.require
-import kotlin.sequences.lastIndexOf
-import kotlin.sequences.plus
-import kotlin.text.get
-import kotlin.text.lastIndexOf
-import kotlin.text.plus
-import kotlin.text.replace
-import kotlin.text.startsWith
-import kotlin.text.substring
 
 /** Discovers generic benchmark runners, trials, and report identities from the declared plan.  */
 internal class BenchmarkCollectionPlan private constructor(
@@ -101,9 +83,9 @@ internal class BenchmarkCollectionPlan private constructor(
                         runner!!.profile,
                         runner.benchmark,
                         runner.parameter,
-                        (if (smoke) Companion.smokeTrialIds(runner) else runner.trialIds)!!
+                        (if (smoke) smokeTrialIds(runner) else runner.trialIds)!!
                             .stream()
-                            .filter { id: String? -> provider == null || Companion.matchesScanProvider(id!!, provider) }
+                            .filter { id: String? -> provider == null || matchesScanProvider(id!!, provider) }
                             .toList())
                 }
                 .filter { runner: Runner? -> !runner!!.trialIds!!.isEmpty() }
@@ -120,7 +102,7 @@ internal class BenchmarkCollectionPlan private constructor(
         else
             filterRunners(
                 runners,
-                Predicate { id: String? -> Companion.matchesScanProvider(id!!, scanProvider) },
+                Predicate { id: String? -> matchesScanProvider(id!!, scanProvider) },
                 false
             )
     }
@@ -181,7 +163,7 @@ internal class BenchmarkCollectionPlan private constructor(
 
     fun allocationRunners(): MutableList<Runner> {
         val prefixes: MutableList<String?> =
-            BenchmarkData.Companion.get().getStringList("configuration.collection.allocationWorkloadPrefixes")
+            BenchmarkData.get().getStringList("configuration.collection.allocationWorkloadPrefixes")
         val allocationOnly = allocationOnlyTrialIds()
         return filterRunners(
             allRunners(),
@@ -241,7 +223,7 @@ internal class BenchmarkCollectionPlan private constructor(
     fun reportPlan(smoke: Boolean = false): ReportPlan {
         val collectedTrialIds =
             runners().stream()
-                .flatMap<String?> { runner: Runner? -> (if (smoke) Companion.smokeTrialIds(runner!!) else runner!!.trialIds)!!.stream() }
+                .flatMap<String?> { runner: Runner? -> (if (smoke) smokeTrialIds(runner!!) else runner!!.trialIds)!!.stream() }
                 .collect(Collectors.toUnmodifiableSet())
         val trials =
             trials(Query.Companion.ALL).stream()
@@ -254,7 +236,7 @@ internal class BenchmarkCollectionPlan private constructor(
         crossEngine.exclusions().stream()
             .filter { exclusion: MaterializedExecutionPlan.Entry? -> workloadIds.contains(exclusion!!.workloadId) }
             .map<ReportExclusion?> { exclusion: MaterializedExecutionPlan.Entry? ->
-                ReportExclusion.Companion.from(
+                ReportExclusion.from(
                     exclusion!!
                 )
             }
@@ -262,7 +244,7 @@ internal class BenchmarkCollectionPlan private constructor(
         specialized.exclusions().stream()
             .filter { exclusion: MaterializedExecutionPlan.Entry? -> workloadIds.contains(exclusion!!.workloadId) }
             .map<ReportExclusion?> { exclusion: MaterializedExecutionPlan.Entry? ->
-                ReportExclusion.Companion.from(
+                ReportExclusion.from(
                     exclusion!!
                 )
             }
@@ -351,13 +333,13 @@ internal class BenchmarkCollectionPlan private constructor(
 
         fun load(): BenchmarkCollectionPlan {
             return BenchmarkCollectionPlan(
-                CrossEngineBenchmarkPlan.Companion.load(), SpecializedBenchmarkPlan.Companion.load(), null
+                CrossEngineBenchmarkPlan.load(), SpecializedBenchmarkPlan.load(), null
             )
         }
 
         fun matchesScanProvider(trialId: String, provider: String?): Boolean {
             val variant = trialId.substring(trialId.lastIndexOf('@') + 1)
-            return RegexEngineVariant.Companion.fromId(variant).scanProvider() == provider
+            return RegexEngineVariant.fromId(variant).scanProvider() == provider
         }
 
         private fun launcherArguments(
@@ -376,11 +358,11 @@ internal class BenchmarkCollectionPlan private constructor(
                         )
                     )
                 }
-            return List.copyOf<kotlin.String?>(arguments)
+            return List.copyOf<String?>(arguments)
         }
 
         private fun filterRunners(
-            runners: MutableList<Runner?>, includeTrial: Predicate<kotlin.String?>?, standardOnly: Boolean
+            runners: MutableList<Runner?>, includeTrial: Predicate<String?>?, standardOnly: Boolean
         ): MutableList<Runner> {
             return runners.stream()
                 .filter { runner: Runner? -> !standardOnly || runner!!.profile == "standard" }
@@ -397,21 +379,21 @@ internal class BenchmarkCollectionPlan private constructor(
         }
 
         private fun runner(
-            profile: kotlin.String?,
+            profile: String?,
             runnerClass: Class<*>,
-            parameter: kotlin.String?,
+            parameter: String?,
             trials: MutableList<CrossEngineBenchmarkPlan.Trial?>
         ): Runner {
             return Runner(
                 profile,
                 runnerClass.getName() + ".run",
                 parameter,
-                trials.stream().map<kotlin.String?> { id() }.toList()
+                trials.stream().map<String?> { id() }.toList()
             )
         }
 
         @JvmStatic
-        fun main(args: Array<kotlin.String>) {
+        fun main(args: Array<String>) {
             require(args.size != 0) {
                 ("Usage: BenchmarkCollectionPlan"
                         + " <runners|allocation-runners|runner-arguments|declared-runner-arguments|trials|report-plan>"
@@ -427,12 +409,12 @@ internal class BenchmarkCollectionPlan private constructor(
                     val smoke = args.size == 2 && args[1] == "--smoke"
                     require(!(args.size > 2 || (args.size == 2 && !smoke))) { "Usage: " + args[0] + " [--smoke]" }
                     for (runner in plan.executionRunners(args[0].startsWith("allocation-"), smoke)) {
-                        val scanProvider: kotlin.String? =
-                            RegexEngineVariant.Companion.fromId(
+                        val scanProvider: String =
+                            RegexEngineVariant.fromId(
                                 runner
                                     .trialIds
-                                    .getFirst()
-                                    .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                                    .first()
+                                    .substring(runner.trialIds.first().lastIndexOf('@') + 1)
                             )
                                 .scanProvider()
                         System.out.printf(
@@ -458,7 +440,7 @@ internal class BenchmarkCollectionPlan private constructor(
                                 runner!!.profile,
                                 runner.benchmark,
                                 runner.parameter,
-                                String.join(",", if (smoke) Companion.smokeTrialIds(runner) else runner.trialIds)
+                                String.join(",", if (smoke) smokeTrialIds(runner) else runner.trialIds)
                             )
                         })
                 }
@@ -468,10 +450,10 @@ internal class BenchmarkCollectionPlan private constructor(
                         ("Usage: BenchmarkCollectionPlan runner-arguments "
                                 + "<benchmark-regex> <benchmark-jar> [parameter ...]")
                     }
-                    val overriddenParameters: MutableSet<kotlin.String?> =
-                        LinkedHashSet<kotlin.String?>(
-                            Arrays.asList<kotlin.String?>(
-                                *Arrays.copyOfRange<kotlin.String?>(
+                    val overriddenParameters: MutableSet<String?> =
+                        LinkedHashSet<String?>(
+                            Arrays.asList<String?>(
+                                *Arrays.copyOfRange<String?>(
                                     args,
                                     3,
                                     args.size
@@ -479,7 +461,7 @@ internal class BenchmarkCollectionPlan private constructor(
                             )
                         )
                     plan.launcherArguments(args[1], args[2], overriddenParameters)
-                        .forEach(Consumer { x: kotlin.String? -> println(x) })
+                        .forEach(Consumer { x: String? -> println(x) })
                 }
 
                 "declared-runner-arguments" -> {
@@ -494,15 +476,15 @@ internal class BenchmarkCollectionPlan private constructor(
                     plan.declaredLauncherArguments(
                         args[2], args[3], args[1] == "allocation-runners", smoke, provider
                     )
-                        .forEach(Consumer { x: kotlin.String? -> println(x) })
+                        .forEach(Consumer { x: String? -> println(x) })
                 }
 
                 "trials" -> {
-                    val query: Query = Query.Companion.parse(Arrays.copyOfRange<kotlin.String?>(args, 1, args.size))
+                    val query: Query = Query.parse(Arrays.copyOfRange<String?>(args, 1, args.size))
                     val selected = plan.trials(query)
                     check(!selected.isEmpty()) { "No declared trials match the query" }
                     println(
-                        selected.stream().map<kotlin.String?>(CollectionTrial::id).collect(Collectors.joining(","))
+                        selected.stream().map<String?>(CollectionTrial::id).collect(Collectors.joining(","))
                     )
                 }
 
@@ -516,15 +498,15 @@ internal class BenchmarkCollectionPlan private constructor(
             }
         }
 
-        fun argumentFileToken(argument: kotlin.String): kotlin.String {
+        fun argumentFileToken(argument: String): String {
             return "\"" + argument.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         }
 
-        private fun smokeTrialIds(runner: Runner): MutableList<kotlin.String?> {
-            val firstTrial: kotlin.String = runner.trialIds.getFirst()
+        private fun smokeTrialIds(runner: Runner): MutableList<String?> {
+            val firstTrial: String = runner.trialIds.first()
             val firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'))
             return runner.trialIds!!.stream()
-                .filter { trialId: kotlin.String? -> trialId!!.startsWith(firstWorkload + "@") }
+                .filter { trialId: String? -> trialId!!.startsWith(firstWorkload + "@") }
                 .toList()
         }
     }

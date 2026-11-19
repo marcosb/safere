@@ -26,7 +26,7 @@ internal class FailedFullMatchFindTest {
                                 val text = if (offset == 0) input else "xx" + input + "yy"
                                 val matcher = Pattern.compile(regex).matcher(text)
                                 if (offset != 0) {
-                                    matcher.region(offset!!, offset + input.length)
+                                    matcher.region(offset!!, offset + input.size)
                                 }
                                 for (attempt in 0..<attempts!!) {
                                     Assertions.assertThat(matcher.matches()).`as`("full match: %s", regex).isFalse()

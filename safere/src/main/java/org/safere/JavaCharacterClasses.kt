@@ -22,50 +22,50 @@ import kotlin.concurrent.Volatile
  */
 internal object JavaCharacterClasses {
     /** `Character.isISOControl`: U+0000..U+001F and U+007F..U+009F.  */
-    private val ISO_CONTROL = arrayOf<IntArray?>(intArrayOf(0x00, 0x1F), intArrayOf(0x7F, 0x9F))
+    private val ISO_CONTROL = arrayOf<IntArray>(intArrayOf(0x00, 0x1F), intArrayOf(0x7F, 0x9F))
 
     /**
      * The non-whitespace ISO controls that `Character.isIdentifierIgnorable` accepts, in
      * addition to the format characters (Cf).
      */
     private val IGNORABLE_CONTROLS =
-        arrayOf<IntArray?>(intArrayOf(0x00, 0x08), intArrayOf(0x0E, 0x1B), intArrayOf(0x7F, 0x9F))
+        arrayOf<IntArray>(intArrayOf(0x00, 0x08), intArrayOf(0x0E, 0x1B), intArrayOf(0x7F, 0x9F))
 
     /** The controls that `Character.isWhitespace` accepts, in addition to Zl, Zp, and Zs.  */
-    private val WHITESPACE_CONTROLS = arrayOf<IntArray?>(intArrayOf(0x09, 0x0D), intArrayOf(0x1C, 0x1F))
+    private val WHITESPACE_CONTROLS = arrayOf<IntArray>(intArrayOf(0x09, 0x0D), intArrayOf(0x1C, 0x1F))
 
     /** The no-break space separators that `Character.isWhitespace` excludes.  */
     private val NO_BREAK_SPACES = intArrayOf(0x00A0, 0x2007, 0x202F)
 
-    private fun generated(name: String?): Array<IntArray?>? {
-        return Objects.requireNonNull<Array<IntArray?>?>(UnicodeGeneratedTables.JAVA_CHARACTER_CLASSES.get(name), name)
+    private fun generated(name: String): Array<IntArray> {
+        return Objects.requireNonNull(UnicodeGeneratedTables.JAVA_CHARACTER_CLASSES.get(name), name)!!
     }
 
-    private fun property(name: String?): Array<IntArray?>? {
-        return Objects.requireNonNull<Array<IntArray?>?>(UnicodeProperties.lookupBinaryProperty(name), name)
+    private fun property(name: String): Array<IntArray> {
+        return Objects.requireNonNull(UnicodeProperties.lookupBinaryProperty(name), name)!!
     }
 
-    private fun category(name: String): Array<IntArray>? {
-        return Objects.requireNonNull<Array<IntArray?>?>(UnicodeProperties.lookupCategory(name), name)
+    private fun category(name: String): Array<IntArray> {
+        return Objects.requireNonNull(UnicodeProperties.lookupCategory(name), name)!!
     }
 
     /** `Character.isWhitespace`: Zl, Zp, and Zs other than the no-break spaces.  */
-    private fun whitespace(): Array<IntArray?> {
+    private fun whitespace(): Array<IntArray> {
         return UnicodeTables.mergeRangeTables(
             category("Zl"),
             category("Zp"),
-            JavaCharacterClasses.withoutCodePoints(category("Zs")!!, NO_BREAK_SPACES),
+            withoutCodePoints(category("Zs")!!, NO_BREAK_SPACES),
             WHITESPACE_CONTROLS
         )
     }
 
     /** `Character.isIdentifierIgnorable`: Cf plus some ISO controls.  */
-    private fun identifierIgnorable(): Array<IntArray?> {
+    private fun identifierIgnorable(): Array<IntArray> {
         return UnicodeTables.mergeRangeTables(category("Cf"), IGNORABLE_CONTROLS)
     }
 
     /** `Character.isJavaIdentifierStart`: L, Nl, Sc, and Pc.  */
-    private fun javaIdentifierStart(): Array<IntArray?> {
+    private fun javaIdentifierStart(): Array<IntArray> {
         return UnicodeTables.mergeRangeTables(
             property("Letter"), category("Nl"), category("Sc"), category("Pc")
         )
@@ -81,7 +81,7 @@ internal object JavaCharacterClasses {
     }
 
     private fun withoutCodePoint(table: Array<IntArray>, cp: Int): Array<IntArray> {
-        val result = arrayOfNulls<IntArray>(table.length + 1)
+        val result = arrayOfNulls<IntArray>(table.size + 1) as Array<IntArray>
         var count = 0
         for (range in table) {
             if (cp < range[0] || cp > range[1]) {
@@ -102,19 +102,18 @@ internal object JavaCharacterClasses {
      * Returns the range table for the given java character class name, or `null` if the name is
      * not a java character class.
      */
-    fun lookup(name: String): Array<IntArray?>? {
+    fun lookup(name: String): Array<IntArray>? {
         if (!name.startsWith("java")) {
             return null
         }
         val table = Holder.JAVA_GROUPS.get(name)
-        return if (table == null) null else table.ranges()
+        return table?.ranges()
     }
 
-    private class LazyTable(private val supplier: Supplier<Array<IntArray?>?>) {
+    private class LazyTable(private val supplier: Supplier<Array<IntArray>?>) {
         @Volatile
-        private var ranges: Array<IntArray?>?
-
-        fun ranges(): Array<IntArray?>? {
+        var ranges: Array<IntArray>? = null
+        fun ranges(): Array<IntArray>? {
             var result = ranges
             if (result == null) {
                 synchronized(this) {
@@ -147,11 +146,11 @@ internal object JavaCharacterClasses {
                 entry(
                     "javaLetterOrDigit",
                     Supplier { UnicodeTables.mergeRangeTables(property("Letter"), property("Digit")) }),
-                Holder.entry("javaSpaceChar", Supplier { category("Z") }),
-                entry("javaWhitespace", Supplier { obj: JavaCharacterClasses? -> whitespace() }),
+                entry("javaSpaceChar", Supplier { category("Z") }),
+                entry("javaWhitespace", Supplier { whitespace() }),
                 entry("javaISOControl", Supplier { ISO_CONTROL }),
-                entry("javaIdentifierIgnorable", Supplier { obj: JavaCharacterClasses? -> identifierIgnorable() }),
-                entry("javaJavaIdentifierStart", Supplier { obj: JavaCharacterClasses? -> javaIdentifierStart() }),
+                entry("javaIdentifierIgnorable", Supplier { identifierIgnorable() }),
+                entry("javaJavaIdentifierStart", Supplier { javaIdentifierStart() }),
                 entry(
                     "javaJavaIdentifierPart",
                     Supplier {
@@ -189,14 +188,14 @@ internal object JavaCharacterClasses {
                 entry(
                     "javaMirrored",
                     Supplier {
-                        Objects.requireNonNull<Array<IntArray?>?>(
+                        Objects.requireNonNull(
                             UnicodeGeneratedTables.JAVA_CHARACTER_CLASSES.get("javaMirrored")
                         )
                     })
             )
         }
 
-        fun entry(name: String, supplier: Supplier<Array<IntArray?>?>): MutableMap.MutableEntry<String?, LazyTable?> {
+        fun entry(name: String, supplier: Supplier<Array<IntArray>?>): MutableMap.MutableEntry<String?, LazyTable?> {
             return Map.entry<String?, LazyTable?>(name, LazyTable(supplier))
         }
     }

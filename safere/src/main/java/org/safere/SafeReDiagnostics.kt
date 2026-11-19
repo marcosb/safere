@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import org.safere.crosscheck.Pattern.Companion.compile
 import java.util.*
 
 /**
@@ -65,9 +64,9 @@ object SafeReDiagnostics {
         json.append(',')
         appendProducer(json)
         json.append(',')
-        SafeReDiagnostics.appendCase(json, caseId!!, regex!!, flags, input!!, mode, engine, BYTECODE_MATCH_KIND)
+        appendCase(json, caseId!!, regex!!, flags, input!!, mode, engine, BYTECODE_MATCH_KIND)
         json.append(',')
-        SafeReDiagnostics.appendResult(json, prog, input, BYTECODE_MATCH_KIND)
+        appendResult(json, prog, input, BYTECODE_MATCH_KIND)
         json.append(',')
         appendProgram(json, prog)
         json.append('}')
@@ -103,7 +102,7 @@ object SafeReDiagnostics {
         flags: Int,
         input: String?,
         mode: BytecodeMatchMode?,
-        pattern: Pattern? = Pattern.Companion.compile(regex, flags)
+        pattern: Pattern? = Pattern.compile(regex, flags)
     ): String {
         return bytecodeCaseToJsonLine(
             caseId, regex, flags, input, mode, BytecodeResultEngine.NFA, pattern
@@ -139,23 +138,23 @@ object SafeReDiagnostics {
         json.append(',')
         appendStringField(json, "mode", mode.jsonName)
         json.append(',')
-        appendStringField(json, "engine", engine.name())
+        appendStringField(json, "engine", engine.name)
         json.append(',')
-        appendStringField(json, "matchKind", matchKind.name())
+        appendStringField(json, "matchKind", matchKind.name)
         json.append('}')
     }
 
     private fun appendFlags(json: StringBuilder, flags: Int) {
         json.append("\"flags\":[")
         var needsComma = false
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.UNIX_LINES, "UNIX_LINES")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.CASE_INSENSITIVE, "CASE_INSENSITIVE")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.COMMENTS, "COMMENTS")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.MULTILINE, "MULTILINE")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.LITERAL, "LITERAL")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.DOTALL, "DOTALL")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.Companion.UNICODE_CASE, "UNICODE_CASE")
-        appendFlag(json, needsComma, flags, Pattern.Companion.UNICODE_CHARACTER_CLASS, "UNICODE_CHARACTER_CLASS")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.UNIX_LINES, "UNIX_LINES")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.CASE_INSENSITIVE, "CASE_INSENSITIVE")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.COMMENTS, "COMMENTS")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.MULTILINE, "MULTILINE")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.LITERAL, "LITERAL")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.DOTALL, "DOTALL")
+        needsComma = appendFlag(json, needsComma, flags, Pattern.UNICODE_CASE, "UNICODE_CASE")
+        appendFlag(json, needsComma, flags, Pattern.UNICODE_CHARACTER_CLASS, "UNICODE_CHARACTER_CLASS")
         json.append(']')
     }
 
@@ -176,12 +175,12 @@ object SafeReDiagnostics {
         json: StringBuilder, prog: Prog, input: String, matchKind: Nfa.MatchKind?
     ) {
         val groups: IntArray? =
-            Nfa.Companion.search(
+            Nfa.search(
                 prog,
                 input,
                 0,
-                input.length(),
-                input.length(),
+                input.length,
+                input.length,
                 0,
                 Nfa.Anchor.ANCHORED,
                 matchKind,
@@ -193,7 +192,20 @@ object SafeReDiagnostics {
         json.append(',')
         json.append("\"groups\":[")
         if (groups != null) {
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            for (group in 0 until prog.numCaptures()) {
+                if (group > 0) {
+                    json.append(',')
+                }
+                json.append('{')
+                appendNumberField(json, "group", group)
+                json.append(',')
+                appendBooleanField(json, "matched", groups[2 * group] >= 0)
+                json.append(',')
+                appendNumberField(json, "start", groups[2 * group])
+                json.append(',')
+                appendNumberField(json, "end", groups[2 * group + 1])
+                json.append('}')
+            }
         }
         json.append("]}")
     }
@@ -204,7 +216,7 @@ object SafeReDiagnostics {
         json.append(',')
         appendBooleanField(json, "didFlatten", prog.didFlatten())
         json.append(',')
-        appendNumberField(json, "size", prog.size())
+        appendNumberField(json, "size", prog.size)
         json.append(',')
         appendNumberField(json, "start", prog.start())
         json.append(',')
@@ -240,7 +252,18 @@ object SafeReDiagnostics {
 
     private fun appendInstructions(json: StringBuilder, prog: Prog) {
         json.append("\"instructions\":[")
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (id in 0 until prog.size) {
+            if (id > 0) {
+                json.append(',')
+            }
+            val inst = prog.inst(id)
+            json.append('{')
+            appendNumberField(json, "id", id)
+            json.append(',')
+            appendStringField(json, "op", inst.op!!.name)
+            appendInstructionFields(json, inst)
+            json.append('}')
+        }
         json.append(']')
     }
 
@@ -261,6 +284,7 @@ object SafeReDiagnostics {
             InstOp.CHAR_RANGE -> appendCharRangeFields(json, inst)
             InstOp.CHAR_CLASS -> appendCharClassFields(json, inst)
             InstOp.PROGRESS_CHECK -> appendProgressCheckFields(json, inst)
+            else -> {}
         }
     }
 
@@ -296,7 +320,14 @@ object SafeReDiagnostics {
         appendNumberField(json, "out", inst.out)
         json.append(',')
         json.append("\"ranges\":[")
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        var i = 0
+        while (i < inst.ranges.size) {
+            if (i > 0) {
+                json.append(',')
+            }
+            json.append('[').append(inst.ranges[i]).append(',').append(inst.ranges[i + 1]).append(']')
+            i += 2
+        }
         json.append(']')
     }
 
@@ -329,7 +360,18 @@ object SafeReDiagnostics {
 
     private fun appendString(json: StringBuilder, value: String) {
         json.append('"')
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until value.length) {
+            when (val ch = value[i]) {
+                '"' -> json.append("\\\"")
+                '\\' -> json.append("\\\\")
+                '\b' -> json.append("\\b")
+                '\u000C' -> json.append("\\f")
+                '\n' -> json.append("\\n")
+                '\r' -> json.append("\\r")
+                '\t' -> json.append("\\t")
+                else -> appendJsonChar(json, ch)
+            }
+        }
         json.append('"')
     }
 
@@ -344,20 +386,16 @@ object SafeReDiagnostics {
     private fun appendUnicodeEscape(json: StringBuilder, ch: Char) {
         json.append("\\u")
         val hex = Integer.toHexString(ch.code)
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in hex.length until 4) {
+            json.append('0')
+        }
         json.append(hex)
     }
 
     /** Match mode for exported result metadata.  */
-    enum class BytecodeMatchMode(jsonName: String) {
+    enum class BytecodeMatchMode(val jsonName: String) {
         /** Run an NFA search anchored at the beginning of the input.  */
         ANCHORED("anchored");
-
-        private val jsonName: String
-
-        init {
-            this.jsonName = jsonName
-        }
     }
 
     /** Engine used to produce bytecode fixture result metadata.  */

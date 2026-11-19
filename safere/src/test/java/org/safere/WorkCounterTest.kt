@@ -31,7 +31,7 @@ internal class WorkCounterTest {
     @Throws(IOException::class, URISyntaxException::class)
     fun productionBytecodeHasNoWorkCounterMethodOrFieldReferencesWhenDisabled() {
         val classesRoot =
-            Path.of(WorkCounter::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
+            Path.of(WorkCounter::class.java.getProtectionDomain().codeSource.location.toURI())
 
         if (Files.isRegularFile(classesRoot)) {
             FileSystems.newFileSystem(classesRoot).use { jarFileSystem ->
@@ -58,7 +58,7 @@ internal class WorkCounterTest {
             return utf8s[classNameIndexes[classIndex]]
         }
 
-        fun name(ref: Ref): String? {
+        fun name(ref: Ref): String {
             return utf8s[nameAndTypeNameIndexes[ref.nameAndTypeIndex]]
         }
 
@@ -71,8 +71,7 @@ internal class WorkCounterTest {
                 val constantPool = ConstantPool(constantPoolCount)
                 var index = 1
                 while (index < constantPoolCount) {
-                    val tag = data.readUnsignedByte()
-                    when (tag) {
+                    when (val tag = data.readUnsignedByte()) {
                         1 -> constantPool.utf8s[index] = data.readUTF()
                         3, 4 -> data.skipBytes(4)
                         5, 6 -> {
@@ -113,7 +112,7 @@ internal class WorkCounterTest {
                 val compiledClasses =
                     classFiles.filter { path: Path -> path.toString().endsWith(".class") }.toList()
                 for (classFile in compiledClasses) {
-                    val classFileName = classFile.getFileName().toString()
+                    val classFileName = classFile.fileName.toString()
                     if (classFileName.startsWith("WorkCounter")) {
                         continue
                     }
@@ -140,7 +139,7 @@ internal class WorkCounterTest {
                             continue
                         }
                         references.add(
-                            classFile.getFileName().toString() + " references " + owner + "." + constantPool.name(ref)
+                            classFile.fileName.toString() + " references " + owner + "." + constantPool.name(ref)
                         )
                     }
                     return references

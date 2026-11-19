@@ -23,18 +23,18 @@ internal class RegionClassSearch {
             return false
         }
         val first = input.decodeForward(start, end)
-        if (contains(cc, InputScanner.Companion.codePoint(first))) {
+        if (contains(cc, InputScanner.codePoint(first))) {
             return true
         }
         // Existence does not require the leftmost occurrence. Probe the terminal code point before
         // scanning: an exposed high surrogate is a witness even when an early NFA match uses a low
         // half of a pair. This avoids delaying that first result with a scan of the entire region.
         val last = input.decodeBackward(end, start)
-        if (contains(cc, InputScanner.Companion.codePoint(last))) {
+        if (contains(cc, InputScanner.codePoint(last))) {
             return true
         }
-        var from: Int = InputScanner.Companion.position(first)
-        val limit: Int = InputScanner.Companion.position(last)
+        var from: Int = InputScanner.position(first)
+        val limit: Int = InputScanner.position(last)
         if (from >= limit) {
             return false
         }
@@ -51,13 +51,13 @@ internal class RegionClassSearch {
             var pos = from
             while (pos < scan.start) {
                 val decoded = input.decodeForward(pos, scan.start)
-                if (contains(cc, InputScanner.Companion.codePoint(decoded))) {
+                if (contains(cc, InputScanner.codePoint(decoded))) {
                     scan.start = from
                     scan.stop = pos
                     scan.hit = true
                     return true
                 }
-                pos = InputScanner.Companion.position(decoded)
+                pos = InputScanner.position(decoded)
             }
             scan.start = from
         }
@@ -82,12 +82,12 @@ internal class RegionClassSearch {
         var pos = from
         while (pos < limit) {
             val decoded = input.decodeForward(pos, limit)
-            if (contains(cc, InputScanner.Companion.codePoint(decoded))) {
+            if (contains(cc, InputScanner.codePoint(decoded))) {
                 scan.stop = pos
                 scan.hit = true
                 return true
             }
-            pos = InputScanner.Companion.position(decoded)
+            pos = InputScanner.position(decoded)
         }
         return false
     }
@@ -95,9 +95,9 @@ internal class RegionClassSearch {
     companion object {
         private fun contains(cc: RejectPrefilter.CharClass, codePoint: Int): Boolean {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            return InputScanner.Companion.classContains(cc.ranges, cc.bitmap0, cc.bitmap1, codePoint)
+            return InputScanner.classContains(cc.ranges!!, cc.bitmap0, cc.bitmap1, codePoint)
         }
     }
 }

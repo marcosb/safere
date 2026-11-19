@@ -91,7 +91,7 @@ internal object Utils {
      * correctly counts supplementary (non-BMP) characters as one.
      */
     fun runeCount(s: String): Int {
-        return s.codePointCount(0, s.length())
+        return s.codePointCount(0, s.length)
     }
 
     /**

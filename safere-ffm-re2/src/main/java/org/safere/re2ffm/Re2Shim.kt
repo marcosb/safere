@@ -327,15 +327,15 @@ internal object Re2Shim {
             val textSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, textBytes)
             val rewriteSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, rewriteBytes)
             val outLenSeg = arena.allocate(ValueLayout.JAVA_INT)
-            val cap = Math.max(textBytes.length * 2, 256)
+            val cap = Math.max(textBytes.size * 2, 256)
             var outBuf = arena.allocate(cap.toLong())
             var count =
                 replaceAll(
                     re2Ptr,
                     textSeg,
-                    textBytes.length,
+                    textBytes.size,
                     rewriteSeg,
-                    rewriteBytes.length,
+                    rewriteBytes.size,
                     outBuf,
                     cap,
                     outLenSeg
@@ -347,9 +347,9 @@ internal object Re2Shim {
                     replaceAll(
                         re2Ptr,
                         textSeg,
-                        textBytes.length,
+                        textBytes.size,
                         rewriteSeg,
-                        rewriteBytes.length,
+                        rewriteBytes.size,
                         outBuf,
                         needed,
                         outLenSeg

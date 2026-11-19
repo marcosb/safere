@@ -15,8 +15,8 @@ internal class Utf8InputTest {
     fun wholeArrayFactoriesExposeLogicalLength() {
         val bytes = "aé😀".toByteArray(StandardCharsets.UTF_8)
 
-        Assertions.assertThat(Utf8Input.trusted(bytes).length()).isEqualTo(bytes.size)
-        Assertions.assertThat(Utf8Input.validated(bytes).length()).isEqualTo(bytes.size)
+        Assertions.assertThat(Utf8Input.trusted(bytes).length).isEqualTo(bytes.size)
+        Assertions.assertThat(Utf8Input.validated(bytes).length).isEqualTo(bytes.size)
     }
 
     @Test
@@ -28,8 +28,8 @@ internal class Utf8InputTest {
         val trusted = Utf8Input.trusted(storage, 2, logical.size)
         val validated = Utf8Input.validated(storage, 2, logical.size)
 
-        Assertions.assertThat(trusted.length()).isEqualTo(logical.size)
-        Assertions.assertThat(validated.length()).isEqualTo(logical.size)
+        Assertions.assertThat(trusted.length).isEqualTo(logical.size)
+        Assertions.assertThat(validated.length).isEqualTo(logical.size)
     }
 
     @Test
@@ -55,7 +55,7 @@ internal class Utf8InputTest {
     fun trustedFactoryAcceptsMalformedInput() {
         val malformed = byteArrayOf(0xC0.toByte(), 0x80.toByte())
 
-        Assertions.assertThat(Utf8Input.trusted(malformed).length()).isEqualTo(2)
+        Assertions.assertThat(Utf8Input.trusted(malformed).length).isEqualTo(2)
     }
 
     @Test

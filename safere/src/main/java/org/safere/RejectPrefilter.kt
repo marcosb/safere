@@ -8,26 +8,7 @@ import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.Pattern.EndAnchoredCharClassInfo
 import org.safere.Pattern.SuffixInfo
-import java.lang.String
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.function.IntFunction
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.ByteArray
-import kotlin.Char
-import kotlin.CharArray
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.Long
-import kotlin.arrayOfNulls
-import kotlin.code
-import kotlin.compareTo
-import kotlin.text.endsWith
-import kotlin.text.indexOf
-import kotlin.text.isEmpty
-import kotlin.text.regionMatches
-import kotlin.text.startsWith
 
 /**
  * Whole-input rejection filter (Tier 0 acceleration).
@@ -75,12 +56,12 @@ internal interface RejectPrefilter {
         scanner: InputScanner?, start: Int, end: Int, searches: RegionClassSearch
     ): MatchStrategy? {
         if (this is CharClass) {
-            return if (cc.rejectsRegion(scanner, start, end, searches)) cc.strategy() else null
+            return if (rejectsRegion(scanner, start, end, searches)) strategy() else null
         }
         if (this is Composite) {
             // Composite construction flattens children. Other filters cannot suppress an NFA match
             // solely because its candidate starts inside a surrogate pair.
-            for (filter in composite.filters) {
+            for (filter in filters!!) {
                 if (filter is CharClass && filter.rejectsRegion(scanner, start, end, searches)) {
                     return filter.strategy()
                 }
@@ -99,7 +80,7 @@ internal interface RejectPrefilter {
         }
         if (this is Composite) {
             // Composite construction flattens the filters, so this remains an iterative bounded walk.
-            for (filter in composite.filters) {
+            for (filter in filters!!) {
                 if (filter is EndAnchoredSuffix || filter is EndAnchoredCharClass) {
                     val rejection = filter.rejectionStrategy(text, scanner, searchFrom, options)
                     if (rejection != null) {
@@ -113,12 +94,12 @@ internal interface RejectPrefilter {
 
     @JvmRecord
     data class Literal(
-        literal: String?,
-        utf8: ByteArray?,
-        failure: IntArray?,
-        shifts: IntArray?,
-        anchorOffset: Int,
-        anchor: Char
+        val literal: String?,
+        val utf8: ByteArray?,
+        val failure: IntArray?,
+        val shifts: IntArray?,
+        val anchorOffset: Int,
+        val anchor: Char
     ) : RejectPrefilter {
         @MaxBytecodeSize(
             value = 35, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
@@ -126,34 +107,34 @@ internal interface RejectPrefilter {
                     + " and put new work in the String or scanner overloads.")
         )
         override fun canReject(
-            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (!options.literalFastPaths) {
+            if (options == null || !options.literalFastPaths) {
                 return false
             }
             return if (text != null) canReject(text, searchFrom) else canReject(scanner, searchFrom)
         }
 
         private fun canReject(text: String, searchFrom: Int): Boolean {
-            return StringLiteralSearch.indexOf(text, literal, anchorOffset, anchor, searchFrom) < 0
+            return StringLiteralSearch.indexOf(text, literal!!, anchorOffset, anchor, searchFrom) < 0
         }
 
         override fun canRejectTail(
-            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
             if (text == null && scanner is Utf8InputScanner) {
-                return options.literalFastPaths
-                        && scanner.indexOfInTail(this.utf8, failure, searchFrom) < 0
+                return options != null && options.literalFastPaths
+                        && scanner.indexOfInTail(this.utf8!!, failure!!, searchFrom) < 0
             }
             return canReject(text, scanner, searchFrom, options)
         }
 
         private fun canReject(scanner: InputScanner?, searchFrom: Int): Boolean {
             if (scanner is Utf8InputScanner) {
-                return scanner.indexOf(this.utf8, failure, shifts, searchFrom) < 0
+                return scanner.indexOf(this.utf8!!, failure!!, shifts!!, searchFrom) < 0
             }
             if (scanner is StringRegionInputScanner) {
-                return scanner.indexOf(literal, searchFrom, scanner.length()) < 0
+                return scanner.indexOf(literal!!, searchFrom, scanner.length) < 0
             }
             return false
         }
@@ -162,27 +143,12 @@ internal interface RejectPrefilter {
             return MatchStrategy.LITERAL
         }
 
-        val literal: String?
-        val utf8: ByteArray?
-        val failure: IntArray?
-        val shifts: IntArray?
-        val anchorOffset: Int
-        val anchor: Char
-
-        init {
-            this.literal = literal
-            this.utf8 = utf8
-            this.failure = failure
-            this.shifts = shifts
-            this.anchorOffset = anchorOffset
-            this.anchor = anchor
-        }
 
         companion object {
             fun create(literal: String): Literal {
-                val utf8: ByteArray = literal.getBytes(StandardCharsets.UTF_8)
-                val failure: IntArray = Pattern.Companion.literalFailure(utf8)
-                val shifts: IntArray? = Pattern.Companion.literalShifts(utf8)
+                val utf8: ByteArray = literal.toByteArray(StandardCharsets.UTF_8)
+                val failure: IntArray = Pattern.literalFailure(utf8)
+                val shifts: IntArray? = Pattern.literalShifts(utf8)
                 val anchorOffset = StringLiteralSearch.anchorOffset(literal)
                 return Literal(
                     literal,
@@ -198,28 +164,28 @@ internal interface RejectPrefilter {
 
     @JvmRecord
     data class CharClass(
-        ranges: IntArray?,
-        bitmap0: Long,
-        bitmap1: Long,
-        singleAscii: Int,
-        smallChars: CharArray?,
-        nonAsciiUtf8: ByteArray?
+        val ranges: IntArray?,
+        val bitmap0: Long,
+        val bitmap1: Long,
+        val singleAscii: Int,
+        val smallChars: CharArray?,
+        val nonAsciiUtf8: ByteArray?
     ) : RejectPrefilter {
         override fun canReject(
-            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (!options.charClassMatchFastPaths) {
+            if (options == null || !options.charClassMatchFastPaths) {
                 return false
             }
             if (text != null) {
                 if (smallChars != null) {
                     return rejectsSmall(text, searchFrom)
                 }
-                val length: Int = text.length()
+                val length: Int = text.length
                 return ((if (singleAscii >= 0)
-                    StringInputScanner.Companion.indexOfAscii(text, singleAscii, searchFrom, length)
+                    StringInputScanner.indexOfAscii(text, singleAscii, searchFrom, length)
                 else
-                    StringInputScanner.Companion.indexOfCodePointClass(
+                    StringInputScanner.indexOfCodePointClass(
                         text, ranges, bitmap0, bitmap1, searchFrom, length
                     ))
                         < 0)
@@ -228,7 +194,7 @@ internal interface RejectPrefilter {
                 return canRejectUtf8(scanner, searchFrom)
             }
             if (scanner != null) {
-                val limit = scanner.length()
+                val limit = scanner.length
                 return ((if (singleAscii >= 0)
                     scanner.indexOfAscii(singleAscii, searchFrom, limit)
                 else
@@ -238,12 +204,22 @@ internal interface RejectPrefilter {
             return false
         }
 
-        private fun rejectsRegion(
+        internal fun rejectsRegion(
             scanner: InputScanner?, start: Int, end: Int, searches: RegionClassSearch
         ): Boolean {
             // Only low-surrogate membership distinguishes scalar rejection from the grapheme NFA's
             // UTF-16 candidate policy. Leave unrelated classes on the existing engine path.
-            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            val ranges = ranges!!
+            var i = 0
+            while (i < ranges.size) {
+                if (ranges[i] > Character.MAX_LOW_SURROGATE.code) {
+                    break
+                }
+                if (ranges[i + 1] >= Character.MIN_LOW_SURROGATE.code) {
+                    return !searches.contains(this, scanner!!, start, end)
+                }
+                i += 2
+            }
             return false
         }
 
@@ -263,10 +239,10 @@ internal interface RejectPrefilter {
             if (searchFrom > 0) {
                 return false
             }
-            val length: Int = haystack.length()
+            val length: Int = haystack.length
             val nearEnd = Math.min(length, FIRST_FIND_NEAR_WINDOW)
             for (member in smallChars!!) {
-                val index: Int = haystack.indexOf(member.code, 0, nearEnd)
+                val index: Int = haystack.indexOfCodePointBounded(member.code, 0, nearEnd)
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record((if (index >= 0) index + 1 else nearEnd).toLong())
                 }
@@ -275,7 +251,7 @@ internal interface RejectPrefilter {
                 }
             }
             for (member in smallChars) {
-                val index: Int = haystack.indexOf(member.code, nearEnd)
+                val index: Int = haystack.indexOfCodePointBounded(member.code, nearEnd, length)
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record((if (index >= 0) index - nearEnd + 1 else length - nearEnd).toLong())
                 }
@@ -304,10 +280,10 @@ internal interface RejectPrefilter {
          * with no ASCII to skip, such as CJK.
          */
         private fun canRejectUtf8(scanner: Utf8InputScanner, searchFrom: Int): Boolean {
-            if (searchFrom > 0 && ranges!![ranges.length - 1] >= 0x80) {
+            if (searchFrom > 0 && ranges!![ranges.size - 1] >= 0x80) {
                 return false
             }
-            val length = scanner.length()
+            val length = scanner.length
             if (nonAsciiUtf8 != null) {
                 val ascii = smallChars!![0].code
                 val first = scanner.indexOfAsciiOrNonAscii(ascii, searchFrom, length)
@@ -329,29 +305,14 @@ internal interface RejectPrefilter {
             return MatchStrategy.CHARACTER_CLASS
         }
 
-        val ranges: IntArray?
-        val bitmap0: Long
-        val bitmap1: Long
-        val singleAscii: Int
-        val smallChars: CharArray?
-        val nonAsciiUtf8: ByteArray?
-
-        init {
-            this.ranges = ranges
-            this.bitmap0 = bitmap0
-            this.bitmap1 = bitmap1
-            this.singleAscii = singleAscii
-            this.smallChars = smallChars
-            this.nonAsciiUtf8 = nonAsciiUtf8
-        }
 
         companion object {
             fun create(scanInfo: CharClassScanInfo): CharClass {
                 val small: CharArray? = smallChars(scanInfo)
                 return CharClass(
-                    scanInfo.ranges(),
-                    scanInfo.bitmap0(),
-                    scanInfo.bitmap1(),
+                    scanInfo.ranges,
+                    scanInfo.bitmap0,
+                    scanInfo.bitmap1,
                     singleAscii(scanInfo),
                     small,
                     nonAsciiUtf8OfMixedPair(small)
@@ -364,8 +325,8 @@ internal interface RejectPrefilter {
              * are sorted, so the ASCII one comes first. Small-set members are never surrogates.
              */
             private fun nonAsciiUtf8OfMixedPair(small: CharArray?): ByteArray? {
-                return if (small != null && small.length == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
-                    String.valueOf(small[1]).getBytes(StandardCharsets.UTF_8)
+                return if (small != null && small.size == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
+                    small[1].toString().toByteArray(StandardCharsets.UTF_8)
                 else
                     null
             }
@@ -380,7 +341,7 @@ internal interface RejectPrefilter {
              */
             private fun singleAscii(scanInfo: CharClassScanInfo?): Int {
                 return if (scanInfo is AsciiSmallSet
-                    && scanInfo.chars != null && scanInfo.chars.length == 1
+                    && scanInfo.chars != null && scanInfo.chars.size == 1
                 )
                     scanInfo.chars[0]
                         .code
@@ -395,8 +356,8 @@ internal interface RejectPrefilter {
              * intrinsic passes over a gap, which has not been measured against the class scan.
              */
             private fun smallChars(scanInfo: CharClassScanInfo?): CharArray? {
-                return if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars().length == 2)
-                    scanInfo.chars()
+                return if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars.size == 2)
+                    scanInfo.chars
                 else
                     null
             }
@@ -412,22 +373,23 @@ internal interface RejectPrefilter {
 
     @JvmRecord
     data class DisjointLiterals(
-        literals: Array<kotlin.String>?,
-        utf8Literals: Array<ByteArray?>?,
-        failures: Array<IntArray?>?,
-        shifts: Array<IntArray?>?
+        val literals: Array<String?>?,
+        val utf8Literals: Array<ByteArray?>?,
+        val failures: Array<IntArray?>?,
+        val shifts: Array<IntArray?>?
     ) : RejectPrefilter {
         override fun canReject(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (!options.literalFastPaths || searchFrom > 0) {
+            if (options == null || !options.literalFastPaths || searchFrom > 0) {
                 return false
             }
             if (text != null) {
                 for (literal in literals!!) {
-                    val idx = text.indexOf(literal)
+                    val lit = literal!!
+                    val idx = text.indexOf(lit)
                     if (WorkCounterConfig.ENABLED) {
-                        val scanned: Int = if (idx >= 0) idx + literal.length() else text.length()
+                        val scanned: Int = if (idx >= 0) idx + lit.length else text.length
                         WorkCounter.record(scanned.toLong())
                     }
                     if (idx >= 0) {
@@ -437,12 +399,16 @@ internal interface RejectPrefilter {
                 return true
             }
             if (scanner is Utf8InputScanner) {
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                for (i in utf8Literals!!.indices) {
+                    if (scanner.indexOf(utf8Literals[i]!!, failures!![i]!!, shifts!![i]!!, 0) >= 0) {
+                        return false
+                    }
+                }
                 return true
             }
             if (scanner is StringRegionInputScanner) {
                 for (literal in literals!!) {
-                    if (scanner.indexOf(literal, searchFrom, scanner.length()) >= 0) {
+                    if (scanner.indexOf(literal!!, searchFrom, scanner.length) >= 0) {
                         return false
                     }
                 }
@@ -455,26 +421,15 @@ internal interface RejectPrefilter {
             return MatchStrategy.LITERAL
         }
 
-        val literals: Array<kotlin.String>?
-        val utf8Literals: Array<ByteArray?>?
-        val failures: Array<IntArray?>?
-        val shifts: Array<IntArray?>?
-
-        init {
-            this.literals = literals
-            this.utf8Literals = utf8Literals
-            this.failures = failures
-            this.shifts = shifts
-        }
 
         companion object {
-            fun create(literals: Array<kotlin.String>?): DisjointLiterals? {
-                if (literals == null || literals.length == 0) {
+            fun create(literals: Array<String?>?): DisjointLiterals? {
+                if (literals == null || literals.size == 0) {
                     return null
                 }
                 var utf8Count = 0
                 for (literal in literals) {
-                    if (!hasUnpairedSurrogate(literal)) {
+                    if (!hasUnpairedSurrogate(literal!!)) {
                         utf8Count++
                     }
                 }
@@ -483,20 +438,34 @@ internal interface RejectPrefilter {
                 val shifts = arrayOfNulls<IntArray>(utf8Count)
                 var idx = 0
                 for (literal in literals) {
-                    if (!hasUnpairedSurrogate(literal)) {
-                        val utf8: ByteArray = literal.getBytes(StandardCharsets.UTF_8)
+                    val lit = literal!!
+                    if (!hasUnpairedSurrogate(lit)) {
+                        val utf8: ByteArray = lit.toByteArray(StandardCharsets.UTF_8)
                         utf8Literals[idx] = utf8
-                        failures[idx] = Pattern.Companion.literalFailure(utf8)
-                        shifts[idx] = Pattern.Companion.literalShifts(utf8)
+                        failures[idx] = Pattern.literalFailure(utf8)
+                        shifts[idx] = Pattern.literalShifts(utf8)
                         idx++
                     }
                 }
                 return DisjointLiterals(literals, utf8Literals, failures, shifts)
             }
 
-            private fun hasUnpairedSurrogate(s: kotlin.String): Boolean {
-                val len: Int = s.length()
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            private fun hasUnpairedSurrogate(s: String): Boolean {
+                val len: Int = s.length
+                var i = 0
+                while (i < len) {
+                    val c: Char = s[i]
+                    if (Character.isHighSurrogate(c)) {
+                        if (i + 1 < len && Character.isLowSurrogate(s[i + 1])) {
+                            i++
+                        } else {
+                            return true
+                        }
+                    } else if (Character.isLowSurrogate(c)) {
+                        return true
+                    }
+                    i++
+                }
                 return false
             }
         }
@@ -504,26 +473,26 @@ internal interface RejectPrefilter {
 
     @JvmRecord
     data class EndAnchoredSuffix(
-        suffix: kotlin.String?,
-        suffixUtf8: ByteArray?,
-        wasDollar: Boolean,
-        unixLines: Boolean,
-        foldCase: Boolean
+        val suffix: String?,
+        val suffixUtf8: ByteArray?,
+        val wasDollar: Boolean,
+        val unixLines: Boolean,
+        val foldCase: Boolean
     ) : RejectPrefilter {
         override fun canReject(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (!options.literalFastPaths) {
+            if (options == null || !options.literalFastPaths) {
                 return false
             }
             if (text != null) {
-                return !Companion.endsWith(text, suffix!!, wasDollar, unixLines, foldCase)
+                return !endsWith(text, suffix!!, wasDollar, unixLines, foldCase)
             }
             if (scanner is Utf8InputScanner) {
-                return !scanner.endsWith(suffixUtf8, wasDollar, unixLines, foldCase)
+                return !scanner.endsWith(suffixUtf8!!, wasDollar, unixLines, foldCase)
             }
             if (scanner is StringRegionInputScanner) {
-                return !scanner.endsWith(suffix, wasDollar, unixLines, foldCase)
+                return !scanner.endsWith(suffix!!, wasDollar, unixLines, foldCase)
             }
             return false
         }
@@ -532,39 +501,26 @@ internal interface RejectPrefilter {
             return MatchStrategy.LITERAL
         }
 
-        val suffix: kotlin.String?
-        val suffixUtf8: ByteArray?
-        val wasDollar: Boolean
-        val unixLines: Boolean
-        val foldCase: Boolean
-
-        init {
-            this.suffix = suffix
-            this.suffixUtf8 = suffixUtf8
-            this.wasDollar = wasDollar
-            this.unixLines = unixLines
-            this.foldCase = foldCase
-        }
 
         companion object {
             fun create(info: SuffixInfo?): EndAnchoredSuffix? {
                 if (info == null || info.suffix == null || info.suffix.isEmpty()) {
                     return null
                 }
-                val utf8: ByteArray = info.suffix.getBytes(StandardCharsets.UTF_8)
+                val utf8: ByteArray = info.suffix.toByteArray(StandardCharsets.UTF_8)
                 return EndAnchoredSuffix(
                     info.suffix, utf8, info.wasDollar, info.unixLines, info.foldCase
                 )
             }
 
             private fun endsWith(
-                text: kotlin.String, suffix: kotlin.String, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean
+                text: String, suffix: String, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean
             ): Boolean {
-                val suffixLen: Int = suffix.length()
-                val textLen: Int = text.length()
+                val suffixLen: Int = suffix.length
+                val textLen: Int = text.length
                 if (textLen >= suffixLen
                     && (if (foldCase)
-                        text.regionMatches(true, textLen - suffixLen, suffix, 0, suffixLen)
+                        text.regionMatches(textLen - suffixLen, suffix, 0, suffixLen, true)
                     else
                         text.endsWith(suffix))
                 ) {
@@ -577,10 +533,10 @@ internal interface RejectPrefilter {
                     return false
                 }
                 val trailingStart: Int =
-                    StringInputScanner.Companion.trailingLineTerminatorStart(text, unixLines, textLen)
+                    StringInputScanner.trailingLineTerminatorStart(text, unixLines, textLen)
                 if (trailingStart >= suffixLen
                     && (if (foldCase)
-                        text.regionMatches(true, trailingStart - suffixLen, suffix, 0, suffixLen)
+                        text.regionMatches(trailingStart - suffixLen, suffix, 0, suffixLen, true)
                     else
                         text.startsWith(suffix, trailingStart - suffixLen))
                 ) {
@@ -595,11 +551,12 @@ internal interface RejectPrefilter {
     }
 
     @JvmRecord
-    data class EndAnchoredCharClass(bitmap: AsciiBitmap?, wasDollar: Boolean, unixLines: Boolean) : RejectPrefilter {
+    data class EndAnchoredCharClass(val bitmap: AsciiBitmap?, val wasDollar: Boolean, val unixLines: Boolean) :
+        RejectPrefilter {
         override fun canReject(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (!options.charClassMatchFastPaths) {
+            if (options == null || !options.charClassMatchFastPaths) {
                 return false
             }
             if (text != null) {
@@ -612,7 +569,7 @@ internal interface RejectPrefilter {
         }
 
         private fun canRejectTerminal(scanner: InputScanner): Boolean {
-            val len = scanner.length()
+            val len = scanner.length
             if (len == 0) {
                 return true
             }
@@ -639,12 +596,12 @@ internal interface RejectPrefilter {
             return true
         }
 
-        private fun canReject(text: kotlin.String): Boolean {
-            val len: Int = text.length()
+        private fun canReject(text: String): Boolean {
+            val len: Int = text.length
             if (len == 0) {
                 return true
             }
-            val last: Char = text.charAt(len - 1)
+            val last: Char = text[len - 1]
             if (bitmap!!.contains(last.code)) {
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record(1)
@@ -654,9 +611,9 @@ internal interface RejectPrefilter {
             if (!wasDollar) {
                 return true
             }
-            val prevPos: Int = StringInputScanner.Companion.trailingLineTerminatorStart(text, unixLines, len)
+            val prevPos: Int = StringInputScanner.trailingLineTerminatorStart(text, unixLines, len)
             if (prevPos > 0) {
-                val prev: Char = text.charAt(prevPos - 1)
+                val prev: Char = text[prevPos - 1]
                 if (bitmap.contains(prev.code)) {
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record(1)
@@ -671,15 +628,6 @@ internal interface RejectPrefilter {
             return MatchStrategy.CHARACTER_CLASS
         }
 
-        val bitmap: AsciiBitmap?
-        val wasDollar: Boolean
-        val unixLines: Boolean
-
-        init {
-            this.bitmap = bitmap
-            this.wasDollar = wasDollar
-            this.unixLines = unixLines
-        }
 
         companion object {
             fun create(info: EndAnchoredCharClassInfo?): EndAnchoredCharClass? {
@@ -692,9 +640,9 @@ internal interface RejectPrefilter {
     }
 
     @JvmRecord
-    data class Composite(filters: Array<RejectPrefilter>?) : RejectPrefilter {
+    data class Composite(val filters: Array<RejectPrefilter>?) : RejectPrefilter {
         override fun canReject(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
             for (filter in filters!!) {
                 if (filter.canReject(text, scanner, searchFrom, options)) {
@@ -705,7 +653,7 @@ internal interface RejectPrefilter {
         }
 
         override fun rejectionStrategy(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): MatchStrategy? {
             for (filter in filters!!) {
                 val strategy = filter.rejectionStrategy(text, scanner, searchFrom, options)
@@ -717,7 +665,7 @@ internal interface RejectPrefilter {
         }
 
         override fun canRejectTail(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
             for (filter in filters!!) {
                 if (filter.canRejectTail(text, scanner, searchFrom, options)) {
@@ -728,7 +676,7 @@ internal interface RejectPrefilter {
         }
 
         override fun tailRejectionStrategy(
-            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): MatchStrategy? {
             for (filter in filters!!) {
                 val strategy = filter.tailRejectionStrategy(text, scanner, searchFrom, options)
@@ -743,11 +691,7 @@ internal interface RejectPrefilter {
             return filters!![0].strategy()
         }
 
-        val filters: Array<RejectPrefilter>?
 
-        init {
-            this.filters = filters
-        }
     }
 
     companion object {
@@ -758,19 +702,31 @@ internal interface RejectPrefilter {
             if (filter is DisjointLiterals) {
                 return null
             }
-            if (filter is) {
-                var kept: MutableList<RejectPrefilter?>? = null
-                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            if (filter is Composite) {
+                val filters = filter.filters!!
+                var kept: MutableList<RejectPrefilter>? = null
+                for (i in filters.indices) {
+                    if (filters[i] is DisjointLiterals) {
+                        if (kept == null) {
+                            kept = ArrayList(filters.size - 1)
+                            for (j in 0 until i) {
+                                kept.add(filters[j])
+                            }
+                        }
+                    } else if (kept != null) {
+                        kept.add(filters[i])
+                    }
+                }
                 if (kept == null) {
                     return filter
                 }
                 if (kept.isEmpty()) {
                     return null
                 }
-                return if (kept.size() == 1)
-                    kept.getFirst()
+                return if (kept.size == 1)
+                    kept[0]
                 else
-                    Composite(kept.toArray<RejectPrefilter?>(IntFunction { _Dummy_.__Array__() }))
+                    Composite(kept.toTypedArray())
             }
             return filter
         }
@@ -787,19 +743,21 @@ internal interface RejectPrefilter {
                 return null
             }
             return when (plan) {
-                -> null
-                -> Literal.Companion.create(l.literal)
-                -> CharClass.Companion.create(c.scanInfo)
-                -> DisjointLiterals.Companion.create(d.literals)
-                -> EndAnchoredSuffix.Companion.create(s.suffix)
-                -> EndAnchoredCharClass.Companion.create(ecc.charClass)
-                -> {
-                    val list: MutableList<RejectPrefilter?> = ArrayList<RejectPrefilter?>()
-                    for (p in comp.plans) {
-                        val filter: RejectPrefilter? = Companion.create(p)
+                is RejectPlan.None -> null
+                is RejectPlan.RequiredLiteral -> Literal.create(plan.literal!!)
+                is RejectPlan.RequiredCharClass -> CharClass.create(plan.scanInfo!!)
+                is RejectPlan.DisjointLiterals -> DisjointLiterals.create(plan.literals!!)
+                is RejectPlan.EndAnchoredSuffix -> EndAnchoredSuffix.create(plan.suffix)
+                is RejectPlan.EndAnchoredCharClass ->
+                    EndAnchoredCharClass.create(plan.charClass!!)
+
+                is RejectPlan.Composite -> {
+                    val list: MutableList<RejectPrefilter> = ArrayList()
+                    for (p in plan.plans!!) {
+                        val filter: RejectPrefilter? = create(p)
                         if (filter != null) {
                             if (filter is Composite) {
-                                list.addAll(List.of<RejectPrefilter?>(*filter.filters))
+                                list.addAll(filter.filters!!)
                             } else {
                                 list.add(filter)
                             }
@@ -807,12 +765,14 @@ internal interface RejectPrefilter {
                     }
                     if (list.isEmpty()) {
                         null
+                    } else if (list.size == 1) {
+                        list[0]
+                    } else {
+                        Composite(list.toTypedArray())
                     }
-                    if (list.size() == 1) {
-                        list.get(0)
-                    }
-                    Composite(list.toArray<RejectPrefilter?>(IntFunction { _Dummy_.__Array__() }))
                 }
+
+                else -> null
             }
         }
     }

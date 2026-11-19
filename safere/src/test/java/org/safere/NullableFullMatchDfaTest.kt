@@ -171,8 +171,8 @@ internal class NullableFullMatchDfaTest {
                 val actualBytes = optimized.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                 val expectedBytes = exact.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                 if (region) {
-                    actual.region(prefix.length, prefix.length + 3)
-                    expected.region(prefix.length, prefix.length + 3)
+                    actual.region(prefix.size, prefix.size + 3)
+                    expected.region(prefix.size, prefix.size + 3)
                     actualBytes.region(
                         prefix.toByteArray(StandardCharsets.UTF_8).size, prefix.toByteArray(
                             StandardCharsets.UTF_8
@@ -219,7 +219,7 @@ internal class NullableFullMatchDfaTest {
                         Pattern.compile(regex, flags)
                             .matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                     if (region) {
-                        matcher.region(prefix.length, prefix.length + 2 + terminator!!.length)
+                        matcher.region(prefix.size, prefix.size + 2 + terminator!!.length)
                         bytes.region(
                             prefix.toByteArray(StandardCharsets.UTF_8).size,
                             prefix.toByteArray(StandardCharsets.UTF_8).size + 2 + terminator.toByteArray(

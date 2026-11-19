@@ -7,21 +7,16 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.io.IOException
-import java.lang.String
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.Boolean
-import kotlin.Throws
-import kotlin.toString
-import kotlin.use
 
-/** Verifies that all Java source files include the required license header.  */
+/** Verifies that all Kotlin source files include the required license header.  */
 @DisabledForCrosscheck("repository source-file validation is not regex API compatibility coverage")
 internal class LicenseHeaderTest {
     @Test
     @Throws(IOException::class)
-    fun allJavaFilesHaveLicenseHeader() {
+    fun allKotlinFilesHaveLicenseHeader() {
         val root = Paths.get("").toAbsolutePath()
         val srcDir = root.resolve("src")
         Assertions.assertThat(Files.isDirectory(srcDir))
@@ -32,8 +27,8 @@ internal class LicenseHeaderTest {
         Files.walk(srcDir).use { files ->
             violations =
                 files
-                    .filter { p: Path? -> p.toString().endsWith(".java") }
-                    .filter { p: Path? -> !Companion.hasLicenseHeader(p!!) }
+                    .filter { p: Path? -> p.toString().endsWith(".kt") }
+                    .filter { p: Path? -> !hasLicenseHeader(p!!) }
                     .toList()
         }
         Assertions.assertThat(violations!!.isEmpty())
@@ -41,7 +36,7 @@ internal class LicenseHeaderTest {
                 "The following files are missing the license header:\n"
                         + String.join(
                     "\n",
-                    violations.stream().map<kotlin.String?> { obj: Path? -> obj.toString() }.toList()
+                    violations.stream().map<String?> { obj: Path? -> obj.toString() }.toList()
                 )
             )
             .isTrue()
@@ -70,7 +65,7 @@ internal class LicenseHeaderTest {
         }
 
         /** Standard 4-line header for files derived from C++ RE2 only.  */
-        private fun hasStandardHeader(lines: MutableList<kotlin.String?>): Boolean {
+        private fun hasStandardHeader(lines: MutableList<String?>): Boolean {
             return lines.size >= 4 && lines.get(0) == LINE_1
                     && lines.get(1) == LINE_2
                     && lines.get(2) == LINE_3
@@ -78,7 +73,7 @@ internal class LicenseHeaderTest {
         }
 
         /** Extended 6-line header for files that also incorporate code from RE2/J.  */
-        private fun hasRe2jHeader(lines: MutableList<kotlin.String?>): Boolean {
+        private fun hasRe2jHeader(lines: MutableList<String?>): Boolean {
             return lines.size >= 6 && lines.get(0) == LINE_1
                     && lines.get(1) == LINE_2
                     && lines.get(2) == RE2J_LINE_3

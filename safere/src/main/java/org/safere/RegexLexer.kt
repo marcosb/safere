@@ -13,7 +13,7 @@ import java.util.regex.PatternSyntaxException
  * Tokens are borrowed until the next read; no object is allocated for an individual source rune.
  * The parser owns flag scope and updates this lexer before scanning beyond a group boundary.
  */
-internal class RegexLexer(source: String, flags: Int) {
+internal class RegexLexer(private val source: String, flags: Int) {
     internal enum class Kind {
         END,
         LITERAL,
@@ -67,8 +67,7 @@ internal class RegexLexer(source: String, flags: Int) {
         var mode: RepetitionMode? = null
     }
 
-    private val source: String
-    private var flags: Int
+    private var flags: Int = 0
     private var sourcePosition = 0
     private var quoting = false
     private var firstQuotedRune = false
@@ -81,12 +80,12 @@ internal class RegexLexer(source: String, flags: Int) {
     private var currentRune: Int = UNREAD
     private var currentStart = 0
     private var currentEnd = 0
-    private var lookahead: IntArray?
+    private var lookahead: IntArray? = null
     private var lookaheadCount = 0
 
     // Quoted punctuation contributes an escaped pair; a leading quoted ASCII digit contributes
     // a hexadecimal escape. Most patterns never need this expansion storage.
-    private var pending: IntArray?
+    private var pending: IntArray? = null
     private var pendingIndex = 0
     private var pendingCount = 0
     private var pendingStart = 0
@@ -104,7 +103,6 @@ internal class RegexLexer(source: String, flags: Int) {
     private var unicodeEnd = 0
 
     init {
-        this.source = source
         this.flags = flags
     }
 
@@ -118,7 +116,7 @@ internal class RegexLexer(source: String, flags: Int) {
     }
 
     fun length(): Int {
-        return source.length()
+        return source.length
     }
 
     fun error(description: String?, index: Int): PatternSyntaxException {
@@ -141,25 +139,25 @@ internal class RegexLexer(source: String, flags: Int) {
         return token
     }
 
-    fun peekClass(): Token? {
+    fun peekClass(): Token {
         if (!classTokenReady) {
             if (classToken == null) classToken = Token()
             scan(classToken!!, true, false)
             classTokenReady = true
         }
-        return classToken
+        return classToken!!
     }
 
     /** Peeks at a possible range endpoint, preserving brackets and reading ampersands singly.  */
-    fun peekClassRangeEndpoint(): Token? {
+    fun peekClassRangeEndpoint(): Token {
         check(!classTokenReady) { "range endpoint requested after expression lookahead" }
         if (classToken == null) classToken = Token()
         scan(classToken!!, true, true)
         classTokenReady = true
-        return classToken
+        return classToken!!
     }
 
-    fun takeClass(): Token? {
+    fun takeClass(): Token {
         val result = peekClass()
         classTokenReady = false
         return result
@@ -179,7 +177,7 @@ internal class RegexLexer(source: String, flags: Int) {
         if ((flags and ParseFlags.LITERAL) != 0) {
             out.leadingTrivia = false
             out.start = sourcePosition
-            if (sourcePosition == source.length()) {
+            if (sourcePosition == source.length) {
                 out.kind = Kind.END
             } else {
                 out.kind = Kind.LITERAL
@@ -196,7 +194,7 @@ internal class RegexLexer(source: String, flags: Int) {
         out.rune = c
         if (c < 0) {
             out.kind = Kind.END
-            out.end = source.length()
+            out.end = source.length
         } else if (c == '\\'.code) {
             out.end = -1
             if (!takeQuotedLiteral(out)) escape(out, inClass)
@@ -225,10 +223,10 @@ internal class RegexLexer(source: String, flags: Int) {
     private fun classOperator(out: Token, c: Int, rangeEndpoint: Boolean) {
         out.kind =
             when (c) {
-                '[' -> Kind.CLASS_OPEN
-                ']' -> Kind.CLASS_CLOSE
-                '-' -> Kind.HYPHEN
-                '^' -> Kind.CARET
+                '['.code -> Kind.CLASS_OPEN
+                ']'.code -> Kind.CLASS_CLOSE
+                '-'.code -> Kind.HYPHEN
+                '^'.code -> Kind.CARET
                 else -> Kind.LITERAL
             }
         if (c == '&'.code && !rangeEndpoint) {
@@ -244,14 +242,14 @@ internal class RegexLexer(source: String, flags: Int) {
     private fun operator(out: Token, c: Int) {
         out.kind =
             when (c) {
-                '(' -> Kind.OPEN
-                ')' -> Kind.CLOSE
-                '|' -> Kind.ALTERNATION
-                '[' -> Kind.CLASS_OPEN
-                '^' -> Kind.CARET
-                '$' -> Kind.DOLLAR
-                '.' -> Kind.DOT
-                '*', '+', '?', '{' -> Kind.REPEAT
+                '('.code -> Kind.OPEN
+                ')'.code -> Kind.CLOSE
+                '|'.code -> Kind.ALTERNATION
+                '['.code -> Kind.CLASS_OPEN
+                '^'.code -> Kind.CARET
+                '$'.code -> Kind.DOLLAR
+                '.'.code -> Kind.DOT
+                '*'.code, '+'.code, '?'.code, '{'.code -> Kind.REPEAT
                 else -> Kind.LITERAL
             }
         if (out.kind == Kind.REPEAT) repetition(out, c)
@@ -310,7 +308,7 @@ internal class RegexLexer(source: String, flags: Int) {
         if (c < 0) throw error("trailing backslash", out.start)
         out.kind = Kind.LITERAL
         when (c) {
-            'p', 'P' -> {
+            'p'.code, 'P'.code -> {
                 if ((flags and ParseFlags.UNICODE_GROUPS) == 0) {
                     throw error("invalid escape sequence", out.start)
                 }
@@ -327,7 +325,7 @@ internal class RegexLexer(source: String, flags: Int) {
                 }
             }
 
-            'd', 'D', 'h', 'H', 's', 'S', 'v', 'V', 'w', 'W' -> {
+            'd'.code, 'D'.code, 'h'.code, 'H'.code, 's'.code, 'S'.code, 'v'.code, 'V'.code, 'w'.code, 'W'.code -> {
                 if ((flags and ParseFlags.PERL_CLASSES) == 0) {
                     throw error("invalid escape sequence", out.start)
                 }
@@ -336,7 +334,7 @@ internal class RegexLexer(source: String, flags: Int) {
                 out.negated = c >= 'A'.code && c <= 'Z'.code
             }
 
-            'b', 'B' -> {
+            'b'.code, 'B'.code -> {
                 if (inClass || (flags and ParseFlags.PERL_B) == 0) {
                     throw error("invalid escape sequence", out.start)
                 }
@@ -350,7 +348,7 @@ internal class RegexLexer(source: String, flags: Int) {
                 }
             }
 
-            'A', 'z', 'Z', 'G' -> {
+            'A'.code, 'z'.code, 'Z'.code, 'G'.code -> {
                 if (inClass || (flags and ParseFlags.PERL_X) == 0 || c == 'G'.code) {
                     throw error(
                         if (c == 'G'.code) "\\G (end of previous match) is not supported" else "invalid escape sequence",
@@ -360,12 +358,12 @@ internal class RegexLexer(source: String, flags: Int) {
                 out.kind = if (c == 'A'.code) Kind.BEGIN else if (c == 'z'.code) Kind.END_TEXT else Kind.FINAL_END
             }
 
-            'R', 'X' -> {
+            'R'.code, 'X'.code -> {
                 if (inClass) throw error("invalid escape sequence", out.start)
                 out.kind = if (c == 'R'.code) Kind.LINEBREAK else Kind.GRAPHEME
             }
 
-            'N' -> {
+            'N'.code -> {
                 if (readRaw() != '{'.code) throw error("invalid escape sequence", out.start)
                 val name = payload('}'.code, "invalid escape sequence", out.start)
                 try {
@@ -378,8 +376,12 @@ internal class RegexLexer(source: String, flags: Int) {
                 }
             }
 
-            '1', '2', '3', '4', '5', '6', '7', '8', '9' -> throw error("backreferences are not supported", out.start)
-            '0' -> {
+            '1'.code, '2'.code, '3'.code, '4'.code, '5'.code, '6'.code, '7'.code, '8'.code, '9'.code -> throw error(
+                "backreferences are not supported",
+                out.start
+            )
+
+            '0'.code -> {
                 skipTrivia()
                 if (peekRaw() < '0'.code || peekRaw() > '7'.code) throw error(
                     "Illegal octal escape sequence",
@@ -398,7 +400,7 @@ internal class RegexLexer(source: String, flags: Int) {
                 out.rune = code
             }
 
-            'x' -> {
+            'x'.code -> {
                 skipTrivia()
                 if (peekRaw() == '{'.code) {
                     readRaw()
@@ -418,19 +420,19 @@ internal class RegexLexer(source: String, flags: Int) {
                 }
             }
 
-            'u' -> {
+            'u'.code -> {
                 val code = exactHex(4, out.start)
                 out.end = lastEnd
                 unicodeTail(out, code)
             }
 
-            'n' -> out.rune = '\n'.code
-            'r' -> out.rune = '\r'.code
-            't' -> out.rune = '\t'.code
-            'a' -> out.rune = '\u0007'.code
-            'e' -> out.rune = '\u001b'.code
-            'f' -> out.rune = '\f'.code
-            'c' -> {
+            'n'.code -> out.rune = '\n'.code
+            'r'.code -> out.rune = '\r'.code
+            't'.code -> out.rune = '\t'.code
+            'a'.code -> out.rune = '\u0007'.code
+            'e'.code -> out.rune = '\u001b'.code
+            'f'.code -> out.rune = '\u000c'.code
+            'c'.code -> {
                 skipTrivia()
                 val target = readRaw()
                 if (target < 0) throw error("invalid escape sequence", out.start)
@@ -479,7 +481,7 @@ internal class RegexLexer(source: String, flags: Int) {
     private fun sourceHex(digits: Int): Int {
         if (currentRune != UNREAD || lookaheadCount != 0 || pendingIndex != pendingCount || quoting
             || escapedSourceRune
-            || source.length() - sourcePosition < digits
+            || source.length - sourcePosition < digits
         ) {
             return -1
         }
@@ -487,7 +489,7 @@ internal class RegexLexer(source: String, flags: Int) {
         // before committing so malformed or interrupted payloads retain the general reader's errors.
         var code = 0
         for (i in 0..<digits) {
-            val digit = Utils.unhex(source.charAt(sourcePosition + i).code)
+            val digit = Utils.unhex(source[sourcePosition + i].code)
             if (digit < 0) return -1
             code = code * 16 + digit
         }
@@ -520,7 +522,7 @@ internal class RegexLexer(source: String, flags: Int) {
             }
             if (readRaw() != '>'.code) throw error("invalid named capture", out.start)
             out.text = name.toString()
-            if (!Companion.validCaptureName(out.text!!, pythonName)) throw error(
+            if (!validCaptureName(out.text!!, pythonName)) throw error(
                 "invalid named capture: " + out.text,
                 out.start
             )
@@ -541,13 +543,13 @@ internal class RegexLexer(source: String, flags: Int) {
             val c = readRaw()
             val mask =
                 when (c) {
-                    'd' -> ParseFlags.UNIX_LINES
-                    'i' -> ParseFlags.FOLD_CASE
-                    'm' -> ParseFlags.ONE_LINE
-                    's' -> ParseFlags.DOT_NL
-                    'u' -> ParseFlags.UNICODE_CASE
-                    'U' -> ParseFlags.UNICODE_CASE or ParseFlags.UNICODE_GROUPS or ParseFlags.UNICODE_CHAR_CLASS
-                    'x' -> ParseFlags.COMMENTS
+                    'd'.code -> ParseFlags.UNIX_LINES
+                    'i'.code -> ParseFlags.FOLD_CASE
+                    'm'.code -> ParseFlags.ONE_LINE
+                    's'.code -> ParseFlags.DOT_NL
+                    'u'.code -> ParseFlags.UNICODE_CASE
+                    'U'.code -> ParseFlags.UNICODE_CASE or ParseFlags.UNICODE_GROUPS or ParseFlags.UNICODE_CHAR_CLASS
+                    'x'.code -> ParseFlags.COMMENTS
                     else -> 0
                 }
             if (mask != 0) {
@@ -591,14 +593,14 @@ internal class RegexLexer(source: String, flags: Int) {
         // No logical characters are buffered here. Read ordinary source trivia without populating
         // and consuming the cursor for each whitespace rune; quotes still use logical interpretation.
         var skipped = false
-        while (sourcePosition < source.length()) {
+        while (sourcePosition < source.length) {
             val c = source.codePointAt(sourcePosition)
             if (c == ' '.code || (c >= '\t'.code && c <= '\r'.code)) {
-                if (WorkCounterConfig.ENABLED) record()
+                if (WorkCounterConfig.ENABLED) WorkCounter.record()
                 sourcePosition += Character.charCount(c)
                 lastEnd = sourcePosition
             } else if (c == '#'.code) {
-                if (WorkCounterConfig.ENABLED) record()
+                if (WorkCounterConfig.ENABLED) WorkCounter.record()
                 currentStart = sourcePosition
                 skipComment()
             } else {
@@ -619,15 +621,15 @@ internal class RegexLexer(source: String, flags: Int) {
         pendingIndex = pendingCount
         quoting = false
         escapedSourceRune = false
-        while (sourcePosition < source.length()) {
-            if (WorkCounterConfig.ENABLED) record()
+        while (sourcePosition < source.length) {
+            if (WorkCounterConfig.ENABLED) WorkCounter.record()
             val cp = source.codePointAt(sourcePosition)
-            if (cp == 0 || cp == '\n'.code || ((flags and ParseFlags.UNIX_LINES) == 0 && Nfa.Companion.isLineTerminator(
+            if (cp == 0 || cp == '\n'.code || ((flags and ParseFlags.UNIX_LINES) == 0 && Nfa.isLineTerminator(
                     cp
                 ))
             ) break
-            if (cp == '\\'.code && sourcePosition + 1 < source.length() && (source.charAt(sourcePosition + 1) == 'Q'
-                        || source.charAt(sourcePosition + 1) == 'E')
+            if (cp == '\\'.code && sourcePosition + 1 < source.length && (source[sourcePosition + 1] == 'Q'
+                        || source[sourcePosition + 1] == 'E')
             ) {
                 commentQuoting = true
             }
@@ -694,14 +696,14 @@ internal class RegexLexer(source: String, flags: Int) {
     private fun advance() {
         // Keep ordinary source reads small enough to inline into numeric readers and token scanning.
         // Quote expansion and backslash state transitions share the general path below.
-        if (!quoting && pendingIndex == pendingCount && sourcePosition < source.length()) {
+        if (!quoting && pendingIndex == pendingCount && sourcePosition < source.length) {
             val cp = source.codePointAt(sourcePosition)
             if (cp != '\\'.code || escapedSourceRune
-                || (flags and ParseFlags.PERL_X) == 0 || sourcePosition + 1 == source.length() || source.charAt(
+                || (flags and ParseFlags.PERL_X) == 0 || sourcePosition + 1 == source.length || source[
                     sourcePosition + 1
-                ) != 'Q'
+                ] != 'Q'
             ) {
-                if (WorkCounterConfig.ENABLED) record()
+                if (WorkCounterConfig.ENABLED) WorkCounter.record()
                 currentStart = sourcePosition
                 sourcePosition += Character.charCount(cp)
                 currentRune = cp
@@ -715,8 +717,8 @@ internal class RegexLexer(source: String, flags: Int) {
 
     private fun advanceExpanded() {
         val value: Int
-        var start: Int
-        var end: Int
+        var start: Int = 0
+        var end: Int = 0
         while (true) {
             if (pendingIndex < pendingCount) {
                 value = pending!![pendingIndex++]
@@ -724,19 +726,19 @@ internal class RegexLexer(source: String, flags: Int) {
                 end = pendingEnd
                 break
             }
-            if (sourcePosition == source.length()) {
+            if (sourcePosition == source.length) {
                 currentRune = -1
                 currentEnd = sourcePosition
                 currentStart = currentEnd
                 return
             }
             start = sourcePosition
-            if (WorkCounterConfig.ENABLED) record()
+            if (WorkCounterConfig.ENABLED) WorkCounter.record()
             val cp = source.codePointAt(sourcePosition)
             sourcePosition += Character.charCount(cp)
             end = sourcePosition
             if (quoting) {
-                if (cp == '\\'.code && sourcePosition < source.length() && source.charAt(sourcePosition) == 'E') {
+                if (cp == '\\'.code && sourcePosition < source.length && source[sourcePosition] == 'E') {
                     sourcePosition++
                     quoting = false
                     continue
@@ -769,9 +771,9 @@ internal class RegexLexer(source: String, flags: Int) {
             if (escapedSourceRune) {
                 escapedSourceRune = false
             } else if (cp == '\\'.code) {
-                if ((flags and ParseFlags.PERL_X) != 0 && sourcePosition < source.length() && source.charAt(
+                if ((flags and ParseFlags.PERL_X) != 0 && sourcePosition < source.length && source[
                         sourcePosition
-                    ) == 'Q'
+                    ] == 'Q'
                 ) {
                     sourcePosition++
                     quoting = true
@@ -799,8 +801,8 @@ internal class RegexLexer(source: String, flags: Int) {
 
         private fun validCaptureName(name: String, underscores: Boolean): Boolean {
             if (name.isEmpty()) return false
-            for (i in 0..<name.length()) {
-                val c: Char = name.charAt(i)
+            for (i in 0..<name.length) {
+                val c: Char = name[i]
                 if (Utils.isAlpha(c.code) || (i > 0 && Utils.isDigit(c.code)) || (underscores && c == '_')) continue
                 return false
             }

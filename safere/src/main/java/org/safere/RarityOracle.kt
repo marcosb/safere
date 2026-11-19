@@ -174,18 +174,18 @@ internal object RarityOracle {
      * path for literals whose interior bytes are only marginally rarer than their endpoints.
      */
     fun rarestUtf8LiteralByteOffset(literal: ByteArray?): Int {
-        if (literal == null || literal.length < 3) {
+        if (literal == null || literal.size < 3) {
             return -1
         }
         val endpointRank =
             Math.max(
                 exactByteRarity(literal[0].toInt() and 0xFF),
-                exactByteRarity(literal[literal.length - 1].toInt() and 0xFF)
+                exactByteRarity(literal[literal.size - 1].toInt() and 0xFF)
             )
         var bestOffset = -1
         var bestRank =
             Math.max(MIN_LITERAL_BYTE_RARITY - 1, endpointRank + MIN_LITERAL_RARITY_ADVANTAGE - 1)
-        for (offset in 1..<literal.length - 1) {
+        for (offset in 1..<literal.size - 1) {
             val rank = exactByteRarity(literal[offset].toInt() and 0xFF)
             if (rank > bestRank) {
                 bestRank = rank
@@ -219,9 +219,9 @@ internal object RarityOracle {
         var bestOffset = 0
         var maxRank = -1
         for (i in 0..<prefixLen) {
-            val c: Char = prefix.charAt(i)
-            if (c.code < 128) {
-                val rank = byteRarity(c.code, caseFolded)
+            val c = prefix[i].code
+            if (c < 128) {
+                val rank = byteRarity(c, caseFolded)
                 if (rank > maxRank) {
                     maxRank = rank
                     bestOffset = i
@@ -240,15 +240,15 @@ internal object RarityOracle {
             return null
         }
         for (i in 0..<prefixLen) {
-            if (prefix.charAt(i).code > 127) {
+            if (prefix[i].code > 127) {
                 return null
             }
         }
         var best1 = 0
-        var maxRank1 = caseFoldedByteRarity(prefix.charAt(0).code)
+        var maxRank1 = caseFoldedByteRarity(prefix[0].code)
         for (i in 1..<prefixLen) {
-            val c: Char = prefix.charAt(i)
-            val rank = caseFoldedByteRarity(c.code)
+            val c = prefix[i].code
+            val rank = caseFoldedByteRarity(c)
             if (rank > maxRank1) {
                 maxRank1 = rank
                 best1 = i
@@ -260,8 +260,8 @@ internal object RarityOracle {
             if (i == best1) {
                 continue
             }
-            val c: Char = prefix.charAt(i)
-            val rank = caseFoldedByteRarity(c.code)
+            val c = prefix[i].code
+            val rank = caseFoldedByteRarity(c)
             if (rank > maxRank2) {
                 maxRank2 = rank
                 best2 = i
@@ -269,8 +269,8 @@ internal object RarityOracle {
         }
         val offset1 = Math.min(best1, best2)
         val offset2 = Math.max(best1, best2)
-        val c1: Char = prefix.charAt(offset1)
-        val c2: Char = prefix.charAt(offset2)
+        val c1: Char = prefix[offset1]
+        val c2: Char = prefix[offset2]
         return AsciiPair(
             offset1,
             Ascii.toLowerCase(c1).code.toByte(),
@@ -299,11 +299,11 @@ internal object RarityOracle {
         }
         var score = 0
         var maxCharRarity = 0
-        for (i in 0..<s.length()) {
+        for (i in 0..<s.length) {
             if (WorkCounterConfig.ENABLED) {
-                record()
+                WorkCounter.record()
             }
-            val r = characterRarity(s.charAt(i).code, caseFolded)
+            val r = characterRarity(s[i].code, caseFolded)
             score += r + 1
             if (r > maxCharRarity) {
                 maxCharRarity = r
@@ -332,8 +332,8 @@ internal object RarityOracle {
 
     /** Returns whether a single-character literal is poisonous in the requested matching mode.  */
     fun isPoisonousAnchor(s: CharSequence?, caseFolded: Boolean): Boolean {
-        return s != null && s.length() == 1 && characterRarity(
-            s.charAt(0).code,
+        return s != null && s.length == 1 && characterRarity(
+            s[0].code,
             caseFolded
         ) <= POISONOUS_ANCHOR_MAX_RARITY
     }
@@ -353,13 +353,13 @@ internal object RarityOracle {
 
     private fun maxExactAsciiAnchorRarity(literal: String?): Int {
         if (literal == null || literal.isEmpty()
-            || literal.length() > StringLiteralSearch.MAX_ANCHORED_LITERAL_LENGTH
+            || literal.length > StringLiteralSearch.MAX_ANCHORED_LITERAL_LENGTH
         ) {
             return -1
         }
         var maxRank = -1
-        for (i in 0..<literal.length()) {
-            val c: Char = literal.charAt(i)
+        for (i in 0..<literal.length) {
+            val c: Char = literal[i]
             if (c.code < 128) {
                 val rank = exactByteRarity(c.code)
                 if (rank > maxRank) {
@@ -408,8 +408,8 @@ internal object RarityOracle {
         if (scanInfo == null) {
             return 0
         }
-        val ranges = scanInfo.ranges()
-        if (ranges == null || ranges.length == 0) {
+        val ranges = scanInfo.ranges
+        if (ranges == null || ranges.size == 0) {
             return 0
         }
         return asciiMemberScore(ranges)
@@ -420,7 +420,7 @@ internal object RarityOracle {
         var totalWeight: Long = 0
         var nonAsciiMembers: Long = 0
         var i = 0
-        while (i < ranges.length) {
+        while (i < ranges.size) {
             val lo = ranges[i]
             val hi = ranges[i + 1]
             if (lo < 128) {
@@ -446,21 +446,5 @@ internal object RarityOracle {
     }
 
     @JvmRecord
-    internal data class AsciiPair(offset1: Int, low1: Byte, high1: Byte, offset2: Int, low2: Byte, high2: Byte) {
-        val offset1: Int
-        val low1: Byte
-        val high1: Byte
-        val offset2: Int
-        val low2: Byte
-        val high2: Byte
-
-        init {
-            this.offset1 = offset1
-            this.low1 = low1
-            this.high1 = high1
-            this.offset2 = offset2
-            this.low2 = low2
-            this.high2 = high2
-        }
-    }
+    internal data class AsciiPair(val offset1: Int, val low1: Byte, val high1: Byte, val offset2: Int, val low2: Byte, val high2: Byte)
 }

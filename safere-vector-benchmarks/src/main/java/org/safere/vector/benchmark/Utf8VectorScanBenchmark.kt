@@ -37,7 +37,7 @@ class Utf8VectorScanBenchmark {
                 .trim()
         kotlin.check(!(!configuredProvider.isEmpty() && !configuredProvider.equals("swar"))) { "Low-level benchmarks require the SWAR production provider, not " + configuredProvider }
         val fields: Array<String?> = vectorScanTrial.split("/", -1)
-        kotlin.require(fields.length == 5) { "Malformed Vector scan trial: " + vectorScanTrial }
+        kotlin.require(fields.size == 5) { "Malformed Vector scan trial: " + vectorScanTrial }
         shape =
             org.safere.vector.benchmark.Utf8VectorScanBenchmark.Shape.valueOf(fields[0].toUpperCase(java.util.Locale.ROOT))
         scanAll =
@@ -50,13 +50,13 @@ class Utf8VectorScanBenchmark {
         offset = Integer.parseInt(fields[4])
         val input: ByteArray = VectorScanConfiguration.input(shape.inputProfile, fields[2], length)
         storage =
-            ByteArray(offset + input.length + org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length())
+            ByteArray(offset + input.size + org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length)
         Arrays.fill(storage, 0x7f.toByte())
-        System.arraycopy(input, 0, storage, offset, input.length)
+        System.arraycopy(input, 0, storage, offset, input.size)
         swarScanner = Utf8ScannerBenchmarkAccess(storage, offset, length, shape.ranges)
         swarProvider = org.safere.vector.benchmark.Utf8VectorScanBenchmark.SwarProvider()
         vectorProvider = org.safere.vector.benchmark.Utf8VectorScanBenchmark.VectorProvider()
-        val rangeCount: Int = shape.ranges.length / 2
+        val rangeCount: Int = shape.ranges.size / 2
         lowerBounds = arrayOfNulls<ByteVector>(rangeCount)
         upperBounds = arrayOfNulls<ByteVector>(rangeCount)
         for (range in 0..<rangeCount) {
@@ -264,7 +264,7 @@ class Utf8VectorScanBenchmark {
             )
             val matches: VectorMask<Byte?> = shape.matches(values)
             if (!matches.anyTrue()) {
-                position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+                position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length
                 continue
             }
             var matchBits: Long = matches.toLong()
@@ -273,7 +273,7 @@ class Utf8VectorScanBenchmark {
                 checksum += position + lane
                 matchBits = matchBits and matchBits - 1
             }
-            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length
         }
         while (position < length) {
             if (shape!!.matches(storage[offset + position])) {
@@ -298,7 +298,7 @@ class Utf8VectorScanBenchmark {
             if (matches.anyTrue()) {
                 return position + matches.firstTrue()
             }
-            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length
         }
         while (position < length) {
             if (shape!!.matches(storage[offset + position])) {
@@ -321,7 +321,7 @@ class Utf8VectorScanBenchmark {
             )
             var matches: VectorMask<Byte?> =
                 values.compare(GE, lowerBounds[0]).and(values.compare(LE, upperBounds[0]))
-            for (range in 1..<lowerBounds.length) {
+            for (range in 1..<lowerBounds.size) {
                 matches =
                     matches.or(
                         values.compare(GE, lowerBounds[range]).and(values.compare(LE, upperBounds[range]))
@@ -330,7 +330,7 @@ class Utf8VectorScanBenchmark {
             if (matches.anyTrue()) {
                 return position + matches.firstTrue()
             }
-            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length
         }
         while (position < length) {
             if (shape!!.matches(storage[offset + position])) {

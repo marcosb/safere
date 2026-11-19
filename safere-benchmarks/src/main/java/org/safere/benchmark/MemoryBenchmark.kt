@@ -40,7 +40,7 @@ object MemoryBenchmark {
     @Throws(Exception::class)
     @JvmStatic
     fun main(args: Array<String>) {
-        val plan: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
+        val plan: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.load()
         val selected = Arrays.stream<String?>(args).collect(Collectors.toSet())
         println("=== Declarative retained-memory measurements (bytes) ===")
         for (trial in plan.retainedMemoryTrials()) {
@@ -55,13 +55,13 @@ object MemoryBenchmark {
                             trial
                                 .variant
                                 .compileForBenchmark(
-                                    workload.patterns.getFirst(), flagSet(workload)
+                                    workload.patterns.first(), flagSet(workload)
                                 )
                         })
 
                     DeclarativeBenchmarkPlan.Operation.DFA_CACHE_GROWTH -> measureDfaCacheGrowth(
-                        workload.patterns.getFirst(),
-                        BenchmarkData.Companion.get().getInputString(workload.inputIds.getFirst())
+                        workload.patterns.first(),
+                        BenchmarkData.get().getInputString(workload.inputIds.first())
                     )
 
                     else -> throw IllegalArgumentException(
@@ -89,7 +89,7 @@ object MemoryBenchmark {
         for (trial in 0..<TRIALS) {
             // Warm up the factory (JIT compile, class loading).
             for (i in 0..19) {
-                val `_` = factory.get()
+                factory.get()
             }
 
             forceGc()

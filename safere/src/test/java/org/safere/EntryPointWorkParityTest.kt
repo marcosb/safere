@@ -33,7 +33,7 @@ internal class EntryPointWorkParityTest {
         override fun toString(): String {
             val leading = tail.substring(0, tail.length - tail.trimStart().length)
             val shown =
-                if (leading.length > 8) "<" + leading.length + " spaces>" + tail.trimStart() else tail
+                if (leading.size > 8) "<" + leading.size + " spaces>" + tail.trimStart() else tail
             return "/" + regex + "/" + (if (tail.isEmpty()) " no match" else " + '" + shown + "'")
         }
     }
@@ -48,7 +48,7 @@ internal class EntryPointWorkParityTest {
                 val find: Long = work(Runnable { consume(pattern.matcher(input).find()) })
                 val findAll: Long = work(Runnable { findAll(pattern, input) })
                 FIRST_MATCH.forEach { (name: String?, op: BiConsumer<Pattern?, String?>?) ->
-                    Companion.check(
+                    check(
                         failures,
                         scenario,
                         size,
@@ -60,7 +60,7 @@ internal class EntryPointWorkParityTest {
                     )
                 }
                 ALL_MATCHES.forEach { (name: String?, op: BiConsumer<Pattern?, String?>?) ->
-                    Companion.check(
+                    check(
                         failures,
                         scenario,
                         size,
@@ -188,9 +188,9 @@ internal class EntryPointWorkParityTest {
         private val FIRST_MATCH: MutableMap<String?, BiConsumer<Pattern?, String?>?> =
             Map.of<String?, BiConsumer<Pattern?, String?>?>(
                 "Utf8Matcher.find",
-                BiConsumer { p: Pattern?, s: String? -> consume(p!!.matcher(Companion.utf8(s!!)).find()) },
+                BiConsumer { p: Pattern?, s: String? -> consume(p!!.matcher(utf8(s!!)).find()) },
                 "Pattern.find(Utf8Input)",
-                BiConsumer { p: Pattern?, s: String? -> consume(p!!.find(Companion.utf8(s!!))) },
+                BiConsumer { p: Pattern?, s: String? -> consume(p!!.find(utf8(s!!))) },
                 "asPredicate",
                 BiConsumer { p: Pattern?, s: String? -> consume(p!!.asPredicate().test(s)) },
                 "replaceFirst",

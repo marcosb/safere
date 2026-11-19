@@ -26,7 +26,7 @@ class FindSequenceFuzzer {
                     for (captures in mutableListOf<Boolean?>(false, true)) {
                         for (assertionFirst in mutableListOf<Boolean?>(false, true)) {
                             for (padding in mutableListOf<String?>("", "zzzz")) {
-                                Companion.assertSearchStartAssertionFinds(
+                                assertSearchStartAssertionFinds(
                                     context, suffix, quantifier, captures!!, assertionFirst!!, padding!!
                                 )
                             }
@@ -200,7 +200,7 @@ class FindSequenceFuzzer {
     @Test
     fun resetAndThreadHandoffKeepsNfaCachesSeparate() {
         for (regex in mutableListOf<String?>("\\X", "(\\X)", "\\X+", "\\X+?")) {
-            Companion.assertResetHandoffCacheIsolation(regex!!, "aé😀", "e\u0301x")
+            assertResetHandoffCacheIsolation(regex!!, "aé😀", "e\u0301x")
         }
     }
 

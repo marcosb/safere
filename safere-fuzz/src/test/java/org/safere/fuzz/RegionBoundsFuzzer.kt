@@ -396,7 +396,7 @@ class RegionBoundsFuzzer {
             val regex: String =
                 REGION_LOCAL_SCALAR_ATOMS.get(data.consumeInt(0, REGION_LOCAL_SCALAR_ATOMS.size - 1))
             val prefix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
-            val suffix: String? = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
+            val suffix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
             val exposedSurrogate = if (data.consumeBoolean()) "\uD83D" else "\uDC4D"
             val input = prefix + exposedSurrogate + suffix
             val start = prefix.length
@@ -431,7 +431,7 @@ class RegionBoundsFuzzer {
 
         private fun compareSplitSurrogateBoundaryModel(data: FuzzedDataProvider) {
             val prefix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
-            val suffix: String? = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
+            val suffix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
             val input = prefix + "\uD801\uDC00" + suffix
             val start = prefix.length
             val regex = if (data.consumeBoolean()) "(?U)\\b." else "(?U)\\B."
@@ -445,7 +445,7 @@ class RegionBoundsFuzzer {
             val pattern: MixedGraphemeScalarPattern =
                 MIXED_GRAPHEME_SCALAR_ATOMS.get(data.consumeInt(0, MIXED_GRAPHEME_SCALAR_ATOMS.size - 1))
             val prefix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
-            val suffix: String? = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
+            val suffix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
             val input = prefix + "\uD83D\uDC4D" + suffix
             val start = prefix.length
             val compiled = Pattern.compile(pattern.regex)
@@ -478,7 +478,7 @@ class RegionBoundsFuzzer {
                 Pattern.compile(
                     if (data.consumeBoolean()) "(?:" + regex + ")|(?:\\Xz)" else "(?:\\Xz)|(?:" + regex + ")"
                 )
-            val suffix: String? = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
+            val suffix: String = SCALAR_CONTEXTS.get(data.consumeInt(0, SCALAR_CONTEXTS.size - 1))
             val pair =
                 mutableListOf<String>("\uD801\uDC00", "\uD83D\uDC4D", "\uD83C\uDDE6").get(data.consumeInt(0, 2))
             val input = prefix + pair.repeat(if (interior) 2 else 1) + suffix

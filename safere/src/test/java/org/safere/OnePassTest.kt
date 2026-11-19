@@ -149,7 +149,7 @@ internal object OnePassTest {
                                     while (iteration < 100000 && failure.get() == null
                                     ) {
                                         val matched =
-                                            (onePass!!.search(scanner, 0, scanner.length(), true, 1, result, scratch)
+                                            (onePass!!.search(scanner, 0, scanner.length, true, 1, result, scratch)
                                                     != null)
                                         if (matched != expected) {
                                             failure.compareAndSet(
@@ -430,7 +430,7 @@ internal object OnePassTest {
                 val probes: MutableSet<Int?> = TreeSet<Int?>()
                 probes.add(0)
                 probes.add(Character.MAX_CODE_POINT)
-                for (id in 0..<prog.size()) {
+                for (id in 0..<prog.size) {
                     val inst = prog.inst(id)
                     if (inst.op == InstOp.CHAR_CLASS) {
                         for (endpoint in inst.ranges) {
@@ -457,8 +457,8 @@ internal object OnePassTest {
                                         prog,
                                         scanner,
                                         0,
-                                        scanner.length(),
-                                        scanner.length(),
+                                        scanner.length,
+                                        scanner.length,
                                         0,
                                         Nfa.Anchor.ANCHORED,
                                         if (endMatch) Nfa.MatchKind.FULL_MATCH else Nfa.MatchKind.FIRST_MATCH,

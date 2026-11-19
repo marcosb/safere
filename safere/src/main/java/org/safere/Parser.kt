@@ -115,19 +115,19 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     // token; before a quantifier, leave the final code point as a separate operand on the stack.
     private var firstLiteral = 0
     private var literalCount = 0
-    private var literalRunes: IntArray?
+    private var literalRunes: IntArray? = null
     private var ncap: Int
     private val namedCaptures: MutableSet<String?> = HashSet<String?>()
 
     init {
-        this.lexer = RegexLexer(pattern, flags)
+        this.lexer = RegexLexer(pattern!!, flags)
         this.flags = flags
         this.stacktop = null
         this.ncap = 0
     }
 
     private fun reportIntentionalDivergences(classSyntaxFailure: Boolean) {
-        val listener: SafeReMatchDiagnostics = Pattern.Companion.diagnostics()
+        val listener: SafeReMatchDiagnostics = Pattern.diagnostics()
         if (lexer.sawCommentQuoting()) {
             listener.onIntentionalDivergence(IntentionalDivergence.COMMENT_QUOTING)
         }
@@ -149,7 +149,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 flushLiterals(token.kind == RegexLexer.Kind.REPEAT)
             }
             if (token.kind == RegexLexer.Kind.END) break
-            if (WorkCounterConfig.ENABLED) record()
+            if (WorkCounterConfig.ENABLED) WorkCounter.record()
             var unary = false
             var barePlus = false
             var nonRepeatable = false
@@ -197,7 +197,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 }
 
                 RegexLexer.Kind.LINEBREAK -> pushRegexp(buildLinebreakRegexp())
-                RegexLexer.Kind.GRAPHEME -> pushRegexp(Regexp.Companion.graphemeCluster(flags))
+                RegexLexer.Kind.GRAPHEME -> pushRegexp(Regexp.graphemeCluster(flags))
                 RegexLexer.Kind.REPEAT -> {
                     val counted = token.rune == '{'.code
                     val reluctant = token.mode == RepetitionMode.RELUCTANT
@@ -260,7 +260,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     }
 
     private fun newMarker(markerTag: Int): StackEntry {
-        val re: Regexp = Regexp.Companion.noMatch(flags)
+        val re: Regexp = Regexp.noMatch(flags)
         re.matchId = markerTag
         val e = StackEntry(re)
         if (markerTag == LEFT_PAREN) {
@@ -273,10 +273,10 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         // Special case: a character class of one character is just a literal.
         var re = re
         if (re.op == RegexpOp.CHAR_CLASS && re.charClass != null) {
-            val cc = re.charClass
+            val cc = re.charClass!!
             if (cc.numRanges() == 1 && cc.lo(0) == cc.hi(0)) {
                 val r = cc.lo(0)
-                re = Regexp.Companion.literal(r, re.flags)
+                re = Regexp.literal(r, re.flags)
             }
         }
 
@@ -303,7 +303,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         // Exclude newline if applicable.
         if ((flags and ParseFlags.NEVER_NL) != 0 && r == '\n'.code) {
-            pushRegexp(Regexp.Companion.noMatch(flags))
+            pushRegexp(Regexp.noMatch(flags))
             return
         }
 
@@ -315,7 +315,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         ) {
             literalFlags = literalFlags and ParseFlags.FOLD_CASE.inv()
         }
-        val re: Regexp = Regexp.Companion.literal(r, literalFlags)
+        val re: Regexp = Regexp.literal(r, literalFlags)
         pushRegexp(re)
     }
 
@@ -325,14 +325,17 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         } else {
             if (literalRunes == null) {
                 literalRunes = IntArray(8)
-            } else if (literalCount == literalRunes.length) {
-                if (WorkCounterConfig.ENABLED) WorkCounter.record(literalRunes.length.toLong())
-                val capacity =
-                    if (literalRunes.length <= Integer.MAX_VALUE / 2)
-                        literalRunes.length * 2
-                    else
-                        Integer.MAX_VALUE
-                literalRunes = Arrays.copyOf(literalRunes, capacity)
+            } else {
+                val runes = literalRunes!!
+                if (literalCount == runes.size) {
+                    if (WorkCounterConfig.ENABLED) WorkCounter.record(runes.size.toLong())
+                    val capacity =
+                        if (runes.size <= Integer.MAX_VALUE / 2)
+                            runes.size * 2
+                        else
+                            Integer.MAX_VALUE
+                    literalRunes = Arrays.copyOf(runes, capacity)
+                }
             }
             if (literalCount == 1) literalRunes!![0] = firstLiteral
             literalRunes!![literalCount] = rune
@@ -343,15 +346,15 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     private fun flushLiterals(separateLast: Boolean) {
         val length = literalCount - (if (separateLast) 1 else 0)
         if (length == 1) {
-            pushRegexp(Regexp.Companion.literal(firstLiteral, flags))
+            pushRegexp(Regexp.literal(firstLiteral, flags))
         } else if (length > 1) {
             if (WorkCounterConfig.ENABLED) WorkCounter.record(2L * length)
             // Regexp takes its own copy, allowing the parser's scratch array to serve later runs.
-            pushRegexp(Regexp.Companion.literalString(Arrays.copyOf(literalRunes, length), flags))
+            pushRegexp(Regexp.literalString(Arrays.copyOf(literalRunes, length), flags))
         }
         if (separateLast) {
             val last = if (literalCount == 1) firstLiteral else literalRunes!![literalCount - 1]
-            pushRegexp(Regexp.Companion.literal(last, flags))
+            pushRegexp(Regexp.literal(last, flags))
         }
         literalCount = 0
     }
@@ -383,7 +386,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             val ccb = CharClassBuilder()
             ccb.addRange(0, '\n'.code - 1)
             ccb.addRange('\n'.code + 1, Utils.MAX_RUNE)
-            val re: Regexp = Regexp.Companion.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
+            val re: Regexp = Regexp.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
             pushRegexp(re)
         } else {
             // Default JDK behavior: . matches everything except line terminators
@@ -394,7 +397,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             ccb.addRange('\r'.code + 1, '\u0085'.code - 1) // 0x0E–0x0084
             ccb.addRange('\u0085'.code + 1, '\u2028'.code - 1) // 0x0086–0x2027
             ccb.addRange('\u2029'.code + 1, Utils.MAX_RUNE) // 0x202A–max
-            val re: Regexp = Regexp.Companion.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
+            val re: Regexp = Regexp.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
             pushRegexp(re)
         }
     }
@@ -410,16 +413,16 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     private fun pushSimpleOp(op: RegexpOp) {
         val re: Regexp =
             when (op) {
-                RegexpOp.BEGIN_LINE -> Regexp.Companion.beginLine(flags)
-                RegexpOp.END_LINE -> Regexp.Companion.endLine(flags)
-                RegexpOp.BEGIN_TEXT -> Regexp.Companion.beginText(flags)
-                RegexpOp.END_TEXT -> Regexp.Companion.endText(flags)
-                RegexpOp.ANY_CHAR -> Regexp.Companion.anyChar(flags)
-                RegexpOp.WORD_BOUNDARY -> Regexp.Companion.wordBoundary(flags)
-                RegexpOp.NO_WORD_BOUNDARY -> Regexp.Companion.noWordBoundary(flags)
-                RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> Regexp.Companion.graphemeClusterBoundary(flags)
-                RegexpOp.GRAPHEME_CLUSTER -> Regexp.Companion.graphemeCluster(flags)
-                else -> Regexp.Companion.emptyMatch(flags)
+                RegexpOp.BEGIN_LINE -> Regexp.beginLine(flags)
+                RegexpOp.END_LINE -> Regexp.endLine(flags)
+                RegexpOp.BEGIN_TEXT -> Regexp.beginText(flags)
+                RegexpOp.END_TEXT -> Regexp.endText(flags)
+                RegexpOp.ANY_CHAR -> Regexp.anyChar(flags)
+                RegexpOp.WORD_BOUNDARY -> Regexp.wordBoundary(flags)
+                RegexpOp.NO_WORD_BOUNDARY -> Regexp.noWordBoundary(flags)
+                RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> Regexp.graphemeClusterBoundary(flags)
+                RegexpOp.GRAPHEME_CLUSTER -> Regexp.graphemeCluster(flags)
+                else -> Regexp.emptyMatch(flags)
             }
         pushRegexp(re)
     }
@@ -444,17 +447,17 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             && fl == stacktop!!.re!!.flags
         ) {
             // Replace with star. Since Regexp is immutable, rebuild.
-            val sub: Regexp? = stacktop!!.re!!.subs.getFirst()
-            stacktop!!.re = Regexp.Companion.star(sub, fl)
+            val sub: Regexp? = stacktop!!.re!!.subs!!.first()
+            stacktop!!.re = Regexp.star(sub, fl)
             return
         }
 
         val sub = stacktop!!.re
         val re: Regexp =
             when (op) {
-                RegexpOp.STAR -> Regexp.Companion.star(sub, fl)
-                RegexpOp.PLUS -> Regexp.Companion.plus(sub, fl)
-                RegexpOp.QUEST -> Regexp.Companion.quest(sub, fl)
+                RegexpOp.STAR -> Regexp.star(sub, fl)
+                RegexpOp.PLUS -> Regexp.plus(sub, fl)
+                RegexpOp.QUEST -> Regexp.quest(sub, fl)
                 else -> throw IllegalStateException("unexpected repeat op: " + op)
             }
         stacktop!!.re = re
@@ -464,7 +467,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         when (op) {
             RegexpOp.STAR -> {
                 val sub = stacktop!!.re
-                stacktop!!.re = Regexp.Companion.rawQuantifier(RegexpOp.QUEST, Regexp.Companion.plus(sub, flags), flags)
+                stacktop!!.re = Regexp.rawQuantifier(RegexpOp.QUEST, Regexp.plus(sub, flags), flags)
             }
 
             RegexpOp.PLUS -> pushRepeatOp(RegexpOp.PLUS, tokenStart, false)
@@ -478,30 +481,30 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
     private fun pushPossessiveZeroWidthRepeatRange(max: Int) {
         val sub = stacktop!!.re
-        val positiveRepeat: Regexp? = if (max == 1) sub else Regexp.Companion.repeat(sub, flags, 1, max)
-        stacktop!!.re = Regexp.Companion.rawQuantifier(RegexpOp.QUEST, positiveRepeat, flags)
+        val positiveRepeat: Regexp? = if (max == 1) sub else Regexp.repeat(sub, flags, 1, max)
+        stacktop!!.re = Regexp.rawQuantifier(RegexpOp.QUEST, positiveRepeat, flags)
     }
 
     private fun canRepeatAfterUnary(op: RegexpOp?, lastUnaryWasBareGreedyPlus: Boolean): Boolean {
         return lastUnaryWasBareGreedyPlus
-                && op == RegexpOp.PLUS && stacktop != null && stacktop!!.re!!.op == RegexpOp.PLUS && !stacktop!!.re!!.nonGreedy() && Companion.isQuantifiedZeroWidth(
+                && op == RegexpOp.PLUS && stacktop != null && stacktop!!.re!!.op == RegexpOp.PLUS && !stacktop!!.re!!.nonGreedy() && isQuantifiedZeroWidth(
             stacktop!!.re!!
         )
     }
 
     private fun canIgnorePossessiveModifierOnZeroWidthOperand(): Boolean {
-        return stacktop != null && !isMarker(stacktop) && Companion.isZeroWidth(stacktop!!.re!!)
+        return stacktop != null && !isMarker(stacktop) && isZeroWidth(stacktop!!.re!!)
     }
 
     private fun canObservePossessiveZeroWidthIteration(): Boolean {
-        return stacktop != null && !isMarker(stacktop) && Companion.hasCapture(stacktop!!.re!!)
-                && Companion.isZeroWidth(stacktop!!.re!!)
+        return stacktop != null && !isMarker(stacktop) && hasCapture(stacktop!!.re!!)
+                && isZeroWidth(stacktop!!.re!!)
     }
 
     private fun pushRepetition(min: Int, max: Int, opStart: Int, nongreedy: Boolean) {
         validateRepeatCount(min, max, opStart)
         if (stacktop == null || isMarker(stacktop)) {
-            pushRegexp(Regexp.Companion.emptyMatch(flags))
+            pushRegexp(Regexp.emptyMatch(flags))
         }
 
         var fl = flags
@@ -510,12 +513,12 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         }
 
         val sub = stacktop!!.re
-        val re: Regexp = Regexp.Companion.repeat(sub, fl, min, max)
+        val re: Regexp = Regexp.repeat(sub, fl, min, max)
         stacktop!!.re = re
 
         // Check for too-deep nesting of repeats.
         if (min >= 2 || max >= 2) {
-            if (Companion.countRepeat(stacktop!!.re!!, MAX_REPEAT) == 0) {
+            if (countRepeat(stacktop!!.re!!, MAX_REPEAT) == 0) {
                 throw lexer.error("invalid repeat count", opStart)
             }
         }
@@ -589,10 +592,10 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         // Rewrite LeftParen as capture if needed.
         if (r2.cap > 0) {
-            val re: Regexp = Regexp.Companion.capture(r1.re, flags, r2.cap, r2.name)
+            val re: Regexp = Regexp.capture(r1.re, flags, r2.cap, r2.name)
             pushRegexp(re)
         } else {
-            pushRegexp(Regexp.Companion.nonCapture(r1.re, flags))
+            pushRegexp(Regexp.nonCapture(r1.re, flags))
         }
     }
 
@@ -603,7 +606,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             throw lexer.error("missing closing )", lexer.length())
         }
         if (top == null) {
-            return Regexp.Companion.emptyMatch(flags)
+            return Regexp.emptyMatch(flags)
         }
         stacktop = null
         return top.re
@@ -613,7 +616,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         val r1 = stacktop
         if (r1 == null || isMarker(r1)) {
             // Empty concatenation.
-            val re: Regexp = Regexp.Companion.emptyMatch(flags)
+            val re: Regexp = Regexp.emptyMatch(flags)
             pushRegexp(re)
         }
         doCollapse(RegexpOp.CONCAT)
@@ -634,7 +637,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             var e = stacktop
             while (e != null && !isMarker(e)) {
                 if (e.re!!.op == op && e.re!!.subs != null) {
-                    n += e.re!!.subs.size()
+                    n += e.re!!.subs!!.size
                 } else {
                     n++
                 }
@@ -659,8 +662,8 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         while (e != null && !isMarker(e)) {
             next = e.down
             if (e.re!!.op == op && e.re!!.subs != null) {
-                for (k in e.re!!.subs.indices.reversed()) {
-                    subs.add(e.re!!.subs.get(k))
+                for (k in e.re!!.subs!!.indices.reversed()) {
+                    subs.add(e.re!!.subs!!.get(k)!!)
                 }
             } else {
                 subs.add(e.re!!)
@@ -677,10 +680,10 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         }
 
         val re: Regexp?
-        if (op == RegexpOp.CONCAT && subs.size() == 1) {
-            re = subs.getFirst()
+        if (op == RegexpOp.CONCAT && subs.size == 1) {
+            re = subs.first()
         } else {
-            re = if (op == RegexpOp.CONCAT) Regexp.Companion.concat(subs, flags) else Regexp.Companion.alternate(
+            re = if (op == RegexpOp.CONCAT) Regexp.concat(subs, flags) else Regexp.alternate(
                 subs,
                 flags
             )
@@ -697,8 +700,8 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         while (!stack.isEmpty()) {
             val frame = stack.peek()
             val token = lexer.takeClass()
-            val start = token.start
-            when (token.kind) {
+            val start = token!!.start
+            when (token!!.kind) {
                 RegexLexer.Kind.END -> throw lexer.error("missing closing ]", frame.classStart)
                 RegexLexer.Kind.CLASS_CLOSE -> {
                     if (!frame.hasItems && !frame.afterIntersection) {
@@ -710,7 +713,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                         "empty right side of character class intersection",
                         start
                     )
-                    val completed = completeClassExpression(frame)
+                    val completed = completeClassExpression(frame)!!
                     stack.pop()
                     if (stack.isEmpty()) return finishCharClassBuilder(completed)
                     val parent = stack.peek()
@@ -740,7 +743,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
                 RegexLexer.Kind.PROPERTY, RegexLexer.Kind.PREDEFINED -> {
                     val verticalTab =
-                        token.kind == RegexLexer.Kind.PREDEFINED && token.rune == 'v'.code && !token.negated
+                        token!!.kind == RegexLexer.Kind.PREDEFINED && token!!.rune == 'v'.code && !token!!.negated
                     expandClassToken(token, frame.currentUnion)
                     if (verticalTab
                         && lexer.peekClass().kind == RegexLexer.Kind.HYPHEN && !lexer.peekClass().leadingTrivia
@@ -756,10 +759,10 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 }
 
                 RegexLexer.Kind.LITERAL, RegexLexer.Kind.CARET, RegexLexer.Kind.HYPHEN, RegexLexer.Kind.AMPERSAND -> {
-                    if (frame.afterIntersection && token.kind == RegexLexer.Kind.HYPHEN) {
+                    if (frame.afterIntersection && token!!.kind == RegexLexer.Kind.HYPHEN) {
                         throw lexer.classError("dangling character class '-'", start)
                     }
-                    addScalarClassItem(frame.currentUnion, token.rune)
+                    addScalarClassItem(frame.currentUnion, token!!.rune)
                     frame.hasItems = true
                     frame.afterIntersection = false
                 }
@@ -810,15 +813,15 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         val group =
             if (token.kind == RegexLexer.Kind.PROPERTY)
                 CharClassExpander.lookupUnicodeGroup(
-                    token.text, (flags and ParseFlags.UNICODE_CHAR_CLASS) != 0
+                    token.text!!, (flags and ParseFlags.UNICODE_CHAR_CLASS) != 0
                 )
             else
                 CharClassExpander.lookupPerlGroup(
                     "\\" + token.rune.toChar(), (flags and ParseFlags.UNICODE_CHAR_CLASS) != 0
                 )
         if (group == null) throw lexer.error("invalid Unicode group: " + token.text, token.start)
-        if (token.negated) CharClassExpander.addNegatedGroup(ccb, group, flags)
-        else CharClassExpander.addPositiveGroup(ccb, group, flags)
+        if (token.negated) CharClassExpander.addNegatedGroup(ccb!!, group, flags)
+        else CharClassExpander.addPositiveGroup(ccb!!, group, flags)
     }
 
     private fun completeClassExpression(frame: ClassExpressionFrame): CharClassBuilder {
@@ -854,7 +857,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
     // ---- Helper: finish CharClassBuilder into a Regexp ----
     private fun finishCharClassBuilder(ccb: CharClassBuilder): Regexp {
-        return Regexp.Companion.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
+        return Regexp.charClass(ccb.build(), flags and ParseFlags.FOLD_CASE.inv())
     }
 
     // ---- \R expansion helper ----
@@ -865,20 +868,20 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
      */
     private fun buildLinebreakRegexp(): Regexp {
         // Alternative 1: \r\n (CRLF as a single unit)
-        val crLf: Regexp = Regexp.Companion.literalString(intArrayOf('\r'.code, '\n'.code), flags)
+        val crLf: Regexp = Regexp.literalString(intArrayOf('\r'.code, '\n'.code), flags)
 
         // Alternative 2: any single linebreak character
         val ccb = CharClassBuilder()
         ccb.addRune('\n'.code) // U+000A LINE FEED
-        ccb.addRune('\u000B'.code) // U+000B VERTICAL TAB
-        ccb.addRune('\f'.code) // U+000C FORM FEED
+        ccb.addRune(0x000B) // U+000B VERTICAL TAB
+        ccb.addRune(0x000C) // U+000C FORM FEED
         ccb.addRune('\r'.code) // U+000D CARRIAGE RETURN
         ccb.addRune(0x85) // U+0085 NEXT LINE
         ccb.addRune(0x2028) // U+2028 LINE SEPARATOR
         ccb.addRune(0x2029) // U+2029 PARAGRAPH SEPARATOR
-        val singleLinebreak: Regexp = Regexp.Companion.charClass(ccb.build(), flags)
+        val singleLinebreak: Regexp = Regexp.charClass(ccb.build()!!, flags)
 
-        return Regexp.Companion.alternate(List.of<Regexp?>(crLf, singleLinebreak), flags)
+        return Regexp.alternate(List.of<Regexp?>(crLf, singleLinebreak), flags)
     }
 
     companion object {
@@ -906,7 +909,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 result = p.doParse()
             } catch (syntaxFailure: PatternSyntaxException) {
                 try {
-                    p.reportIntentionalDivergences(RegexLexer.Companion.isClassSyntaxError(syntaxFailure))
+                    p.reportIntentionalDivergences(RegexLexer.isClassSyntaxError(syntaxFailure))
                 } catch (notificationFailure: RuntimeException) {
                     if (syntaxFailure != notificationFailure) {
                         syntaxFailure.addSuppressed(notificationFailure)
@@ -944,7 +947,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                     return true
                 }
                 if (current.subs != null) {
-                    pending.addAll(current.subs)
+                    pending.addAll(current.subs!!)
                 }
             }
             return false
@@ -952,7 +955,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         private fun isQuantifiedZeroWidth(re: Regexp): Boolean {
             return when (re.op) {
-                RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST, RegexpOp.REPEAT -> isZeroWidth(re.subs.getFirst())
+                RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST, RegexpOp.REPEAT -> isZeroWidth(re.subs!!.first()!!)
                 else -> false
             }
         }
@@ -968,17 +971,17 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                     }
 
                     RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE, RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> pending.add(
-                        current.subs.getFirst()
+                        current.subs!!.first()
                     )
 
                     RegexpOp.REPEAT -> {
                         // A zero-count repetition never executes its child, regardless of the child's width.
                         if (current.max != 0) {
-                            pending.add(current.subs.getFirst())
+                            pending.add(current.subs!!.first())
                         }
                     }
 
-                    RegexpOp.CONCAT, RegexpOp.ALTERNATE -> pending.addAll(current.subs)
+                    RegexpOp.CONCAT, RegexpOp.ALTERNATE -> pending.addAll(current.subs!!)
                     else -> {
                         return false
                     }
@@ -1002,9 +1005,9 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             var result: RepeatCount? = null
             while (!stack.isEmpty()) {
                 val frame = stack.peek()
-                val nsub = if (frame.re.subs == null) 0 else frame.re.subs.size()
+                val nsub = if (frame.re.subs == null) 0 else frame.re.subs!!.size
                 if (frame.nextSub < nsub) {
-                    stack.push(RepeatCountFrame(frame.re.subs.get(frame.nextSub)))
+                    stack.push(RepeatCountFrame(frame.re!!.subs!!.get(frame.nextSub)!!))
                     frame.nextSub++
                     continue
                 }
@@ -1034,7 +1037,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         // ---- Literal string coalescing ----
         private fun coalesceLiteralStrings(subs: MutableList<Regexp>): MutableList<Regexp> {
-            val coalesced: MutableList<Regexp> = ArrayList<Regexp>(subs.size())
+            val coalesced: MutableList<Regexp> = ArrayList<Regexp>(subs.size)
             var literalStart = -1
             var literalLength = 0
             var literalFlags = 0
@@ -1056,7 +1059,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 }
                 literalLength += literalLength(re)
             }
-            flushLiteralString(subs, coalesced, literalStart, subs.size(), literalLength, literalFlags)
+            flushLiteralString(subs, coalesced, literalStart, subs.size, literalLength, literalFlags)
             return coalesced
         }
 
@@ -1082,18 +1085,18 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 val re = source.get(i)
                 if (re.op == RegexpOp.LITERAL) {
                     if (WorkCounterConfig.ENABLED) {
-                        record()
+                        WorkCounter.record()
                     }
                     runes[out++] = re.rune
                 } else {
                     if (WorkCounterConfig.ENABLED) {
-                        WorkCounter.record(re.runes.length.toLong())
+                        WorkCounter.record(re.runes.size.toLong())
                     }
-                    System.arraycopy(re.runes, 0, runes, out, re.runes.length)
-                    out += re.runes.length
+                    System.arraycopy(re.runes, 0, runes, out, re.runes.size)
+                    out += re.runes.size
                 }
             }
-            target.add(Regexp.Companion.literalString(runes, literalFlags))
+            target.add(Regexp.literalString(runes, literalFlags))
         }
 
         private fun isLiteralStringPart(re: Regexp): Boolean {
@@ -1105,11 +1108,11 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         }
 
         private fun literalLength(re: Regexp): Int {
-            return if (re.op == RegexpOp.LITERAL) 1 else re.runes.length
+            return if (re.op == RegexpOp.LITERAL) 1 else re.runes.size
         }
 
         private fun addRangeFlags(ccb: CharClassBuilder?, lo: Int, hi: Int, parseFlags: Int) {
-            CharClassExpander.addRange(ccb, lo, hi, parseFlags)
+            CharClassExpander.addRange(ccb!!, lo, hi, parseFlags)
         }
     }
 }

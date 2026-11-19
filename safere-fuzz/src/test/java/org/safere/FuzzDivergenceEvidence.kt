@@ -33,7 +33,7 @@ object FuzzDivergenceEvidence {
     }
 
     /** Returns execution evidence; an empty set means no instrumented signal was observed.  */
-    fun observed(): String? {
+    fun observed(): String {
         return EVENTS.get().toString()
     }
 }

@@ -16,6 +16,7 @@ import java.util.*
 import java.util.List
 import java.util.function.Function
 import java.util.function.Predicate
+import kotlin.collections.first
 
 internal class DeclarativeBenchmarkPlanTest {
     @Test
@@ -60,24 +61,24 @@ internal class DeclarativeBenchmarkPlanTest {
         val engine: EngineDeclaration =
             engine(
                 "test-string",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.FIND
+                InputRepresentation.JAVA_STRING,
+                Feature.FIND
             )
         val additionalEngine: EngineDeclaration =
             engine(
                 "additional-string",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.FIND
+                InputRepresentation.JAVA_STRING,
+                Feature.FIND
             )
         val first =
             plan.expand(
                 List.of<EngineDeclaration?>(engine, additionalEngine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
         val second =
             plan.expand(
                 List.of<EngineDeclaration?>(engine, additionalEngine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
         Assertions.assertThat<String?>(plan.inputs().keys).containsExactly("generated.input.8", "generated.input.16")
@@ -124,19 +125,19 @@ internal class DeclarativeBenchmarkPlanTest {
         val engine: EngineDeclaration =
             engine(
                 "string",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.FIND
+                InputRepresentation.JAVA_STRING,
+                Feature.FIND
             )
 
         val expanded =
             plan.expand(
                 List.of<EngineDeclaration?>(engine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
         Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
             .singleElement()
-            .extracting<String?>(Function { workload: ExpandedWorkload? -> workload!!.patterns.getFirst() })
+            .extracting<String?>(Function { workload: ExpandedWorkload? -> workload!!.patterns.first() })
             .isEqualTo("\\x{feff}x")
     }
 
@@ -163,12 +164,12 @@ internal class DeclarativeBenchmarkPlanTest {
             """.trimIndent()
             )
         val engine: EngineDeclaration =
-            engine("string", DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING)
+            engine("string", InputRepresentation.JAVA_STRING)
 
         val expanded =
             plan.expand(
                 List.of<EngineDeclaration?>(engine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.COMPILE)
+                EnumSet.of<Operation?>(Operation.COMPILE)
             )
 
         Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
@@ -213,17 +214,17 @@ internal class DeclarativeBenchmarkPlanTest {
         val engine: EngineDeclaration =
             engine(
                 "string",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.REPLACE
+                InputRepresentation.JAVA_STRING,
+                Feature.REPLACE
             )
 
         val expanded =
             plan.expand(
                 List.of<EngineDeclaration?>(engine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL)
+                EnumSet.of<Operation?>(Operation.REPLACE_ALL)
             )
 
-        Assertions.assertThat<String?, DeclarativeBenchmarkPlan.InputDeclaration?>(plan.inputs())
+        Assertions.assertThat<String?, InputDeclaration?>(plan.inputs())
             .containsKey("generated.greeting")
         Assertions.assertThat<RecipeValue?>(plan.inputs().get("generated.greeting")!!.recipe.arguments.get("text"))
             .isEqualTo(RecipeString("hello"))
@@ -262,21 +263,21 @@ internal class DeclarativeBenchmarkPlanTest {
                 List.of<EngineDeclaration?>(
                     engine(
                         "string",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     ),
                     engine(
                         "utf8",
-                        DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.PREEXISTING_UTF8,
+                        Feature.FIND
                     ),
                     engine(
                         "conversion",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
+                        Feature.FIND
                     )
                 ),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
         Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
@@ -313,30 +314,30 @@ internal class DeclarativeBenchmarkPlanTest {
                 List.of<EngineDeclaration?>(
                     engine(
                         "string",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     ),
                     engine(
                         "utf8",
-                        DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.PREEXISTING_UTF8,
+                        Feature.FIND
                     )
                 ),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
         Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
             .singleElement()
             .extracting<String?>(ExpandedWorkload::inputRepresentationReason)
             .isEqualTo("This workload measures an API whose input is a Java String.")
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Trial?>(expanded.trials)
+        Assertions.assertThat<Trial?>(expanded.trials)
             .singleElement()
             .extracting<String?>(Function { id() })
             .isEqualTo("Synthetic.find@string")
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
             .singleElement()
             .satisfies(
-                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                ThrowingConsumer { exclusion: Exclusion? ->
                     Assertions.assertThat(exclusion!!.engineId).isEqualTo("utf8")
                     Assertions.assertThat<ExclusionKind?>(exclusion.kind)
                         .isEqualTo(
@@ -482,23 +483,23 @@ internal class DeclarativeBenchmarkPlanTest {
         val stringEngine: EngineDeclaration =
             engine(
                 "string",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.FIND,
-                DeclarativeBenchmarkPlan.Feature.MATCHES
+                InputRepresentation.JAVA_STRING,
+                Feature.FIND,
+                Feature.MATCHES
             )
         val utf8Engine: EngineDeclaration =
             engine(
                 "utf8",
-                DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-                DeclarativeBenchmarkPlan.Feature.FIND
+                InputRepresentation.PREEXISTING_UTF8,
+                Feature.FIND
             )
 
         val expanded =
             plan.expand(
                 List.of<EngineDeclaration?>(stringEngine, utf8Engine),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
-                    DeclarativeBenchmarkPlan.Operation.FIND,
-                    DeclarativeBenchmarkPlan.Operation.MATCHES
+                EnumSet.of<Operation?>(
+                    Operation.FIND,
+                    Operation.MATCHES
                 )
             )
 
@@ -506,10 +507,10 @@ internal class DeclarativeBenchmarkPlanTest {
             .containsExactly(
                 "Synthetic.find@string", "Synthetic.find@utf8", "Synthetic.matches@string"
             )
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
             .singleElement()
             .satisfies(
-                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                ThrowingConsumer { exclusion: Exclusion? ->
                     Assertions.assertThat(exclusion!!.workloadId).isEqualTo("Synthetic.matches")
                     Assertions.assertThat(exclusion.engineId).isEqualTo("utf8")
                     Assertions.assertThat<ExclusionKind?>(exclusion.kind)
@@ -545,11 +546,11 @@ internal class DeclarativeBenchmarkPlanTest {
             .singleElement()
             .satisfies(
                 ThrowingConsumer { workload: WorkloadDeclaration? ->
-                    Assertions.assertThat<DeclarativeBenchmarkPlan.Feature?>(workload!!.requirements())
+                    Assertions.assertThat<Feature?>(workload!!.requirements())
                         .containsExactlyInAnyOrder(
-                            DeclarativeBenchmarkPlan.Feature.FIND,
-                            DeclarativeBenchmarkPlan.Feature.MATCHER_STATE,
-                            DeclarativeBenchmarkPlan.Feature.REGIONS
+                            Feature.FIND,
+                            Feature.MATCHER_STATE,
+                            Feature.REGIONS
                         )
                 })
     }
@@ -640,34 +641,34 @@ internal class DeclarativeBenchmarkPlanTest {
         val supported: EngineDeclaration =
             engine(
                 "supported",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                DeclarativeBenchmarkPlan.Feature.FIND
+                InputRepresentation.JAVA_STRING,
+                Feature.FIND
             )
         val missingAdapter =
             EngineDeclaration(
                 "missing-adapter",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
-                EnumSet.allOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                InputRepresentation.JAVA_STRING,
+                EnumSet.of<Feature?>(Feature.FIND),
+                EnumSet.allOf<Flag?>(Flag::class.java),
                 false
             )
         val expanded =
             plan.expand(
                 List.of<EngineDeclaration?>(supported, missingAdapter),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
         Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
             .containsExactly("Synthetic.find@supported")
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
-            .extracting<ExclusionKind?, RuntimeException?>(DeclarativeBenchmarkPlan.Exclusion::kind)
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
+            .extracting<ExclusionKind?, RuntimeException?>(Exclusion::kind)
             .containsExactly(ExclusionKind.MISSING_ENGINE_ADAPTER)
 
         Assertions.assertThatThrownBy(
             ThrowingCallable {
                 plan.expand(
                     List.of<EngineDeclaration?>(supported),
-                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.MATCHES)
+                    EnumSet.of<Operation?>(Operation.MATCHES)
                 )
             })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -709,23 +710,23 @@ internal class DeclarativeBenchmarkPlanTest {
                 List.of<EngineDeclaration?>(
                     engine(
                         "safere-string",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.REPLACE
+                        InputRepresentation.JAVA_STRING,
+                        Feature.REPLACE
                     ),
                     engine(
                         "jdk-string",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.REPLACE
+                        InputRepresentation.JAVA_STRING,
+                        Feature.REPLACE
                     )
                 ),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL)
+                EnumSet.of<Operation?>(Operation.REPLACE_ALL)
             )
 
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
             .extracting(
-                Function { exclusion: DeclarativeBenchmarkPlan.Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId },
-                DeclarativeBenchmarkPlan.Exclusion::kind,
-                DeclarativeBenchmarkPlan.Exclusion::reason
+                Function { exclusion: Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId },
+                Exclusion::kind,
+                Exclusion::reason
             )
             .containsExactly(
                 Tuple.tuple(
@@ -796,30 +797,30 @@ internal class DeclarativeBenchmarkPlanTest {
                 List.of<EngineDeclaration?>(
                     engine(
                         "first",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     ),
                     engine(
                         "second",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     ),
                     engine(
                         "third",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     ),
                     engine(
                         "unexcluded",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     )
                 ),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
-            .extracting<String?, RuntimeException?>(ThrowingExtractor { exclusion: DeclarativeBenchmarkPlan.Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId })
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { exclusion: Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId })
             .containsExactly(
                 "Synthetic.find.hit.8@third",
                 "Synthetic.find.hit.16@first",
@@ -927,10 +928,10 @@ internal class DeclarativeBenchmarkPlanTest {
                     List.of<EngineDeclaration?>(
                         engine(
                             "safere-string",
-                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING
+                            InputRepresentation.JAVA_STRING
                         )
                     ),
-                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    EnumSet.of<Operation?>(Operation.FIND)
                 )
             })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -948,10 +949,10 @@ internal class DeclarativeBenchmarkPlanTest {
                     List.of<EngineDeclaration?>(
                         engine(
                             "jdk-string",
-                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING
+                            InputRepresentation.JAVA_STRING
                         )
                     ),
-                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    EnumSet.of<Operation?>(Operation.FIND)
                 )
             })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -982,9 +983,9 @@ internal class DeclarativeBenchmarkPlanTest {
         val engine =
             EngineDeclaration(
                 "without-comments",
-                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
-                EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                InputRepresentation.JAVA_STRING,
+                EnumSet.of<Feature?>(Feature.FIND),
+                EnumSet.noneOf<Flag?>(Flag::class.java),
                 true
             )
 
@@ -992,7 +993,7 @@ internal class DeclarativeBenchmarkPlanTest {
             ThrowingCallable {
                 plan.expand(
                     List.of<EngineDeclaration?>(engine),
-                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    EnumSet.of<Operation?>(Operation.FIND)
                 )
             })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -1025,18 +1026,18 @@ internal class DeclarativeBenchmarkPlanTest {
                 List.of<EngineDeclaration?>(
                     engine(
                         "string",
-                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                        DeclarativeBenchmarkPlan.Feature.FIND
+                        InputRepresentation.JAVA_STRING,
+                        Feature.FIND
                     )
                 ),
-                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                EnumSet.of<Operation?>(Operation.FIND)
             )
 
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Trial?>(expanded.trials).isEmpty()
-        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+        Assertions.assertThat<Trial?>(expanded.trials).isEmpty()
+        Assertions.assertThat<Exclusion?>(expanded.exclusions)
             .singleElement()
             .satisfies(
-                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                ThrowingConsumer { exclusion: Exclusion? ->
                     Assertions.assertThat<ExclusionKind?>(exclusion!!.kind)
                         .isEqualTo(ExclusionKind.WORKLOAD_DISABLED)
                 })
@@ -1068,11 +1069,11 @@ internal class DeclarativeBenchmarkPlanTest {
                     List.of<EngineDeclaration?>(
                         engine(
                             "string",
-                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                            DeclarativeBenchmarkPlan.Feature.FIND
+                            InputRepresentation.JAVA_STRING,
+                            Feature.FIND
                         )
                     ),
-                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    EnumSet.of<Operation?>(Operation.FIND)
                 )
             })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -1477,7 +1478,7 @@ internal class DeclarativeBenchmarkPlanTest {
 
     companion object {
         private fun parse(json: String): DeclarativeBenchmarkPlan {
-            return DeclarativeBenchmarkPlan.Companion.parse(JsonParser.parseString(json).getAsJsonObject())
+            return DeclarativeBenchmarkPlan.parse(JsonParser.parseString(json).asJsonObject)
         }
 
         private fun assertInvalidTrialExclusion(exclusion: String?, message: String?) {
@@ -1526,17 +1527,17 @@ internal class DeclarativeBenchmarkPlanTest {
 
         private fun engine(
             id: String?,
-            representation: DeclarativeBenchmarkPlan.InputRepresentation?,
-            vararg features: DeclarativeBenchmarkPlan.Feature?
+            representation: InputRepresentation?,
+            vararg features: Feature?
         ): EngineDeclaration {
             val featureSet =
-                EnumSet.noneOf<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature::class.java)
-            featureSet.addAll(List.of<DeclarativeBenchmarkPlan.Feature?>(*features))
+                EnumSet.noneOf<Feature?>(Feature::class.java)
+            featureSet.addAll(List.of<Feature?>(*features))
             return EngineDeclaration(
                 id,
                 representation,
                 featureSet,
-                EnumSet.allOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                EnumSet.allOf<Flag?>(Flag::class.java),
                 true
             )
         }

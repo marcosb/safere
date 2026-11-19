@@ -31,7 +31,7 @@ internal class EmptyCaptureSemanticsTest {
             val pattern = Pattern.compile(wrapped + repeat.regex + mode, 0, engine)
             for (region in booleanArrayOf(false, true)) {
                 val input = if (region) "😀#" else ""
-                val position = input.length
+                val position = input.size
                 for (operation in 0..2) {
                     val matcher = pattern.matcher(input)
                     val utf8 = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))

@@ -13,6 +13,22 @@ import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.List
 import java.util.stream.Stream
+import kotlin.Boolean
+import kotlin.Int
+import kotlin.String
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.minus
+import kotlin.collections.mutableListOf
+import kotlin.collections.plus
+import kotlin.intArrayOf
+import kotlin.plus
+import kotlin.sequences.minus
+import kotlin.sequences.plus
+import kotlin.text.StringBuilder
+import kotlin.text.plus
+import kotlin.text.substring
+import kotlin.text.toByteArray
 
 /** Substring and original-input anchor models from docs/OPAQUE_REGION_BOUNDS.md.  */
 @DisabledForCrosscheck("Opaque substring semantics intentionally differ from JDK region behavior")

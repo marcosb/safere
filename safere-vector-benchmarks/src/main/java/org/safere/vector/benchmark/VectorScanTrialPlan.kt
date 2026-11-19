@@ -8,7 +8,7 @@ package org.safere.vector.benchmark
 object VectorScanTrialPlan {
     /** Prints a comma-separated trial list for `smoke` or `standard`.  */
     fun main(args: Array<String?>) {
-        kotlin.require(args.length == 1) { "Usage: VectorScanTrialPlan <smoke|standard>" }
+        kotlin.require(args.size == 1) { "Usage: VectorScanTrialPlan <smoke|standard>" }
         System.out.println(String.join(",", VectorScanConfiguration.trials(args[0])))
     }
 }

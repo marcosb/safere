@@ -61,8 +61,8 @@ internal class OracleDefectsTest {
     fun stateSequencesCoverSurrogatesRegionsAndReplacement() {
         for (regex in arrayOf<String>(".|", "a*", "(?:a|b)+", ".", "[^a]")) {
             for (input in arrayOf<String>("", "a", "é中", "\udb7d\udf02A", "\ud800x\udc00")) {
-                for (start in 0..input.length) {
-                    Assertions.assertThat(StrictStateChecks.check(regex, input, start, input.length, true, false))
+                for (start in 0..input.size) {
+                    Assertions.assertThat(StrictStateChecks.check(regex, input, start, input.size, true, false))
                         .isTrue()
                 }
             }

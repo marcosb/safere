@@ -19,11 +19,11 @@ class StrictStateFuzzer {
         fun fuzzerTestOneInput(data: FuzzedDataProvider) {
             val regex = StrictDomain.generate(data).regex
             val input = StrictDomain.input(data)
-            val start = data.consumeInt(0, input.length)
-            var end = data.consumeInt(start, input.length)
+            val start = data.consumeInt(0, input.size)
+            var end = data.consumeInt(start, input.size)
             // Split-surrogate region ends are a documented intentional scalar-quantifier boundary.
             // Interior starts remain included, as do arbitrary lone surrogates.
-            if (end > 0 && end < input.length && Character.isHighSurrogate(input.get(end - 1))
+            if (end > 0 && end < input.size && Character.isHighSurrogate(input.get(end - 1))
                 && Character.isLowSurrogate(input.get(end))
             ) {
                 end++

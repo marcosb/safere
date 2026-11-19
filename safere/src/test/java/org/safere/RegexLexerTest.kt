@@ -113,8 +113,8 @@ internal class RegexLexerTest {
                 .isInstanceOfSatisfying<PatternSyntaxException?>(
                     PatternSyntaxException::class.java,
                     Consumer { error: PatternSyntaxException? ->
-                        Assertions.assertThat(error!!.getPattern()).isEqualTo(regex)
-                        Assertions.assertThat(error.getIndex()).isEqualTo(2)
+                        Assertions.assertThat(error!!.pattern).isEqualTo(regex)
+                        Assertions.assertThat(error.index).isEqualTo(2)
                     })
         }
     }

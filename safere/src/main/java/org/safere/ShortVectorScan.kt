@@ -4,10 +4,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import jdk.incubator.vector.ShortVector
-import jdk.incubator.vector.VectorMask
-import jdk.incubator.vector.VectorOperators
-import jdk.incubator.vector.VectorSpecies
+import jdk.incubator.vector.*
 import java.nio.ByteOrder
 
 /**
@@ -24,15 +21,28 @@ internal object ShortVectorScan {
         species: VectorSpecies<Short?>, chars: CharArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 4)) {
-            return VectorScanProvider.Companion.UNSUPPORTED
+            return VectorScanProvider.UNSUPPORTED
         }
         var position = Math.max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (position <= limit) {
+            val values = ShortVector.fromCharArray(species, chars, offset + position)
+            val matches = matches(values, ranges)
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += vectorLen
+        }
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (position < length) {
+            val ch: Char = chars[offset + position]
+            if (matches(ch, ranges)) {
+                return position
+            }
+            position++
+        }
         return -1
     }
 
@@ -44,16 +54,32 @@ internal object ShortVectorScan {
         species: VectorSpecies<Short?>, bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 4) || ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
-            return VectorScanProvider.Companion.UNSUPPORTED
+            return VectorScanProvider.UNSUPPORTED
         }
         var position = Math.max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
         val byteSpecies = species.withLanes<Byte?>(Byte::class.javaPrimitiveType)
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (position <= limit) {
+            val values =
+                ByteVector.fromArray(byteSpecies, bytes, offset + (position shl 1)).reinterpretAsShorts()
+            val matches = matches(values, ranges)
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += vectorLen
+        }
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (position < length) {
+            val ch =
+                ((bytes[offset + (position shl 1)].toInt() and 0xFF)
+                        or ((bytes[offset + (position shl 1) + 1].toInt() and 0xFF) shl 8)).toChar()
+            if (matches(ch, ranges)) {
+                return position
+            }
+            position++
+        }
         return -1
     }
 
@@ -69,11 +95,15 @@ internal object ShortVectorScan {
         prefix: String,
         start: Int
     ): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return Math.min(Math.max(0, start), length)
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until prefixLen) {
+            if (prefix[i].code > 127) {
+                return VectorScanProvider.UNSUPPORTED
+            }
+        }
         if (prefixLen > 1) {
             return Utf16.indexOfIgnoreCase(chars, offset, length, prefix, start)
         }
@@ -82,16 +112,42 @@ internal object ShortVectorScan {
         val vectorLen = species.length()
         val limit = length - vectorLen
 
-        val first: Char = prefix.charAt(0)
+        val first: Char = prefix[0]
         val low = Ascii.toLowerCase(first).code.toShort()
         val high = Ascii.toUpperCase(first).code.toShort()
         val lowVec = ShortVector.broadcast(species, low)
         val highVec = ShortVector.broadcast(species, high)
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= limit) {
+            val inputVec = ShortVector.fromCharArray(species, chars, offset + pos)
+            val matchMask =
+                inputVec
+                    .compare(VectorOperators.EQ, lowVec)
+                    .or(inputVec.compare(VectorOperators.EQ, highVec))
+
+            if (matchMask.anyTrue()) {
+                var activeLanes = matchMask.toLong()
+                while (activeLanes != 0L) {
+                    val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                    val candidatePos = pos + bit
+                    if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)
+                        && Utf16.regionMatchesIgnoreCase(chars, offset + candidatePos, prefix, prefixLen)
+                    ) {
+                        return candidatePos
+                    }
+                    activeLanes = activeLanes and (activeLanes - 1)
+                }
+            }
+            pos += vectorLen
+        }
 
         val limitScalar = length - prefixLen
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= limitScalar) {
+            if (Utf16.regionMatchesIgnoreCase(chars, offset + pos, prefix, prefixLen)) {
+                return pos
+            }
+            pos++
+        }
         return -1
     }
 
@@ -109,16 +165,20 @@ internal object ShortVectorScan {
         prefix: String,
         start: Int
     ): Int {
-        val prefixLen: Int = prefix.length()
+        val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
             return Math.min(Math.max(0, start), length)
         }
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (i in 0 until prefixLen) {
+            if (prefix[i].code > 127) {
+                return VectorScanProvider.UNSUPPORTED
+            }
+        }
         if (prefixLen > 1) {
             return Utf16.indexOfIgnoreCaseUtf16(bytes, offset, length, prefix, start)
         }
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
-            return VectorScanProvider.Companion.UNSUPPORTED
+            return VectorScanProvider.UNSUPPORTED
         }
 
         var pos = Math.max(0, start)
@@ -126,28 +186,57 @@ internal object ShortVectorScan {
         val limit = length - vectorLen
         val byteSpecies = species.withLanes<Byte?>(Byte::class.javaPrimitiveType)
 
-        val first: Char = prefix.charAt(0)
+        val first: Char = prefix[0]
         val low = Ascii.toLowerCase(first).code.toShort()
         val high = Ascii.toUpperCase(first).code.toShort()
         val lowVec = ShortVector.broadcast(species, low)
         val highVec = ShortVector.broadcast(species, high)
 
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= limit) {
+            val inputVec =
+                ByteVector.fromArray(byteSpecies, bytes, offset + (pos shl 1)).reinterpretAsShorts()
+            val matchMask =
+                inputVec
+                    .compare(VectorOperators.EQ, lowVec)
+                    .or(inputVec.compare(VectorOperators.EQ, highVec))
+
+            if (matchMask.anyTrue()) {
+                var activeLanes = matchMask.toLong()
+                while (activeLanes != 0L) {
+                    val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                    val candidatePos = pos + bit
+                    if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)
+                        && Utf16.regionMatchesIgnoreCaseUtf16(
+                            bytes, offset + (candidatePos shl 1), prefix, prefixLen
+                        )
+                    ) {
+                        return candidatePos
+                    }
+                    activeLanes = activeLanes and (activeLanes - 1)
+                }
+            }
+            pos += vectorLen
+        }
 
         val limitScalar = length - prefixLen
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        while (pos <= limitScalar) {
+            if (Utf16.regionMatchesIgnoreCaseUtf16(bytes, offset + (pos shl 1), prefix, prefixLen)) {
+                return pos
+            }
+            pos++
+        }
         return -1
     }
 
     private fun matches(values: ShortVector, ranges: IntArray): VectorMask<Short?> {
         var matches = matches(values, ranges[0], ranges[1])
-        if (ranges.length >= 4) {
+        if (ranges.size >= 4) {
             matches = matches.or(matches(values, ranges[2], ranges[3]))
         }
-        if (ranges.length >= 6) {
+        if (ranges.size >= 6) {
             matches = matches.or(matches(values, ranges[4], ranges[5]))
         }
-        if (ranges.length == 8) {
+        if (ranges.size == 8) {
             matches = matches.or(matches(values, ranges[6], ranges[7]))
         }
         return matches
@@ -173,7 +262,11 @@ internal object ShortVectorScan {
     }
 
     private fun matches(value: Char, ranges: IntArray): Boolean {
-        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        for (index in ranges.indices step 2) {
+            if (value.code >= ranges[index] && value.code <= ranges[index + 1]) {
+                return true
+            }
+        }
         return false
     }
 }

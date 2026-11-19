@@ -10,22 +10,15 @@ import java.util.Set
 /** Immutable static analysis of a compiled pattern.  */
 @JvmRecord
 data class PatternAnalysis(
-    features: MutableSet<PatternFeature?>?,
-    capabilities: MutableSet<PatternCapability?>?,
-    limitations: MutableSet<PatternLimitation?>?,
-    programSize: Int,
-    captureCount: Int
-) {
-    val features: MutableSet<PatternFeature?>?
-    val capabilities: MutableSet<PatternCapability?>?
-    val limitations: MutableSet<PatternLimitation?>?
-    val programSize: Int
+    val features: MutableSet<PatternFeature?>?,
+    val capabilities: MutableSet<PatternCapability?>?,
+    val limitations: MutableSet<PatternLimitation?>?,
+    val programSize: Int,
     val captureCount: Int
+) {
 
     /** Creates an immutable pattern analysis.  */
     init {
-        this.captureCount = captureCount
-        this.programSize = programSize
         var features = features
         var capabilities = capabilities
         var limitations = limitations
@@ -45,8 +38,5 @@ data class PatternAnalysis(
         )
         require(programSize >= 0) { "programSize must be non-negative" }
         require(captureCount >= 0) { "captureCount must be non-negative" }
-        this.features = features
-        this.capabilities = capabilities
-        this.limitations = limitations
     }
 }

@@ -189,10 +189,10 @@ class ParserCompatibilityFuzzer {
                 )
             val gap =
                 data.pickValue<String?>(mutableListOf<String?>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n", "\\Q1\\E"))
-            val gapPosition = data.consumeInt(1, count.length - 1)
+            val gapPosition = data.consumeInt(1, count.size - 1)
             val allGaps = data.consumeBoolean()
             val quotedCount = StringBuilder("{")
-            for (i in 1..<count.length) {
+            for (i in 1..<count.size) {
                 if (allGaps || i == gapPosition) quotedCount.append(gap)
                 quotedCount.append(count.get(i))
             }

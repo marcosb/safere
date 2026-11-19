@@ -8,7 +8,6 @@ import com.google.gson.JsonObject
 import org.safere.exhaustive.SweepWorkers.LineWorker
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.IOException
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,11 +16,7 @@ import java.util.List
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.Array
-import kotlin.Boolean
-import kotlin.Int
-import kotlin.Long
 import kotlin.RuntimeException
-import kotlin.Throws
 import kotlin.check
 import kotlin.code
 import kotlin.io.println
@@ -30,7 +25,6 @@ import kotlin.math.min
 import kotlin.plus
 import kotlin.text.StringBuilder
 import kotlin.text.format
-import kotlin.use
 
 /** Offline differential sweep for `\cX` control-escape target bugs.  */
 object ControlEscapeDivergenceSweep {
@@ -300,7 +294,7 @@ object ControlEscapeDivergenceSweep {
         )
     }
 
-    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+    private fun direction(jdk: Outcome, safere: Outcome): String {
         if (jdk.accepted && !safere.accepted) {
             return "jdk-accepts"
         }
@@ -310,7 +304,7 @@ object ControlEscapeDivergenceSweep {
         return "matches"
     }
 
-    private fun targetClass(target: Int): kotlin.String {
+    private fun targetClass(target: Int): String {
         if (Character.isHighSurrogate(target.toChar())) {
             return "high-surrogate"
         }
@@ -336,7 +330,7 @@ object ControlEscapeDivergenceSweep {
         return !left.accepted || left.matches == right.matches
     }
 
-    private fun context(label: kotlin.String?, template: kotlin.String?): Context {
+    private fun context(label: String?, template: String?): Context {
         return Context(label, template)
     }
 
@@ -360,8 +354,8 @@ object ControlEscapeDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Context(val label: kotlin.String?, val template: kotlin.String?) {
-        fun regex(target: kotlin.String?): kotlin.String {
+    private data class Context(val label: String?, val template: String?) {
+        fun regex(target: String?): String {
             return template.formatted(target)
         }
 
@@ -375,17 +369,17 @@ object ControlEscapeDivergenceSweep {
     }
 
     @JvmRecord
-    private data class FlagMode(val label: kotlin.String?, val prefix: kotlin.String?, val flags: Int)
+    private data class FlagMode(val label: String?, val prefix: String?, val flags: Int)
 
     @JvmRecord
     private data class CaseSpec(val target: Int, val context: Context?, val flagMode: FlagMode?) {
-        fun regex(): kotlin.String {
+        fun regex(): String {
             return flagMode!!.prefix + context!!.regex(stringForCodePoint(target))
         }
 
-        fun labels(): kotlin.String {
+        fun labels(): String {
             return ("target="
-                    + kotlin.String.format(Locale.ROOT, "U+%04X", target) + ",context="
+                    + String.format(Locale.ROOT, "U+%04X", target) + ",context="
                     + context!!.label
                     + ",flags="
                     + flagMode!!.label
@@ -395,17 +389,17 @@ object ControlEscapeDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Outcome(val accepted: Boolean, val matches: kotlin.String?, val error: kotlin.String?)
+    private data class Outcome(val accepted: Boolean, val matches: String?, val error: String?)
 
     @JvmRecord
     private data class Divergence(
         val spec: CaseSpec?,
-        val regex: kotlin.String?,
+        val regex: String?,
         val jdk: Outcome?,
         val safere: Outcome?,
-        val bucket: kotlin.String?
+        val bucket: String?
     ) {
-        fun toJson(): kotlin.String {
+        fun toJson(): String {
             val `object` = SweepJson.`object`()
             `object`.add("case", Companion.caseJson(spec!!))
             `object`.addProperty("bucket", bucket)

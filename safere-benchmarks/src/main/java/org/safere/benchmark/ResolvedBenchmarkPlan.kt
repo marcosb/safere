@@ -15,6 +15,19 @@ import java.util.Set
 import java.util.function.*
 import java.util.function.Function
 import java.util.stream.Collectors
+import kotlin.Boolean
+import kotlin.IllegalArgumentException
+import kotlin.IllegalStateException
+import kotlin.Int
+import kotlin.String
+import kotlin.collections.ArrayList
+import kotlin.collections.Iterable
+import kotlin.collections.LinkedHashSet
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.MutableSet
+import kotlin.plus
+import kotlin.require
 
 /**
  * Materializes the complete engine/workload compatibility join for every benchmark runner.
@@ -27,26 +40,26 @@ import java.util.stream.Collectors
 internal object ResolvedBenchmarkPlan {
     const val VERSION: Int = 1
 
-    private val PORTABLE_OPERATIONS: EnumSet<DeclarativeBenchmarkPlan.Operation?> =
-        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
-            DeclarativeBenchmarkPlan.Operation.MATCHES,
-            DeclarativeBenchmarkPlan.Operation.FIND,
-            DeclarativeBenchmarkPlan.Operation.LOOKING_AT,
-            DeclarativeBenchmarkPlan.Operation.FIND_ALL_COUNT,
-            DeclarativeBenchmarkPlan.Operation.MATCHES_CORPUS,
-            DeclarativeBenchmarkPlan.Operation.MATCHES_GROUP_LENGTH_SUM,
-            DeclarativeBenchmarkPlan.Operation.FIND_ALL_LENGTH_SUM,
-            DeclarativeBenchmarkPlan.Operation.FIND_ALL_GROUP_LENGTH_SUM,
-            DeclarativeBenchmarkPlan.Operation.CAPTURE_GROUPS,
-            DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST,
-            DeclarativeBenchmarkPlan.Operation.REPLACE_ALL,
-            DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM,
-            DeclarativeBenchmarkPlan.Operation.SPLIT_LENGTH_SUM,
-            DeclarativeBenchmarkPlan.Operation.COMPILE,
-            DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND,
-            DeclarativeBenchmarkPlan.Operation.FIND_GROUP_PRESENT,
-            DeclarativeBenchmarkPlan.Operation.FIND_GROUP,
-            DeclarativeBenchmarkPlan.Operation.UTF8_CAPTURE_BOUNDS
+    private val PORTABLE_OPERATIONS: EnumSet<Operation?> =
+        EnumSet.of<Operation?>(
+            Operation.MATCHES,
+            Operation.FIND,
+            Operation.LOOKING_AT,
+            Operation.FIND_ALL_COUNT,
+            Operation.MATCHES_CORPUS,
+            Operation.MATCHES_GROUP_LENGTH_SUM,
+            Operation.FIND_ALL_LENGTH_SUM,
+            Operation.FIND_ALL_GROUP_LENGTH_SUM,
+            Operation.CAPTURE_GROUPS,
+            Operation.REPLACE_FIRST,
+            Operation.REPLACE_ALL,
+            Operation.REPLACE_ALL_LENGTH_SUM,
+            Operation.SPLIT_LENGTH_SUM,
+            Operation.COMPILE,
+            Operation.COMPILE_AND_FIND,
+            Operation.FIND_GROUP_PRESENT,
+            Operation.FIND_GROUP,
+            Operation.UTF8_CAPTURE_BOUNDS
         )
 
     private val PORTABLE_MODES: EnumSet<MeasurementMode?> = EnumSet.of<MeasurementMode?>(
@@ -63,12 +76,12 @@ internal object ResolvedBenchmarkPlan {
         planData.add("inputs", normalizedBenchmarkData.getAsJsonArray("inputs").deepCopy())
         planData.add("workloads", normalizedBenchmarkData.getAsJsonArray("workloads").deepCopy())
 
-        val plan: DeclarativeBenchmarkPlan = DeclarativeBenchmarkPlan.Companion.parse(planData)
+        val plan: DeclarativeBenchmarkPlan = DeclarativeBenchmarkPlan.parse(planData)
         val patternProfiles: PatternProfiles =
-            PatternProfiles.Companion.parse(normalizedBenchmarkData.get("patternProfiles"))
+            PatternProfiles.parse(normalizedBenchmarkData.get("patternProfiles"))
                 .withFallback("re2-cpp", "re2")
         val replacementProfiles: PatternProfiles =
-            PatternProfiles.Companion.parse(normalizedBenchmarkData.get("replacementProfiles"))
+            PatternProfiles.parse(normalizedBenchmarkData.get("replacementProfiles"))
 
         validateEngines(engines)
         val result = JsonObject()
@@ -112,8 +125,8 @@ internal object ResolvedBenchmarkPlan {
                 entries.add(toEntry(workload, engine, patternProfiles, replacementProfiles))
             }
         }
-        result.addProperty("workloadCount", workloads.size())
-        result.addProperty("engineCount", engines.size())
+        result.addProperty("workloadCount", workloads.size)
+        result.addProperty("engineCount", engines.size)
         result.add("entries", entries)
         return result
     }
@@ -129,13 +142,13 @@ internal object ResolvedBenchmarkPlan {
                     variant.patternProfile(),
                     "java",
                     variant.declaration(),
-                    EnumSet.allOf<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation::class.java),
+                    EnumSet.allOf<Operation?>(Operation::class.java),
                     EnumSet.allOf<MeasurementMode?>(MeasurementMode::class.java),
                     if (variant === RegexEngineVariant.SAFERE_STRING || variant === RegexEngineVariant.SAFERE_UTF8 || variant === RegexEngineVariant.SAFERE_UTF8_VECTOR || variant === RegexEngineVariant.JDK_STRING)
                         allFlagSets()
                     else
                         if (variant === RegexEngineVariant.RE2J_STRING)
-                            RegexEngineVariant.Companion.re2jCompileFlagSets()
+                            RegexEngineVariant.re2jCompileFlagSets()
                         else
                             Set.of<String?>("0")
                 )
@@ -200,14 +213,14 @@ internal object ResolvedBenchmarkPlan {
         )
 
         val dotnetFeatures = portableFeatures(false, true, false)
-        dotnetFeatures.remove(DeclarativeBenchmarkPlan.Feature.UTF8_INPUT)
-        dotnetFeatures.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE)
-        dotnetFeatures.add(DeclarativeBenchmarkPlan.Feature.JAVA_CHARACTER_CLASS)
+        dotnetFeatures.remove(Feature.UTF8_INPUT)
+        dotnetFeatures.add(Feature.FLAGGED_COMPILE)
+        dotnetFeatures.add(Feature.JAVA_CHARACTER_CLASS)
         val dotnetOperations =
-            EnumSet.copyOf<DeclarativeBenchmarkPlan.Operation?>(PORTABLE_OPERATIONS)
-        dotnetOperations.remove(DeclarativeBenchmarkPlan.Operation.UTF8_CAPTURE_BOUNDS)
-        dotnetOperations.add(DeclarativeBenchmarkPlan.Operation.FIND_ROTATING_UTF16)
-        dotnetOperations.add(DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND_ROTATING_UTF16)
+            EnumSet.copyOf<Operation?>(PORTABLE_OPERATIONS)
+        dotnetOperations.remove(Operation.UTF8_CAPTURE_BOUNDS)
+        dotnetOperations.add(Operation.FIND_ROTATING_UTF16)
+        dotnetOperations.add(Operation.COMPILE_AND_FIND_ROTATING_UTF16)
         result.add(
             Engine(
                 "dotnet_nonbacktracking",
@@ -217,9 +230,9 @@ internal object ResolvedBenchmarkPlan {
                 "dotnet",
                 EngineDeclaration(
                     "dotnet_nonbacktracking",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                    InputRepresentation.JAVA_STRING,
                     dotnetFeatures,
-                    EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                    EnumSet.noneOf<Flag?>(Flag::class.java),
                     true
                 ),
                 dotnetOperations,
@@ -248,7 +261,7 @@ internal object ResolvedBenchmarkPlan {
         linearTime: Boolean,
         replacement: Boolean,
         retainedHeap: Boolean,
-        operations: EnumSet<DeclarativeBenchmarkPlan.Operation?>?,
+        operations: EnumSet<Operation?>?,
         modes: EnumSet<MeasurementMode?>?
     ): Engine {
         return Engine(
@@ -259,9 +272,9 @@ internal object ResolvedBenchmarkPlan {
             replacementProfile,
             EngineDeclaration(
                 id,
-                DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
+                InputRepresentation.PREEXISTING_UTF8,
                 portableFeatures(linearTime, replacement, retainedHeap),
-                EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                EnumSet.noneOf<Flag?>(Flag::class.java),
                 true
             ),
             operations,
@@ -272,39 +285,39 @@ internal object ResolvedBenchmarkPlan {
 
     private fun portableFeatures(
         linearTime: Boolean, replacement: Boolean, retainedHeap: Boolean
-    ): EnumSet<DeclarativeBenchmarkPlan.Feature?> {
+    ): EnumSet<Feature?> {
         val features =
-            EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(
-                DeclarativeBenchmarkPlan.Feature.FIND,
-                DeclarativeBenchmarkPlan.Feature.MATCHES,
-                DeclarativeBenchmarkPlan.Feature.LOOKING_AT,
-                DeclarativeBenchmarkPlan.Feature.CAPTURE_PARTICIPATION,
-                DeclarativeBenchmarkPlan.Feature.CAPTURE_TEXT,
-                DeclarativeBenchmarkPlan.Feature.NAMED_GROUPS,
-                DeclarativeBenchmarkPlan.Feature.SPLIT,
-                DeclarativeBenchmarkPlan.Feature.UTF8_INPUT
+            EnumSet.of<Feature?>(
+                Feature.FIND,
+                Feature.MATCHES,
+                Feature.LOOKING_AT,
+                Feature.CAPTURE_PARTICIPATION,
+                Feature.CAPTURE_TEXT,
+                Feature.NAMED_GROUPS,
+                Feature.SPLIT,
+                Feature.UTF8_INPUT
             )
         if (linearTime) {
-            features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME)
+            features.add(Feature.LINEAR_TIME)
         }
         if (replacement) {
-            features.add(DeclarativeBenchmarkPlan.Feature.REPLACE)
-            features.add(DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT)
-            features.add(DeclarativeBenchmarkPlan.Feature.NAMED_REPLACEMENT)
+            features.add(Feature.REPLACE)
+            features.add(Feature.NUMBERED_REPLACEMENT)
+            features.add(Feature.NAMED_REPLACEMENT)
         }
         if (retainedHeap) {
-            features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP)
+            features.add(Feature.RETAINED_HEAP)
         }
         return features
     }
 
     private fun withoutReplacement(
-        operations: EnumSet<DeclarativeBenchmarkPlan.Operation?>
-    ): EnumSet<DeclarativeBenchmarkPlan.Operation?> {
-        val result = EnumSet.copyOf<DeclarativeBenchmarkPlan.Operation?>(operations)
-        result.remove(DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST)
-        result.remove(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL)
-        result.remove(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM)
+        operations: EnumSet<Operation?>
+    ): EnumSet<Operation?> {
+        val result = EnumSet.copyOf<Operation?>(operations)
+        result.remove(Operation.REPLACE_FIRST)
+        result.remove(Operation.REPLACE_ALL)
+        result.remove(Operation.REPLACE_ALL_LENGTH_SUM)
         return result
     }
 
@@ -428,7 +441,7 @@ internal object ResolvedBenchmarkPlan {
             return Exclusion("unsupportedOptions", "engine does not support flag set " + flagSet)
         }
         if ((engine.declaration.inputRepresentation
-                    == DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION)
+                    == InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION)
             && workload.lifecycle.matcher == MatcherReuse.RETAINED
         ) {
             return Exclusion(
@@ -444,7 +457,7 @@ internal object ResolvedBenchmarkPlan {
                     == MeasurementMode.SINGLE_SHOT_COLD_START)
             && flagSet == "0"
         ) {
-            missing.remove(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE)
+            missing.remove(Feature.FLAGGED_COMPILE)
         }
         if (!missing.isEmpty()) {
             return Exclusion("unsupportedFeature", "engine lacks " + featureNames(missing))
@@ -479,12 +492,12 @@ internal object ResolvedBenchmarkPlan {
         val result = JsonObject()
         arguments.forEach(
             BiConsumer { name: String?, value: RecipeValue? ->
-                var json = ResolvedBenchmarkPlan.recipeValue(value!!)
+                var json = recipeValue(value!!)
                 if (name == "replacement") {
                     json =
                         JsonPrimitive(
                             replacementProfiles.select(
-                                engine.replacementProfile, json.getAsString(), flagSet
+                                engine.replacementProfile, json.asString, flagSet
                             )
                         )
                 }
@@ -495,17 +508,17 @@ internal object ResolvedBenchmarkPlan {
 
     private fun recipeValue(value: RecipeValue): JsonElement {
         return when (value) {
-            -> JsonPrimitive(string.value)
-            -> JsonPrimitive(integer.value)
-            -> strings(strings.values)
-            -> {
+            is RecipeString -> JsonPrimitive(value.value)
+            is RecipeInteger -> JsonPrimitive(value.value)
+            is RecipeStringList -> strings(value.values)
+            is RecipeIntegerList -> {
                 val result = JsonArray()
-                integers.values.forEach(Consumer { number: Int? -> result.add(number) })
+                value.values.forEach(Consumer { number: Int? -> result.add(number) })
                 result
             }
 
-            -> throw IllegalStateException(
-                "Expanded workload retains unresolved argument axis: " + reference.axis
+            is RecipeAxisReference -> throw IllegalStateException(
+                "Expanded workload retains unresolved argument axis: " + value.axis
             )
         }
     }
@@ -531,7 +544,7 @@ internal object ResolvedBenchmarkPlan {
         }
     }
 
-    private fun lifecycle(lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle): JsonObject {
+    private fun lifecycle(lifecycle: MatcherLifecycle): JsonObject {
         val result = JsonObject()
         result.addProperty("matcher", lifecycle.matcher.jsonName())
         val steps = JsonArray()
@@ -553,7 +566,7 @@ internal object ResolvedBenchmarkPlan {
         return result
     }
 
-    private fun measurement(measurement: DeclarativeBenchmarkPlan.Measurement): JsonObject {
+    private fun measurement(measurement: Measurement): JsonObject {
         val result = JsonObject()
         result.addProperty("mode", measurement.mode.jsonName())
         result.addProperty("timingUnit", measurement.timingUnit.jsonName())
@@ -564,7 +577,7 @@ internal object ResolvedBenchmarkPlan {
         return result
     }
 
-    private fun flagNames(values: MutableSet<DeclarativeBenchmarkPlan.Flag?>): String? {
+    private fun flagNames(values: MutableSet<Flag?>): String {
         return values.stream()
             .map<String?>(Function { jsonName() })
             .sorted()
@@ -572,7 +585,7 @@ internal object ResolvedBenchmarkPlan {
             .toString()
     }
 
-    private fun featureNames(values: MutableSet<DeclarativeBenchmarkPlan.Feature?>): String? {
+    private fun featureNames(values: MutableSet<Feature?>): String {
         return values.stream()
             .map<String?>(Function { jsonName() })
             .sorted()
@@ -603,19 +616,19 @@ internal object ResolvedBenchmarkPlan {
         val patternProfile: String?,
         val replacementProfile: String?,
         val declaration: EngineDeclaration?,
-        operations: EnumSet<DeclarativeBenchmarkPlan.Operation?>?,
+        operations: EnumSet<Operation?>?,
         measurementModes: EnumSet<MeasurementMode?>?,
         flagSets: MutableSet<String?>?
     ) {
-        public override fun operations(): EnumSet<DeclarativeBenchmarkPlan.Operation?>? {
+        public override fun operations(): EnumSet<Operation?> {
             return operations!!.clone()
         }
 
-        public override fun measurementModes(): EnumSet<MeasurementMode?>? {
+        public override fun measurementModes(): EnumSet<MeasurementMode?> {
             return measurementModes!!.clone()
         }
 
-        val operations: EnumSet<DeclarativeBenchmarkPlan.Operation?>?
+        val operations: EnumSet<Operation?>?
         val measurementModes: EnumSet<MeasurementMode?>?
         val flagSets: MutableSet<String?>?
 
@@ -626,9 +639,6 @@ internal object ResolvedBenchmarkPlan {
             operations = operations!!.clone()
             measurementModes = measurementModes!!.clone()
             flagSets = Collections.unmodifiableSet<String?>(LinkedHashSet<String?>(flagSets))
-            this.operations = operations
-            this.measurementModes = measurementModes
-            this.flagSets = flagSets
         }
     }
 

@@ -57,7 +57,7 @@ class CaptureCutoffBenchmark {
     ): CaptureCutoffTask {
         return CaptureCutoffTask(
             variant,
-            workload.patterns().getFirst(),
+            workload.patterns().first(),
             variant.prepareInputs(BenchmarkData.get(), workload.inputKeys()),
             operation,
             documents,

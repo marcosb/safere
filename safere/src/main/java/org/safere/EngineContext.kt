@@ -45,7 +45,7 @@ internal data class EngineContext(
                 if (graphemeContext != null)
                     graphemeContext
                 else
-                    GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+                    GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics())
             return EngineContext(
                 text,
                 searchStart,

@@ -44,9 +44,6 @@ class CapturePolicySharedBenchmark {
         val reader: CapturePolicyProtocol.Task?
         val booleanConsumer: CapturePolicyProtocol.Task?
 
-        init {
-            this.reader = reader
-            this.booleanConsumer = booleanConsumer
-        }
+
     }
 }

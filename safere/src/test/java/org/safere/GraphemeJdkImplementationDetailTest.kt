@@ -226,7 +226,7 @@ internal class GraphemeJdkImplementationDetailTest {
             safeMatcher.reset(input).region(start, end)
             Assertions.assertThat<IntArray?>(findBounds(safeMatcher))
                 .`as`("find() positions for /%s/ on %s region [%s,%s]", regex, input, start, end)
-                .containsExactly(*findBounds(jdkMatcher).toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                .containsExactly(*findBounds(jdkMatcher).toTypedArray())
         }
 
         private fun assertTransparentTraceSameAsJdk(
@@ -254,7 +254,7 @@ internal class GraphemeJdkImplementationDetailTest {
             safeMatcher.reset(input).region(start, end).useTransparentBounds(true)
             Assertions.assertThat<IntArray?>(findBounds(safeMatcher))
                 .`as`("transparent find() positions for /%s/ on %s region [%s,%s]", regex, input, start, end)
-                .containsExactly(*findBounds(jdkMatcher).toArray<IntArray?>(IntFunction { _Dummy_.__Array__() }))
+                .containsExactly(*findBounds(jdkMatcher).toTypedArray())
         }
 
         private fun assertCapturedFindTraceSameAsJdk(

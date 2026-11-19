@@ -8,16 +8,14 @@ import java.util.*
 
 /** A strategy-specific explanation of routing or fallback.  */
 @JvmRecord
-data class StrategyDecision(strategy: MatchStrategy?, disposition: StrategyDisposition?, reason: StrategyReason?) {
-    val strategy: MatchStrategy?
-    val disposition: StrategyDisposition?
+data class StrategyDecision(
+    val strategy: MatchStrategy?,
+    val disposition: StrategyDisposition?,
     val reason: StrategyReason?
+) {
 
     /** Creates a strategy decision.  */
     init {
-        this.reason = reason
-        this.disposition = disposition
-        this.strategy = strategy
         Objects.requireNonNull<MatchStrategy?>(strategy, "strategy")
         Objects.requireNonNull<StrategyDisposition?>(disposition, "disposition")
         Objects.requireNonNull<StrategyReason?>(reason, "reason")

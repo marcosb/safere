@@ -6,8 +6,7 @@ package org.safere
 
 internal interface InputScanner {
     /** Returns the length of the input in index units (chars for String, bytes for byte[]).  */
-    fun length(): Int
-
+    val length: Int
     /** Returns the ASCII value at `pos`, or `-1` if the unit is not ASCII.  */
     fun asciiAt(pos: Int): Int
 
@@ -139,7 +138,7 @@ internal interface InputScanner {
                 return (bitmap1 and (1L shl (codePoint - 64))) != 0L
             }
             var low = 0
-            var high: Int = ranges.length / 2 - 1
+            var high: Int = ranges.size / 2 - 1
             while (low <= high) {
                 val middle = (low + high) ushr 1
                 val rangeLow = ranges[middle * 2]

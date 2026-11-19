@@ -8,7 +8,6 @@ import com.google.gson.JsonObject
 import org.safere.exhaustive.SweepWorkers.LineWorker
 import org.safere.exhaustive.SweepWorkers.ProgressReporter
 import java.io.IOException
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,30 +20,14 @@ import java.util.function.Supplier
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.IllegalArgumentException
-import kotlin.IndexOutOfBoundsException
-import kotlin.Int
-import kotlin.Long
-import kotlin.RuntimeException
-import kotlin.Throws
-import kotlin.arrayOfNulls
-import kotlin.check
-import kotlin.code
 import kotlin.collections.ArrayList
 import kotlin.collections.LinkedHashMap
 import kotlin.collections.MutableList
 import kotlin.collections.MutableMap
-import kotlin.collections.contains
 import kotlin.collections.indices
 import kotlin.collections.mutableListOf
 import kotlin.collections.toTypedArray
-import kotlin.io.println
-import kotlin.io.use
 import kotlin.math.min
-import kotlin.plus
-import kotlin.use
 
 /** Offline differential sweep for `\X` and `\b{g}` grapheme-cluster bugs.  */
 object GraphemeClusterDivergenceSweep {
@@ -179,7 +162,7 @@ object GraphemeClusterDivergenceSweep {
     )
 
     private val INPUT_SPACE: InputSpace = buildInputSpace()
-    private val INPUT_CASES = INPUT_SPACE.size()
+    private val INPUT_CASES = INPUT_SPACE.size
 
     private val REGION_MODES: MutableList<RegionMode?> = List.of<RegionMode?>(
         region("full", "", "", 0, 0),
@@ -448,7 +431,7 @@ object GraphemeClusterDivergenceSweep {
                 JDK_PATTERN_CACHE.computeIfAbsent(spec.regex()) { regex: String? -> Pattern.compile(regex) }
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -460,7 +443,7 @@ object GraphemeClusterDivergenceSweep {
                 SAFERE_PATTERN_CACHE.computeIfAbsent(spec.regex()) { regex: String? -> org.safere.Pattern.compile(regex) }
             return Outcome(true, operationTrace(pattern, spec), "")
         } catch (e: PatternSyntaxException) {
-            return Outcome(false, "", e.getDescription())
+            return Outcome(false, "", e.description)
         } catch (e: RuntimeException) {
             return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
@@ -613,7 +596,7 @@ object GraphemeClusterDivergenceSweep {
     private fun matchSpan(start: Int, end: Int, groupCount: Int, groupValue: GroupValue): String {
         val result = StringBuilder()
         result.append(start).append('-').append(end).append(':')
-            .append(GraphemeClusterDivergenceSweep.escape(groupValue.group(0)!!))
+            .append(escape(groupValue.group(0)!!))
         for (i in 1..groupCount) {
             result.append(':')
             val group = groupValue.group(i)
@@ -657,7 +640,7 @@ object GraphemeClusterDivergenceSweep {
         )
     }
 
-    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+    private fun direction(jdk: Outcome, safere: Outcome): String {
         if (jdk.accepted && !safere.accepted) {
             return "jdk-accepts"
         }
@@ -718,11 +701,10 @@ object GraphemeClusterDivergenceSweep {
                 && spec.inputTemplate!!.label!!.startsWith("indicConjunctLinkerZwj")
     }
 
-    private fun escape(value: kotlin.String): kotlin.String {
+    private fun escape(value: String): String {
         val result = StringBuilder()
         for (i in 0..<value.length) {
-            val c = value.get(i)
-            when (c) {
+            when (val c = value.get(i)) {
                 '\\' -> result.append("\\\\")
                 '\n' -> result.append("\\n")
                 '\t' -> result.append("\\t")
@@ -730,7 +712,7 @@ object GraphemeClusterDivergenceSweep {
                 '"' -> result.append("\\\"")
                 else -> {
                     if (Character.isISOControl(c) || Character.isSurrogate(c)) {
-                        result.append(kotlin.String.format(Locale.ROOT, "\\u%04X", c.code))
+                        result.append(String.format(Locale.ROOT, "\\u%04X", c.code))
                     } else {
                         result.append(c)
                     }
@@ -740,42 +722,42 @@ object GraphemeClusterDivergenceSweep {
         return result.toString()
     }
 
-    private fun regex(label: kotlin.String, regex: kotlin.String?): RegexTemplate {
+    private fun regex(label: String, regex: String?): RegexTemplate {
         return RegexTemplate(label, regex)
     }
 
-    private fun input(label: kotlin.String?, input: kotlin.String): InputTemplate {
+    private fun input(label: String?, input: String): InputTemplate {
         return InputTemplate(label, input)
     }
 
-    private fun atom(label: kotlin.String?, input: kotlin.String?): GraphemeAtom {
+    private fun atom(label: String?, input: String?): GraphemeAtom {
         return GraphemeAtom(label, input)
     }
 
     private fun region(
-        label: kotlin.String?, prefix: kotlin.String?, suffix: kotlin.String?, startAdjustment: Int, endAdjustment: Int
+        label: String?, prefix: String?, suffix: String?, startAdjustment: Int, endAdjustment: Int
     ): RegionMode {
         return RegionMode(label, prefix, suffix, startAdjustment, endAdjustment, null, null)
     }
 
     private fun fixedRegion(
-        label: kotlin.String?, prefix: kotlin.String?, suffix: kotlin.String?, regionStart: Int, regionEnd: Int
+        label: String?, prefix: String?, suffix: String?, regionStart: Int, regionEnd: Int
     ): RegionMode {
         return RegionMode(label, prefix, suffix, 0, 0, regionStart, regionEnd)
     }
 
     private fun bounds(
-        label: kotlin.String?, transparentBounds: Boolean, anchoringBounds: Boolean
+        label: String?, transparentBounds: Boolean, anchoringBounds: Boolean
     ): BoundsMode {
         return BoundsMode(label, transparentBounds, anchoringBounds)
     }
 
-    private fun operation(label: kotlin.String?, jdkTrace: JdkTrace?, safeReTrace: SafeReTrace?): OperationMode {
+    private fun operation(label: String?, jdkTrace: JdkTrace?, safeReTrace: SafeReTrace?): OperationMode {
         return OperationMode(label, jdkTrace, safeReTrace)
     }
 
     private fun targetedRegion(
-        label: kotlin.String?, text: kotlin.String?, regionStart: Int, regionEnd: Int
+        label: String?, text: String?, regionStart: Int, regionEnd: Int
     ): TargetedRegionInput {
         return TargetedRegionInput(label, text, regionStart, regionEnd)
     }
@@ -784,7 +766,7 @@ object GraphemeClusterDivergenceSweep {
         val cases: MutableList<CaseSpec?> = ArrayList<CaseSpec?>()
         for (regex in REGEX_TEMPLATES) {
             for (input in TARGETED_REGION_INPUTS) {
-                val inputTemplate = GraphemeClusterDivergenceSweep.input(input.label, input.text!!)
+                val inputTemplate = input(input.label, input.text!!)
                 val region =
                     fixedRegion(input.label, "", "", input.regionStart, input.regionEnd)
                 for (bounds in BOUNDS_MODES) {
@@ -797,14 +779,14 @@ object GraphemeClusterDivergenceSweep {
         return List.copyOf<CaseSpec?>(cases)
     }
 
-    private fun boundsMode(label: kotlin.String?): BoundsMode {
+    private fun boundsMode(label: String?): BoundsMode {
         return BOUNDS_MODES.stream()
             .filter { mode: BoundsMode? -> mode!!.label == label }
             .findFirst()
             .orElseThrow<IllegalArgumentException?>(Supplier { IllegalArgumentException("unknown bounds mode: " + label) })
     }
 
-    private fun replayBoundsMode(label: kotlin.String): BoundsMode {
+    private fun replayBoundsMode(label: String): BoundsMode {
         return when (label) {
             "transparentAnchoring" -> bounds("transparentAnchoring", true, true)
             "transparentNonAnchoring" -> bounds("transparentNonAnchoring", true, false)
@@ -812,7 +794,7 @@ object GraphemeClusterDivergenceSweep {
         }
     }
 
-    private fun operationMode(label: kotlin.String?): OperationMode {
+    private fun operationMode(label: String?): OperationMode {
         return OPERATION_MODES.stream()
             .filter { mode: OperationMode? -> mode!!.label == label }
             .findFirst()
@@ -843,7 +825,7 @@ object GraphemeClusterDivergenceSweep {
     }
 
     private fun buildCuratedInputs(): MutableList<InputTemplate?> {
-        val inputs: MutableMap<kotlin.String?, InputTemplate?> = LinkedHashMap<kotlin.String?, InputTemplate?>()
+        val inputs: MutableMap<String?, InputTemplate?> = LinkedHashMap<String?, InputTemplate?>()
         addInput(inputs, input("empty", ""))
         addInput(inputs, input("ascii", "a"))
         addInput(inputs, input("twoAscii", "ab"))
@@ -908,7 +890,7 @@ object GraphemeClusterDivergenceSweep {
     }
 
     private fun buildTargetedLongInputs(): MutableList<InputTemplate?> {
-        val inputs: MutableMap<kotlin.String?, InputTemplate?> = LinkedHashMap<kotlin.String?, InputTemplate?>()
+        val inputs: MutableMap<String?, InputTemplate?> = LinkedHashMap<String?, InputTemplate?>()
         val suffixes: MutableList<InputTemplate> =
             List.of<InputTemplate?>(
                 input("End", ""),
@@ -994,7 +976,7 @@ object GraphemeClusterDivergenceSweep {
     }
 
     private fun buildIndicConjunctLinkerZwjInputs(): MutableList<InputTemplate?> {
-        val inputs: MutableMap<kotlin.String?, InputTemplate?> = LinkedHashMap<kotlin.String?, InputTemplate?>()
+        val inputs: MutableMap<String?, InputTemplate?> = LinkedHashMap<String?, InputTemplate?>()
         addIndicConjunctLinkerZwjInputs(inputs, "Devanagari", "\u0915", "\u094D")
         addIndicConjunctLinkerZwjInputs(inputs, "Bengali", "\u0995", "\u09CD")
         addIndicConjunctLinkerZwjInputs(inputs, "Gujarati", "\u0A95", "\u0ACD")
@@ -1005,10 +987,10 @@ object GraphemeClusterDivergenceSweep {
     }
 
     private fun addIndicConjunctLinkerZwjInputs(
-        inputs: MutableMap<kotlin.String?, InputTemplate?>,
-        script: kotlin.String,
-        consonant: kotlin.String?,
-        linker: kotlin.String
+        inputs: MutableMap<String?, InputTemplate?>,
+        script: String,
+        consonant: String?,
+        linker: String
     ) {
         val prefix = "indicConjunctLinkerZwj" + script
         val conjunct = consonant + linker + "\u200D" + consonant
@@ -1026,7 +1008,7 @@ object GraphemeClusterDivergenceSweep {
         )
     }
 
-    private fun emojiZwjChain(chainLength: Int, suffixAfterEachPictographic: kotlin.String?): kotlin.String {
+    private fun emojiZwjChain(chainLength: Int, suffixAfterEachPictographic: String?): String {
         val result = StringBuilder("\uD83D\uDC69").append(suffixAfterEachPictographic)
         for (i in 1..<chainLength) {
             result.append('\u200D').append("\uD83D\uDC69").append(suffixAfterEachPictographic)
@@ -1034,7 +1016,7 @@ object GraphemeClusterDivergenceSweep {
         return result.toString()
     }
 
-    private fun addInput(inputs: MutableMap<kotlin.String?, InputTemplate?>, input: InputTemplate) {
+    private fun addInput(inputs: MutableMap<String?, InputTemplate?>, input: InputTemplate) {
         inputs.putIfAbsent(input.label, input)
     }
 
@@ -1048,9 +1030,9 @@ object GraphemeClusterDivergenceSweep {
         )
     }
 
-    fun divergenceClassificationNames(): MutableList<kotlin.String?> {
+    fun divergenceClassificationNames(): MutableList<String?> {
         return Arrays.stream<DivergenceClass?>(DivergenceClass.entries.toTypedArray())
-            .map<kotlin.String?> { obj: DivergenceClass? -> obj!!.name }.toList()
+            .map<String?> { obj: DivergenceClass? -> obj!!.name }.toList()
     }
 
     fun divergenceClassificationStatuses(): MutableList<DivergenceStatus?> {
@@ -1101,36 +1083,36 @@ object GraphemeClusterDivergenceSweep {
     }
 
     private interface GroupValue {
-        fun group(group: Int): kotlin.String?
+        fun group(group: Int): String?
     }
 
     private interface JdkTrace {
-        fun trace(pattern: Pattern?, spec: CaseSpec?): kotlin.String?
+        fun trace(pattern: Pattern?, spec: CaseSpec?): String?
     }
 
     private interface SafeReTrace {
-        fun trace(pattern: org.safere.Pattern?, spec: CaseSpec?): kotlin.String?
+        fun trace(pattern: org.safere.Pattern?, spec: CaseSpec?): String?
     }
 
     @JvmRecord
-    private data class RegexTemplate(val label: kotlin.String, val regex: kotlin.String?)
+    private data class RegexTemplate(val label: String, val regex: String?)
 
     @JvmRecord
-    private data class GraphemeAtom(val label: kotlin.String?, val input: kotlin.String?)
+    private data class GraphemeAtom(val label: String?, val input: String?)
 
     @JvmRecord
-    private data class InputTemplate(val label: kotlin.String?, val input: kotlin.String)
+    private data class InputTemplate(val label: String?, val input: String)
 
     @JvmRecord
     private data class TargetedRegionInput(
-        val label: kotlin.String?,
-        val text: kotlin.String?,
+        val label: String?,
+        val text: String?,
         val regionStart: Int,
         val regionEnd: Int
     )
 
     private interface InputFamily {
-        fun label(): kotlin.String?
+        fun label(): String?
 
         fun size(): Long
 
@@ -1142,7 +1124,7 @@ object GraphemeClusterDivergenceSweep {
         fun size(): Long {
             var total: Long = 0
             for (family in families!!) {
-                total = Math.addExact(total, family.size())
+                total = Math.addExact(total, family.size)
             }
             return total
         }
@@ -1150,29 +1132,29 @@ object GraphemeClusterDivergenceSweep {
         fun inputAt(index: Long): InputTemplate? {
             var remaining = index
             for (family in families!!) {
-                if (remaining < family.size()) {
+                if (remaining < family.size) {
                     return family.inputAt(remaining)
                 }
-                remaining -= family.size()
+                remaining -= family.size
             }
             throw IndexOutOfBoundsException("input index " + index + " >= " + size())
         }
 
-        fun familySummary(): kotlin.String {
+        fun familySummary(): String {
             val result = StringBuilder()
             for (i in families!!.indices) {
                 if (i > 0) {
                     result.append(',')
                 }
                 val family = families.get(i)
-                result.append(family.label()).append('=').append(family.size())
+                result.append(family.label()).append('=').append(family.size)
             }
             return result.toString()
         }
     }
 
     @JvmRecord
-    private data class ExplicitInputFamily(val label: kotlin.String?, val inputs: MutableList<InputTemplate?>?) :
+    private data class ExplicitInputFamily(val label: String?, val inputs: MutableList<InputTemplate?>?) :
         InputFamily {
         override fun size(): Long {
             return inputs!!.size.toLong()
@@ -1185,7 +1167,7 @@ object GraphemeClusterDivergenceSweep {
 
     @JvmRecord
     private data class SequenceInputFamily(
-        val label: kotlin.String?,
+        val label: String?,
         val atoms: MutableList<GraphemeAtom>?,
         val length: Int
     ) : InputFamily {
@@ -1195,8 +1177,8 @@ object GraphemeClusterDivergenceSweep {
 
         override fun inputAt(index: Long): InputTemplate {
             var remaining = index
-            val atomLabels = arrayOfNulls<kotlin.String>(length)
-            val atomInputs = arrayOfNulls<kotlin.String>(length)
+            val atomLabels = arrayOfNulls<String>(length)
+            val atomInputs = arrayOfNulls<String>(length)
             for (i in length - 1 downTo 0) {
                 val atomIndex = (remaining % atoms!!.size).toInt()
                 remaining /= atoms.size.toLong()
@@ -1231,9 +1213,9 @@ object GraphemeClusterDivergenceSweep {
 
     @JvmRecord
     private data class RegionMode(
-        val label: kotlin.String?,
-        val prefix: kotlin.String?,
-        val suffix: kotlin.String?,
+        val label: String?,
+        val prefix: String?,
+        val suffix: String?,
         val startAdjustment: Int,
         val endAdjustment: Int,
         val fixedStart: Int?,
@@ -1242,13 +1224,13 @@ object GraphemeClusterDivergenceSweep {
 
     @JvmRecord
     private data class BoundsMode(
-        val label: kotlin.String?,
+        val label: String?,
         val transparentBounds: Boolean,
         val anchoringBounds: Boolean
     )
 
     @JvmRecord
-    private data class OperationMode(val label: kotlin.String?, val jdkTrace: JdkTrace?, val safeReTrace: SafeReTrace?)
+    private data class OperationMode(val label: String?, val jdkTrace: JdkTrace?, val safeReTrace: SafeReTrace?)
 
     @JvmRecord
     private data class CaseSpec(
@@ -1258,15 +1240,15 @@ object GraphemeClusterDivergenceSweep {
         val boundsMode: BoundsMode?,
         val operationMode: OperationMode?
     ) {
-        fun regex(): kotlin.String? {
+        fun regex(): String? {
             return regexTemplate!!.regex
         }
 
-        fun input(): kotlin.String {
+        fun input(): String {
             return inputTemplate!!.input
         }
 
-        fun text(): kotlin.String {
+        fun text(): String {
             return regionMode!!.prefix + input() + regionMode.suffix
         }
 
@@ -1284,7 +1266,7 @@ object GraphemeClusterDivergenceSweep {
             return regionMode.prefix!!.length + input().length + regionMode.endAdjustment
         }
 
-        fun labels(): kotlin.String {
+        fun labels(): String {
             return ("regex="
                     + regexTemplate!!.label
                     + ",input="
@@ -1299,7 +1281,7 @@ object GraphemeClusterDivergenceSweep {
     }
 
     @JvmRecord
-    private data class Outcome(val accepted: Boolean, val trace: kotlin.String?, val error: kotlin.String?)
+    private data class Outcome(val accepted: Boolean, val trace: String?, val error: String?)
 
     @JvmRecord
     private data class GraphemeRunResult(
@@ -1316,7 +1298,7 @@ object GraphemeClusterDivergenceSweep {
         }
     }
 
-    private enum class DivergenceClass(status: DivergenceStatus, rationale: kotlin.String) : DivergenceClassification {
+    private enum class DivergenceClass(status: DivergenceStatus, rationale: String) : DivergenceClassification {
         BOUNDARY_CLUSTER_BOUNDARY_COMPOSITION(
             DivergenceStatus.KNOWN_INTENTIONAL,
             "SafeRE composes explicit \\b{g}, primitive \\X, and trailing \\b{g};"
@@ -1355,7 +1337,7 @@ object GraphemeClusterDivergenceSweep {
         UNKNOWN(DivergenceStatus.UNKNOWN, "Unclassified SafeRE/JDK grapheme divergence.");
 
         private val status: DivergenceStatus?
-        private val rationale: kotlin.String?
+        private val rationale: String?
 
         init {
             this.status = status
@@ -1366,7 +1348,7 @@ object GraphemeClusterDivergenceSweep {
             return status
         }
 
-        override fun rationale(): kotlin.String? {
+        override fun rationale(): String? {
             return rationale
         }
     }
@@ -1377,13 +1359,13 @@ object GraphemeClusterDivergenceSweep {
         val spec: CaseSpec?,
         val jdk: Outcome?,
         val safere: Outcome?,
-        val bucket: kotlin.String?,
+        val bucket: String?,
         val classification: DivergenceClass?
     ) {
-        fun toJson(): kotlin.String {
+        fun toJson(): String {
             val `object` = SweepJson.`object`()
             `object`.addProperty("caseIndex", caseIndex)
-            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.add("case", caseJson(spec!!))
             `object`.addProperty("bucket", bucket)
             `object`.addProperty("classification", classification!!.name)
             `object`.addProperty("classificationStatus", classification.status()!!.name)
@@ -1462,7 +1444,7 @@ object GraphemeClusterDivergenceSweep {
         }
 
         fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
-            GraphemeClusterDivergenceSweep.evaluateCase(runState!!, summary, spec, caseIndex, workerIndex)
+            evaluateCase(runState!!, summary, spec, caseIndex, workerIndex)
             reportProgressIfNeeded()
         }
 

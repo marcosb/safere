@@ -57,7 +57,7 @@ class MatchFuzzer {
                 FuzzSupport.assertFullMatchesJdk(regression.regex, regression.flags, regression.inputs)
             }
             for (regression in CASE_FOLDING_MODEL_REGRESSIONS) {
-                Companion.assertFullMatchesSafeRe(regression.regex, regression.flags, regression.inputs!!)
+                assertFullMatchesSafeRe(regression.regex, regression.flags, regression.inputs!!)
             }
             assertAcceleratedRestartArrayGrowthMatchesJdk(data)
             CaseFamilyChecks.assertCaseFamilyClosureSafeRe(data)
@@ -76,8 +76,6 @@ class MatchFuzzer {
             assertFactoredPrefixCaseFlagsMatchJdk(data)
             assertAlternationAndQuantifierPriorityLookingAtMatchesJdk(data)
 
-            val regex: String?
-            val flags: Int
             val input: String
             if (data.consumeBoolean()) {
                 val atom: String = distinctLiteralRun(data.consumeInt(16, 192))
@@ -350,7 +348,7 @@ class MatchFuzzer {
             }
 
             val firstTerminator = if (data.consumeBoolean()) "\r\n" else "\r"
-            val secondTerminator = if (firstTerminator.length == 2) "\r" else "\r\n"
+            val secondTerminator = if (firstTerminator.size == 2) "\r" else "\r\n"
             val regex = if (data.consumeBoolean()) "(?m)^.X" else "(?m)^\\nX"
             val input =
                 ("a".repeat(data.consumeInt(257, 1024))

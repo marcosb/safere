@@ -33,13 +33,13 @@ internal class BenchmarkInputMaterializerTest {
     @Throws(IOException::class)
     fun declaredBenchmarkCorpusMaterializesDeterministically() {
         val benchmarkData =
-            JsonParser.parseString(Files.readString(Path.of("benchmark-data.json"))).getAsJsonObject()
+            JsonParser.parseString(Files.readString(Path.of("benchmark-data.json"))).asJsonObject
 
         val first: MutableMap<String?, ByteArray?> = materialize(benchmarkData)
         val second: MutableMap<String?, ByteArray?> = materialize(benchmarkData)
 
         val declaredInputIds: MutableSet<String?> =
-            DeclarativeBenchmarkPlan.Companion.parseInputDeclarations(benchmarkData.getAsJsonArray("inputs"))
+            DeclarativeBenchmarkPlan.parseInputDeclarations(benchmarkData.getAsJsonArray("inputs"))
                 .keys
         Assertions.assertThat<String?, ByteArray?>(first).hasSizeGreaterThanOrEqualTo(MINIMUM_MATERIALIZED_INPUTS)
         Assertions.assertThat<String?>(first.keys).containsExactlyElementsOf(declaredInputIds)
@@ -112,7 +112,7 @@ internal class BenchmarkInputMaterializerTest {
                 
                 """.trimIndent()
             )
-                .getAsJsonObject()
+                .asJsonObject
 
         Assertions.assertThatThrownBy(ThrowingCallable { materialize(benchmarkData) })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -142,7 +142,7 @@ internal class BenchmarkInputMaterializerTest {
                 
                 """.trimIndent()
             )
-                .getAsJsonObject()
+                .asJsonObject
 
         Assertions.assertThatThrownBy(ThrowingCallable { materialize(benchmarkData) })
             .isInstanceOf(IllegalArgumentException::class.java)
@@ -186,8 +186,8 @@ internal class BenchmarkInputMaterializerTest {
     @Throws(Exception::class)
     fun manifestAttributesInputsAndRecordsExactEncodingMetadata() {
         val declaredData =
-            JsonParser.parseString(Files.readString(Path.of("benchmark-data.json"))).getAsJsonObject()
-        BenchmarkInputMaterializer.Companion.main(
+            JsonParser.parseString(Files.readString(Path.of("benchmark-data.json"))).asJsonObject
+        BenchmarkInputMaterializer.main(
             arrayOf<String>(
                 Path.of(".").toAbsolutePath().normalize().toString(), tempDirectory.toString()
             )
@@ -195,19 +195,19 @@ internal class BenchmarkInputMaterializerTest {
 
         val manifest =
             JsonParser.parseString(Files.readString(tempDirectory!!.resolve("manifest.json")))
-                .getAsJsonObject()
+                .asJsonObject
         val entry =
             manifest
                 .getAsJsonObject("inputs")
                 .getAsJsonObject("crossEngine.RegexBenchmark.literalMatch.input")
 
-        Assertions.assertThat(entry.get("file").getAsString())
+        Assertions.assertThat(entry.get("file").asString)
             .isEqualTo("crossEngine/RegexBenchmark/literalMatch/input.txt")
-        Assertions.assertThat(entry.get("shared").getAsBoolean()).isTrue()
-        Assertions.assertThat(entry.get("utf8Bytes").getAsInt()).isEqualTo(5)
-        Assertions.assertThat(entry.get("utf16CodeUnits").getAsInt()).isEqualTo(5)
-        Assertions.assertThat(entry.get("unicodeScalars").getAsInt()).isEqualTo(5)
-        Assertions.assertThat(entry.get("sha256").getAsString())
+        Assertions.assertThat(entry.get("shared").asBoolean).isTrue()
+        Assertions.assertThat(entry.get("utf8Bytes").asInt).isEqualTo(5)
+        Assertions.assertThat(entry.get("utf16CodeUnits").asInt).isEqualTo(5)
+        Assertions.assertThat(entry.get("unicodeScalars").asInt).isEqualTo(5)
+        Assertions.assertThat(entry.get("sha256").asString)
             .isEqualTo("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
         val resolvedData = manifest.getAsJsonObject("benchmarkData")
         // These are historical floors: adding syntax alternates must not require a test update.
@@ -235,7 +235,7 @@ internal class BenchmarkInputMaterializerTest {
             .containsExactlyElementsOf(declarationIds(declaredData.getAsJsonArray("inputs")))
         Assertions.assertThat<String?>(manifest.getAsJsonObject("inputs").keySet())
             .containsExactlyElementsOf(
-                DeclarativeBenchmarkPlan.Companion.parseInputDeclarations(declaredData.getAsJsonArray("inputs"))
+                DeclarativeBenchmarkPlan.parseInputDeclarations(declaredData.getAsJsonArray("inputs"))
                     .keys
             )
         val declaredWorkloadIds: MutableSet<String?> = declarationIds(declaredData.getAsJsonArray("workloads"))
@@ -243,7 +243,7 @@ internal class BenchmarkInputMaterializerTest {
         Assertions.assertThat<String?>(declarationIds(resolvedData.getAsJsonArray("workloads")))
             .containsExactlyElementsOf(declaredWorkloadIds)
         val executionPlan = manifest.getAsJsonObject("executionPlan")
-        Assertions.assertThat(executionPlan.get("version").getAsInt()).isEqualTo(1)
+        Assertions.assertThat(executionPlan.get("version").asInt).isEqualTo(1)
         val workloadIds: MutableSet<String?> = executionPlanIds(executionPlan, "workloadId")
         val expectedWorkloadIds: MutableSet<String?> = expandedWorkloadIds(resolvedData)
         Assertions.assertThat<String?>(expectedWorkloadIds).hasSizeGreaterThanOrEqualTo(MINIMUM_EXPANDED_WORKLOADS)
@@ -255,8 +255,8 @@ internal class BenchmarkInputMaterializerTest {
                 expectedExecutionIds.add(workloadId + "@" + engineId)
             }
         }
-        Assertions.assertThat(executionPlan.get("workloadCount").getAsInt()).isEqualTo(expectedWorkloadIds.size)
-        Assertions.assertThat(executionPlan.get("engineCount").getAsInt()).isEqualTo(engineIds.size)
+        Assertions.assertThat(executionPlan.get("workloadCount").asInt).isEqualTo(expectedWorkloadIds.size)
+        Assertions.assertThat(executionPlan.get("engineCount").asInt).isEqualTo(engineIds.size)
         Assertions.assertThat<JsonElement?>(executionPlan.getAsJsonArray("entries")).hasSize(expectedExecutionIds.size)
         Assertions.assertThat<String?>(executionPlanIds(executionPlan, "id"))
             .containsExactlyInAnyOrderElementsOf(expectedExecutionIds)
@@ -266,7 +266,7 @@ internal class BenchmarkInputMaterializerTest {
             )
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString()
+                .asString
         )
             .isEqualTo("[A-Za-z0-9_]+")
         Assertions.assertThat(
@@ -275,9 +275,9 @@ internal class BenchmarkInputMaterializerTest {
                 "RealWorldRegexBenchmark.runBenchmark.fruitSearchQuery.match.1000@dotnet_nonbacktracking"
             )
                 .get("exclusion")
-                .getAsJsonObject()
+                .asJsonObject
                 .get("kind")
-                .getAsString()
+                .asString
         )
             .isEqualTo("unsupportedSyntax")
         for (input in arrayOf<String>("absent", "late")) {
@@ -286,8 +286,8 @@ internal class BenchmarkInputMaterializerTest {
                     executionEntry(
                         executionPlan, "UnicodePrefixBenchmark.alphabetic." + input + ".1024@" + engineId
                     )
-                Assertions.assertThat(excludedAlphabetic.get("status").getAsString()).isEqualTo("excluded")
-                Assertions.assertThat(excludedAlphabetic.getAsJsonObject("exclusion").get("reason").getAsString())
+                Assertions.assertThat(excludedAlphabetic.get("status").asString).isEqualTo("excluded")
+                Assertions.assertThat(excludedAlphabetic.getAsJsonObject("exclusion").get("reason").asString)
                     .contains("Alphabetic")
             }
             Assertions.assertThat(
@@ -297,7 +297,7 @@ internal class BenchmarkInputMaterializerTest {
                 )
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\p{Alphabetic}]+[0-9]+")
 
@@ -305,7 +305,7 @@ internal class BenchmarkInputMaterializerTest {
                 executionEntry(executionPlan, "UnicodePrefixBenchmark.cjk." + input + ".1024@re2_cpp")
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\x{4E00}-\\x{9FFF}]+[0-9]+")
             Assertions.assertThat(
@@ -314,7 +314,7 @@ internal class BenchmarkInputMaterializerTest {
                 )
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\x{4E00}-\\x{9FFF}]+[0-9]+")
             Assertions.assertThat(
@@ -323,7 +323,7 @@ internal class BenchmarkInputMaterializerTest {
                 )
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\x{4E00}-\\x{9FFF}]+[0-9]+")
             Assertions.assertThat(
@@ -332,7 +332,7 @@ internal class BenchmarkInputMaterializerTest {
                 )
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\x{4E00}-\\x{9FFF}]+[0-9]+")
             Assertions.assertThat(
@@ -342,35 +342,35 @@ internal class BenchmarkInputMaterializerTest {
                 )
                     .getAsJsonArray("patterns")
                     .get(0)
-                    .getAsString()
+                    .asString
             )
                 .isEqualTo("[\\u4E00-\\u9FFF]+[0-9]+")
         }
         for (engineElement in executionPlan.getAsJsonArray("engines")) {
-            val engineId = engineElement.getAsJsonObject().get("id").getAsString()
+            val engineId = engineElement.asJsonObject.get("id").asString
             Assertions.assertThat<JsonObject?>(
                 executionPlan.getAsJsonArray("entries").asList().stream()
-                    .map<JsonObject?> { obj: JsonElement? -> obj!!.getAsJsonObject() }
-                    .filter { planEntry: JsonObject? -> planEntry!!.get("engineId").getAsString() == engineId }
+                    .map<JsonObject?> { obj: JsonElement? -> obj!!.asJsonObject }
+                    .filter { planEntry: JsonObject? -> planEntry!!.get("engineId").asString == engineId }
                     .filter { planEntry: JsonObject? ->
                         mutableSetOf<String?>(
                             "runnable",
                             "excluded"
-                        ).contains(planEntry!!.get("status").getAsString())
+                        ).contains(planEntry!!.get("status").asString)
                     })
                 .`as`(engineId)
                 .extracting<String?, RuntimeException?>(ThrowingExtractor { planEntry: JsonObject? ->
-                    planEntry!!.get("workloadId").getAsString()
+                    planEntry!!.get("workloadId").asString
                 })
                 .containsExactlyInAnyOrderElementsOf(workloadIds)
         }
         Assertions.assertThat<JsonObject?>(
             executionPlan.getAsJsonArray("entries").asList().stream()
-                .map<JsonObject?> { obj: JsonElement? -> obj!!.getAsJsonObject() }
+                .map<JsonObject?> { obj: JsonElement? -> obj!!.asJsonObject }
                 .filter { planEntry: JsonObject? ->
                     (planEntry!!
                         .get("workloadId")
-                        .getAsString()
+                        .asString
                             == "CompileBenchmark.compileSimple")
                 }
                 .filter { planEntry: JsonObject? ->
@@ -379,46 +379,46 @@ internal class BenchmarkInputMaterializerTest {
                         "pcre2_jit",
                         "go_regexp",
                         "rust_regex"
-                    ).contains(planEntry!!.get("engineId").getAsString())
+                    ).contains(planEntry!!.get("engineId").asString)
                 })
             .hasSize(4)
             .allSatisfy(
                 ThrowingConsumer { planEntry: JsonObject? ->
                     Assertions.assertThat(
-                        planEntry!!.get("status").getAsString()
+                        planEntry!!.get("status").asString
                     ).isEqualTo("runnable")
                 })
         Assertions.assertThat(
             resolvedData.getAsJsonArray("workloads").asList().stream()
                 .filter { workload: JsonElement? ->
                     (workload!!
-                        .getAsJsonObject()
+                        .asJsonObject
                         .get("id")
-                        .getAsString()
+                        .asString
                             == "UnicodeCompileBenchmark.compile.{regex}.{flagSet}")
                 }
                 .findFirst()
                 .orElseThrow()
-                .getAsJsonObject()
+                .asJsonObject
                 .getAsJsonObject("axes")
                 .getAsJsonArray("regex")
                 .get(4)
-                .getAsJsonObject()
+                .asJsonObject
                 .get("value")
-                .getAsString())
+                .asString)
             .isEqualTo("\\p{IsAlphabetic}+")
     }
 
     @Test
     fun emptyRepeatUnitIsRejectedWhenOutputIsRequired() {
-        Assertions.assertThatThrownBy(ThrowingCallable { BenchmarkInputMaterializer.Companion.repeatToSize("", 1) })
+        Assertions.assertThatThrownBy(ThrowingCallable { BenchmarkInputMaterializer.repeatToSize("", 1) })
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessage("Repeat unit must not be empty when size is positive")
     }
 
     @Test
     fun emptyRepeatUnitCanProduceEmptyOutput() {
-        Assertions.assertThat(BenchmarkInputMaterializer.Companion.repeatToSize("", 0)).isEmpty()
+        Assertions.assertThat(BenchmarkInputMaterializer.repeatToSize("", 0)).isEmpty()
     }
 
     companion object {
@@ -441,37 +441,37 @@ internal class BenchmarkInputMaterializerTest {
                 
                 """.trimIndent()
                 )
-                    .getAsJsonObject()
+                    .asJsonObject
             val recipe =
-                data.getAsJsonArray("inputs").get(0).getAsJsonObject().getAsJsonObject("recipe")
+                data.getAsJsonArray("inputs").get(0).asJsonObject.getAsJsonObject("recipe")
             recipe.addProperty("path", path)
             recipe.addProperty("sha256", sha256)
             return data
         }
 
         private fun text(inputs: MutableMap<String?, ByteArray?>, id: String?): String {
-            return kotlin.text.String(inputs.get(id)!!, StandardCharsets.UTF_8)
+            return String(inputs.get(id)!!, StandardCharsets.UTF_8)
         }
 
         private fun executionEntry(plan: JsonObject, id: String?): JsonObject {
             return plan.getAsJsonArray("entries").asList().stream()
-                .map<JsonObject> { obj: JsonElement? -> obj!!.getAsJsonObject() }
-                .filter { entry: JsonObject? -> entry!!.get("id").getAsString() == id }
+                .map<JsonObject> { obj: JsonElement? -> obj!!.asJsonObject }
+                .filter { entry: JsonObject? -> entry!!.get("id").asString == id }
                 .findFirst()
                 .orElseThrow()
         }
 
         private fun declarationIds(declarations: JsonArray): MutableSet<String?> {
             return declarations.asList().stream()
-                .map<JsonObject?> { obj: JsonElement? -> obj!!.getAsJsonObject() }
-                .map<String?> { declaration: JsonObject? -> declaration!!.get("id").getAsString() }
+                .map<JsonObject?> { obj: JsonElement? -> obj!!.asJsonObject }
+                .map<String?> { declaration: JsonObject? -> declaration!!.get("id").asString }
                 .collect(Collectors.toCollection(Supplier { LinkedHashSet() }))
         }
 
         private fun executionPlanIds(plan: JsonObject, property: String?): MutableSet<String?> {
             return plan.getAsJsonArray("entries").asList().stream()
-                .map<JsonObject?> { obj: JsonElement? -> obj!!.getAsJsonObject() }
-                .map<String?> { entry: JsonObject? -> entry!!.get(property).getAsString() }
+                .map<JsonObject?> { obj: JsonElement? -> obj!!.asJsonObject }
+                .map<String?> { entry: JsonObject? -> entry!!.get(property).asString }
                 .collect(Collectors.toCollection(Supplier { LinkedHashSet() }))
         }
 
@@ -480,7 +480,7 @@ internal class BenchmarkInputMaterializerTest {
             planData.add("schemaVersion", data.get("schemaVersion").deepCopy())
             planData.add("inputs", data.getAsJsonArray("inputs").deepCopy())
             planData.add("workloads", data.getAsJsonArray("workloads").deepCopy())
-            return DeclarativeBenchmarkPlan.Companion.parse(planData).expandedWorkloads().stream()
+            return DeclarativeBenchmarkPlan.parse(planData).expandedWorkloads().stream()
                 .map<String?>(ExpandedWorkload::id)
                 .collect(Collectors.toCollection(Supplier { LinkedHashSet() }))
         }

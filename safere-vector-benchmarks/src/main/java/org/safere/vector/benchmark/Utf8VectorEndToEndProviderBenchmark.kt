@@ -29,7 +29,7 @@ class Utf8VectorEndToEndProviderBenchmark {
     @Setup(Level.Trial)
     fun setup() {
         val fields: Array<String?> = vectorScanTrial.split("/", -1)
-        kotlin.require(fields.length == 5) { "Malformed Vector scan trial: " + vectorScanTrial }
+        kotlin.require(fields.size == 5) { "Malformed Vector scan trial: " + vectorScanTrial }
         scanAll = fields[1]!!.equals("all")
         kotlin.require(!(!scanAll && !fields[1]!!.equals("first"))) { "Unknown traversal: " + fields[1] }
         var inputProfile = ""
@@ -59,9 +59,9 @@ class Utf8VectorEndToEndProviderBenchmark {
             System.getProperty("org.safere.experimental.vectorScanProvider", "swar").trim()
         kotlin.check(scanProvider!!.equals(configuredProvider)) { "Expected provider " + scanProvider + " but JVM selected " + configuredProvider }
         val source: ByteArray = VectorScanConfiguration.input(inputProfile, fields[2], length)
-        val storage = ByteArray(offset + source.length + ByteVector.SPECIES_PREFERRED.length())
+        val storage = ByteArray(offset + source.size + ByteVector.SPECIES_PREFERRED.length)
         Arrays.fill(storage, 0x7f.toByte())
-        System.arraycopy(source, 0, storage, offset, source.length)
+        System.arraycopy(source, 0, storage, offset, source.size)
 
         pattern = Pattern.compile(regex)
         input = Utf8Input.trusted(storage, offset, length)

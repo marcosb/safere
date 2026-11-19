@@ -21,13 +21,9 @@ import org.safere.benchmark.BenchmarkCollectionPlan.CollectionTrial
 import org.safere.benchmark.BenchmarkCollectionPlan.ReportExclusion
 import org.safere.benchmark.CrossEngineWorkload.TimingGroup
 import org.safere.benchmark.DeclarativeBenchmarkPlan.*
-import org.safere.benchmark.RegexEngineVariant.CompiledRegex
-import org.safere.benchmark.RegexEngineVariant.MatchCursor
-import org.safere.benchmark.RegexEngineVariant.RegexInput
-import org.safere.benchmark.RegexEngineVariant.StringRegexInput
+import org.safere.benchmark.RegexEngineVariant.*
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
-import java.lang.String
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -35,45 +31,25 @@ import java.util.*
 import java.util.List
 import java.util.function.Consumer
 import java.util.function.Predicate
-import kotlin.AssertionError
-import kotlin.Boolean
-import kotlin.Exception
-import kotlin.IllegalArgumentException
-import kotlin.IllegalStateException
-import kotlin.Int
-import kotlin.IntArray
-import kotlin.RuntimeException
-import kotlin.Throws
-import kotlin.UnsupportedOperationException
-import kotlin.arrayOf
-import kotlin.code
 import kotlin.collections.ArrayList
 import kotlin.collections.HashSet
 import kotlin.collections.MutableList
 import kotlin.collections.MutableSet
 import kotlin.collections.filter
-import kotlin.collections.lastIndexOf
+import kotlin.collections.first
 import kotlin.collections.map
 import kotlin.collections.mutableListOf
 import kotlin.collections.mutableSetOf
-import kotlin.collections.plus
 import kotlin.collections.toList
 import kotlin.collections.toTypedArray
-import kotlin.intArrayOf
-import kotlin.io.startsWith
-import kotlin.io.use
 import kotlin.map
-import kotlin.plus
 import kotlin.run
 import kotlin.sequences.filter
-import kotlin.sequences.lastIndexOf
 import kotlin.sequences.map
-import kotlin.sequences.plus
 import kotlin.sequences.toList
 import kotlin.streams.asStream
 import kotlin.text.contains
 import kotlin.text.endsWith
-import kotlin.text.get
 import kotlin.text.lastIndexOf
 import kotlin.text.lineSequence
 import kotlin.text.map
@@ -84,14 +60,12 @@ import kotlin.text.toByteArray
 import kotlin.text.toList
 import kotlin.text.toRegex
 import kotlin.toList
-import kotlin.toString
-import kotlin.use
 
 internal class CrossEngineBenchmarkPlanTest {
     @Test
     fun everyRunnableRe2jPatternCompiles() {
         val entries: MutableList<MaterializedExecutionPlan.Entry> =
-            MaterializedExecutionPlan.Companion.load().entries().stream()
+            MaterializedExecutionPlan.load().entries().stream()
                 .filter { entry: MaterializedExecutionPlan.Entry -> entry.engineId == "re2j-string" && entry.runnable() }
                 .toList()
         Assertions.assertThat<MaterializedExecutionPlan.Entry?>(entries).isNotEmpty()
@@ -107,7 +81,7 @@ internal class CrossEngineBenchmarkPlanTest {
     @Test
     fun workloadIdsAreUniqueStableReportIdentities() {
         val ids: MutableList<String> =
-            CrossEngineBenchmarkPlan.Companion.load().workloads().stream().map<String?>(CrossEngineWorkload::id)
+            CrossEngineBenchmarkPlan.load().workloads().stream().map<String?>(CrossEngineWorkload::id)
                 .toList()
 
         Assertions.assertThat<String?>(ids).doesNotHaveDuplicates()
@@ -125,7 +99,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun everyWorkloadEnginePairIsScheduledOrExplicitlyExcluded() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
         val allTrials =
             List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
                 plan.trials(TimingGroup.NANOSECONDS),
@@ -151,7 +125,7 @@ internal class CrossEngineBenchmarkPlanTest {
                 allTrials.stream()
                     .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.id == workload.id }
                     .map<RegexEngineVariant?>(CrossEngineBenchmarkPlan.Trial::variant))
-                .containsAnyOf(RegexEngineVariant.SAFERE_STRING, RegexEngineVariant.SAFERE_UTF8)
+                .containsAnyOf(SAFERE_STRING, SAFERE_UTF8)
         }
         Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(allTrials)
             .hasSizeGreaterThanOrEqualTo(MINIMUM_RUNNABLE_CROSS_ENGINE_TRIALS)
@@ -172,7 +146,7 @@ internal class CrossEngineBenchmarkPlanTest {
             System.clearProperty(property)
             Assertions.assertThatThrownBy(
                 ThrowingCallable {
-                    CrossEngineTrialRunner.Companion.prepare(
+                    CrossEngineTrialRunner.prepare(
                         "RegexBenchmark.emailFind@safere-utf8-vector",
                         TimingGroup.NANOSECONDS
                     )
@@ -181,7 +155,7 @@ internal class CrossEngineBenchmarkPlanTest {
                 .hasMessageContaining("requires -D" + property + "=vector")
             Assertions.assertThatThrownBy(
                 ThrowingCallable {
-                    SpecializedTrialRunner.Companion.prepare(
+                    SpecializedTrialRunner.prepare(
                         "Utf8MatchingBenchmark.captureBounds.numbered@safere-utf8-vector"
                     )
                 })
@@ -190,7 +164,7 @@ internal class CrossEngineBenchmarkPlanTest {
             System.setProperty(property, "vector")
             Assertions.assertThatThrownBy(
                 ThrowingCallable {
-                    CrossEngineTrialRunner.Companion.prepare(
+                    CrossEngineTrialRunner.prepare(
                         "RegexBenchmark.emailFind@safere-utf8",
                         TimingGroup.NANOSECONDS
                     )
@@ -208,7 +182,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun vectorUtf8PreservesWorkloadsExclusionsAndProviderMetadata() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         val defaults =
             plan.reportPlan().trials.stream()
                 .filter { trial: CollectionTrial? -> trial!!.executionVariant == "safere-utf8" }
@@ -228,9 +202,9 @@ internal class CrossEngineBenchmarkPlanTest {
                 defaults.stream().map<String?>(CollectionTrial::workloadId).toList()
             )
         Assertions.assertThat<CollectionTrial?>(vector)
-            .extracting<DeclarativeBenchmarkPlan.Measurement?, RuntimeException?>(CollectionTrial::measurement)
+            .extracting<Measurement?, RuntimeException?>(CollectionTrial::measurement)
             .containsExactlyElementsOf(
-                defaults.stream().map<DeclarativeBenchmarkPlan.Measurement?>(CollectionTrial::measurement).toList()
+                defaults.stream().map<Measurement?>(CollectionTrial::measurement).toList()
             )
         Assertions.assertThat<String?>(
             plan.reportPlan().exclusions.stream()
@@ -245,18 +219,18 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun executionGroupsIsolateProvidersAndPreserveFullAndSmokeMembership() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         for (smoke in mutableListOf<Boolean?>(false, true)) {
             val groups = plan.executionRunners(false, smoke!!)
             Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(groups)
                 .allSatisfy(
                     ThrowingConsumer { group: BenchmarkCollectionPlan.Runner? ->
                         val provider: String =
-                            RegexEngineVariant.Companion.fromId(
+                            RegexEngineVariant.fromId(
                                 group!!
                                     .trialIds
-                                    .getFirst()
-                                    .substring(group.trialIds.getFirst().lastIndexOf('@') + 1)
+                                    .first()
+                                    .substring(group.trialIds.first().lastIndexOf('@') + 1)
                             )
                                 .scanProvider()
                         Assertions.assertThat<String?>(group.trialIds)
@@ -295,7 +269,7 @@ internal class CrossEngineBenchmarkPlanTest {
     @Test
     fun longRecitationListsExcludeOnlyJdkTrialsThatOverflowItsStack() {
         val exclusions: MutableList<MaterializedExecutionPlan.Entry> =
-            CrossEngineBenchmarkPlan.Companion.load().exclusions().stream()
+            CrossEngineBenchmarkPlan.load().exclusions().stream()
                 .filter { exclusion: MaterializedExecutionPlan.Entry ->
                     exclusion
                         .workloadId
@@ -326,8 +300,8 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun trialExpansionIsDeterministicAndPreservesTimingGroups() {
-        val first: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
-        val second: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val first: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
+        val second: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
 
         val trialIds: MutableSet<String?> = HashSet<String?>()
         for (timingGroup in TimingGroup.entries) {
@@ -352,7 +326,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun utf8ParticipatesInEveryOperationSupportedByItsNativeApi() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
         val utf8Trials =
             List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
                 plan.trials(TimingGroup.NANOSECONDS),
@@ -360,7 +334,7 @@ internal class CrossEngineBenchmarkPlanTest {
             )
                 .stream()
                 .flatMap<CrossEngineBenchmarkPlan.Trial?> { obj: MutableList<CrossEngineBenchmarkPlan.Trial?>? -> obj!!.stream() }
-                .filter { trial: CrossEngineBenchmarkPlan.Trial -> trial.variant === RegexEngineVariant.SAFERE_UTF8 }
+                .filter { trial: CrossEngineBenchmarkPlan.Trial -> trial.variant === SAFERE_UTF8 }
                 .toList()
 
         Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(utf8Trials).isNotEmpty()
@@ -387,7 +361,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun utf8ReplacementTrialsCoverGenericBenchmarkFamilies() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
 
         Assertions.assertThat<String?>(
             List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
@@ -396,7 +370,7 @@ internal class CrossEngineBenchmarkPlanTest {
             )
                 .stream()
                 .flatMap<CrossEngineBenchmarkPlan.Trial?> { obj: MutableList<CrossEngineBenchmarkPlan.Trial?>? -> obj!!.stream() }
-                .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.variant === RegexEngineVariant.SAFERE_UTF8 }
+                .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.variant === SAFERE_UTF8 }
                 .map<String?> { id() })
             .contains(
                 "ApplicationBenchmark.secretRedaction@safere-utf8",
@@ -415,7 +389,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun unsupportedCombinationIsDistinctFromMissingImplementation() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
 
         Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(plan.resolve("RegexBenchmark.literalMatch@safere-utf8"))
             .isNotNull()
@@ -432,18 +406,18 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun inputRepresentationsExposeTheirTimingBoundaries() {
-        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.SAFERE_STRING.inputRepresentation())
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(SAFERE_STRING.inputRepresentation())
             .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING)
-        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.SAFERE_UTF8.inputRepresentation())
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(SAFERE_UTF8.inputRepresentation())
             .isEqualTo(RegexEngineVariant.InputRepresentation.PREEXISTING_UTF8)
-        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.inputRepresentation())
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RE2_FFM_STRING_CONVERSION.inputRepresentation())
             .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION)
     }
 
     @Test
     fun re2BasedAdaptersShareARegexSyntaxProfile() {
-        Assertions.assertThat(RegexEngineVariant.RE2J_STRING.patternProfile()).isEqualTo("re2")
-        Assertions.assertThat(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.patternProfile()).isEqualTo("re2")
+        Assertions.assertThat(RE2J_STRING.patternProfile()).isEqualTo("re2")
+        Assertions.assertThat(RE2_FFM_STRING_CONVERSION.patternProfile()).isEqualTo("re2")
     }
 
     @ParameterizedTest
@@ -451,7 +425,7 @@ internal class CrossEngineBenchmarkPlanTest {
         "0,15", "CASE_INSENSITIVE,8", "CASE_INSENSITIVE_UNICODE_CASE,7", "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,5"
     )
     fun unicodeCompileRowsAdmitOnlyEquivalentRe2jOptions(flagSet: String?, expectedRunnable: Int) {
-        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.load()
         val rows =
             plan.entries().stream()
                 .filter { entry: MaterializedExecutionPlan.Entry -> entry.engineId == "re2j-string" }
@@ -479,7 +453,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun admittedUnicodeCompileRowsPreserveDeclaredSemantics() {
-        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.load()
         // Stable characters exercise folding, categories, scripts, blocks and predefined classes.
         // Engine Unicode database versions differ; this is not a Unicode-version conformance test.
         val inputs: MutableList<String> = mutableListOf<String?>(
@@ -497,12 +471,12 @@ internal class CrossEngineBenchmarkPlanTest {
                 (row.workload.arguments.get("flagSet") as RecipeString)
                     .value
             val canonical: String =
-                plan.resolve(row.workloadId + "@jdk-string").workload.patterns.getFirst()
+                plan.resolve(row.workloadId + "@jdk-string").workload.patterns.first()
             val jdk =
                 java.util.regex.Pattern.compile(canonical, BenchmarkFlags.parse(flagSet))
             val re2j =
-                RegexEngineVariant.RE2J_STRING.compileForBenchmark(
-                    row.workload.patterns.getFirst(), flagSet
+                RE2J_STRING.compileForBenchmark(
+                    row.workload.patterns.first(), flagSet
                 ) as Pattern
             for (input in inputs) {
                 Assertions.assertThat(re2j.matcher(input).matches())
@@ -512,7 +486,7 @@ internal class CrossEngineBenchmarkPlanTest {
             if (flagSet != "0") {
                 val unflaggedJdk = java.util.regex.Pattern.compile(canonical)
                 val unflaggedRe2j =
-                    Pattern.compile(row.workload.patterns.getFirst())
+                    Pattern.compile(row.workload.patterns.first())
                 var codePoint = 0
                 while (codePoint <= Character.MAX_VALUE.code) {
                     if (Character.isSurrogate(codePoint.toChar())) {
@@ -538,7 +512,7 @@ internal class CrossEngineBenchmarkPlanTest {
     @CsvSource("0,9", "CASE_INSENSITIVE_UNICODE_CASE,4", "UNICODE_CHARACTER_CLASS,0")
     fun coldUnicodeCompileRowsRetainEquivalentRe2jOptions(flagSet: String?, expectedRunnable: Int) {
         Assertions.assertThat<MaterializedExecutionPlan.Entry?>(
-            MaterializedExecutionPlan.Companion.load().entries().stream()
+            MaterializedExecutionPlan.load().entries().stream()
                 .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.engineId == "re2j-string" && entry.runnable() }
                 .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.workloadId.startsWith("UnicodeFirstCompileBenchmark.firstCompile.") }
                 .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.workloadId.endsWith("." + flagSet) })
@@ -562,13 +536,13 @@ internal class CrossEngineBenchmarkPlanTest {
     fun excludedUnicodeCompileRowsHaveDemonstrablyDifferentFlagSemantics(
         regex: String, flagSet: String, input: String
     ) {
-        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.load()
         val prefix = "UnicodeCompileBenchmark.compile." + regex + "."
         Assertions.assertThat(plan.resolve(prefix + flagSet + "@re2j-string").exclusion.kind)
             .isEqualTo("explicitTrialExclusion")
         val canonical: String =
-            plan.resolve(prefix + flagSet + "@jdk-string").workload.patterns.getFirst()
-        val alternate: String = plan.resolve(prefix + "0@re2j-string").workload.patterns.getFirst()
+            plan.resolve(prefix + flagSet + "@jdk-string").workload.patterns.first()
+        val alternate: String = plan.resolve(prefix + "0@re2j-string").workload.patterns.first()
         Assertions.assertThat(
             Pattern.compile(alternate, Pattern.CASE_INSENSITIVE)
                 .matcher(input)
@@ -587,7 +561,7 @@ internal class CrossEngineBenchmarkPlanTest {
     )
     fun re2jCompileAdapterMapsFlagIdentitiesExplicitly(flagSet: String?, expectedFlags: Int) {
         val pattern =
-            RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", flagSet) as Pattern
+            RE2J_STRING.compileForBenchmark("a", flagSet) as Pattern
         Assertions.assertThat(pattern.flags()).isEqualTo(expectedFlags)
         Assertions.assertThat(pattern.matcher("A").matches()).isEqualTo(expectedFlags != 0)
         Assertions.assertThat(pattern.matcher("\n").matches()).isFalse()
@@ -596,11 +570,11 @@ internal class CrossEngineBenchmarkPlanTest {
     @Test
     fun re2jCompileAdapterRejectsUnsupportedFlagIdentities() {
         Assertions.assertThatThrownBy(
-            ThrowingCallable { RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", "UNICODE_CHARACTER_CLASS") })
+            ThrowingCallable { RE2J_STRING.compileForBenchmark("a", "UNICODE_CHARACTER_CLASS") })
             .isInstanceOf(UnsupportedOperationException::class.java)
             .hasMessageContaining("UNICODE_CHARACTER_CLASS")
         Assertions.assertThatThrownBy(ThrowingCallable {
-            RegexEngineVariant.RE2J_STRING.compileForBenchmark(
+            RE2J_STRING.compileForBenchmark(
                 "a",
                 "unknown"
             )
@@ -641,7 +615,7 @@ internal class CrossEngineBenchmarkPlanTest {
             }
         val task =
             BenchmarkOperation.FIND_SAMPLED_GROUP.bind(
-                RegexEngineVariant.SAFERE_STRING,
+                SAFERE_STRING,
                 mutableListOf<String?>("(a)"),
                 List.of<CompiledRegex?>(pattern),
                 List.of<RegexInput?>(StringRegexInput("a")),
@@ -649,7 +623,7 @@ internal class CrossEngineBenchmarkPlanTest {
                 null,
                 0,
                 DeclarativeBenchmarkPlan.MatcherLifecycle(
-                    MatcherReuse.Companion.fromJson(reuse), mutableListOf<LifecycleStep?>()
+                    MatcherReuse.fromJson(reuse), mutableListOf<LifecycleStep?>()
                 ),
                 null,
                 0,
@@ -727,14 +701,14 @@ internal class CrossEngineBenchmarkPlanTest {
                         )
                 val task =
                     operation.bind(
-                        RegexEngineVariant.SAFERE_STRING,
+                        SAFERE_STRING,
                         mutableListOf<String?>("x"),
                         List.of<CompiledRegex?>(pattern),
                         List.of<RegexInput?>(StringRegexInput("abcd")),
                         IntArray(0),
                         null,
                         0,
-                        DeclarativeBenchmarkPlan.MatcherLifecycle(reuse, steps),
+                        MatcherLifecycle(reuse, steps),
                         null,
                         0,
                         0,
@@ -765,14 +739,14 @@ internal class CrossEngineBenchmarkPlanTest {
             }
         val task =
             BenchmarkOperation.FIND.bind(
-                RegexEngineVariant.SAFERE_STRING,
+                SAFERE_STRING,
                 mutableListOf<String?>("x"),
                 List.of<CompiledRegex?>(pattern),
                 List.of<RegexInput?>(preparedInput),
                 IntArray(0),
                 null,
                 0,
-                DeclarativeBenchmarkPlan.MatcherLifecycle.Companion.NONE,
+                MatcherLifecycle.NONE,
                 null,
                 0,
                 0,
@@ -796,7 +770,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun preparationValidatesDeclaredExpectedResult() {
-        CrossEngineTrialRunner.Companion.prepare(
+        CrossEngineTrialRunner.prepare(
             "ApplicationBenchmark.uuidValidation@safere-string",
             TimingGroup.NANOSECONDS
         ).use { ignored ->
@@ -806,7 +780,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun expandedUtf8OperationsPrepareAndRunThroughTheGenericAdapter() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
         val blackhole =
             Blackhole(
                 "Today's password is swordfish. I understand instantiating Blackholes directly is"
@@ -843,7 +817,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun ffmPublicMatcherOperationsPrepareAndRunThroughTheGenericAdapter() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
         val blackhole =
             Blackhole(
                 "Today's password is swordfish. I understand instantiating Blackholes directly is"
@@ -856,18 +830,18 @@ internal class CrossEngineBenchmarkPlanTest {
         )) {
             val id = workload + "@re2-ffm-string-conversion"
             val trial = plan.resolve(id)
-            CrossEngineTrialRunner.Companion.prepare(id, trial.workload.timingGroup).use { runner ->
+            CrossEngineTrialRunner.prepare(id, trial.workload.timingGroup).use { runner ->
                 runner.run(blackhole)
                 runner.run(blackhole)
             }
         }
-        Assertions.assertThat<EngineCapability?>(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.capabilities())
+        Assertions.assertThat<EngineCapability?>(RE2_FFM_STRING_CONVERSION.capabilities())
             .doesNotContain(EngineCapability.APPEND_REPLACEMENT)
     }
 
     @Test
     fun utf8ReplacementOperationsPrepareAndRunThroughTheGenericAdapter() {
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
         val blackhole =
             Blackhole(
                 "Today's password is swordfish. I understand instantiating Blackholes directly is"
@@ -895,7 +869,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun utf8ReplacementAdapterExpandsLiteralNumberedAndNamedTemplates() {
-        val variant = RegexEngineVariant.SAFERE_UTF8
+        val variant = SAFERE_UTF8
         val input: RegexInput =
             utf8Input("alpha=one&beta=two".toByteArray(StandardCharsets.UTF_8))
 
@@ -950,12 +924,12 @@ internal class CrossEngineBenchmarkPlanTest {
                 null,
                 null,
                 0,
-                DeclarativeBenchmarkPlan.MatcherLifecycle.Companion.NONE,
+                MatcherLifecycle.NONE,
                 "",
                 0,
                 1,
                 null,
-                DeclarativeBenchmarkPlan.Measurement(
+                Measurement(
                     MeasurementMode.SINGLE_SHOT_COLD_START,
                     TimingUnit.MILLISECONDS,
                     EnumSet.of<ExecutionConstraint?>(
@@ -965,15 +939,15 @@ internal class CrossEngineBenchmarkPlanTest {
                 TimingGroup.MILLISECONDS
             )
         val trial =
-            CrossEngineBenchmarkPlan.Trial(workload, RegexEngineVariant.SAFERE_STRING)
+            CrossEngineBenchmarkPlan.Trial(workload, SAFERE_STRING)
         val blackhole =
             Blackhole(
                 "Today's password is swordfish. I understand instantiating Blackholes directly is"
                         + " dangerous."
             )
 
-        CrossEngineTrialRunner.Companion.prepareColdStart(
-            BenchmarkData.Companion.get(), trial, TimingGroup.MILLISECONDS
+        CrossEngineTrialRunner.prepareColdStart(
+            BenchmarkData.get(), trial, TimingGroup.MILLISECONDS
         ).use { runner ->
             Assertions.assertThatThrownBy(ThrowingCallable { runner.run(blackhole) })
                 .isInstanceOf(IllegalArgumentException::class.java)
@@ -1020,11 +994,11 @@ internal class CrossEngineBenchmarkPlanTest {
             "JavaCharacterClassBenchmark.findJavaLetter@safere-string",
             "JavaCharacterClassBenchmark.findJavaLetter@jdk-string"
         )
-        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.load()
 
         for (trialId in trials) {
             val timingGroup = plan.resolve(trialId).workload.timingGroup
-            CrossEngineTrialRunner.Companion.prepare(trialId, timingGroup).use { ignored ->
+            CrossEngineTrialRunner.prepare(trialId, timingGroup).use { ignored ->
                 Assertions.assertThat<CrossEngineTrialRunner?>(ignored).`as`(trialId).isNotNull()
             }
         }
@@ -1032,8 +1006,8 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun specializedMeasurementModesSelectStableGenericTrials() {
-        val first: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
-        val second: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
+        val first: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.load()
+        val second: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.load()
 
         Assertions.assertThat<SpecializedBenchmarkPlan.Trial?>(first.averageTimeTrials())
             .hasSizeGreaterThanOrEqualTo(MINIMUM_SPECIALIZED_AVERAGE_TIME_TRIALS)
@@ -1062,7 +1036,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun collectionPlanDiscoversGenericRunnersAndStableReportRows() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
 
         Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runners())
             .extracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::benchmark)
@@ -1087,7 +1061,7 @@ internal class CrossEngineBenchmarkPlanTest {
         Assertions.assertThat<ReportExclusion?>(plan.reportPlan().exclusions).isNotEmpty().doesNotHaveDuplicates()
         val expectedSmokeTrialIds: MutableSet<String> = HashSet<String>()
         for (runner in plan.runners()) {
-            val firstTrial: String = runner.trialIds.getFirst()
+            val firstTrial: String = runner.trialIds.first()
             val firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'))
             runner.trialIds.stream()
                 .filter { trialId: String? -> trialId!!.startsWith(firstWorkload + "@") }
@@ -1100,7 +1074,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun collectionPlanSelectsOnlyRunnersMatchedByJmhFilter() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
 
         Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(
             plan.runnersMatching("^org\\.safere\\.benchmark\\.CrossEngineScalingBenchmark\\.run$")
@@ -1146,7 +1120,7 @@ internal class CrossEngineBenchmarkPlanTest {
             else
                 TimingGroup.MICROSECONDS
         val expected: MutableList<String> =
-            CrossEngineBenchmarkPlan.Companion.load().trials(group).stream()
+            CrossEngineBenchmarkPlan.load().trials(group).stream()
                 .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.id.startsWith(prefix) }
                 .map<String?> { id() }
                 .toList()
@@ -1156,7 +1130,7 @@ internal class CrossEngineBenchmarkPlanTest {
         try {
             PrintStream(output, true, StandardCharsets.UTF_8).use { capture ->
                 System.setOut(capture)
-                CrossEngineBenchmarkPlan.Companion.main(arrayOf<String>("--argument-file", timingGroup, prefix))
+                CrossEngineBenchmarkPlan.main(arrayOf<String>("--argument-file", timingGroup, prefix))
             }
         } finally {
             System.setOut(original)
@@ -1167,7 +1141,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun declaredRunnerArgumentsUseTheSelectedTimingOrAllocationTrials() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         val benchmark = "org.safere.benchmark.CrossEngineBenchmark.run"
         val jar = "/tmp/benchmark jar.jar"
         val timing =
@@ -1181,27 +1155,27 @@ internal class CrossEngineBenchmarkPlanTest {
                 .findFirst()
                 .orElseThrow()
 
-        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, false, false, null))
+        Assertions.assertThat<String?>(plan.declaredLauncherArguments(benchmark, jar, false, false, null))
             .containsExactly(
                 "-jar",
                 "\"/tmp/benchmark jar.jar\"",
                 "-p",
                 "\"crossEngineTrial=" + String.join(",", timing.trialIds) + "\""
             )
-        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, true, false, null))
+        Assertions.assertThat<String?>(plan.declaredLauncherArguments(benchmark, jar, true, false, null))
             .containsExactly(
                 "-jar",
                 "\"/tmp/benchmark jar.jar\"",
                 "-p",
                 "\"crossEngineTrial=" + String.join(",", allocation.trialIds) + "\""
             )
-        val firstWorkload: kotlin.String? =
-            allocation.trialIds.getFirst().split("@".toRegex(), limit = 2).toTypedArray()[0]
+        val firstWorkload: String =
+            allocation.trialIds.first().split("@".toRegex(), limit = 2).toTypedArray()[0]
         val smokeTrials =
             allocation.trialIds.stream()
-                .filter { trialId: kotlin.String -> trialId.startsWith(firstWorkload + "@") }
+                .filter { trialId: String -> trialId.startsWith(firstWorkload + "@") }
                 .toList()
-        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, true, true, null))
+        Assertions.assertThat<String?>(plan.declaredLauncherArguments(benchmark, jar, true, true, null))
             .containsExactly(
                 "-jar",
                 "\"/tmp/benchmark jar.jar\"",
@@ -1223,29 +1197,29 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun declaredArgumentFilesPreserveProviderGroupsAndSmokeSelection() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         val jar = "/tmp/benchmark \"quoted\" \\ jar.jar"
         for (allocation in mutableListOf<Boolean?>(false, true)) {
             for (smoke in mutableListOf<Boolean?>(false, true)) {
                 for (runner in plan.executionRunners(allocation!!, smoke!!)) {
-                    val provider: kotlin.String =
-                        RegexEngineVariant.Companion.fromId(
+                    val provider: String =
+                        RegexEngineVariant.fromId(
                             runner
                                 .trialIds
-                                .getFirst()
-                                .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                                .first()
+                                .substring(runner.trialIds.first().lastIndexOf('@') + 1)
                         )
                             .scanProvider()
-                    Assertions.assertThat<kotlin.String?>(
+                    Assertions.assertThat<String?>(
                         plan.declaredLauncherArguments(
                             runner.benchmark, jar, allocation, smoke, provider
                         )
                     )
                         .containsExactly(
                             "-jar",
-                            BenchmarkCollectionPlan.Companion.argumentFileToken(jar),
+                            BenchmarkCollectionPlan.argumentFileToken(jar),
                             "-p",
-                            BenchmarkCollectionPlan.Companion.argumentFileToken(
+                            BenchmarkCollectionPlan.argumentFileToken(
                                 runner.parameter + "=" + String.join(",", runner.trialIds)
                             )
                         )
@@ -1258,18 +1232,18 @@ internal class CrossEngineBenchmarkPlanTest {
     @ResourceLock(Resources.SYSTEM_OUT)
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     fun declaredArgumentFileCommandFiltersProvidersAfterSmokeSelection() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         val property = "safere.benchmark.scanProvider"
         val previous = System.getProperty(property)
         val original = System.out
         try {
             for (runner in plan.executionRunners(false, true)) {
-                val provider: kotlin.String =
-                    RegexEngineVariant.Companion.fromId(
+                val provider: String =
+                    RegexEngineVariant.fromId(
                         runner
                             .trialIds
-                            .getFirst()
-                            .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                            .first()
+                            .substring(runner.trialIds.first().lastIndexOf('@') + 1)
                     )
                         .scanProvider()
                 System.setProperty(property, provider)
@@ -1278,7 +1252,7 @@ internal class CrossEngineBenchmarkPlanTest {
                     PrintStream(output, true, StandardCharsets.UTF_8).use { capture ->
                         System.setOut(capture)
                         BenchmarkCollectionPlan.Companion.main(
-                            arrayOf<kotlin.String?>(
+                            arrayOf<String?>(
                                 "declared-runner-arguments",
                                 "runners",
                                 runner.benchmark,
@@ -1290,14 +1264,14 @@ internal class CrossEngineBenchmarkPlanTest {
                 } finally {
                     System.setOut(original)
                 }
-                Assertions.assertThat<kotlin.String?>(
+                Assertions.assertThat<String?>(
                     output.toString(StandardCharsets.UTF_8).lineSequence().asStream().toList()
                 )
                     .containsExactly(
                         "-jar",
                         "\"/tmp/benchmark jar.jar\"",
                         "-p",
-                        BenchmarkCollectionPlan.Companion.argumentFileToken(
+                        BenchmarkCollectionPlan.argumentFileToken(
                             runner.parameter + "=" + String.join(",", runner.trialIds)
                         )
                     )
@@ -1314,10 +1288,10 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun allocationCollectionPreservesMemoryScalingWithoutAddingTimingTrials() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
 
         Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.allocationRunners())
-            .flatExtracting<kotlin.String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .flatExtracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
             .contains(
                 "MemoryScalingBenchmark.searchEasy.1024@safere-string",
                 "MemoryScalingBenchmark.searchEasy.1024@jdk-string",
@@ -1326,19 +1300,19 @@ internal class CrossEngineBenchmarkPlanTest {
                 "MemoryScalingBenchmark.searchMedium.1048576@jdk-string",
                 "MemoryScalingBenchmark.searchMedium.1048576@re2j-string"
             )
-            .noneMatch(Predicate { trial: kotlin.String? ->
+            .noneMatch(Predicate { trial: String? ->
                 trial!!.startsWith("MemoryScalingBenchmark.") && trial.contains(
                     "utf8"
                 )
             })
         Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runners())
-            .flatExtracting<kotlin.String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
-            .noneMatch(Predicate { trial: kotlin.String? -> trial!!.startsWith("MemoryScalingBenchmark.") })
+            .flatExtracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .noneMatch(Predicate { trial: String? -> trial!!.startsWith("MemoryScalingBenchmark.") })
     }
 
     @Test
     fun collectionPlanQueriesModeTimingPrefixAndExecutionVariant() {
-        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.load()
         val query =
             BenchmarkCollectionPlan.Query(
                 "averageTime", "nanoseconds", "RegexBenchmark.", "safere-utf8"
@@ -1365,7 +1339,7 @@ internal class CrossEngineBenchmarkPlanTest {
                 Path.of("safere-benchmarks/src/main/java/org/safere/benchmark")
 
         Files.list(sourceDirectory).use { files ->
-            Assertions.assertThat<kotlin.String?>(
+            Assertions.assertThat<String?>(
                 files
                     .filter { path: Path? -> path.toString().endsWith(".java") }
                     .filter { path: Path? ->
@@ -1375,7 +1349,7 @@ internal class CrossEngineBenchmarkPlanTest {
                             throw IllegalStateException(exception)
                         }
                     }
-                    .map<kotlin.String?> { path: Path? -> path!!.getFileName().toString() }
+                    .map<String?> { path: Path? -> path!!.fileName.toString() }
                     .sorted())
                 .containsExactly(
                     "CrossEngineBenchmark.java",
@@ -1390,7 +1364,7 @@ internal class CrossEngineBenchmarkPlanTest {
 
     @Test
     fun everySpecializedOperationPreparesAndRunsThroughOneEntryPoint() {
-        val trials = mutableListOf<kotlin.String?>(
+        val trials = mutableListOf<String?>(
             "PatternSetBenchmark.unanchoredMatch.4@safere-string",
             "Utf8MatchingBenchmark.repeatedFind.ascii@safere-utf8",
             "Utf8MatchingBenchmark.repeatedFind.multibyte@safere-utf8",
@@ -1415,7 +1389,7 @@ internal class CrossEngineBenchmarkPlanTest {
             )
 
         for (trial in trials) {
-            SpecializedTrialRunner.Companion.prepare(trial).use { runner ->
+            SpecializedTrialRunner.prepare(trial).use { runner ->
                 runner.run(blackhole)
             }
         }
@@ -1437,8 +1411,8 @@ internal class CrossEngineBenchmarkPlanTest {
         fun materializeCorpus() {
             val benchmarkDirectory =
                 if (Files.exists(Path.of("benchmark-data.json"))) Path.of(".") else Path.of("safere-benchmarks")
-            BenchmarkInputMaterializer.Companion.main(
-                arrayOf<kotlin.String>(benchmarkDirectory.toString(), temporaryDirectory.toString())
+            BenchmarkInputMaterializer.main(
+                arrayOf<String>(benchmarkDirectory.toString(), temporaryDirectory.toString())
             )
             System.setProperty("safere.benchmark.corpus", temporaryDirectory.toString())
         }
