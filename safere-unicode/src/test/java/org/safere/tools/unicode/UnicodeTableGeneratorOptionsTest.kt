@@ -60,7 +60,7 @@ internal class UnicodeTableGeneratorOptionsTest {
         UnicodeTableGenerator.main(arrayOf<String>("--unicode-license=" + license, output.toString()))
         val generated = Files.readString(output)
         for (name in arrayOf<String>("javaUnicodeIdentifierStartExtra", "javaUnicodeIdentifierPartExtra")) {
-            Assertions.assertThat(generated.contains("Map.entry(\"" + name + "\""))
+            Assertions.assertThat(generated.contains("\"" + name + "\" to "))
                 .`as`("regenerated internal table %s", name)
                 .isTrue()
         }

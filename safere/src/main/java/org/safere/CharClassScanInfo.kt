@@ -4,8 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.Arrays
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Encapsulates pre-computed character class metadata for scanning, start acceleration, and
  * rejection.
@@ -212,8 +212,8 @@ internal sealed interface CharClassScanInfo {
         val hi = cc.hi(i)
         ranges[i * 2] = lo
         ranges[i * 2 + 1] = hi
-        val start = Math.max(0, lo)
-        val end = Math.min(127, hi)
+        val start = max(0, lo)
+        val end = min(127, hi)
         for (cp in start..end) {
           if (cp < 64) {
             b0 = b0 or (1L shl cp)
@@ -306,7 +306,7 @@ internal sealed interface CharClassScanInfo {
       if (rangeCount == 0) {
         return IntArray(0)
       }
-      return Arrays.copyOf(temp, rangeCount * 2)
+      return (temp).copyOf(rangeCount * 2)
     }
   }
 }

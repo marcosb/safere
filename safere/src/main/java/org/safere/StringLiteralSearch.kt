@@ -4,6 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+
+import kotlin.math.*
 /**
  * Exact-case literal search in a [String], anchored on the literal's rarest byte.
  * 
@@ -184,7 +187,7 @@ internal object StringLiteralSearch {
                 + " callers before changing size again.")
     )
     fun indexOf(text: String, literal: String, anchorOffset: Int, anchor: Char, fromIndex: Int): Int {
-        var pos = Math.max(0, fromIndex)
+        var pos = max(0, fromIndex)
         val length: Int = text.length
         if (anchorOffset == NO_ANCHOR || length - pos < MIN_ANCHORED_WINDOW) {
             return indexOfDirect(text, literal, pos)
@@ -246,7 +249,7 @@ internal object StringLiteralSearch {
         val idx = text.indexOf(literal, fromIndex)
         if (WorkCounterConfig.ENABLED) {
             val scanned: Int = if (idx >= 0) idx - fromIndex + literal.length else text.length - fromIndex
-            WorkCounter.record(Math.max(0, scanned).toLong())
+            WorkCounter.record(max(0, scanned).toLong())
         }
         return idx
     }
@@ -293,11 +296,11 @@ internal object StringLiteralSearch {
      * amount it was negative by.
      */
     fun indexOfChar(text: String, ch: Int, fromIndex: Int): Int {
-        val pos = Math.max(0, fromIndex)
+        val pos = max(0, fromIndex)
         val idx: Int = text.indexOfCodePointBounded(ch, pos, text.length)
         if (WorkCounterConfig.ENABLED) {
             val scanned = if (idx >= 0) idx - pos + 1 else text.length - pos
-            WorkCounter.record(Math.max(0, scanned).toLong())
+            WorkCounter.record(max(0, scanned).toLong())
         }
         return idx
     }

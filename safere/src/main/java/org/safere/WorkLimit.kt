@@ -4,6 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+
+import kotlin.math.*
 /**
  * Bounds checking and work-budget accounting for candidate-filtering string search kernels.
  * 
@@ -14,7 +17,7 @@ package org.safere
 internal object WorkLimit {
     /** Computes the maximum verification work allowed for a search over `remaining` bytes.  */
     fun forRemaining(remaining: Int): Long {
-        return Math.max(1L, remaining.toLong() * 2)
+        return max(1L, remaining.toLong() * 2)
     }
 
     /** Checks whether candidate work has exhausted the budget.  */
@@ -29,7 +32,7 @@ internal object WorkLimit {
 
     /**
      * Checks whether a candidate match starting at `candidate` is within search bounds.
-     * Overflow-safe for inputs approaching [Integer.MAX_VALUE].
+     * Overflow-safe for inputs approaching [Int.MAX_VALUE].
      */
     fun candidateInBounds(candidate: Int, start: Int, length: Int, matchLength: Int): Boolean {
         return candidate >= start && candidate <= length - matchLength

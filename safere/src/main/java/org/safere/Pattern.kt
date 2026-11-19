@@ -15,7 +15,6 @@ import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.lang.invoke.MutableCallSite
 import java.lang.ref.SoftReference
-import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.Predicate
@@ -24,7 +23,10 @@ import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 import java.util.stream.StreamSupport
 import kotlin.concurrent.Volatile
-
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmStatic
+import kotlin.math.*
+import kotlin.text.Charsets
 /**
  * A compiled regular expression backed by a linear-time NFA engine. This class provides a drop-in
  * replacement for [java.util.regex.Pattern].
@@ -703,9 +705,9 @@ class Pattern private constructor(
         }
         // A literal run needs at most four UTF-8 units per consuming instruction. Leave a small
         // minimum for short loops; exceeding the probe defers to ordinary start acceleration.
-        val probeUnits = Math.min(
-            Integer.MAX_VALUE.toLong(),
-            Math.max(MIN_END_ANCHORED_PROBE_UNITS.toLong(), 4L * reverseProgram.size)
+        val probeUnits = min(
+            Int.MAX_VALUE.toLong(),
+            max(MIN_END_ANCHORED_PROBE_UNITS.toLong(), 4L * reverseProgram.size)
         ).toInt()
         return searchEndAnchoredStart(
             reverse,
@@ -713,7 +715,7 @@ class Pattern private constructor(
             searchFrom,
             leftmostStart,
             diagnostics,
-            if (speculative) probeUnits else Integer.MAX_VALUE
+            if (speculative) probeUnits else Int.MAX_VALUE
         )
     }
 
@@ -897,7 +899,7 @@ class Pattern private constructor(
         if (matchesCount == 0) {
             return arrayOf<String?>(text)
         }
-        val partsCount = if (limit > 0) Math.min(limit, matchesCount + 1) else matchesCount + 1
+        val partsCount = if (limit > 0) min(limit, matchesCount + 1) else matchesCount + 1
         var parts = arrayOfNulls<String>(partsCount)
         var last = 0
         var i = 0
@@ -968,7 +970,7 @@ class Pattern private constructor(
         }
         var partsCount = 2 * matchesCount + 1
         if (limit > 0) {
-            partsCount = Math.min(2L * limit - 1, partsCount.toLong()).toInt()
+            partsCount = min(2L * limit - 1, partsCount.toLong()).toInt()
         }
         var parts = arrayOfNulls<String>(partsCount)
         var last = 0
@@ -2136,20 +2138,20 @@ class Pattern private constructor(
             if (this.prefix == null || this.prefix.isEmpty())
                 null
             else
-                this.prefix.toByteArray(StandardCharsets.UTF_8)
+                this.prefix.toByteArray(Charsets.UTF_8)
         this.anchoredPrefix = this.multiAnchor.anchoredPrefix()
         this.anchoredPrefixUtf8 =
             if (this.anchoredPrefix == null || this.anchoredPrefix.isEmpty())
                 null
             else
-                this.anchoredPrefix.toByteArray(StandardCharsets.UTF_8)
+                this.anchoredPrefix.toByteArray(Charsets.UTF_8)
         this.matchDescriptor = if (matchDescriptor != null) matchDescriptor else MatchDescriptor.NONE
         // Fold the option into prepared literal data so the search methods need no extra guard.
         // An extra guard there can perturb C2 compilation of their inlined byte-scanning loops.
         val literalMatch =
             if (enginePathOptions.literalFastPaths) this.matchDescriptor.literalMatch else null
         this.literalMatchUtf8 =
-            if (literalMatch == null) null else literalMatch.toByteArray(StandardCharsets.UTF_8)
+            if (literalMatch == null) null else literalMatch.toByteArray(Charsets.UTF_8)
         this.literalMatchFailure = if (literalMatchUtf8 == null) null else literalFailure(literalMatchUtf8)
         this.literalMatchShifts = if (literalMatchUtf8 == null) null else literalShifts(literalMatchUtf8)
         this.literalMatchRareByteOffset =
@@ -2452,7 +2454,7 @@ class Pattern private constructor(
             this.minOffset = minOffset
             this.maxOffset = maxOffset
             this.discreteOffsets = discreteOffsets
-            this.utf8 = literal.toByteArray(StandardCharsets.UTF_8)
+            this.utf8 = literal.toByteArray(Charsets.UTF_8)
             this.failure = literalFailure(utf8)
             this.shifts = literalShifts(utf8)
         }
@@ -2518,7 +2520,7 @@ class Pattern private constructor(
         }
 
         fun find(scanner: InputScanner, startPos: Int): Long {
-            val matchStart = Math.max(0, startPos)
+            val matchStart = max(0, startPos)
             if (greedyWholeInput) {
                 for (position in scanner.length - 1 downTo matchStart) {
                     val match = matchAt(scanner, position)
@@ -2921,7 +2923,7 @@ class Pattern private constructor(
                 return null
             }
             val shifts = IntArray(256)
-            Arrays.fill(shifts, literal.size)
+            (shifts).fill(literal.size)
             for (index in 0..<literal.size - 1) {
                 shifts[literal[index].toInt() and 0xFF] = literal.size - index - 1
             }
@@ -3327,8 +3329,8 @@ class Pattern private constructor(
                 val hi = cc.hi(i)
                 ranges[i * 2] = lo
                 ranges[i * 2 + 1] = hi
-                val start = Math.max(lo, 0)
-                val end = Math.min(hi, 127)
+                val start = max(lo, 0)
+                val end = min(hi, 127)
                 for (cp in start..end) {
                     if (cp < 64) {
                         b0 = b0 or (1L shl cp)

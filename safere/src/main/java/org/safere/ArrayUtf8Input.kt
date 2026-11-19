@@ -4,8 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.nio.charset.StandardCharsets
 
+import kotlin.text.Charsets
 internal class ArrayUtf8Input(
     bytes: ByteArray,
     offset: Int,
@@ -26,7 +26,7 @@ internal class ArrayUtf8Input(
     }
 
     fun decode(): String {
-        return String(scanner.bytes()!!, scanner.offset(), scanner.length, StandardCharsets.UTF_8)
+        return String(scanner.bytes()!!, scanner.offset(), scanner.length, Charsets.UTF_8)
     }
 
     fun appendRange(sink: Utf8Sink, start: Int, end: Int) {

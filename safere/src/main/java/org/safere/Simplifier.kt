@@ -6,6 +6,7 @@ package org.safere
 
 import java.util.*
 import java.util.List
+import kotlin.jvm.JvmRecord
 
 /**
  * Simplifies a [Regexp] AST using basic operators such as [RegexpOp.STAR], [ ][RegexpOp.PLUS], [RegexpOp.QUEST], and [RegexpOp.CONCAT]. Nullable finite [ ][RegexpOp.REPEAT] nodes with optional iterations retain their invocation boundaries for the

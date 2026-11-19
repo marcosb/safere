@@ -32,10 +32,10 @@ internal interface VectorScanProvider {
     /**
      * Returns the longest search window, in bytes, for which the `kind` kernel is expected to
      * beat the SWAR and scalar fallbacks. Kernels that remain profitable on arbitrarily long windows
-     * return [Integer.MAX_VALUE].
+     * return [Int.MAX_VALUE].
      */
     fun maximumWindowLength(kind: ScanKind?): Int {
-        return Integer.MAX_VALUE
+        return Int.MAX_VALUE
     }
 
     /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
@@ -59,7 +59,7 @@ internal interface VectorScanProvider {
     }
 
     /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
-    fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: TeddyModel?, start: Int): Int
+    fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: Any?, start: Int): Int
 
     /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
     fun indexOfMultiLiteral(
@@ -71,7 +71,7 @@ internal interface VectorScanProvider {
         anchorOffsets: IntArray?,
         anchorRanges: IntArray?,
         minLength: Int,
-        teddyModel: TeddyModel?,
+        teddyModel: Any?,
         start: Int
     ): Int
 

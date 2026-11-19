@@ -6,6 +6,7 @@ package org.safere
 
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.Pattern.StartAcceleration
+import kotlin.jvm.JvmRecord
 
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match

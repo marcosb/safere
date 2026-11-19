@@ -19,7 +19,7 @@ import kotlin.plus
 import kotlin.sequences.minus
 import kotlin.sequences.plus
 import kotlin.times
-
+import kotlin.math.*
 /**
  * A compiled regular expression program, consisting of an array of [Inst] instructions. This
  * is the output of the `Compiler` and the input to the execution engines (NFA, DFA, etc.).
@@ -699,9 +699,9 @@ internal class Prog {
         var edgeCount: Int = 0
         init {
             head = IntArray(ninst)
-            Arrays.fill(head, -1)
-            nextEdge = IntArray(Math.max(16, ninst * 2))
-            predInst = IntArray(Math.max(16, ninst * 2))
+            (head).fill(-1)
+            nextEdge = IntArray(max(16, ninst * 2))
+            predInst = IntArray(max(16, ninst * 2))
         }
 
         fun addPredecessor(to: Int, from: Int) {
@@ -710,8 +710,8 @@ internal class Prog {
             }
             if (edgeCount == nextEdge.size) {
                 val newCap: Int = nextEdge.size * 2
-                nextEdge = Arrays.copyOf(nextEdge, newCap)
-                predInst = Arrays.copyOf(predInst, newCap)
+                nextEdge = (nextEdge).copyOf(newCap)
+                predInst = (predInst).copyOf(newCap)
             }
             val edge = edgeCount++
             predInst[edge] = from
@@ -739,7 +739,7 @@ internal class Prog {
 
         val ninst: Int = instructions.size
         val rootmap = IntArray(ninst)
-        Arrays.fill(rootmap, -1)
+        (rootmap).fill(-1)
         val roots = IntArrayList(ninst)
         val predecessors = PredecessorGraph(ninst)
 

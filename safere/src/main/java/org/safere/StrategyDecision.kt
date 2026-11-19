@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /** A strategy-specific explanation of routing or fallback.  */
 @JvmRecord

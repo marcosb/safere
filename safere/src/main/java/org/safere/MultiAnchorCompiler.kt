@@ -12,7 +12,9 @@ import org.safere.Pattern.*
 import java.util.*
 import java.util.List
 import java.util.function.Consumer
-
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Compiles AST representations of regular expressions into [MultiAnchorDescriptor], [ ], and [RejectDescriptor] instances in a single bottom-up traversal.
  */
@@ -412,7 +414,7 @@ internal object MultiAnchorCompiler {
             }
             i += 2
         }
-        return Arrays.copyOf(excluded, count)
+        return (excluded).copyOf(count)
     }
 
     /** Returns whether the start plan scans for a literal at the match start.  */
@@ -517,8 +519,8 @@ internal object MultiAnchorCompiler {
             val currRunes = extractRunes(node)
             if (prevRunes != null && currRunes != null && (prev!!.flags and ParseFlags.FOLD_CASE) == (node.flags and ParseFlags.FOLD_CASE)) {
                 val merged = IntArray(prevRunes.size + currRunes.size)
-                System.arraycopy(prevRunes, 0, merged, 0, prevRunes.size)
-                System.arraycopy(currRunes, 0, merged, prevRunes.size, currRunes.size)
+                prevRunes.copyInto(merged, 0, 0, 0 + prevRunes.size)
+                currRunes.copyInto(merged, prevRunes.size, 0, 0 + currRunes.size)
                 subs.set(subs.size - 1, Regexp.literalString(merged, prev.flags))
                 return
             }
@@ -577,7 +579,7 @@ internal object MultiAnchorCompiler {
                 if (prefixFlags == null) {
                     return re
                 }
-                val prefixRunes = Arrays.copyOf(leadingRunesList.get(0), lcp)
+                val prefixRunes = (leadingRunesList.get(0)).copyOf(lcp)
                 val remainders: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs!!.size)
                 for (sub in re.subs!!) {
                     remainders.add(stripLeadingRunes(sub!!, lcp))
@@ -631,7 +633,7 @@ internal object MultiAnchorCompiler {
             } else if (((commonFlags xor node.flags) and ParseFlags.FOLD_CASE) != 0) {
                 return null
             }
-            remaining -= Math.min(remaining, nodeLength)
+            remaining -= min(remaining, nodeLength)
             if (remaining == 0) {
                 return commonFlags
             }
@@ -713,7 +715,7 @@ internal object MultiAnchorCompiler {
         val first = list.get(0)
         var minLen: Int = first.size
         for (i in 1..<list.size) {
-            minLen = Math.min(minLen, list.get(i)!!.size)
+            minLen = min(minLen, list.get(i)!!.size)
         }
         var len = 0
         for (col in 0..<minLen) {
@@ -821,19 +823,19 @@ internal object MultiAnchorCompiler {
         when (first.op) {
             RegexpOp.STAR -> {
                 minRepetition = 0
-                maxRepetition = Integer.MAX_VALUE
+                maxRepetition = Int.MAX_VALUE
                 repeated = unwrapCaptures(first.sub())
             }
 
             RegexpOp.PLUS -> {
                 minRepetition = 1
-                maxRepetition = Integer.MAX_VALUE
+                maxRepetition = Int.MAX_VALUE
                 repeated = unwrapCaptures(first.sub())
             }
 
             RegexpOp.REPEAT -> {
                 minRepetition = first.min
-                maxRepetition = if (first.max == -1) Integer.MAX_VALUE else first.max
+                maxRepetition = if (first.max == -1) Int.MAX_VALUE else first.max
                 repeated = unwrapCaptures(first.sub())
             }
 
@@ -1383,7 +1385,7 @@ internal object MultiAnchorCompiler {
                     size = insertWidth(combined, size, width)
                 }
             }
-            discrete = if (size == combined.size) combined else Arrays.copyOf(combined, size)
+            discrete = if (size == combined.size) combined else (combined).copyOf(size)
         }
         return AsciiWidthRange(minWidth, maxWidth, discrete)
     }
@@ -1399,17 +1401,17 @@ internal object MultiAnchorCompiler {
             return size + 1
         }
         index = -index - 1
-        System.arraycopy(widths, index, widths, index + 1, size - index)
+        widths.copyInto(widths, index + 1, index, index + size - index)
         widths[index] = width
         return size + 1
     }
 
     private fun addWidth(left: Int, right: Int): Int {
-        return if (left > Integer.MAX_VALUE - right) -1 else left + right
+        return if (left > Int.MAX_VALUE - right) -1 else left + right
     }
 
     private fun multiplyWidth(width: Int, count: Int): Int {
-        return if (width != 0 && count > Integer.MAX_VALUE / width) -1 else width * count
+        return if (width != 0 && count > Int.MAX_VALUE / width) -1 else width * count
     }
 
     private fun isLeadingZeroWidth(re: Regexp): Boolean {
@@ -2630,7 +2632,7 @@ internal object MultiAnchorCompiler {
                     size = insertWidth(discrete, size, width)
                 }
                 return AsciiWidthRange(
-                    0, child.maxWidth, if (size <= 16) Arrays.copyOf(discrete, size) else null
+                    0, child.maxWidth, if (size <= 16) (discrete).copyOf(size) else null
                 )
             }
 
@@ -2638,8 +2640,8 @@ internal object MultiAnchorCompiler {
                 if (childArgs.isEmpty()) {
                     return AsciiWidthRange.INVALID
                 }
-                var minWidth = Integer.MAX_VALUE
-                var maxWidth = Integer.MIN_VALUE
+                var minWidth = Int.MAX_VALUE
+                var maxWidth = Int.MIN_VALUE
                 val discrete = IntArray(8)
                 var size = 0
                 var allDiscrete = true
@@ -2647,8 +2649,8 @@ internal object MultiAnchorCompiler {
                     if (!child.isValid) {
                         return AsciiWidthRange.INVALID
                     }
-                    minWidth = Math.min(minWidth, child.minWidth)
-                    maxWidth = Math.max(maxWidth, child.maxWidth)
+                    minWidth = min(minWidth, child.minWidth)
+                    maxWidth = max(maxWidth, child.maxWidth)
                     if (allDiscrete && child.discreteWidths != null) {
                         for (width in child.discreteWidths) {
                             size = insertWidth(discrete, size, width)
@@ -2662,7 +2664,7 @@ internal object MultiAnchorCompiler {
                     }
                 }
                 return AsciiWidthRange(
-                    minWidth, maxWidth, if (allDiscrete) Arrays.copyOf(discrete, size) else null
+                    minWidth, maxWidth, if (allDiscrete) (discrete).copyOf(size) else null
                 )
             }
         }

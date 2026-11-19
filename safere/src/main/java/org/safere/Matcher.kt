@@ -13,6 +13,8 @@ import java.util.regex.MatchResult
 import java.util.stream.Stream
 import java.util.stream.StreamSupport
 import kotlin.concurrent.Volatile
+import kotlin.jvm.JvmRecord
+import kotlin.jvm.JvmStatic
 
 /**
  * An engine that performs match operations on a [character sequence][CharSequence] by

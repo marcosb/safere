@@ -9,14 +9,14 @@ import jdk.incubator.vector.Vector
 import jdk.incubator.vector.VectorMask
 import jdk.incubator.vector.VectorOperators
 import jdk.incubator.vector.VectorSpecies
-
+import kotlin.math.*
 /** Stateless SIMD Teddy multi-keyword vector-shuffle scanning kernels using the Vector API.  */
 internal object TeddyVectorScan {
   private val SPECIES: VectorSpecies<Byte> = ByteVector.SPECIES_PREFERRED
 
   fun indexOfTeddyUtf8(bytes: ByteArray, offset: Int, length: Int, model: TeddyModel, start: Int): Int {
     val minLen = model.minLength()
-    var pos = Math.max(0, start)
+    var pos = max(0, start)
     val vectorLen = SPECIES.length()
     val limit = length - vectorLen
 

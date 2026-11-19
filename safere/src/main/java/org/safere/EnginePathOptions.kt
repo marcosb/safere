@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.Map
+import kotlin.jvm.JvmRecord
 
 /**
  * Package-private engine-path controls for forced-path equivalence tests.

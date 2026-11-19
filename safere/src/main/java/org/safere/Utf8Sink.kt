@@ -5,7 +5,7 @@
 package org.safere
 
 import java.nio.ByteBuffer
-
+import kotlin.math.*
 /**
  * A synchronous destination for borrowed UTF-8 byte ranges.
  * 
@@ -38,9 +38,9 @@ fun interface Utf8Sink {
             append(source.array(), source.arrayOffset() + source.position(), source.remaining())
             return
         }
-        val chunk = ByteArray(Math.min(source.remaining(), 8192))
+        val chunk = ByteArray(min(source.remaining(), 8192))
         while (source.hasRemaining()) {
-            val length = Math.min(source.remaining(), chunk.size)
+            val length = min(source.remaining(), chunk.size)
             source.get(chunk, 0, length)
             append(chunk, 0, length)
         }

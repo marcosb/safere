@@ -6,6 +6,7 @@ package org.safere
 
 import org.safere.Pattern.CharClassMatchInfo
 import org.safere.Pattern.KeywordAlternation
+import kotlin.jvm.JvmRecord
 
 /**
  * Immutable descriptor capturing pre-computed match-execution fast-path metadata extracted from a

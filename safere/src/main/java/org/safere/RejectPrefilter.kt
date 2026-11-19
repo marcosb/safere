@@ -8,8 +8,9 @@ import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.Pattern.EndAnchoredCharClassInfo
 import org.safere.Pattern.SuffixInfo
-import java.nio.charset.StandardCharsets
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
+import kotlin.text.Charsets
 /**
  * Whole-input rejection filter (Tier 0 acceleration).
  * 
@@ -148,7 +149,7 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(literal: String): Literal {
-                val utf8: ByteArray = literal.toByteArray(StandardCharsets.UTF_8)
+                val utf8: ByteArray = literal.toByteArray(Charsets.UTF_8)
                 val failure: IntArray = Pattern.literalFailure(utf8)
                 val shifts: IntArray? = Pattern.literalShifts(utf8)
                 val anchorOffset = StringLiteralSearch.anchorOffset(literal)
@@ -242,7 +243,7 @@ internal interface RejectPrefilter {
                 return false
             }
             val length: Int = haystack.length
-            val nearEnd = Math.min(length, FIRST_FIND_NEAR_WINDOW)
+            val nearEnd = min(length, FIRST_FIND_NEAR_WINDOW)
             for (member in smallChars!!) {
                 val index: Int = haystack.indexOfCodePointBounded(member.code, 0, nearEnd)
                 if (WorkCounterConfig.ENABLED) {
@@ -328,7 +329,7 @@ internal interface RejectPrefilter {
              */
             private fun nonAsciiUtf8OfMixedPair(small: CharArray?): ByteArray? {
                 return if (small != null && small.size == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
-                    small[1].toString().toByteArray(StandardCharsets.UTF_8)
+                    small[1].toString().toByteArray(Charsets.UTF_8)
                 else
                     null
             }
@@ -442,7 +443,7 @@ internal interface RejectPrefilter {
                 for (literal in literals) {
                     val lit = literal!!
                     if (!hasUnpairedSurrogate(lit)) {
-                        val utf8: ByteArray = lit.toByteArray(StandardCharsets.UTF_8)
+                        val utf8: ByteArray = lit.toByteArray(Charsets.UTF_8)
                         utf8Literals[idx] = utf8
                         failures[idx] = Pattern.literalFailure(utf8)
                         shifts[idx] = Pattern.literalShifts(utf8)
@@ -457,13 +458,13 @@ internal interface RejectPrefilter {
                 var i = 0
                 while (i < len) {
                     val c: Char = s[i]
-                    if (Character.isHighSurrogate(c)) {
-                        if (i + 1 < len && Character.isLowSurrogate(s[i + 1])) {
+                    if (CodePoints.isHighSurrogate(c)) {
+                        if (i + 1 < len && CodePoints.isLowSurrogate(s[i + 1])) {
                             i++
                         } else {
                             return true
                         }
-                    } else if (Character.isLowSurrogate(c)) {
+                    } else if (CodePoints.isLowSurrogate(c)) {
                         return true
                     }
                     i++
@@ -509,7 +510,7 @@ internal interface RejectPrefilter {
                 if (info == null || info.suffix == null || info.suffix.isEmpty()) {
                     return null
                 }
-                val utf8: ByteArray = info.suffix.toByteArray(StandardCharsets.UTF_8)
+                val utf8: ByteArray = info.suffix.toByteArray(Charsets.UTF_8)
                 return EndAnchoredSuffix(
                     info.suffix, utf8, info.wasDollar, info.unixLines, info.foldCase
                 )

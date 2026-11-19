@@ -8,6 +8,7 @@ import java.lang.invoke.MethodHandles
 import java.lang.invoke.VarHandle
 import java.nio.ByteOrder
 import java.util.*
+import kotlin.jvm.JvmOverloads
 
 internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : ByteSwarScan(bytes, offset, length),
     InputScanner {

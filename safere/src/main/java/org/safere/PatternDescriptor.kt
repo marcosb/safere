@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /**
  * Opaque process-local pattern identity paired with its static analysis.

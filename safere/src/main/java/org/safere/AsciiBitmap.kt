@@ -5,7 +5,8 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Immutable 128-bit bitmap representing a set of ASCII code points (0–127).
  * 
@@ -77,7 +78,7 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
             temp[count++] = start
             temp[count++] = 127
         }
-        return Arrays.copyOf(temp, count)
+        return (temp).copyOf(count)
     }
 
     internal class Builder {
@@ -94,7 +95,7 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
         }
 
         fun addRange(lo: Int, hi: Int): Builder {
-            for (cp in Math.max(0, lo)..Math.min(127, hi)) {
+            for (cp in max(0, lo)..Math.min(127, hi)) {
                 add(cp)
             }
             return this

@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /**
  * A stateful matcher over UTF-8 input whose reported positions are relative byte offsets.

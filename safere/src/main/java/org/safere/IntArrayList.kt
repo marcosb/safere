@@ -7,7 +7,8 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.jvm.JvmOverloads
+import kotlin.math.*
 /**
  * A resizable array of primitive `int` values to avoid boxing and object allocation overhead.
  */
@@ -17,7 +18,7 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
 
     fun add(value: Int) {
         if (size == data.size) {
-            data = Arrays.copyOf(data, data.size * 2)
+            data = (data).copyOf(data.size * 2)
         }
         data[size++] = value
     }
@@ -41,7 +42,7 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
     }
 
     fun toArray(): IntArray {
-        return Arrays.copyOf(data, size)
+        return (data).copyOf(size)
     }
 
     /**
@@ -78,11 +79,11 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
                 a[unique++] = a[i]
             }
         }
-        return Arrays.copyOf(a, unique)
+        return (a).copyOf(unique)
     }
 
     init {
-        data = IntArray(Math.max(4, capacity))
+        data = IntArray(max(4, capacity))
     }
 
     companion object {
@@ -111,8 +112,8 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
                 var r = 0
                 while (r < runs) {
                     val lo = starts[r]
-                    val mid = starts[Math.min(r + 1, runs)]
-                    val hi = starts[Math.min(r + 2, runs)]
+                    val mid = starts[min(r + 1, runs)]
+                    val hi = starts[min(r + 2, runs)]
                     starts[merged++] = out
                     var i = lo
                     var j = mid

@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmRecord
 /** A straight-line capture/consumer/capture sequence in a frozen [Prog].  */
 @JvmRecord
 internal data class CaptureRune(val rune: Inst?, val endRegister: Int, val out: Int)

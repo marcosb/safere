@@ -5,7 +5,7 @@
 package org.safere
 
 import java.nio.charset.StandardCharsets
-
+import kotlin.math.*
 /** Complete, ordered literal alternatives for a bounded String and UTF-8 search fast path.  */
 internal class LiteralAlternation private constructor(
     private val literals: Array<String>,
@@ -35,7 +35,7 @@ internal class LiteralAlternation private constructor(
             // Preserve locality for patterns that did not already scan the whole input for rejection.
             var start = 0
             while (start < length) {
-                val limit = start + Math.min(WINDOW_LENGTH, length - start)
+                val limit = start + min(WINDOW_LENGTH, length - start)
                 val match = search(text, start, limit)
                 if (match >= 0) {
                     return match
@@ -59,11 +59,11 @@ internal class LiteralAlternation private constructor(
         val length: Int = text.length
         var start = 0
         while (start < length) {
-            val limit = start + Math.min(WINDOW_LENGTH, length - start)
+            val limit = start + min(WINDOW_LENGTH, length - start)
             var bestStart = limit
             var bestEnd = -1
             for (literal in literals) {
-                val end = bestStart + Math.min(literal.length - 1, length - bestStart)
+                val end = bestStart + min(literal.length - 1, length - bestStart)
                 val candidate = text.indexOf(literal, start, end)
                 if (candidate >= 0 && candidate < bestStart) {
                     bestStart = candidate
@@ -156,14 +156,14 @@ internal class LiteralAlternation private constructor(
         val length = text.length
         while (start < length) {
             val remaining = length - start
-            val width = Math.min(windowLength, remaining)
+            val width = min(windowLength, remaining)
             val limit = if (remaining - width <= PROBE_LENGTH * 4) length else start + width
             val match = search(text, start, limit)
             if (match >= 0) {
                 return match
             }
             start = limit
-            windowLength = Math.min(2L * windowLength, (length - start).toLong()).toInt()
+            windowLength = min(2L * windowLength, (length - start).toLong()).toInt()
         }
         return NO_MATCH
     }
@@ -194,7 +194,7 @@ internal class LiteralAlternation private constructor(
         val length: Int = text.length
         while (start < length) {
             val remaining = length - start
-            val width = Math.min(windowLength, remaining)
+            val width = min(windowLength, remaining)
             // Combine a small final remainder with this window, avoiding another range search.
             val limit = if (remaining - width <= PROBE_LENGTH * 4) length else start + width
             val match = search(text, start, limit)
@@ -204,7 +204,7 @@ internal class LiteralAlternation private constructor(
             start = limit
             // Candidate-start ranges do not overlap. search() includes the literal-length overlap
             // needed for crossing matches; long arithmetic keeps growth safe at String's size limit.
-            windowLength = Math.min(2L * windowLength, (length - start).toLong()).toInt()
+            windowLength = min(2L * windowLength, (length - start).toLong()).toInt()
         }
         return NO_MATCH
     }
@@ -215,7 +215,7 @@ internal class LiteralAlternation private constructor(
         var bestEnd = -1
         val length: Int = text.length
         for (literal in literals) {
-            val end = bestStart + Math.min(literal.length - 1, length - bestStart)
+            val end = bestStart + min(literal.length - 1, length - bestStart)
             val idx = run {
                 var hit = -1
                 var i = from

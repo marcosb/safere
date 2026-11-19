@@ -5,7 +5,7 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.math.*
 /** A required suffix and a guarded gap can exclude a prefix of candidate match starts.  */
 internal class InnerLiteralSearch private constructor(
     private val suffix: RejectPrefilter.Literal,
@@ -58,7 +58,7 @@ internal class InnerLiteralSearch private constructor(
                 WorkCounter.record()
             }
             if (!gap!!.contains(InputScanner.codePoint(decoded))) {
-                return Math.max(from, scanner.retreatByCodePoints(position, prefixCodePoints))
+                return max(from, scanner.retreatByCodePoints(position, prefixCodePoints))
             }
             position = previous
             count++

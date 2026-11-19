@@ -4,6 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+
+import kotlin.math.*
 /**
  * Static helpers for the start-acceleration give-up rule, over state packed into one `long`.
  * 
@@ -62,7 +65,7 @@ internal object AdaptiveBackoff {
 
     /** Returns the quarantine window for the given backoff shift.  */
     fun quarantineWindow(shift: Int, initialWindow: Int, maxWindow: Int): Int {
-        return Math.min(initialWindow.toLong() shl shift, maxWindow.toLong()).toInt()
+        return min(initialWindow.toLong() shl shift, maxWindow.toLong()).toInt()
     }
 
     /**
@@ -115,7 +118,7 @@ internal object AdaptiveBackoff {
         if (deficit == 0) {
             return state
         }
-        deficit = Math.max(0, deficit + minSkip - skipped)
+        deficit = max(0, deficit + minSkip - skipped)
         // Callers only charge calls made at or after the resume position, so a repaid deficit leaves
         // nothing to remember.
         return if (deficit == 0) NEUTRAL else (state and DEFICIT_MASK.inv()) or deficit.toLong()
@@ -129,7 +132,7 @@ internal object AdaptiveBackoff {
         if (WorkCounterConfig.ENABLED) {
             WorkCounter.recordStartQuarantine(window)
         }
-        val resumePos = nextPos + Math.min(window, textLen - nextPos)
+        val resumePos = nextPos + min(window, textLen - nextPos)
         val nextShift = if (window < maxWindow && shift < MAX_SHIFT) shift + 1 else shift
         return pack(lossLimit ushr 1, nextShift, resumePos)
     }

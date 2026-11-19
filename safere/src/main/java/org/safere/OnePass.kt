@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmOverloads
 
 /**
  * One-pass NFA execution engine. For patterns where the NFA is deterministic (at most one possible

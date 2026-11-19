@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmStatic
 
 /**
  * A borrowed, immutable-bounds view of caller-owned UTF-8 text storage.
@@ -56,7 +57,7 @@ interface Utf8Input {
          */
         @JvmStatic
         fun trusted(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
-            Objects.requireNonNull(bytes, "bytes")
+            requireNotNull(bytes) { "bytes" }
             return ArrayUtf8Input(bytes!!, offset, length, false)
         }
 
@@ -87,7 +88,7 @@ interface Utf8Input {
          */
         @JvmStatic
         fun validated(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
-            Objects.requireNonNull(bytes, "bytes")
+            requireNotNull(bytes) { "bytes" }
             Utf8InputScanner.validate(bytes!!, offset, length)
             return ArrayUtf8Input(bytes!!, offset, length, true)
         }

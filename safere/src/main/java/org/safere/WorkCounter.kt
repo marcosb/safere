@@ -4,6 +4,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /** Package-private deterministic work accounting for performance regression tests.  */
 internal object WorkCounter {
     private val COUNTER = ThreadLocal<Counter?>()
@@ -86,7 +90,7 @@ internal object WorkCounter {
         val counter = COUNTER.get()
         if (counter != null) {
             counter.quarantineCount++
-            counter.largestQuarantine = Math.max(counter.largestQuarantine, window)
+            counter.largestQuarantine = max(counter.largestQuarantine, window)
         }
     }
 

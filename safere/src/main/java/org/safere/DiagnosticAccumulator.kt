@@ -70,13 +70,13 @@ internal class DiagnosticAccumulator {
     }
 
     fun incrementForwardDfaSearchCount() {
-        if (forwardDfaSearchCount < Integer.MAX_VALUE) {
+        if (forwardDfaSearchCount < Int.MAX_VALUE) {
             forwardDfaSearchCount++
         }
     }
 
     fun incrementReverseDfaSearchCount() {
-        if (reverseDfaSearchCount < Integer.MAX_VALUE) {
+        if (reverseDfaSearchCount < Int.MAX_VALUE) {
             reverseDfaSearchCount++
         }
     }

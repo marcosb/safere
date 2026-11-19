@@ -7,11 +7,12 @@ package org.safere
 import org.safere.CharClassScanInfo.UnicodeSmallSet
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.Utf8StartAccelerator.LeadingExpansion.ExcludedSet
-import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.function.IntFunction
 import java.util.function.IntPredicate
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
+import kotlin.text.Charsets
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
  * positions in a [Utf8InputScanner].
@@ -48,7 +49,7 @@ internal interface Utf8StartAccelerator {
 
         companion object {
             fun create(prefix: String): Literal {
-                val utf8: ByteArray = prefix.toByteArray(StandardCharsets.UTF_8)
+                val utf8: ByteArray = prefix.toByteArray(Charsets.UTF_8)
                 return Literal(
                     utf8,
                     Pattern.Companion.literalFailure(utf8),
@@ -150,7 +151,7 @@ internal interface Utf8StartAccelerator {
             private var workLimit: Long = -1
 
             override fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-                val start = Math.max(0, fromIndex)
+                val start = max(0, fromIndex)
                 if (exhausted) {
                     return start
                 }
@@ -163,12 +164,12 @@ internal interface Utf8StartAccelerator {
                 var searchFrom = start + anchorByteOffset
                 while (searchFrom < scanner.length) {
                     val windowEnd =
-                        searchFrom + Math.min(ANCHOR_SCAN_WINDOW, scanner.length - searchFrom) - 1
-                    var nextHit = Integer.MAX_VALUE
+                        searchFrom + min(ANCHOR_SCAN_WINDOW, scanner.length - searchFrom) - 1
+                    var nextHit = Int.MAX_VALUE
                     for (variant in anchorVariants) {
                         val hit =
                             scanner.indexOfWithin(
-                                variant.bytes, variant.failure!!, searchFrom, Math.min(windowEnd, nextHit - 1)
+                                variant.bytes, variant.failure!!, searchFrom, min(windowEnd, nextHit - 1)
                             )
                         if (hit >= 0) {
                             nextHit = hit
@@ -177,7 +178,7 @@ internal interface Utf8StartAccelerator {
                             }
                         }
                     }
-                    if (nextHit == Integer.MAX_VALUE) {
+                    if (nextHit == Int.MAX_VALUE) {
                         searchFrom = windowEnd + 1
                         continue
                     }
@@ -260,9 +261,9 @@ internal interface Utf8StartAccelerator {
                         var variantRarity = 0
                         for (value in variant.bytes) {
                             variantRarity =
-                                Math.max(variantRarity, RarityOracle.exactByteRarity(value.toInt() and 0xFF))
+                                max(variantRarity, RarityOracle.exactByteRarity(value.toInt() and 0xFF))
                         }
-                        rarity = Math.min(rarity, variantRarity)
+                        rarity = min(rarity, variantRarity)
                         stableWidth = stableWidth and (variant.bytes.size == width)
                     }
                     if (rarity > bestRarity) {
@@ -303,7 +304,7 @@ internal interface Utf8StartAccelerator {
             private fun encodedFoldVariants(foldVariants: IntArray): MutableList<EncodedFold> {
                 val variants: MutableList<EncodedFold> = ArrayList<EncodedFold>()
                 for (folded in foldVariants) {
-                    val bytes: ByteArray = String(Character.toChars(folded)).toByteArray(StandardCharsets.UTF_8)
+                    val bytes: ByteArray = String(CodePoints.toChars(folded)).toByteArray(Charsets.UTF_8)
                     variants.add(EncodedFold(bytes, Pattern.Companion.literalFailure(bytes)))
                 }
                 return variants
@@ -383,7 +384,7 @@ internal interface Utf8StartAccelerator {
                             continue
                         }
                     }
-                    return Math.max(
+                    return max(
                         searchFrom, scanner.retreatByCodePoints(literalStart, fixedOffsetLiteral.maxOffset())
                     )
                 }
@@ -420,8 +421,8 @@ internal interface Utf8StartAccelerator {
                         && start < scanner.length
                         && charClassPrefix.contains(scanner.codePointAt(start))
                     ) {
-                        return Math.max(
-                            searchFrom, Math.min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
+                        return max(
+                            searchFrom, min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
                         )
                     }
                 }
@@ -518,10 +519,10 @@ internal interface Utf8StartAccelerator {
                 if (scanInfo is UnicodeSmallSet) {
                     val chars = scanInfo.chars
                     if (chars.size == 1) {
-                        return chars[0].toString().toByteArray(StandardCharsets.UTF_8)
+                        return chars[0].toString().toByteArray(Charsets.UTF_8)
                     }
                     if (chars.size == 2 && chars[0].code < 0x80 && chars[1].code >= 0x80) {
-                        return chars[1].toString().toByteArray(StandardCharsets.UTF_8)
+                        return chars[1].toString().toByteArray(Charsets.UTF_8)
                     }
                 }
                 return null
@@ -588,7 +589,7 @@ internal interface Utf8StartAccelerator {
         }
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            val start = Math.max(0, fromIndex)
+            val start = max(0, fromIndex)
             if (offset >= scanner.length - start) {
                 return -1
             }
@@ -705,7 +706,7 @@ internal interface Utf8StartAccelerator {
                  */
                 fun of(le: StartPlan.LeadingExpansion): ExcludedSet? {
                     val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
-                    if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Integer.MAX_VALUE) {
+                    if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Int.MAX_VALUE) {
                         return null
                     }
                     return ExcludedSet(
@@ -714,10 +715,10 @@ internal interface Utf8StartAccelerator {
                             .filter(
                                 IntPredicate { cp: Int ->
                                     cp >= 0x80
-                                            && (cp > Character.MAX_VALUE.code || !Character.isSurrogate(cp.toChar()))
+                                            && (cp > Char.MAX_VALUE.code || !CodePoints.isSurrogate(cp.toChar()))
                                 })
                             .mapToObj<ByteArray?>(IntFunction { cp: Int ->
-                                Character.toString(cp).toByteArray(StandardCharsets.UTF_8)
+                                Character.toString(cp).toByteArray(Charsets.UTF_8)
                             })
                             .toArray(IntFunction { size: Int -> arrayOfNulls<ByteArray>(size) })
                     )
@@ -775,7 +776,7 @@ internal interface Utf8StartAccelerator {
         }
 
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
-            var searchPos = Math.max(0, fromIndex)
+            var searchPos = max(0, fromIndex)
             val textLen = scanner.length
             // A wide class's walk covers the rest of the line, so a skip shorter than
             // MIN_WIDE_LEADING_SKIP saves less than the literal scan and the walk cost. Such searches
@@ -791,7 +792,7 @@ internal interface Utf8StartAccelerator {
                 if (wideLeadingClass
                     && innerMatch - fromIndex < MultiAnchorCompiler.MIN_WIDE_LEADING_SKIP
                 ) {
-                    return Math.max(0, fromIndex)
+                    return max(0, fromIndex)
                 }
                 // A forward scan can show that the walk would reach the search start. Probe only the
                 // first hit: an excluded code point before it will also precede every later hit.

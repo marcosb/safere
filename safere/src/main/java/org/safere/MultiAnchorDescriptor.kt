@@ -8,6 +8,8 @@ import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
 import org.safere.Pattern.*
 import java.util.*
 import java.util.function.IntPredicate
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmRecord
 
 /**
  * Immutable descriptor carrying the prefilter and start-acceleration plans extracted from a regular
@@ -140,7 +142,7 @@ internal class MultiAnchorDescriptor @JvmOverloads constructor(
         data class Literal(val prefix: String?, val foldCase: Boolean) : StartPlan {
 
             init {
-                Objects.requireNonNull(prefix, "prefix")
+                requireNotNull(prefix) { "prefix" }
             }
         }
 
@@ -258,7 +260,7 @@ internal class MultiAnchorDescriptor @JvmOverloads constructor(
         data class Composite(val plans: Array<RejectPlan>?) : RejectPlan {
 
             init {
-                Objects.requireNonNull(plans, "plans")
+                requireNotNull(plans) { "plans" }
             }
         }
     }

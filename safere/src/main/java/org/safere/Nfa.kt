@@ -6,6 +6,7 @@ package org.safere
 
 import java.util.*
 import java.util.function.Function
+import kotlin.jvm.JvmOverloads
 
 /**
  * Pike VM NFA execution engine. Simulates all possible NFA threads in lockstep, tracking submatch

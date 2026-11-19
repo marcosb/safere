@@ -7,6 +7,8 @@ package org.safere
 import org.safere.StateAccelerator.*
 import org.safere.Utf8StartAccelerator.SearchCursor
 import java.util.*
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmRecord
 
 /**
  * Lazy DFA execution engine. Builds DFA states on demand from the compiled NFA program using the

@@ -5,7 +5,7 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.math.*
 /**
  * A mutable builder for [CharClass]. Maintains a set of Unicode code point ranges and
  * supports incremental construction via [.addRange], [.addCharClass], and [ ][.negate].
@@ -42,7 +42,7 @@ internal class CharClassBuilder {
 
     private fun append(lo: Int, hi: Int) {
         if (size == ranges.size) {
-            ranges = Arrays.copyOf(ranges, size * 2)
+            ranges = (ranges).copyOf(size * 2)
         }
         ranges[size++] = pack(lo, hi)
     }
@@ -62,7 +62,7 @@ internal class CharClassBuilder {
             var hi: Int = hi(ranges[i])
             i++
             while (i < size && lo(ranges[i]) <= hi.toLong() + 1) {
-                hi = Math.max(hi, hi(ranges[i]))
+                hi = max(hi, hi(ranges[i]))
                 i++
             }
             ranges[out++] = pack(lo, hi)
@@ -180,7 +180,7 @@ internal class CharClassBuilder {
             negated[out++] = pack(next, Utils.MAX_RUNE)
             count += Utils.MAX_RUNE - next + 1
         }
-        ranges = if (negated.size >= 8) negated else Arrays.copyOf(negated, 8)
+        ranges = if (negated.size >= 8) negated else (negated).copyOf(8)
         size = out
         nrunes = count
         return this
@@ -217,7 +217,7 @@ internal class CharClassBuilder {
                 count += rhi - hi
             }
         }
-        ranges = if (result.size >= 8) result else Arrays.copyOf(result, 8)
+        ranges = if (result.size >= 8) result else (result).copyOf(8)
         size = out
         nrunes = count
         return this
@@ -259,7 +259,7 @@ internal class CharClassBuilder {
     fun intersect(other: CharClassBuilder): CharClassBuilder {
         normalize()
         other.normalize()
-        val result = LongArray(Math.max(8, size + other.size))
+        val result = LongArray(max(8, size + other.size))
         var out = 0
         var count = 0
         var a = 0
@@ -267,8 +267,8 @@ internal class CharClassBuilder {
         while (a < size && b < other.size) {
             val ra = ranges[a]
             val rb = other.ranges[b]
-            val lo: Int = Math.max(lo(ra), lo(rb))
-            val hi: Int = Math.min(hi(ra), hi(rb))
+            val lo: Int = max(lo(ra), lo(rb))
+            val hi: Int = min(hi(ra), hi(rb))
             if (lo <= hi) {
                 result[out++] = pack(lo, hi)
                 count += hi - lo + 1

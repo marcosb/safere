@@ -21,9 +21,9 @@ internal object Swar {
             val low = ranges[i]
             val high = ranges[i + 1]
             if (low < 0
-                || high > Character.MAX_VALUE.code
+                || high > Char.MAX_VALUE.code
                 || low > high
-                || (low <= Character.MAX_SURROGATE.code && high >= Character.MIN_SURROGATE.code)
+                || (low <= Char.MAX_SURROGATE.code && high >= Char.MIN_SURROGATE.code)
             ) {
                 return false
             }

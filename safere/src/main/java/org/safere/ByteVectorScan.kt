@@ -8,7 +8,8 @@ import jdk.incubator.vector.ByteVector
 import jdk.incubator.vector.VectorMask
 import jdk.incubator.vector.VectorOperators
 import jdk.incubator.vector.VectorSpecies
-
+import kotlin.jvm.JvmStatic
+import kotlin.math.*
 /**
  * Stateless SIMD kernels using the incubating Vector API for 1-byte sequences (UTF-8 and Latin-1).
  */
@@ -26,7 +27,7 @@ internal object ByteVectorScan {
         if (!Swar.supportsAsciiRanges(ranges, 4)) {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val limit = position + species.loopBound(length - position)
         while (position < limit) {
             val values = ByteVector.fromArray(species, bytes, offset + position)
@@ -52,7 +53,7 @@ internal object ByteVectorScan {
     fun indexOfByte(
         species: VectorSpecies<Byte?>, bytes: ByteArray, offset: Int, length: Int, target: Byte, start: Int
     ): Int {
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val limit = position + species.loopBound(length - position)
         val targetVec = ByteVector.broadcast(species, target)
         while (position < limit) {
@@ -73,7 +74,7 @@ internal object ByteVectorScan {
     }
 
     fun indexOfBytePair(bytes: ByteArray, offset: Int, length: Int, b0: Byte, b1: Byte, start: Int): Int {
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val limit = position + SPECIES.loopBound(length - position)
         val v0 = ByteVector.broadcast(SPECIES, b0)
         val v1 = ByteVector.broadcast(SPECIES, b1)
@@ -98,7 +99,7 @@ internal object ByteVectorScan {
     fun indexOfByteTriple(
         bytes: ByteArray, offset: Int, length: Int, b0: Byte, b1: Byte, b2: Byte, start: Int
     ): Int {
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val limit = position + SPECIES.loopBound(length - position)
         val v0 = ByteVector.broadcast(SPECIES, b0)
         val v1 = ByteVector.broadcast(SPECIES, b1)
@@ -190,14 +191,14 @@ internal object ByteVectorScan {
         start: Int
     ): Int {
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         var verificationWork: Long = 0
         val workLimit = WorkLimit.forRemaining(length - pos)
 
         // Fast scalar prologue to catch immediate matches without SIMD setup
-        val scalarPrologueLimit = Math.min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
+        val scalarPrologueLimit = min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
         while (pos < scalarPrologueLimit) {
             val b = bytes[offset + pos + anchorOffset].toInt() and 0xFF
             if ((b == (low.toInt() and 0xFF) || b == (high.toInt() and 0xFF))
@@ -218,7 +219,7 @@ internal object ByteVectorScan {
         val limit = ByteScanBounds.lastLoadStart(length, 0, vectorLen)
         if (pos > limit) {
             val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
-            for (p in Math.max(start, pos - anchorOffset)..limitScalar) {
+            for (p in max(start, pos - anchorOffset)..limitScalar) {
                 val b = bytes[offset + p + anchorOffset].toInt() and 0xFF
                 if (b != (low.toInt() and 0xFF) && b != (high.toInt() and 0xFF)) {
                     continue
@@ -265,7 +266,7 @@ internal object ByteVectorScan {
         }
 
         val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
-        for (p in Math.max(start, pos - anchorOffset)..limitScalar) {
+        for (p in max(start, pos - anchorOffset)..limitScalar) {
             val b = bytes[offset + p + anchorOffset].toInt() and 0xFF
             if (b != (low.toInt() and 0xFF) && b != (high.toInt() and 0xFF)) {
                 continue
@@ -296,14 +297,14 @@ internal object ByteVectorScan {
         start: Int
     ): Int {
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         var verificationWork: Long = 0
         val workLimit = WorkLimit.forRemaining(length - pos)
 
-        val maxAnchorOffset = Math.max(offset1, offset2)
-        val scalarPrologueLimit = Math.min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
+        val maxAnchorOffset = max(offset1, offset2)
+        val scalarPrologueLimit = min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
         while (pos < scalarPrologueLimit) {
             val b1 = bytes[offset + pos + offset1].toInt() and 0xFF
             if ((b1 == (low1.toInt() and 0xFF) || b1 == (high1.toInt() and 0xFF))) {
@@ -488,7 +489,7 @@ internal object ByteVectorScan {
         if (numLits == 0 || length < minLength) {
             return -1
         }
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         var verificationWork: Long = 0
         val workLimit = WorkLimit.forRemaining(length - pos)
         var observedBytes = 0

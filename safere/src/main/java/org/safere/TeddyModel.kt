@@ -6,7 +6,7 @@ package org.safere
 
 import java.io.Serializable
 import java.util.*
-
+import kotlin.math.*
 /**
  * Immutable precomputed lookup tables and metadata for Teddy SIMD vector-shuffle multi-literal
  * acceleration.
@@ -95,7 +95,7 @@ internal class TeddyModel private constructor(
             if (literals == null || literals.size < 2 || literals.size > 32) {
                 return null
             }
-            var minLen = Integer.MAX_VALUE
+            var minLen = Int.MAX_VALUE
             for (lit in literals) {
                 if (lit == null || lit.isEmpty()) {
                     return null
@@ -105,10 +105,10 @@ internal class TeddyModel private constructor(
                         return null
                     }
                 }
-                minLen = Math.min(minLen, lit.length)
+                minLen = min(minLen, lit.length)
             }
 
-            val numBuckets: Int = Math.min(literals.size, MAX_BUCKETS)
+            val numBuckets: Int = min(literals.size, MAX_BUCKETS)
             val literalBuckets = IntArray(literals.size)
             val baseLutLo0 = ByteArray(NIBBLE_TABLE_SIZE)
             val baseLutHi0 = ByteArray(NIBBLE_TABLE_SIZE)
@@ -159,7 +159,7 @@ internal class TeddyModel private constructor(
                 }
             }
 
-            val tableSize = Math.max(64, Math.max(NIBBLE_TABLE_SIZE, vectorLength))
+            val tableSize = max(64, max(NIBBLE_TABLE_SIZE, vectorLength))
             val repeatedLo0: ByteArray = repeatTable(baseLutLo0, tableSize)
             val repeatedHi0: ByteArray = repeatTable(baseLutHi0, tableSize)
             val repeatedLo1: ByteArray? = if (is2Byte) repeatTable(baseLutLo1!!, tableSize) else null
@@ -185,7 +185,7 @@ internal class TeddyModel private constructor(
         private fun repeatTable(base16: ByteArray, totalSize: Int): ByteArray {
             val result = ByteArray(totalSize)
             for (i in 0 until totalSize step NIBBLE_TABLE_SIZE) {
-                System.arraycopy(base16, 0, result, i, Math.min(NIBBLE_TABLE_SIZE, totalSize - i))
+                base16.copyInto(result, i, 0, 0 + min(NIBBLE_TABLE_SIZE, totalSize - i))
             }
             return result
         }

@@ -5,7 +5,8 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.jvm.JvmOverloads
+import kotlin.math.*
 /**
  * Diagnostic export helpers for verifier fixtures and bytecode inspection.
  * 
@@ -224,7 +225,7 @@ object SafeReDiagnostics {
         json.append(',')
         appendNumberField(json, "numCaptures", prog.numCaptures())
         json.append(',')
-        appendNumberField(json, "numCaptureSlots", 2 * Math.max(prog.numCaptures(), 1))
+        appendNumberField(json, "numCaptureSlots", 2 * max(prog.numCaptures(), 1))
         json.append(',')
         appendNumberField(json, "numLoopRegs", prog.numLoopRegs())
         json.append(',')
@@ -376,7 +377,7 @@ object SafeReDiagnostics {
     }
 
     private fun appendJsonChar(json: StringBuilder, ch: Char) {
-        if (ch.code < 0x20 || Character.isSurrogate(ch)) {
+        if (ch.code < 0x20 || CodePoints.isSurrogate(ch)) {
             appendUnicodeEscape(json, ch)
         } else {
             json.append(ch)

@@ -7,7 +7,8 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Compiles a [Regexp] AST into a [Prog] (bytecode program) via Thompson NFA
  * construction. Each node in the AST is compiled into a [Frag] (instruction fragment) and
@@ -289,7 +290,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             return suffix
         }
 
-        val first = Math.max(0, minimum - 1)
+        val first = max(0, minimum - 1)
         val loopReg = nextLoopReg++
         var exits = copies.get(maximum - 1)!!.end
         var firstCheck = 0

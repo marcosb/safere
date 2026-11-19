@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmRecord
 /** A lazy single-consumer loop whose exit starts with captures/NOPs and an ASCII literal.  */
 @JvmRecord
 internal data class LazyRuneLoop(val rune: Inst?, val exitChar: Int, val exitStart: Int)

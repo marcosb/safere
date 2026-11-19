@@ -23,7 +23,7 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
     override fun maximumWindowLength(kind: ScanKind?): Int {
         // TRIPLE is the only kind with a measured upper crossover: past this window the SWAR triple
         // scan wins again. Every other kernel stays profitable for arbitrarily long windows.
-        return if (kind == ScanKind.TRIPLE) MAXIMUM_TRIPLE_WINDOW_LENGTH else Integer.MAX_VALUE
+        return if (kind == ScanKind.TRIPLE) MAXIMUM_TRIPLE_WINDOW_LENGTH else Int.MAX_VALUE
     }
 
     override fun indexOfByte(bytes: ByteArray?, offset: Int, length: Int, target: Byte, start: Int): Int {
@@ -44,8 +44,8 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
         return ByteVectorScan.indexOfByteTriple(bytes!!, offset, length, b0, b1, b2, start)
     }
 
-    override fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: TeddyModel?, start: Int): Int {
-        return TeddyVectorScan.indexOfTeddyUtf8(bytes!!, offset, length, model!!, start)
+    override fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: Any?, start: Int): Int {
+        return TeddyVectorScan.indexOfTeddyUtf8(bytes!!, offset, length, model as TeddyModel, start)
     }
 
     override fun indexOfMultiLiteral(
@@ -57,7 +57,7 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
         anchorOffsets: IntArray?,
         anchorRanges: IntArray?,
         minLength: Int,
-        teddyModel: TeddyModel?,
+        teddyModel: Any?,
         start: Int
     ): Int {
         return ByteVectorScan.indexOfMultiLiteral(
@@ -69,7 +69,7 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
             anchorOffsets!!,
             anchorRanges!!,
             minLength,
-            teddyModel,
+            teddyModel as TeddyModel?,
             start
         )
     }

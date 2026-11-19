@@ -408,10 +408,8 @@ object UnicodeTableGenerator {
         tables: MutableMap<String?, Array<IntArray?>?>,
         prefix: String
     ) {
-        out.println("  // Include explicit type arguments to ofEntries to avoid JDK-8221301")
-        out.println(
-            "  static final Map<String, int[][]> " + name + " = Map.<String, int[][]>ofEntries("
-        )
+        // Emit Kotlin mapOf / `to` pairs so generated tables compile on KMP commonMain.
+        out.println("  val " + name + ": Map<String, Array<IntArray>> = mapOf(")
         var count = 0
         for (entry in tables.entrySet()) {
             val key: String = entry.getKey()
@@ -421,13 +419,14 @@ object UnicodeTableGenerator {
                 entryStr =
                     String.format(
                         Locale.ROOT,
-                        "    Map.entry(\"%s\", new int[][] {{0x%x, 0x%x}})",
+                        "    \"%s\" to arrayOf(intArrayOf(0x%x, 0x%x))",
                         key,
                         ranges[0]!![0],
                         ranges[0]!![1]
                     )
             } else {
-                entryStr = "    Map.entry(\"%s\", %s_%s())".formatted(key, prefix, safeIdentifier(key))
+                entryStr =
+                    "    \"%s\" to %s_%s()".formatted(key, prefix, safeIdentifier(key))
             }
             out.print(entryStr)
             if (++count < tables.size) {
@@ -436,7 +435,7 @@ object UnicodeTableGenerator {
                 out.println()
             }
         }
-        out.println("  );")
+        out.println("  )")
         out.println()
     }
 

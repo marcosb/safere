@@ -7,6 +7,7 @@ package org.safere
 import java.util.*
 import java.util.List
 import java.util.Set
+import kotlin.jvm.JvmRecord
 
 /**
  * Immutable summary of one normally completed public matching operation.

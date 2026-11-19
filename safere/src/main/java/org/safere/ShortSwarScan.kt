@@ -7,7 +7,7 @@ package org.safere
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.VarHandle
 import java.nio.ByteOrder
-
+import kotlin.math.*
 /** Shared 64-bit SWAR kernels for scanning bounded 2-byte sequences (UTF-16 and char[]).  */
 internal object ShortSwarScan {
     private val LONG_VIEW: VarHandle =
@@ -22,7 +22,7 @@ internal object ShortSwarScan {
             return scalarIndexOfCharClass(chars, offset, length, ranges, start)
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val wordEnd = length - 4 // 4 chars = 64 bits
 
         val low0 = (ranges[0].toLong() and 0xFFFFL) * Swar.SHORT_ONES
@@ -84,7 +84,7 @@ internal object ShortSwarScan {
             return scalarIndexOfCharClassUtf16(bytes, offset, length, ranges, start)
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val wordEnd = length - 4 // 4 shorts = 8 bytes
 
         val low0 = (ranges[0].toLong() and 0xFFFFL) * Swar.SHORT_ONES
@@ -146,7 +146,7 @@ internal object ShortSwarScan {
     fun indexOfIgnoreCase(chars: CharArray, offset: Int, length: Int, prefix: String, start: Int): Int {
         val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         for (i in 0 until prefixLen) {
             if (prefix[i].code > 127) {
@@ -157,7 +157,7 @@ internal object ShortSwarScan {
             return Utf16.indexOfIgnoreCase(chars, offset, length, prefix, start)
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val wordEnd = length - 4
 
         val first: Char = prefix[0]
@@ -202,7 +202,7 @@ internal object ShortSwarScan {
     ): Int {
         val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         for (i in 0 until prefixLen) {
             if (prefix[i].code > 127) {
@@ -216,7 +216,7 @@ internal object ShortSwarScan {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val wordEnd = length - 4
 
         val first: Char = prefix[0]

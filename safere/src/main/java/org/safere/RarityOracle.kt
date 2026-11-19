@@ -4,6 +4,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmOverloads
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Empirical character and byte rarity oracle for regex literal and start acceleration.
  * 
@@ -178,13 +182,13 @@ internal object RarityOracle {
             return -1
         }
         val endpointRank =
-            Math.max(
+            max(
                 exactByteRarity(literal[0].toInt() and 0xFF),
                 exactByteRarity(literal[literal.size - 1].toInt() and 0xFF)
             )
         var bestOffset = -1
         var bestRank =
-            Math.max(MIN_LITERAL_BYTE_RARITY - 1, endpointRank + MIN_LITERAL_RARITY_ADVANTAGE - 1)
+            max(MIN_LITERAL_BYTE_RARITY - 1, endpointRank + MIN_LITERAL_RARITY_ADVANTAGE - 1)
         for (offset in 1..<literal.size - 1) {
             val rank = exactByteRarity(literal[offset].toInt() and 0xFF)
             if (rank > bestRank) {
@@ -267,8 +271,8 @@ internal object RarityOracle {
                 best2 = i
             }
         }
-        val offset1 = Math.min(best1, best2)
-        val offset2 = Math.max(best1, best2)
+        val offset1 = min(best1, best2)
+        val offset2 = max(best1, best2)
         val c1: Char = prefix[offset1]
         val c2: Char = prefix[offset2]
         return AsciiPair(
@@ -424,10 +428,10 @@ internal object RarityOracle {
             val lo = ranges[i]
             val hi = ranges[i + 1]
             if (lo < 128) {
-                totalWeight += asciiRangeFrequencyWeight(lo, Math.min(127, hi))
+                totalWeight += asciiRangeFrequencyWeight(lo, min(127, hi))
             }
             if (hi >= 128) {
-                nonAsciiMembers += hi - Math.max(128, lo) + 1L
+                nonAsciiMembers += hi - max(128, lo) + 1L
                 if (nonAsciiMembers > MAX_UNSCORED_NON_ASCII_MEMBERS) {
                     return 0
                 }

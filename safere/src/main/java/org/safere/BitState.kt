@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmOverloads
 
 /**
  * Bit-state backtracking execution engine. Uses explicit stack-based backtracking with a visited

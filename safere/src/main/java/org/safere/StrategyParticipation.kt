@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /** A strategy performing an auxiliary role during an operation.  */
 @JvmRecord

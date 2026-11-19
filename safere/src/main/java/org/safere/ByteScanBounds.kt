@@ -4,6 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+
+import kotlin.math.*
 /** Inclusive scan limits in bytes, relative to the logical input slice.  */
 internal object ByteScanBounds {
     /** Last start at which a match of `matchLen` fits; negative if no match fits.  */
@@ -24,7 +27,7 @@ internal object ByteScanBounds {
      * full-match bounds checks.
      */
     fun lastWideScanStart(length: Int, matchLen: Int, maxAnchorOffset: Int, loadBytes: Int): Int {
-        return Math.min(
+        return min(
             lastLoadStart(length, maxAnchorOffset, loadBytes), lastMatchStart(length, matchLen)
         )
     }

@@ -6,7 +6,8 @@ package org.safere
 
 import java.io.Serializable
 import java.util.*
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Metadata for small multi-literal alternation acceleration (2  N  4) using multi-vector
  * SIMD matching on distinct initial prefix characters.
@@ -47,7 +48,7 @@ internal data class MultiLiteralInfo(
             if (literals == null || literals.size < 2 || literals.size > 4) {
                 return null
             }
-            var minLen = Integer.MAX_VALUE
+            var minLen = Int.MAX_VALUE
             val anchorChars = CharArray(literals.size)
             val anchorOffsets = IntArray(literals.size)
             var seen0 = 0L
@@ -80,7 +81,7 @@ internal data class MultiLiteralInfo(
                 anchorOffsets[i] = 0
                 anchorChars[i] = firstChar
                 anchorBitmap.add(anchorChars[i].code)
-                minLen = Math.min(minLen, lit.length)
+                minLen = min(minLen, lit.length)
             }
 
             return MultiLiteralInfo(

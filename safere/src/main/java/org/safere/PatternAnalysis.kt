@@ -4,7 +4,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.Objects
+import kotlin.jvm.JvmRecord
 
 /** Immutable static analysis of a compiled pattern.  */
 @JvmRecord
@@ -20,9 +20,9 @@ data class PatternAnalysis(
         // Kotlin @JvmRecord cannot reassign primary-constructor properties the way a Java record
         // compact constructor can. Construction sites pass Set.copyOf(...) so these remain
         // unmodifiable views; requireNonNull preserves the Java null-check contract.
-        Objects.requireNonNull(features, "features")
-        Objects.requireNonNull(capabilities, "capabilities")
-        Objects.requireNonNull(limitations, "limitations")
+        requireNotNull(features) { "features" }
+        requireNotNull(capabilities) { "capabilities" }
+        requireNotNull(limitations) { "limitations" }
         require(programSize >= 0) { "programSize must be non-negative" }
         require(captureCount >= 0) { "captureCount must be non-negative" }
     }

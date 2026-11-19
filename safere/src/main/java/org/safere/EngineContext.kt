@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /** Immutable execution bounds shared by regex engines.  */
 @JvmRecord
@@ -22,8 +23,8 @@ internal data class EngineContext(
     val graphemeContext: GraphemeSupport.Context
 ) {
     init {
-        Objects.requireNonNull(text, "text")
-        Objects.requireNonNull(graphemeContext, "graphemeContext")
+        requireNotNull(text) { "text" }
+        requireNotNull(graphemeContext) { "graphemeContext" }
     }
 
     companion object {

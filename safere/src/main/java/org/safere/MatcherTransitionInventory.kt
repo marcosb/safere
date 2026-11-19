@@ -9,6 +9,7 @@ import java.util.List
 import java.util.Set
 import java.util.function.Function
 import java.util.stream.Collectors
+import kotlin.jvm.JvmRecord
 
 /**
  * Package-private inventory of public [Matcher] lifecycle transitions.

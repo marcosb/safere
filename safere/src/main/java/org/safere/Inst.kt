@@ -5,7 +5,7 @@
 package org.safere
 
 import java.util.*
-
+import kotlin.math.*
 /**
  * A single instruction in a compiled regular expression program. Each instruction has an [ ] and opcode-specific data.
  * 
@@ -228,8 +228,8 @@ internal class Inst {
         while (i < ranges.size) {
             val lo = ranges[i]
             val hi = ranges[i + 1]
-            val start = Math.max(lo, 0)
-            val end = Math.min(hi, 127)
+            val start = max(lo, 0)
+            val end = min(hi, 127)
             for (cp in start..end) {
                 if (cp < 64) {
                     b0 = b0 or (1L shl cp)

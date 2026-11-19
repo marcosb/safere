@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmRecord
 /**
  * Immutable tuning policy and diagnostic metadata for start-position and DFA accelerators.
  * 

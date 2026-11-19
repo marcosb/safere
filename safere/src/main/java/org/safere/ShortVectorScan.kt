@@ -6,7 +6,8 @@ package org.safere
 
 import jdk.incubator.vector.*
 import java.nio.ByteOrder
-
+import kotlin.jvm.JvmStatic
+import kotlin.math.*
 /**
  * Stateless SIMD kernels using the incubating Vector API for 2-byte sequences (UTF-16 and char[]).
  */
@@ -24,7 +25,7 @@ internal object ShortVectorScan {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 4)) {
             return VectorScanProvider.UNSUPPORTED
         }
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
 
@@ -57,7 +58,7 @@ internal object ShortVectorScan {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 4) || ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
             return VectorScanProvider.UNSUPPORTED
         }
-        var position = Math.max(0, start)
+        var position = max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
         val byteSpecies = species.withLanes<Byte?>(Byte::class.javaPrimitiveType)
@@ -98,7 +99,7 @@ internal object ShortVectorScan {
     ): Int {
         val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         for (i in 0 until prefixLen) {
             if (prefix[i].code > 127) {
@@ -109,7 +110,7 @@ internal object ShortVectorScan {
             return Utf16.indexOfIgnoreCase(chars, offset, length, prefix, start)
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
 
@@ -168,7 +169,7 @@ internal object ShortVectorScan {
     ): Int {
         val prefixLen: Int = prefix.length
         if (prefixLen == 0) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         for (i in 0 until prefixLen) {
             if (prefix[i].code > 127) {
@@ -182,7 +183,7 @@ internal object ShortVectorScan {
             return VectorScanProvider.UNSUPPORTED
         }
 
-        var pos = Math.max(0, start)
+        var pos = max(0, start)
         val vectorLen = species.length()
         val limit = length - vectorLen
         val byteSpecies = species.withLanes<Byte?>(Byte::class.javaPrimitiveType)

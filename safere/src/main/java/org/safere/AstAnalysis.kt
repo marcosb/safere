@@ -5,7 +5,8 @@
 package org.safere
 
 import java.util.Collections
-
+import kotlin.jvm.JvmRecord
+import kotlin.math.*
 /**
  * Encapsulates structural analysis of a regular expression AST in a single bottom-up pass using the
  * stack-safe [Walker].
@@ -76,7 +77,7 @@ internal data class AstAnalysis(
             when (re.op) {
                 RegexpOp.NO_MATCH -> {
                     canMatchEmpty = false
-                    minMatchLength = Integer.MAX_VALUE / 2
+                    minMatchLength = Int.MAX_VALUE / 2
                 }
 
                 RegexpOp.EMPTY_MATCH, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.HAVE_MATCH -> {
@@ -86,14 +87,14 @@ internal data class AstAnalysis(
 
                 RegexpOp.LITERAL -> {
                     canMatchEmpty = false
-                    minMatchLength = Character.charCount(re.rune)
+                    minMatchLength = CodePoints.charCount(re.rune)
                 }
 
                 RegexpOp.LITERAL_STRING -> {
                     var count = 0
                     if (re.runes != null) {
                         for (r in re.runes) {
-                            count += Character.charCount(r)
+                            count += CodePoints.charCount(r)
                         }
                     }
                     canMatchEmpty = count == 0
@@ -118,7 +119,7 @@ internal data class AstAnalysis(
                 RegexpOp.REPEAT -> {
                     val subMin = if (!childArgs.isNullOrEmpty()) childArgs!!.first().minMatchLength else 0
                     minMatchLength =
-                        Math.min(subMin.toLong() * Math.max(0, re.min), (Integer.MAX_VALUE / 2).toLong()).toInt()
+                        min(subMin.toLong() * max(0, re.min), (Int.MAX_VALUE / 2).toLong()).toInt()
                     canMatchEmpty =
                         re.min == 0 || (!childArgs.isNullOrEmpty() && childArgs!!.first().canMatchEmpty)
                 }
@@ -138,20 +139,20 @@ internal data class AstAnalysis(
                         sum += child.minMatchLength.toLong()
                     }
                     canMatchEmpty = allEmpty
-                    minMatchLength = Math.min(sum, (Integer.MAX_VALUE / 2).toLong()).toInt()
+                    minMatchLength = min(sum, (Int.MAX_VALUE / 2).toLong()).toInt()
                 }
 
                 RegexpOp.ALTERNATE -> {
                     var anyChildEmpty = false
-                    var min = Integer.MAX_VALUE / 2
+                    var min = Int.MAX_VALUE / 2
                     for (child in childArgs.orEmpty()) {
                         if (child.canMatchEmpty) {
                             anyChildEmpty = true
                         }
-                        min = Math.min(min, child.minMatchLength)
+                        min = min(min, child.minMatchLength)
                     }
                     canMatchEmpty = anyChildEmpty || childArgs.isNullOrEmpty()
-                    minMatchLength = if (min == Integer.MAX_VALUE / 2) 0 else min
+                    minMatchLength = if (min == Int.MAX_VALUE / 2) 0 else min
                     if (anyChildEmpty) {
                         anyNullableAlt = true
                     }

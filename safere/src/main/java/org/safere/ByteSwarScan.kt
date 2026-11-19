@@ -8,7 +8,7 @@ import java.lang.invoke.MethodHandles
 import java.lang.invoke.VarHandle
 import java.nio.ByteOrder
 import java.util.*
-
+import kotlin.math.*
 /** Shared 64-bit SWAR kernels for scanning bounded 1-byte sequences.  */
 internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int) {
     val bytes: ByteArray
@@ -44,7 +44,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.nativeOrder())
 
         fun filterThreshold(literalLength: Int): Long {
-            return Math.max(MIN_FILTER_LENGTH.toLong(), literalLength.toLong() * FILTER_LENGTH_FACTOR)
+            return max(MIN_FILTER_LENGTH.toLong(), literalLength.toLong() * FILTER_LENGTH_FACTOR)
         }
 
         fun indexOfByte(bytes: ByteArray, offset: Int, length: Int, target: Byte, start: Int): Int {
@@ -141,7 +141,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
         fun indexOfIgnoreCase(bytes: ByteArray, offset: Int, length: Int, prefix: String, start: Int): Int {
             val prefixLen: Int = prefix.length
             if (prefixLen == 0) {
-                return Math.min(Math.max(0, start), length)
+                return min(max(0, start), length)
             }
             for (i in 0..<prefixLen) {
                 if (prefix[i].code > 127) {
@@ -191,9 +191,9 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             start: Int
         ): Int {
             if (prefixLen == 0) {
-                return Math.min(Math.max(0, start), length)
+                return min(max(0, start), length)
             }
-            var pos = Math.max(0, start)
+            var pos = max(0, start)
             if (pos <= ByteScanBounds.lastMatchStart(length, prefixLen)
                 && Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)
             ) {
@@ -202,7 +202,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             var verificationWork: Long = 0
             val workLimit = WorkLimit.forRemaining(length - pos)
 
-            val maxAnchorOffset = Math.max(offset1, offset2)
+            val maxAnchorOffset = max(offset1, offset2)
             // Both anchor word loads and the immediate full-prefix check must fit in the slice.
             val wordEnd = ByteScanBounds.lastWideScanStart(length, prefixLen, maxAnchorOffset, java.lang.Long.BYTES)
             val repeatedLow1 = (low1.toLong() and 0xFFL) * Swar.BYTE_ONES
@@ -302,9 +302,9 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             start: Int
         ): Int {
             if (prefixLen == 0) {
-                return Math.min(Math.max(0, start), length)
+                return min(max(0, start), length)
             }
-            var pos = Math.max(0, start)
+            var pos = max(0, start)
             if (pos <= ByteScanBounds.lastMatchStart(length, prefixLen)
                 && Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)
             ) {
@@ -684,7 +684,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             }
             val numRanges: Int = ranges.size / 2
 
-            var pos = Math.max(0, start)
+            var pos = max(0, start)
             val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
 
             val low0 = (ranges[0].toLong() and 0xFFL) * Swar.BYTE_ONES

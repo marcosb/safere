@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmRecord
 /**
  * One scan dispatch, as observed by [ScanAudit].
  * 

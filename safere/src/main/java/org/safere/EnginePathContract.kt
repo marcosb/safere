@@ -6,6 +6,7 @@ package org.safere
 
 import java.util.*
 import java.util.List
+import kotlin.jvm.JvmRecord
 
 /** Machine-readable engine-path contract metadata for package-private tests.  */
 @JvmRecord

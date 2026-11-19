@@ -182,7 +182,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             } else {
                 out.kind = Kind.LITERAL
                 out.rune = source.codePointAt(sourcePosition)
-                sourcePosition += Character.charCount(out.rune)
+                sourcePosition += CodePoints.charCount(out.rune)
             }
             out.end = sourcePosition
             return
@@ -321,7 +321,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
                     skipTrivia()
                     out.text = payload('}'.code, "invalid Unicode group", out.start)
                 } else {
-                    out.text = String(Character.toChars(first))
+                    out.text = String(CodePoints.toChars(first))
                 }
             }
 
@@ -330,7 +330,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
                     throw error("invalid escape sequence", out.start)
                 }
                 out.kind = Kind.PREDEFINED
-                out.rune = Character.toLowerCase(c)
+                out.rune = CodePoints.toLowerCase(c)
                 out.negated = c >= 'A'.code && c <= 'Z'.code
             }
 
@@ -448,14 +448,14 @@ internal class RegexLexer(private val source: String, flags: Int) {
 
     private fun unicodeTail(out: Token, code: Int) {
         out.rune = code
-        if (!Character.isHighSurrogate(code.toChar())) return
+        if (!CodePoints.isHighSurrogate(code.toChar())) return
         skipTrivia()
         if (peekRaw() != '\\'.code || peekRaw(1) != 'u'.code) return
         val start = position()
         readRaw()
         readRaw()
         val low = exactHex(4, start)
-        if (Character.isLowSurrogate(low.toChar())) {
+        if (CodePoints.isLowSurrogate(low.toChar())) {
             out.rune = Character.toCodePoint(code.toChar(), low.toChar())
             out.end = lastEnd
         } else {
@@ -597,7 +597,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             val c = source.codePointAt(sourcePosition)
             if (c == ' '.code || (c >= '\t'.code && c <= '\r'.code)) {
                 if (WorkCounterConfig.ENABLED) WorkCounter.record()
-                sourcePosition += Character.charCount(c)
+                sourcePosition += CodePoints.charCount(c)
                 lastEnd = sourcePosition
             } else if (c == '#'.code) {
                 if (WorkCounterConfig.ENABLED) WorkCounter.record()
@@ -633,7 +633,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             ) {
                 commentQuoting = true
             }
-            sourcePosition += Character.charCount(cp)
+            sourcePosition += CodePoints.charCount(cp)
         }
     }
 
@@ -705,7 +705,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             ) {
                 if (WorkCounterConfig.ENABLED) WorkCounter.record()
                 currentStart = sourcePosition
-                sourcePosition += Character.charCount(cp)
+                sourcePosition += CodePoints.charCount(cp)
                 currentRune = cp
                 currentEnd = sourcePosition
                 escapedSourceRune = cp == '\\'.code && !escapedSourceRune
@@ -735,7 +735,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             start = sourcePosition
             if (WorkCounterConfig.ENABLED) WorkCounter.record()
             val cp = source.codePointAt(sourcePosition)
-            sourcePosition += Character.charCount(cp)
+            sourcePosition += CodePoints.charCount(cp)
             end = sourcePosition
             if (quoting) {
                 if (cp == '\\'.code && sourcePosition < source.length && source[sourcePosition] == 'E') {

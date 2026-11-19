@@ -5,6 +5,7 @@
 package org.safere
 
 import java.util.*
+import kotlin.jvm.JvmRecord
 
 /** Event emitted after a pattern is compiled while diagnostics are enabled.  */
 @JvmRecord

@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmRecord
 /** A fresh loop entry/check pair, optionally followed by one straight-line capture write.  */
 @JvmRecord
 internal data class LoopEntry(val out: Int, val captureRegister: Int)

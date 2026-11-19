@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+
+import kotlin.jvm.JvmOverloads
 /** ASCII character classification and case-folding utilities.  */
 internal object Ascii {
     /** Converts an ASCII uppercase character to lowercase; leaves other characters unchanged.  */
