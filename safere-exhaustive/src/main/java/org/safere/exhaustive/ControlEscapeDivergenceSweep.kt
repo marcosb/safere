@@ -2,444 +2,483 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.exhaustive
 
-package org.safere.exhaustive;
+import com.google.gson.JsonObject
+import org.safere.exhaustive.SweepWorkers.LineWorker
+import org.safere.exhaustive.SweepWorkers.ProgressReporter
+import java.io.IOException
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.List
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.Int
+import kotlin.Long
+import kotlin.RuntimeException
+import kotlin.Throws
+import kotlin.check
+import kotlin.code
+import kotlin.io.println
+import kotlin.io.use
+import kotlin.math.min
+import kotlin.plus
+import kotlin.text.StringBuilder
+import kotlin.text.format
+import kotlin.use
 
-import com.google.gson.JsonObject;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.regex.PatternSyntaxException;
+/** Offline differential sweep for `\cX` control-escape target bugs.  */
+object ControlEscapeDivergenceSweep {
+    private val TARGET_COUNT = Character.MAX_CODE_POINT + 1
 
-/** Offline differential sweep for {@code \cX} control-escape target bugs. */
-public final class ControlEscapeDivergenceSweep {
-  private static final int TARGET_COUNT = Character.MAX_CODE_POINT + 1;
+    private val CONTEXTS: MutableList<Context?> = List.of<Context?>(
+        context("bare", "\\c%s"),
+        context("anchored", "^\\c%s$"),
+        context("class", "[\\c%s]"),
+        context("negatedClass", "[^\\c%s]"),
+        context("prefixLiteral", "a\\c%s"),
+        context("suffixLiteral", "\\c%sa"),
+        context("captured", "(\\c%s)"),
+        context("optional", "\\c%s?")
+    )
 
-  private static final List<Context> CONTEXTS =
-      List.of(
-          context("bare", "\\c%s"),
-          context("anchored", "^\\c%s$"),
-          context("class", "[\\c%s]"),
-          context("negatedClass", "[^\\c%s]"),
-          context("prefixLiteral", "a\\c%s"),
-          context("suffixLiteral", "\\c%sa"),
-          context("captured", "(\\c%s)"),
-          context("optional", "\\c%s?"));
+    private val FLAG_MODES: MutableList<FlagMode?> = List.of<FlagMode?>(
+        FlagMode("none", "", 0),
+        FlagMode("comments", "(?x)", Pattern.COMMENTS),
+        FlagMode("caseInsensitive", "(?i)", Pattern.CASE_INSENSITIVE),
+        FlagMode(
+            "commentsCaseInsensitive",
+            "(?xi)",
+            Pattern.COMMENTS or Pattern.CASE_INSENSITIVE
+        )
+    )
 
-  private static final List<FlagMode> FLAG_MODES =
-      List.of(
-          new FlagMode("none", "", 0),
-          new FlagMode("comments", "(?x)", java.util.regex.Pattern.COMMENTS),
-          new FlagMode("caseInsensitive", "(?i)", java.util.regex.Pattern.CASE_INSENSITIVE),
-          new FlagMode(
-              "commentsCaseInsensitive",
-              "(?xi)",
-              java.util.regex.Pattern.COMMENTS | java.util.regex.Pattern.CASE_INSENSITIVE));
-
-  private ControlEscapeDivergenceSweep() {}
-
-  public static void main(String[] args) throws IOException {
-    SweepOptions options =
-        SweepOptions.parse(
-            args,
-            Path.of("target", "exhaustive-reports", "control-escape-sweep"),
-            "control-escape-divergences.jsonl",
-            1_000_000);
-    Files.createDirectories(options.outputDir());
-    if (options.replayFile() != null) {
-      Files.deleteIfExists(options.jsonlPath());
-    }
-    options.printStartup("control-escape");
-
-    if (options.replayFile() != null) {
-      runReplay(options);
-      return;
-    }
-
-    SweepRunState state = runSweep(options);
-
-    System.out.println("checked=" + state.checked.sum());
-    System.out.println("generated=" + state.generated);
-    System.out.println("totalCases=" + totalCases());
-    System.out.println("divergences=" + state.divergences.sum());
-    System.out.println("threads=" + options.threads());
-  }
-
-  private static SweepRunState runSweep(SweepOptions options) throws IOException {
-    try (SweepRunState runState = new SweepRunState(options, options.totalChecks(totalCases()))) {
-      runState.enableCompactLogs(
-          "control-escape", totalCases(), List.of("UNKNOWN"), List.of(DivergenceStatus.UNKNOWN));
-      SweepWorkers.run(
-          options.threads(),
-          "control-escape-sweep-",
-          workerIndex -> {
-            SweepState worker = new SweepState(runState, workerIndex);
-            worker.run();
-            worker.finish();
-          });
-      return runState;
-    }
-  }
-
-  private static void runReplay(SweepOptions options) throws IOException {
-    try (BufferedReader reader =
-            Files.newBufferedReader(options.replayFile(), StandardCharsets.UTF_8);
-        SweepRunState runState = new SweepRunState(options, 0)) {
-      long generated =
-          SweepWorkers.runStreamingLines(
-              options.threads(),
-              "control-escape-replay-",
-              reader,
-              line -> {
-                runState.checked.increment();
-                evaluateCase(runState, replayCase(line), -1, -1);
-              });
-      runState.recordGenerated(generated);
-      System.out.println("checked=" + runState.checked.sum());
-      System.out.println("generated=" + runState.generated);
-      System.out.println("divergences=" + runState.divergences.sum());
-      System.out.println("threads=" + options.threads());
-      System.out.println("jsonl=" + options.jsonlPath());
-      if (runState.divergences.sum() > 0) {
-        throw new IllegalStateException(
-            "replay found " + runState.divergences.sum() + " behavioral divergences");
-      }
-    }
-  }
-
-  private static CaseSpec replayCase(String line) {
-    var object = SweepJson.parseObject(line);
-    var caseObject = SweepJson.object(object, "case");
-    return new CaseSpec(
-        SweepJson.integer(caseObject, "target"),
-        new Context(
-            SweepJson.string(caseObject, "contextLabel"),
-            SweepJson.string(caseObject, "contextTemplate")),
-        new FlagMode(
-            SweepJson.string(caseObject, "flagLabel"),
-            SweepJson.string(caseObject, "flagPrefix"),
-            SweepJson.integer(caseObject, "flags")));
-  }
-
-  static long totalCases() {
-    return (long) TARGET_COUNT * CONTEXTS.size() * FLAG_MODES.size();
-  }
-
-  static String compactReplayJson(long caseIndex, String classification) {
-    CaseSpec spec = caseAt(caseIndex);
-    var object = SweepJson.object();
-    object.addProperty("caseIndex", caseIndex);
-    object.addProperty("classification", classification);
-    object.add("case", Divergence.caseJson(spec));
-    return SweepJson.toJson(object);
-  }
-
-  private static CaseSpec caseAt(long index) {
-    int flagIndex = (int) (index % FLAG_MODES.size());
-    index /= FLAG_MODES.size();
-    int contextIndex = (int) (index % CONTEXTS.size());
-    index /= CONTEXTS.size();
-    int target = (int) index;
-    return new CaseSpec(target, CONTEXTS.get(contextIndex), FLAG_MODES.get(flagIndex));
-  }
-
-  private static Outcome jdkOutcome(String regex, int flags, List<String> inputs) {
-    try {
-      return new Outcome(true, matches(java.util.regex.Pattern.compile(regex, flags), inputs), "");
-    } catch (PatternSyntaxException e) {
-      return new Outcome(false, "", e.getDescription());
-    } catch (RuntimeException e) {
-      return new Outcome(false, "", e.getClass().getSimpleName() + ": " + e.getMessage());
-    }
-  }
-
-  private static Outcome safeReOutcome(String regex, int flags, List<String> inputs) {
-    try {
-      return new Outcome(true, matches(org.safere.Pattern.compile(regex, flags), inputs), "");
-    } catch (PatternSyntaxException e) {
-      return new Outcome(false, "", e.getDescription());
-    } catch (RuntimeException e) {
-      return new Outcome(false, "", e.getClass().getSimpleName() + ": " + e.getMessage());
-    }
-  }
-
-  private static String matches(java.util.regex.Pattern pattern, List<String> inputs) {
-    StringBuilder result = new StringBuilder();
-    for (String input : inputs) {
-      if (pattern.matcher(input).matches()) {
-        appendInput(result, input);
-      }
-    }
-    return result.toString();
-  }
-
-  private static String matches(org.safere.Pattern pattern, List<String> inputs) {
-    StringBuilder result = new StringBuilder();
-    for (String input : inputs) {
-      if (pattern.matcher(input).matches()) {
-        appendInput(result, input);
-      }
-    }
-    return result.toString();
-  }
-
-  private static List<String> inputsFor(CaseSpec spec) {
-    String target = stringForCodePoint(spec.target());
-    String transformed = stringForCodePoint(spec.target() ^ 0x40);
-    Set<String> inputs = new LinkedHashSet<>();
-    inputs.add("");
-    inputs.add(transformed);
-    inputs.add(target);
-    addIfValid(inputs, (spec.target() ^ 0x40) - 1);
-    addIfValid(inputs, (spec.target() ^ 0x40) + 1);
-    inputs.add("a");
-    inputs.add("A");
-    inputs.add("!");
-    inputs.add("\u0001");
-    inputs.add("\u001b");
-    inputs.add("\u0140");
-    inputs.add("\uf57f");
-    inputs.add("\uD83D\uDE40");
-    if (spec.context().needsPrefixA()) {
-      inputs.add("a" + transformed);
-      inputs.add("aa");
-      inputs.add("a" + target);
-    }
-    if (spec.context().needsSuffixA()) {
-      inputs.add(transformed + "a");
-      inputs.add(target + "a");
-    }
-    return List.copyOf(inputs);
-  }
-
-  private static void addIfValid(Set<String> inputs, int codePoint) {
-    if (Character.isValidCodePoint(codePoint)) {
-      inputs.add(stringForCodePoint(codePoint));
-    }
-  }
-
-  private static String stringForCodePoint(int codePoint) {
-    if (codePoint <= Character.MAX_VALUE) {
-      return Character.toString((char) codePoint);
-    }
-    return new String(Character.toChars(codePoint));
-  }
-
-  private static void appendInput(StringBuilder result, String input) {
-    if (result.length() > 0) {
-      result.append(',');
-    }
-    result.append(escape(input));
-  }
-
-  private static String escape(String value) {
-    StringBuilder result = new StringBuilder();
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      switch (c) {
-        case '\\' -> result.append("\\\\");
-        case '\n' -> result.append("\\n");
-        case '\t' -> result.append("\\t");
-        case '\r' -> result.append("\\r");
-        case '"' -> result.append("\\\"");
-        default -> {
-          if (Character.isISOControl(c)
-              || Character.isSurrogate(c)
-              || Character.getType(c) == Character.PRIVATE_USE) {
-            result.append(String.format(Locale.ROOT, "\\u%04X", (int) c));
-          } else {
-            result.append(c);
-          }
+    @Throws(IOException::class)
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val options: SweepOptions =
+            SweepOptions.Companion.parse(
+                args,
+                Path.of("target", "exhaustive-reports", "control-escape-sweep"),
+                "control-escape-divergences.jsonl",
+                1000000
+            )
+        Files.createDirectories(options.outputDir)
+        if (options.replayFile != null) {
+            Files.deleteIfExists(options.jsonlPath())
         }
-      }
-    }
-    return result.toString();
-  }
+        options.printStartup("control-escape")
 
-  private static String bucketFor(CaseSpec spec, Outcome jdk, Outcome safere) {
-    String kind = jdk.accepted() != safere.accepted() ? "compile" : "membership";
-    return String.join(
-        "|",
-        "kind=" + kind,
-        "direction=" + direction(jdk, safere),
-        "context=" + spec.context().label(),
-        "flags=" + spec.flagMode().label(),
-        "targetClass=" + targetClass(spec.target()));
-  }
-
-  private static String direction(Outcome jdk, Outcome safere) {
-    if (jdk.accepted() && !safere.accepted()) {
-      return "jdk-accepts";
-    }
-    if (!jdk.accepted() && safere.accepted()) {
-      return "safere-accepts";
-    }
-    return "matches";
-  }
-
-  private static String targetClass(int target) {
-    if (Character.isHighSurrogate((char) target)) {
-      return "high-surrogate";
-    }
-    if (Character.isLowSurrogate((char) target)) {
-      return "low-surrogate";
-    }
-    if (target < 0x20 || target == 0x7F) {
-      return "ascii-control";
-    }
-    if (target < 0x80) {
-      return "ascii-printable";
-    }
-    if (target <= Character.MAX_VALUE) {
-      return "bmp";
-    }
-    return "supplementary";
-  }
-
-  private static boolean semanticallyEqual(Outcome left, Outcome right) {
-    if (left.accepted() != right.accepted()) {
-      return false;
-    }
-    return !left.accepted() || left.matches().equals(right.matches());
-  }
-
-  private static Context context(String label, String template) {
-    return new Context(label, template);
-  }
-
-  private record Context(String label, String template) {
-    String regex(String target) {
-      return template.formatted(target);
-    }
-
-    boolean needsPrefixA() {
-      return label.equals("prefixLiteral");
-    }
-
-    boolean needsSuffixA() {
-      return label.equals("suffixLiteral");
-    }
-  }
-
-  private record FlagMode(String label, String prefix, int flags) {}
-
-  private record CaseSpec(int target, Context context, FlagMode flagMode) {
-    String regex() {
-      return flagMode.prefix() + context.regex(stringForCodePoint(target));
-    }
-
-    String labels() {
-      return "target="
-          + String.format(Locale.ROOT, "U+%04X", target)
-          + ",context="
-          + context.label()
-          + ",flags="
-          + flagMode.label()
-          + ",targetClass="
-          + targetClass(target);
-    }
-  }
-
-  private record Outcome(boolean accepted, String matches, String error) {}
-
-  private record Divergence(
-      CaseSpec spec, String regex, Outcome jdk, Outcome safere, String bucket) {
-    String toJson() {
-      var object = SweepJson.object();
-      object.add("case", caseJson(spec));
-      object.addProperty("bucket", bucket);
-      object.addProperty("labels", spec.labels());
-      object.addProperty("regex", regex);
-      object.addProperty("target", spec.target());
-      object.addProperty("context", spec.context().label());
-      object.addProperty("flags", spec.flagMode().label());
-      object.addProperty("jdkAccepted", jdk.accepted());
-      object.addProperty("safeReAccepted", safere.accepted());
-      object.addProperty("jdkMatches", jdk.matches());
-      object.addProperty("safeReMatches", safere.matches());
-      object.addProperty("jdkError", jdk.error());
-      object.addProperty("safeReError", safere.error());
-      return SweepJson.toJson(object);
-    }
-
-    private static JsonObject caseJson(CaseSpec spec) {
-      var object = SweepJson.object();
-      object.addProperty("target", spec.target());
-      object.addProperty("contextLabel", spec.context().label());
-      object.addProperty("contextTemplate", spec.context().template());
-      object.addProperty("flagLabel", spec.flagMode().label());
-      object.addProperty("flagPrefix", spec.flagMode().prefix());
-      object.addProperty("flags", spec.flagMode().flags());
-      return object;
-    }
-  }
-
-  private static final class SweepState {
-    final SweepRunState runState;
-    final SweepOptions options;
-    final SweepWorkers.ProgressReporter progressReporter;
-    final int workerIndex;
-    long generated;
-
-    SweepState(SweepRunState runState, int workerIndex) {
-      this.runState = runState;
-      this.options = runState.options;
-      this.progressReporter = new SweepWorkers.ProgressReporter(runState, workerIndex);
-      this.workerIndex = workerIndex;
-    }
-
-    void run() {
-      long end = Math.min(options.rangeEndExclusive(), totalCases());
-      while (generated < end) {
-        long caseIndex = generated++;
-        if (caseIndex < options.rangeStartInclusive()) {
-          reportProgressIfNeeded();
-          continue;
+        if (options.replayFile != null) {
+            runReplay(options)
+            return
         }
-        if (caseIndex % options.threads() != workerIndex) {
-          continue;
+
+        val state = runSweep(options)
+
+        println("checked=" + state.checked.sum())
+        println("generated=" + state.generated)
+        println("totalCases=" + totalCases())
+        println("divergences=" + state.divergences.sum())
+        println("threads=" + options.threads)
+    }
+
+    @Throws(IOException::class)
+    private fun runSweep(options: SweepOptions): SweepRunState {
+        SweepRunState(options, options.totalChecks(totalCases())).use { runState ->
+            runState.enableCompactLogs(
+                "control-escape",
+                totalCases(),
+                mutableListOf<String?>("UNKNOWN"),
+                List.of<DivergenceStatus?>(DivergenceStatus.UNKNOWN)
+            )
+            SweepWorkers.run(
+                options.threads,
+                "control-escape-sweep-",
+                SweepWorkers.Worker { workerIndex: Int ->
+                    val worker = SweepState(runState, workerIndex)
+                    worker.run()
+                    worker.finish()
+                })
+            return runState
         }
-        progressReporter.checked();
-        evaluateCase(caseIndex, caseAt(caseIndex));
-      }
     }
 
-    void evaluateCase(long caseIndex, CaseSpec spec) {
-      ControlEscapeDivergenceSweep.evaluateCase(runState, spec, workerIndex, caseIndex);
-      reportProgressIfNeeded();
+    @Throws(IOException::class)
+    private fun runReplay(options: SweepOptions) {
+        Files.newBufferedReader(options.replayFile, StandardCharsets.UTF_8).use { reader ->
+            SweepRunState(options, 0).use { runState ->
+                val generated =
+                    SweepWorkers.runStreamingLines(
+                        options.threads,
+                        "control-escape-replay-",
+                        reader,
+                        LineWorker { line: String? ->
+                            runState.checked.increment()
+                            evaluateCase(runState, replayCase(line), -1, -1)
+                        })
+                runState.recordGenerated(generated)
+                println("checked=" + runState.checked.sum())
+                println("generated=" + runState.generated)
+                println("divergences=" + runState.divergences.sum())
+                println("threads=" + options.threads)
+                println("jsonl=" + options.jsonlPath())
+                check(runState.divergences.sum() <= 0) { "replay found " + runState.divergences.sum() + " behavioral divergences" }
+            }
+        }
     }
 
-    void finish() {
-      runState.recordGenerated(generated);
-      runState.updateWorkerNextCaseIndex(workerIndex, generated);
+    private fun replayCase(line: String?): CaseSpec {
+        val `object` = SweepJson.parseObject(line)
+        val caseObject = SweepJson.`object`(`object`, "case")
+        return CaseSpec(
+            SweepJson.integer(caseObject, "target"),
+            Context(
+                SweepJson.string(caseObject, "contextLabel"),
+                SweepJson.string(caseObject, "contextTemplate")
+            ),
+            FlagMode(
+                SweepJson.string(caseObject, "flagLabel"),
+                SweepJson.string(caseObject, "flagPrefix"),
+                SweepJson.integer(caseObject, "flags")
+            )
+        )
     }
 
-    void reportProgressIfNeeded() {
-      progressReporter.reportIfNeeded(generated);
+    @JvmStatic
+    fun totalCases(): Long {
+        return TARGET_COUNT.toLong() * CONTEXTS.size * FLAG_MODES.size
     }
-  }
 
-  private static void evaluateCase(
-      SweepRunState runState, CaseSpec spec, int workerIndex, long caseIndex) {
-    String regex = spec.regex();
-    List<String> inputs = inputsFor(spec);
-    Outcome jdk = jdkOutcome(regex, spec.flagMode().flags(), inputs);
-    Outcome safere = safeReOutcome(regex, spec.flagMode().flags(), inputs);
-    if (semanticallyEqual(jdk, safere)) {
-      return;
+    fun compactReplayJson(caseIndex: Long, classification: String?): String {
+        val spec = caseAt(caseIndex)
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("caseIndex", caseIndex)
+        `object`.addProperty("classification", classification)
+        `object`.add("case", Divergence.Companion.caseJson(spec))
+        return SweepJson.toJson(`object`)
     }
-    String bucketName = bucketFor(spec, jdk, safere);
-    if (workerIndex >= 0) {
-      runState.recordCompactDivergence(workerIndex, caseIndex, 0);
-    } else {
-      runState.recordDivergence();
-      runState.appendJsonl(new Divergence(spec, regex, jdk, safere, bucketName).toJson());
+
+    private fun caseAt(index: Long): CaseSpec {
+        var index = index
+        val flagIndex = (index % FLAG_MODES.size).toInt()
+        index /= FLAG_MODES.size.toLong()
+        val contextIndex = (index % CONTEXTS.size).toInt()
+        index /= CONTEXTS.size.toLong()
+        val target = index.toInt()
+        return CaseSpec(target, CONTEXTS.get(contextIndex), FLAG_MODES.get(flagIndex))
     }
-  }
+
+    private fun jdkOutcome(regex: String, flags: Int, inputs: MutableList<String>): Outcome {
+        try {
+            return Outcome(true, matches(Pattern.compile(regex, flags), inputs), "")
+        } catch (e: PatternSyntaxException) {
+            return Outcome(false, "", e.getDescription())
+        } catch (e: RuntimeException) {
+            return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
+        }
+    }
+
+    private fun safeReOutcome(regex: String?, flags: Int, inputs: MutableList<String>): Outcome {
+        try {
+            return Outcome(true, matches(org.safere.Pattern.compile(regex, flags), inputs), "")
+        } catch (e: PatternSyntaxException) {
+            return Outcome(false, "", e.getDescription())
+        } catch (e: RuntimeException) {
+            return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
+        }
+    }
+
+    private fun matches(pattern: Pattern, inputs: MutableList<String>): String {
+        val result = StringBuilder()
+        for (input in inputs) {
+            if (pattern.matcher(input).matches()) {
+                appendInput(result, input)
+            }
+        }
+        return result.toString()
+    }
+
+    private fun matches(pattern: org.safere.Pattern, inputs: MutableList<String>): String {
+        val result = StringBuilder()
+        for (input in inputs) {
+            if (pattern.matcher(input).matches()) {
+                appendInput(result, input)
+            }
+        }
+        return result.toString()
+    }
+
+    private fun inputsFor(spec: CaseSpec): MutableList<String> {
+        val target = stringForCodePoint(spec.target)
+        val transformed = stringForCodePoint(spec.target xor 0x40)
+        val inputs: MutableSet<String?> = LinkedHashSet<String?>()
+        inputs.add("")
+        inputs.add(transformed)
+        inputs.add(target)
+        addIfValid(inputs, (spec.target xor 0x40) - 1)
+        addIfValid(inputs, (spec.target xor 0x40) + 1)
+        inputs.add("a")
+        inputs.add("A")
+        inputs.add("!")
+        inputs.add("\u0001")
+        inputs.add("\u001b")
+        inputs.add("\u0140")
+        inputs.add("\uf57f")
+        inputs.add("\uD83D\uDE40")
+        if (spec.context!!.needsPrefixA()) {
+            inputs.add("a" + transformed)
+            inputs.add("aa")
+            inputs.add("a" + target)
+        }
+        if (spec.context.needsSuffixA()) {
+            inputs.add(transformed + "a")
+            inputs.add(target + "a")
+        }
+        return List.copyOf<String?>(inputs)
+    }
+
+    private fun addIfValid(inputs: MutableSet<String?>, codePoint: Int) {
+        if (Character.isValidCodePoint(codePoint)) {
+            inputs.add(stringForCodePoint(codePoint))
+        }
+    }
+
+    private fun stringForCodePoint(codePoint: Int): String {
+        if (codePoint <= Character.MAX_VALUE.code) {
+            return Character.toString(codePoint.toChar())
+        }
+        return String(Character.toChars(codePoint))
+    }
+
+    private fun appendInput(result: StringBuilder, input: String) {
+        if (result.length > 0) {
+            result.append(',')
+        }
+        result.append(escape(input))
+    }
+
+    private fun escape(value: String): String {
+        val result = StringBuilder()
+        for (i in 0..<value.length) {
+            val c = value.get(i)
+            when (c) {
+                '\\' -> result.append("\\\\")
+                '\n' -> result.append("\\n")
+                '\t' -> result.append("\\t")
+                '\r' -> result.append("\\r")
+                '"' -> result.append("\\\"")
+                else -> {
+                    if (Character.isISOControl(c)
+                        || Character.isSurrogate(c)
+                        || Character.getType(c) == Character.PRIVATE_USE.toInt()
+                    ) {
+                        result.append(String.format(Locale.ROOT, "\\u%04X", c.code))
+                    } else {
+                        result.append(c)
+                    }
+                }
+            }
+        }
+        return result.toString()
+    }
+
+    private fun bucketFor(spec: CaseSpec, jdk: Outcome, safere: Outcome): String {
+        val kind = if (jdk.accepted != safere.accepted) "compile" else "membership"
+        return String.join(
+            "|",
+            "kind=" + kind,
+            "direction=" + direction(jdk, safere),
+            "context=" + spec.context!!.label,
+            "flags=" + spec.flagMode!!.label,
+            "targetClass=" + targetClass(spec.target)
+        )
+    }
+
+    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+        if (jdk.accepted && !safere.accepted) {
+            return "jdk-accepts"
+        }
+        if (!jdk.accepted && safere.accepted) {
+            return "safere-accepts"
+        }
+        return "matches"
+    }
+
+    private fun targetClass(target: Int): kotlin.String {
+        if (Character.isHighSurrogate(target.toChar())) {
+            return "high-surrogate"
+        }
+        if (Character.isLowSurrogate(target.toChar())) {
+            return "low-surrogate"
+        }
+        if (target < 0x20 || target == 0x7F) {
+            return "ascii-control"
+        }
+        if (target < 0x80) {
+            return "ascii-printable"
+        }
+        if (target <= Character.MAX_VALUE.code) {
+            return "bmp"
+        }
+        return "supplementary"
+    }
+
+    private fun semanticallyEqual(left: Outcome, right: Outcome): Boolean {
+        if (left.accepted != right.accepted) {
+            return false
+        }
+        return !left.accepted || left.matches == right.matches
+    }
+
+    private fun context(label: kotlin.String?, template: kotlin.String?): Context {
+        return Context(label, template)
+    }
+
+    private fun evaluateCase(
+        runState: SweepRunState, spec: CaseSpec, workerIndex: Int, caseIndex: Long
+    ) {
+        val regex = spec.regex()
+        val inputs = inputsFor(spec)
+        val jdk = jdkOutcome(regex, spec.flagMode!!.flags, inputs)
+        val safere = safeReOutcome(regex, spec.flagMode.flags, inputs)
+        if (semanticallyEqual(jdk, safere)) {
+            return
+        }
+        val bucketName = bucketFor(spec, jdk, safere)
+        if (workerIndex >= 0) {
+            runState.recordCompactDivergence(workerIndex, caseIndex, 0)
+        } else {
+            runState.recordDivergence()
+            runState.appendJsonl(Divergence(spec, regex, jdk, safere, bucketName).toJson())
+        }
+    }
+
+    @JvmRecord
+    private data class Context(val label: kotlin.String?, val template: kotlin.String?) {
+        fun regex(target: kotlin.String?): kotlin.String {
+            return template.formatted(target)
+        }
+
+        fun needsPrefixA(): Boolean {
+            return label == "prefixLiteral"
+        }
+
+        fun needsSuffixA(): Boolean {
+            return label == "suffixLiteral"
+        }
+    }
+
+    @JvmRecord
+    private data class FlagMode(val label: kotlin.String?, val prefix: kotlin.String?, val flags: Int)
+
+    @JvmRecord
+    private data class CaseSpec(val target: Int, val context: Context?, val flagMode: FlagMode?) {
+        fun regex(): kotlin.String {
+            return flagMode!!.prefix + context!!.regex(stringForCodePoint(target))
+        }
+
+        fun labels(): kotlin.String {
+            return ("target="
+                    + kotlin.String.format(Locale.ROOT, "U+%04X", target) + ",context="
+                    + context!!.label
+                    + ",flags="
+                    + flagMode!!.label
+                    + ",targetClass="
+                    + targetClass(target))
+        }
+    }
+
+    @JvmRecord
+    private data class Outcome(val accepted: Boolean, val matches: kotlin.String?, val error: kotlin.String?)
+
+    @JvmRecord
+    private data class Divergence(
+        val spec: CaseSpec?,
+        val regex: kotlin.String?,
+        val jdk: Outcome?,
+        val safere: Outcome?,
+        val bucket: kotlin.String?
+    ) {
+        fun toJson(): kotlin.String {
+            val `object` = SweepJson.`object`()
+            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.addProperty("bucket", bucket)
+            `object`.addProperty("labels", spec.labels())
+            `object`.addProperty("regex", regex)
+            `object`.addProperty("target", spec.target)
+            `object`.addProperty("context", spec.context!!.label)
+            `object`.addProperty("flags", spec.flagMode!!.label)
+            `object`.addProperty("jdkAccepted", jdk!!.accepted)
+            `object`.addProperty("safeReAccepted", safere!!.accepted)
+            `object`.addProperty("jdkMatches", jdk.matches)
+            `object`.addProperty("safeReMatches", safere.matches)
+            `object`.addProperty("jdkError", jdk.error)
+            `object`.addProperty("safeReError", safere.error)
+            return SweepJson.toJson(`object`)
+        }
+
+        companion object {
+            private fun caseJson(spec: CaseSpec): JsonObject {
+                val `object` = SweepJson.`object`()
+                `object`.addProperty("target", spec.target)
+                `object`.addProperty("contextLabel", spec.context!!.label)
+                `object`.addProperty("contextTemplate", spec.context.template)
+                `object`.addProperty("flagLabel", spec.flagMode!!.label)
+                `object`.addProperty("flagPrefix", spec.flagMode.prefix)
+                `object`.addProperty("flags", spec.flagMode.flags)
+                return `object`
+            }
+        }
+    }
+
+    private class SweepState(runState: SweepRunState, workerIndex: Int) {
+        val runState: SweepRunState?
+        val options: SweepOptions
+        val progressReporter: ProgressReporter
+        val workerIndex: Int
+        var generated: Long = 0
+
+        init {
+            this.runState = runState
+            this.options = runState.options
+            this.progressReporter = ProgressReporter(runState, workerIndex)
+            this.workerIndex = workerIndex
+        }
+
+        fun run() {
+            val end = min(options.rangeEndExclusive, totalCases())
+            while (generated < end) {
+                val caseIndex = generated++
+                if (caseIndex < options.rangeStartInclusive) {
+                    reportProgressIfNeeded()
+                    continue
+                }
+                if (caseIndex % options.threads != workerIndex.toLong()) {
+                    continue
+                }
+                progressReporter.checked()
+                evaluateCase(caseIndex, caseAt(caseIndex))
+            }
+        }
+
+        fun evaluateCase(caseIndex: Long, spec: CaseSpec) {
+            ControlEscapeDivergenceSweep.evaluateCase(runState!!, spec, workerIndex, caseIndex)
+            reportProgressIfNeeded()
+        }
+
+        fun finish() {
+            runState!!.recordGenerated(generated)
+            runState.updateWorkerNextCaseIndex(workerIndex, generated)
+        }
+
+        fun reportProgressIfNeeded() {
+            progressReporter.reportIfNeeded(generated)
+        }
+    }
 }

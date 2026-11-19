@@ -2,733 +2,818 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import org.safere.Pattern.EndAnchoredCharClassInfo;
-import org.safere.Pattern.SuffixInfo;
+import org.safere.CharClassScanInfo.AsciiSmallSet
+import org.safere.MultiAnchorDescriptor.RejectPlan
+import org.safere.Pattern.EndAnchoredCharClassInfo
+import org.safere.Pattern.SuffixInfo
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.util.List
+import java.util.function.IntFunction
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.ByteArray
+import kotlin.Char
+import kotlin.CharArray
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.Long
+import kotlin.arrayOfNulls
+import kotlin.code
+import kotlin.compareTo
+import kotlin.text.endsWith
+import kotlin.text.indexOf
+import kotlin.text.isEmpty
+import kotlin.text.regionMatches
+import kotlin.text.startsWith
 
 /**
  * Whole-input rejection filter (Tier 0 acceleration).
- *
- * <p>Rejects match attempts in O(1) / fast linear scan before invoking automata when mandatory
+ * 
+ * 
+ * Rejects match attempts in O(1) / fast linear scan before invoking automata when mandatory
  * tokens or character classes are absent anywhere in the input.
  */
-sealed interface RejectPrefilter
-    permits RejectPrefilter.Literal,
-        RejectPrefilter.CharClass,
-        RejectPrefilter.DisjointLiterals,
-        RejectPrefilter.EndAnchoredSuffix,
-        RejectPrefilter.EndAnchoredCharClass,
-        RejectPrefilter.Composite {
+internal interface RejectPrefilter {
+    /**
+     * Returns whether the input starting from `searchFrom` can be rejected. Callers pass either
+     * a non-null `text` or a non-null `scanner`.
+     */
+    fun canReject(text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?): Boolean
 
-  /**
-   * Returns whether the input starting from {@code searchFrom} can be rejected. Callers pass either
-   * a non-null {@code text} or a non-null {@code scanner}.
-   */
-  boolean canReject(String text, InputScanner scanner, int searchFrom, EnginePathOptions options);
-
-  /** Returns the strategy that rejected the input, or {@code null} if it cannot be rejected. */
-  default MatchStrategy rejectionStrategy(
-      String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-    return canReject(text, scanner, searchFrom, options) ? strategy() : null;
-  }
-
-  /**
-   * Like {@link #canReject}, for the tail of a short input after its first start candidate. On
-   * success that tail is scanned again by the automaton, so filters may pick a search with a lower
-   * fixed cost.
-   */
-  default boolean canRejectTail(
-      String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-    return canReject(text, scanner, searchFrom, options);
-  }
-
-  /** Like {@link #rejectionStrategy}, using {@link #canRejectTail}. */
-  default MatchStrategy tailRejectionStrategy(
-      String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-    return canRejectTail(text, scanner, searchFrom, options) ? strategy() : null;
-  }
-
-  MatchStrategy strategy();
-
-  /** Restores scalar rejection that can suppress low-half starts in independent String input. */
-  default MatchStrategy regionCharClassRejectionStrategy(
-      InputScanner scanner, int start, int end, RegionClassSearch searches) {
-    if (this instanceof CharClass cc) {
-      return cc.rejectsRegion(scanner, start, end, searches) ? cc.strategy() : null;
+    /** Returns the strategy that rejected the input, or `null` if it cannot be rejected.  */
+    fun rejectionStrategy(
+        text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+    ): MatchStrategy? {
+        return if (canReject(text, scanner, searchFrom, options)) strategy() else null
     }
-    if (this instanceof Composite composite) {
-      // Composite construction flattens children. Other filters cannot suppress an NFA match
-      // solely because its candidate starts inside a surrogate pair.
-      for (RejectPrefilter filter : composite.filters()) {
-        if (filter instanceof CharClass cc && cc.rejectsRegion(scanner, start, end, searches)) {
-          return cc.strategy();
+
+    /**
+     * Like [.canReject], for the tail of a short input after its first start candidate. On
+     * success that tail is scanned again by the automaton, so filters may pick a search with a lower
+     * fixed cost.
+     */
+    fun canRejectTail(
+        text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+    ): Boolean {
+        return canReject(text, scanner, searchFrom, options)
+    }
+
+    /** Like [.rejectionStrategy], using [.canRejectTail].  */
+    fun tailRejectionStrategy(
+        text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+    ): MatchStrategy? {
+        return if (canRejectTail(text, scanner, searchFrom, options)) strategy() else null
+    }
+
+    fun strategy(): MatchStrategy?
+
+    /** Restores scalar rejection that can suppress low-half starts in independent String input.  */
+    fun regionCharClassRejectionStrategy(
+        scanner: InputScanner?, start: Int, end: Int, searches: RegionClassSearch
+    ): MatchStrategy? {
+        if (this is CharClass) {
+            return if (cc.rejectsRegion(scanner, start, end, searches)) cc.strategy() else null
         }
-      }
-    }
-    return null;
-  }
-
-  /** Checks only terminal filters, whose work is bounded by the pattern rather than the input. */
-  default MatchStrategy endAnchoredRejectionStrategy(
-      InputScanner scanner, int searchFrom, EnginePathOptions options) {
-    String text = scanner instanceof StringInputScanner stringScanner ? stringScanner.text() : null;
-    if (this instanceof EndAnchoredSuffix || this instanceof EndAnchoredCharClass) {
-      return rejectionStrategy(text, scanner, searchFrom, options);
-    }
-    if (this instanceof Composite composite) {
-      // Composite construction flattens the filters, so this remains an iterative bounded walk.
-      for (RejectPrefilter filter : composite.filters()) {
-        if (filter instanceof EndAnchoredSuffix || filter instanceof EndAnchoredCharClass) {
-          MatchStrategy rejection = filter.rejectionStrategy(text, scanner, searchFrom, options);
-          if (rejection != null) {
-            return rejection;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Drops {@link DisjointLiterals} when UTF-8 start acceleration is already active, so {@code
-   * find()} does not add multi-literal full-input scans ahead of a single-pass start accelerator.
-   */
-  static RejectPrefilter withoutDisjointLiterals(RejectPrefilter filter) {
-    if (filter instanceof DisjointLiterals) {
-      return null;
-    }
-    if (filter instanceof Composite(RejectPrefilter[] filters)) {
-      List<RejectPrefilter> kept = null;
-      for (int i = 0; i < filters.length; i++) {
-        if (filters[i] instanceof DisjointLiterals) {
-          if (kept == null) {
-            kept = new ArrayList<>(filters.length - 1);
-            for (int j = 0; j < i; j++) {
-              kept.add(filters[j]);
+        if (this is Composite) {
+            // Composite construction flattens children. Other filters cannot suppress an NFA match
+            // solely because its candidate starts inside a surrogate pair.
+            for (filter in composite.filters) {
+                if (filter is CharClass && filter.rejectsRegion(scanner, start, end, searches)) {
+                    return filter.strategy()
+                }
             }
-          }
-        } else if (kept != null) {
-          kept.add(filters[i]);
         }
-      }
-      if (kept == null) {
-        return filter;
-      }
-      if (kept.isEmpty()) {
-        return null;
-      }
-      return kept.size() == 1
-          ? kept.getFirst()
-          : new Composite(kept.toArray(RejectPrefilter[]::new));
+        return null
     }
-    return filter;
-  }
 
-  static RejectPrefilter create(MultiAnchorDescriptor descriptor) {
-    if (descriptor == null) {
-      return null;
-    }
-    return create(descriptor.rejectPlan());
-  }
-
-  static RejectPrefilter create(MultiAnchorDescriptor.RejectPlan plan) {
-    if (plan == null || plan instanceof MultiAnchorDescriptor.RejectPlan.None) {
-      return null;
-    }
-    return switch (plan) {
-      case MultiAnchorDescriptor.RejectPlan.None ignored -> null;
-      case MultiAnchorDescriptor.RejectPlan.RequiredLiteral l -> Literal.create(l.literal());
-      case MultiAnchorDescriptor.RejectPlan.RequiredCharClass c -> CharClass.create(c.scanInfo());
-      case MultiAnchorDescriptor.RejectPlan.DisjointLiterals d ->
-          DisjointLiterals.create(d.literals());
-      case MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix s ->
-          EndAnchoredSuffix.create(s.suffix());
-      case MultiAnchorDescriptor.RejectPlan.EndAnchoredCharClass ecc ->
-          EndAnchoredCharClass.create(ecc.charClass());
-      case MultiAnchorDescriptor.RejectPlan.Composite comp -> {
-        List<RejectPrefilter> list = new ArrayList<>();
-        for (MultiAnchorDescriptor.RejectPlan p : comp.plans()) {
-          RejectPrefilter filter = create(p);
-          if (filter != null) {
-            if (filter instanceof Composite subComp) {
-              list.addAll(List.of(subComp.filters()));
-            } else {
-              list.add(filter);
+    /** Checks only terminal filters, whose work is bounded by the pattern rather than the input.  */
+    fun endAnchoredRejectionStrategy(
+        scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+    ): MatchStrategy? {
+        val text = if (scanner is StringInputScanner) scanner.text() else null
+        if (this is EndAnchoredSuffix || this is EndAnchoredCharClass) {
+            return rejectionStrategy(text, scanner, searchFrom, options)
+        }
+        if (this is Composite) {
+            // Composite construction flattens the filters, so this remains an iterative bounded walk.
+            for (filter in composite.filters) {
+                if (filter is EndAnchoredSuffix || filter is EndAnchoredCharClass) {
+                    val rejection = filter.rejectionStrategy(text, scanner, searchFrom, options)
+                    if (rejection != null) {
+                        return rejection
+                    }
+                }
             }
-          }
         }
-        if (list.isEmpty()) {
-          yield null;
+        return null
+    }
+
+    @JvmRecord
+    data class Literal(
+        literal: String?,
+        utf8: ByteArray?,
+        failure: IntArray?,
+        shifts: IntArray?,
+        anchorOffset: Int,
+        anchor: Char
+    ) : RejectPrefilter {
+        @MaxBytecodeSize(
+            value = 35, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
+                    + " before searching for patterns with a required literal. Keep it a dispatcher"
+                    + " and put new work in the String or scanner overloads.")
+        )
+        override fun canReject(
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (!options.literalFastPaths) {
+                return false
+            }
+            return if (text != null) canReject(text, searchFrom) else canReject(scanner, searchFrom)
         }
-        if (list.size() == 1) {
-          yield list.get(0);
+
+        private fun canReject(text: String, searchFrom: Int): Boolean {
+            return StringLiteralSearch.indexOf(text, literal, anchorOffset, anchor, searchFrom) < 0
         }
-        yield new Composite(list.toArray(RejectPrefilter[]::new));
-      }
-    };
-  }
 
-  @SuppressWarnings("ArrayRecordComponent")
-  record Literal(
-      String literal, byte[] utf8, int[] failure, int[] shifts, int anchorOffset, char anchor)
-      implements RejectPrefilter {
-
-    static Literal create(String literal) {
-      byte[] utf8 = literal.getBytes(StandardCharsets.UTF_8);
-      int[] failure = Pattern.literalFailure(utf8);
-      int[] shifts = Pattern.literalShifts(utf8);
-      int anchorOffset = StringLiteralSearch.anchorOffset(literal);
-      return new Literal(
-          literal,
-          utf8,
-          failure,
-          shifts,
-          anchorOffset,
-          StringLiteralSearch.anchorAt(literal, anchorOffset));
-    }
-
-    @Override
-    @MaxBytecodeSize(
-        value = 35,
-        reason =
-            "C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
-                + " before searching for patterns with a required literal. Keep it a dispatcher"
-                + " and put new work in the String or scanner overloads.")
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (!options.literalFastPaths()) {
-        return false;
-      }
-      return text != null ? canReject(text, searchFrom) : canReject(scanner, searchFrom);
-    }
-
-    private boolean canReject(String text, int searchFrom) {
-      return StringLiteralSearch.indexOf(text, literal, anchorOffset, anchor, searchFrom) < 0;
-    }
-
-    @Override
-    public boolean canRejectTail(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (text == null && scanner instanceof Utf8InputScanner utf8Scanner) {
-        return options.literalFastPaths()
-            && utf8Scanner.indexOfInTail(this.utf8, failure, searchFrom) < 0;
-      }
-      return canReject(text, scanner, searchFrom, options);
-    }
-
-    private boolean canReject(InputScanner scanner, int searchFrom) {
-      if (scanner instanceof Utf8InputScanner utf8Scanner) {
-        return utf8Scanner.indexOf(this.utf8, failure, shifts, searchFrom) < 0;
-      }
-      if (scanner instanceof StringRegionInputScanner regionScanner) {
-        return regionScanner.indexOf(literal, searchFrom, regionScanner.length()) < 0;
-      }
-      return false;
-    }
-
-    @Override
-    public MatchStrategy strategy() {
-      return MatchStrategy.LITERAL;
-    }
-  }
-
-  @SuppressWarnings("ArrayRecordComponent")
-  record CharClass(
-      int[] ranges,
-      long bitmap0,
-      long bitmap1,
-      int singleAscii,
-      char[] smallChars,
-      byte[] nonAsciiUtf8)
-      implements RejectPrefilter {
-
-    static CharClass create(CharClassScanInfo scanInfo) {
-      char[] small = smallChars(scanInfo);
-      return new CharClass(
-          scanInfo.ranges(),
-          scanInfo.bitmap0(),
-          scanInfo.bitmap1(),
-          singleAscii(scanInfo),
-          small,
-          nonAsciiUtf8OfMixedPair(small));
-    }
-
-    /**
-     * Returns the UTF-8 encoding of the non-ASCII member of a small set with one ASCII and one
-     * non-ASCII member, such as {@code [\]\uFF3D]}, or {@code null} for every other class. Members
-     * are sorted, so the ASCII one comes first. Small-set members are never surrogates.
-     */
-    private static byte[] nonAsciiUtf8OfMixedPair(char[] small) {
-      return small != null && small.length == 2 && small[0] < 0x80 && small[1] >= 0x80
-          ? String.valueOf(small[1]).getBytes(StandardCharsets.UTF_8)
-          : null;
-    }
-
-    /**
-     * Returns the sole member of a one-character ASCII class, or {@code -1} for every other class.
-     *
-     * <p>A one-character reject class is a character search, not a class scan. {@link
-     * InputScanner#indexOfAscii} reaches {@link String#indexOf(int, int)}, which is intrinsified,
-     * whereas {@link InputScanner#indexOfCodePointClass} walks {@code codePointAt} and {@code
-     * charCount} per character. {@link CharClassScanInfo.AsciiSmallSet} already records its
-     * enumerated members; this reads that back so the distinction survives construction.
-     */
-    private static int singleAscii(CharClassScanInfo scanInfo) {
-      return scanInfo instanceof CharClassScanInfo.AsciiSmallSet smallSet
-              && smallSet.chars() != null
-              && smallSet.chars().length == 1
-          ? smallSet.chars()[0]
-          : -1;
-    }
-
-    /**
-     * Returns the members of a two-member small class, or {@code null}. On the {@code String} path
-     * they are searched with {@link #rejectsSmall}. A single ASCII member is already one {@code
-     * String.indexOf} through {@link #singleAscii}, and routing it through the windowed search
-     * instead cost 9% on {@code bracketCitation.match}. A three-member set would cost three
-     * intrinsic passes over a gap, which has not been measured against the class scan.
-     */
-    private static char[] smallChars(CharClassScanInfo scanInfo) {
-      return scanInfo instanceof CharClassScanInfo.SmallSet smallSet && smallSet.chars().length == 2
-          ? smallSet.chars()
-          : null;
-    }
-
-    @Override
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (!options.charClassMatchFastPaths()) {
-        return false;
-      }
-      if (text != null) {
-        if (smallChars != null) {
-          return rejectsSmall(text, searchFrom);
+        override fun canRejectTail(
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (text == null && scanner is Utf8InputScanner) {
+                return options.literalFastPaths
+                        && scanner.indexOfInTail(this.utf8, failure, searchFrom) < 0
+            }
+            return canReject(text, scanner, searchFrom, options)
         }
-        int length = text.length();
-        return (singleAscii >= 0
-                ? StringInputScanner.indexOfAscii(text, singleAscii, searchFrom, length)
-                : StringInputScanner.indexOfCodePointClass(
-                    text, ranges, bitmap0, bitmap1, searchFrom, length))
-            < 0;
-      }
-      if (scanner instanceof Utf8InputScanner utf8Scanner) {
-        return canRejectUtf8(utf8Scanner, searchFrom);
-      }
-      if (scanner != null) {
-        int limit = scanner.length();
-        return (singleAscii >= 0
-                ? scanner.indexOfAscii(singleAscii, searchFrom, limit)
-                : scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, searchFrom, limit))
-            < 0;
-      }
-      return false;
+
+        private fun canReject(scanner: InputScanner?, searchFrom: Int): Boolean {
+            if (scanner is Utf8InputScanner) {
+                return scanner.indexOf(this.utf8, failure, shifts, searchFrom) < 0
+            }
+            if (scanner is StringRegionInputScanner) {
+                return scanner.indexOf(literal, searchFrom, scanner.length()) < 0
+            }
+            return false
+        }
+
+        override fun strategy(): MatchStrategy {
+            return MatchStrategy.LITERAL
+        }
+
+        val literal: String?
+        val utf8: ByteArray?
+        val failure: IntArray?
+        val shifts: IntArray?
+        val anchorOffset: Int
+        val anchor: Char
+
+        init {
+            this.literal = literal
+            this.utf8 = utf8
+            this.failure = failure
+            this.shifts = shifts
+            this.anchorOffset = anchorOffset
+            this.anchor = anchor
+        }
+
+        companion object {
+            fun create(literal: String): Literal {
+                val utf8: ByteArray = literal.getBytes(StandardCharsets.UTF_8)
+                val failure: IntArray = Pattern.Companion.literalFailure(utf8)
+                val shifts: IntArray? = Pattern.Companion.literalShifts(utf8)
+                val anchorOffset = StringLiteralSearch.anchorOffset(literal)
+                return Literal(
+                    literal,
+                    utf8,
+                    failure,
+                    shifts,
+                    anchorOffset,
+                    StringLiteralSearch.anchorAt(literal, anchorOffset)
+                )
+            }
+        }
     }
 
-    private boolean rejectsRegion(
-        InputScanner scanner, int start, int end, RegionClassSearch searches) {
-      // Only low-surrogate membership distinguishes scalar rejection from the grapheme NFA's
-      // UTF-16 candidate policy. Leave unrelated classes on the existing engine path.
-      for (int i = 0; i < ranges.length; i += 2) {
-        if (ranges[i] > Character.MAX_LOW_SURROGATE) {
-          break;
+    @JvmRecord
+    data class CharClass(
+        ranges: IntArray?,
+        bitmap0: Long,
+        bitmap1: Long,
+        singleAscii: Int,
+        smallChars: CharArray?,
+        nonAsciiUtf8: ByteArray?
+    ) : RejectPrefilter {
+        override fun canReject(
+            text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (!options.charClassMatchFastPaths) {
+                return false
+            }
+            if (text != null) {
+                if (smallChars != null) {
+                    return rejectsSmall(text, searchFrom)
+                }
+                val length: Int = text.length()
+                return ((if (singleAscii >= 0)
+                    StringInputScanner.Companion.indexOfAscii(text, singleAscii, searchFrom, length)
+                else
+                    StringInputScanner.Companion.indexOfCodePointClass(
+                        text, ranges, bitmap0, bitmap1, searchFrom, length
+                    ))
+                        < 0)
+            }
+            if (scanner is Utf8InputScanner) {
+                return canRejectUtf8(scanner, searchFrom)
+            }
+            if (scanner != null) {
+                val limit = scanner.length()
+                return ((if (singleAscii >= 0)
+                    scanner.indexOfAscii(singleAscii, searchFrom, limit)
+                else
+                    scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, searchFrom, limit))
+                        < 0)
+            }
+            return false
         }
-        if (ranges[i + 1] >= Character.MIN_LOW_SURROGATE) {
-          return !searches.contains(this, scanner, start, end);
+
+        private fun rejectsRegion(
+            scanner: InputScanner?, start: Int, end: Int, searches: RegionClassSearch
+        ): Boolean {
+            // Only low-surrogate membership distinguishes scalar rejection from the grapheme NFA's
+            // UTF-16 candidate policy. Leave unrelated classes on the existing engine path.
+            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            return false
         }
-      }
-      return false;
+
+        /**
+         * Returns whether no member of [.smallChars] occurs in the input, checked only from the
+         * start of the input.
+         * 
+         * 
+         * The check covers a short window for every member, then searches each member over the rest
+         * of the input. That costs at most one pass per member per search sequence, and on input with
+         * no member it rejects in as few intrinsic calls as possible. Later `find()` calls do not
+         * reject: the start accelerator and DFA already bound the work for the rest of the input, and
+         * re-searching an absent member from every `find()` position cost 2x on input with sparse
+         * matches, even through bounded windows.
+         */
+        private fun rejectsSmall(haystack: String, searchFrom: Int): Boolean {
+            if (searchFrom > 0) {
+                return false
+            }
+            val length: Int = haystack.length()
+            val nearEnd = Math.min(length, FIRST_FIND_NEAR_WINDOW)
+            for (member in smallChars!!) {
+                val index: Int = haystack.indexOf(member.code, 0, nearEnd)
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record((if (index >= 0) index + 1 else nearEnd).toLong())
+                }
+                if (index >= 0) {
+                    return false
+                }
+            }
+            for (member in smallChars) {
+                val index: Int = haystack.indexOf(member.code, nearEnd)
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record((if (index >= 0) index - nearEnd + 1 else length - nearEnd).toLong())
+                }
+                if (index >= 0) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        /**
+         * Checks UTF-8 rejection.
+         * 
+         * 
+         * A class with a non-ASCII member is only checked from the start of the input. The UTF-8
+         * scanner has no memo, so repeating the check from every `find()` position would rescan
+         * the rest of the input each time.
+         * 
+         * 
+         * A mixed pair such as `[\]\uFF3D]` is first checked with one search for the ASCII
+         * member or any non-ASCII byte. On ASCII text that one pass decides the check, as it did when
+         * the class was searched as code points. Only from the first non-ASCII byte on is the class
+         * checked as two searches: the ASCII member with [Utf8InputScanner.indexOfAscii], and the
+         * non-ASCII member as a byte sequence with [Utf8InputScanner.indexOfUtf8Sequence]. Both
+         * use the byte search kernel. Decoding code points instead, as [ ][Utf8InputScanner.indexOfCodePointClass] does, costs several nanoseconds per character on text
+         * with no ASCII to skip, such as CJK.
+         */
+        private fun canRejectUtf8(scanner: Utf8InputScanner, searchFrom: Int): Boolean {
+            if (searchFrom > 0 && ranges!![ranges.length - 1] >= 0x80) {
+                return false
+            }
+            val length = scanner.length()
+            if (nonAsciiUtf8 != null) {
+                val ascii = smallChars!![0].code
+                val first = scanner.indexOfAsciiOrNonAscii(ascii, searchFrom, length)
+                if (first < 0) {
+                    return true
+                }
+                if (scanner.asciiAt(first) == ascii) {
+                    return false
+                }
+                return scanner.indexOfMixedPair(ascii, nonAsciiUtf8, first, length) < 0
+            }
+            if (singleAscii >= 0) {
+                return scanner.indexOfAscii(singleAscii, searchFrom, length) < 0
+            }
+            return scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, searchFrom, length) < 0
+        }
+
+        override fun strategy(): MatchStrategy {
+            return MatchStrategy.CHARACTER_CLASS
+        }
+
+        val ranges: IntArray?
+        val bitmap0: Long
+        val bitmap1: Long
+        val singleAscii: Int
+        val smallChars: CharArray?
+        val nonAsciiUtf8: ByteArray?
+
+        init {
+            this.ranges = ranges
+            this.bitmap0 = bitmap0
+            this.bitmap1 = bitmap1
+            this.singleAscii = singleAscii
+            this.smallChars = smallChars
+            this.nonAsciiUtf8 = nonAsciiUtf8
+        }
+
+        companion object {
+            fun create(scanInfo: CharClassScanInfo): CharClass {
+                val small: CharArray? = smallChars(scanInfo)
+                return CharClass(
+                    scanInfo.ranges(),
+                    scanInfo.bitmap0(),
+                    scanInfo.bitmap1(),
+                    singleAscii(scanInfo),
+                    small,
+                    nonAsciiUtf8OfMixedPair(small)
+                )
+            }
+
+            /**
+             * Returns the UTF-8 encoding of the non-ASCII member of a small set with one ASCII and one
+             * non-ASCII member, such as `[\]\uFF3D]`, or `null` for every other class. Members
+             * are sorted, so the ASCII one comes first. Small-set members are never surrogates.
+             */
+            private fun nonAsciiUtf8OfMixedPair(small: CharArray?): ByteArray? {
+                return if (small != null && small.length == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
+                    String.valueOf(small[1]).getBytes(StandardCharsets.UTF_8)
+                else
+                    null
+            }
+
+            /**
+             * Returns the sole member of a one-character ASCII class, or `-1` for every other class.
+             * 
+             * 
+             * A one-character reject class is a character search, not a class scan. [ ][InputScanner.indexOfAscii] reaches [String.indexOf], which is intrinsified,
+             * whereas [InputScanner.indexOfCodePointClass] walks `codePointAt` and `charCount` per character. [CharClassScanInfo.AsciiSmallSet] already records its
+             * enumerated members; this reads that back so the distinction survives construction.
+             */
+            private fun singleAscii(scanInfo: CharClassScanInfo?): Int {
+                return if (scanInfo is AsciiSmallSet
+                    && scanInfo.chars != null && scanInfo.chars.length == 1
+                )
+                    scanInfo.chars[0]
+                        .code
+                else
+                    -1
+            }
+
+            /**
+             * Returns the members of a two-member small class, or `null`. On the `String` path
+             * they are searched with [.rejectsSmall]. A single ASCII member is already one `String.indexOf` through [.singleAscii], and routing it through the windowed search
+             * instead cost 9% on `bracketCitation.match`. A three-member set would cost three
+             * intrinsic passes over a gap, which has not been measured against the class scan.
+             */
+            private fun smallChars(scanInfo: CharClassScanInfo?): CharArray? {
+                return if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars().length == 2)
+                    scanInfo.chars()
+                else
+                    null
+            }
+
+            /**
+             * Chars the first `find()` searches for every member before searching the rest of the
+             * input one member at a time, so a member near the start is found without first scanning the
+             * whole input for one that is absent.
+             */
+            private const val FIRST_FIND_NEAR_WINDOW = 80
+        }
     }
 
-    /**
-     * Chars the first {@code find()} searches for every member before searching the rest of the
-     * input one member at a time, so a member near the start is found without first scanning the
-     * whole input for one that is absent.
-     */
-    private static final int FIRST_FIND_NEAR_WINDOW = 80;
+    @JvmRecord
+    data class DisjointLiterals(
+        literals: Array<kotlin.String>?,
+        utf8Literals: Array<ByteArray?>?,
+        failures: Array<IntArray?>?,
+        shifts: Array<IntArray?>?
+    ) : RejectPrefilter {
+        override fun canReject(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (!options.literalFastPaths || searchFrom > 0) {
+                return false
+            }
+            if (text != null) {
+                for (literal in literals!!) {
+                    val idx = text.indexOf(literal)
+                    if (WorkCounterConfig.ENABLED) {
+                        val scanned: Int = if (idx >= 0) idx + literal.length() else text.length()
+                        WorkCounter.record(scanned.toLong())
+                    }
+                    if (idx >= 0) {
+                        return false
+                    }
+                }
+                return true
+            }
+            if (scanner is Utf8InputScanner) {
+                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                return true
+            }
+            if (scanner is StringRegionInputScanner) {
+                for (literal in literals!!) {
+                    if (scanner.indexOf(literal, searchFrom, scanner.length()) >= 0) {
+                        return false
+                    }
+                }
+                return true
+            }
+            return false
+        }
 
-    /**
-     * Returns whether no member of {@link #smallChars} occurs in the input, checked only from the
-     * start of the input.
-     *
-     * <p>The check covers a short window for every member, then searches each member over the rest
-     * of the input. That costs at most one pass per member per search sequence, and on input with
-     * no member it rejects in as few intrinsic calls as possible. Later {@code find()} calls do not
-     * reject: the start accelerator and DFA already bound the work for the rest of the input, and
-     * re-searching an absent member from every {@code find()} position cost 2x on input with sparse
-     * matches, even through bounded windows.
-     */
-    private boolean rejectsSmall(String haystack, int searchFrom) {
-      if (searchFrom > 0) {
-        return false;
-      }
-      int length = haystack.length();
-      int nearEnd = Math.min(length, FIRST_FIND_NEAR_WINDOW);
-      for (char member : smallChars) {
-        int index = haystack.indexOf(member, 0, nearEnd);
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(index >= 0 ? index + 1 : nearEnd);
+        override fun strategy(): MatchStrategy {
+            return MatchStrategy.LITERAL
         }
-        if (index >= 0) {
-          return false;
+
+        val literals: Array<kotlin.String>?
+        val utf8Literals: Array<ByteArray?>?
+        val failures: Array<IntArray?>?
+        val shifts: Array<IntArray?>?
+
+        init {
+            this.literals = literals
+            this.utf8Literals = utf8Literals
+            this.failures = failures
+            this.shifts = shifts
         }
-      }
-      for (char member : smallChars) {
-        int index = haystack.indexOf(member, nearEnd);
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(index >= 0 ? index - nearEnd + 1 : length - nearEnd);
+
+        companion object {
+            fun create(literals: Array<kotlin.String>?): DisjointLiterals? {
+                if (literals == null || literals.length == 0) {
+                    return null
+                }
+                var utf8Count = 0
+                for (literal in literals) {
+                    if (!hasUnpairedSurrogate(literal)) {
+                        utf8Count++
+                    }
+                }
+                val utf8Literals = arrayOfNulls<ByteArray>(utf8Count)
+                val failures = arrayOfNulls<IntArray>(utf8Count)
+                val shifts = arrayOfNulls<IntArray>(utf8Count)
+                var idx = 0
+                for (literal in literals) {
+                    if (!hasUnpairedSurrogate(literal)) {
+                        val utf8: ByteArray = literal.getBytes(StandardCharsets.UTF_8)
+                        utf8Literals[idx] = utf8
+                        failures[idx] = Pattern.Companion.literalFailure(utf8)
+                        shifts[idx] = Pattern.Companion.literalShifts(utf8)
+                        idx++
+                    }
+                }
+                return DisjointLiterals(literals, utf8Literals, failures, shifts)
+            }
+
+            private fun hasUnpairedSurrogate(s: kotlin.String): Boolean {
+                val len: Int = s.length()
+                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                return false
+            }
         }
-        if (index >= 0) {
-          return false;
-        }
-      }
-      return true;
     }
 
-    /**
-     * Checks UTF-8 rejection.
-     *
-     * <p>A class with a non-ASCII member is only checked from the start of the input. The UTF-8
-     * scanner has no memo, so repeating the check from every {@code find()} position would rescan
-     * the rest of the input each time.
-     *
-     * <p>A mixed pair such as {@code [\]\uFF3D]} is first checked with one search for the ASCII
-     * member or any non-ASCII byte. On ASCII text that one pass decides the check, as it did when
-     * the class was searched as code points. Only from the first non-ASCII byte on is the class
-     * checked as two searches: the ASCII member with {@link Utf8InputScanner#indexOfAscii}, and the
-     * non-ASCII member as a byte sequence with {@link Utf8InputScanner#indexOfUtf8Sequence}. Both
-     * use the byte search kernel. Decoding code points instead, as {@link
-     * Utf8InputScanner#indexOfCodePointClass} does, costs several nanoseconds per character on text
-     * with no ASCII to skip, such as CJK.
-     */
-    private boolean canRejectUtf8(Utf8InputScanner scanner, int searchFrom) {
-      if (searchFrom > 0 && ranges[ranges.length - 1] >= 0x80) {
-        return false;
-      }
-      int length = scanner.length();
-      if (nonAsciiUtf8 != null) {
-        int ascii = smallChars[0];
-        int first = scanner.indexOfAsciiOrNonAscii(ascii, searchFrom, length);
-        if (first < 0) {
-          return true;
+    @JvmRecord
+    data class EndAnchoredSuffix(
+        suffix: kotlin.String?,
+        suffixUtf8: ByteArray?,
+        wasDollar: Boolean,
+        unixLines: Boolean,
+        foldCase: Boolean
+    ) : RejectPrefilter {
+        override fun canReject(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (!options.literalFastPaths) {
+                return false
+            }
+            if (text != null) {
+                return !Companion.endsWith(text, suffix!!, wasDollar, unixLines, foldCase)
+            }
+            if (scanner is Utf8InputScanner) {
+                return !scanner.endsWith(suffixUtf8, wasDollar, unixLines, foldCase)
+            }
+            if (scanner is StringRegionInputScanner) {
+                return !scanner.endsWith(suffix, wasDollar, unixLines, foldCase)
+            }
+            return false
         }
-        if (scanner.asciiAt(first) == ascii) {
-          return false;
+
+        override fun strategy(): MatchStrategy {
+            return MatchStrategy.LITERAL
         }
-        return scanner.indexOfMixedPair(ascii, nonAsciiUtf8, first, length) < 0;
-      }
-      if (singleAscii >= 0) {
-        return scanner.indexOfAscii(singleAscii, searchFrom, length) < 0;
-      }
-      return scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, searchFrom, length) < 0;
-    }
 
-    @Override
-    public MatchStrategy strategy() {
-      return MatchStrategy.CHARACTER_CLASS;
-    }
-  }
+        val suffix: kotlin.String?
+        val suffixUtf8: ByteArray?
+        val wasDollar: Boolean
+        val unixLines: Boolean
+        val foldCase: Boolean
 
-  @SuppressWarnings("ArrayRecordComponent")
-  record DisjointLiterals(
-      String[] literals, byte[][] utf8Literals, int[][] failures, int[][] shifts)
-      implements RejectPrefilter {
-
-    static DisjointLiterals create(String[] literals) {
-      if (literals == null || literals.length == 0) {
-        return null;
-      }
-      int utf8Count = 0;
-      for (String literal : literals) {
-        if (!hasUnpairedSurrogate(literal)) {
-          utf8Count++;
+        init {
+            this.suffix = suffix
+            this.suffixUtf8 = suffixUtf8
+            this.wasDollar = wasDollar
+            this.unixLines = unixLines
+            this.foldCase = foldCase
         }
-      }
-      byte[][] utf8Literals = new byte[utf8Count][];
-      int[][] failures = new int[utf8Count][];
-      int[][] shifts = new int[utf8Count][];
-      int idx = 0;
-      for (String literal : literals) {
-        if (!hasUnpairedSurrogate(literal)) {
-          byte[] utf8 = literal.getBytes(StandardCharsets.UTF_8);
-          utf8Literals[idx] = utf8;
-          failures[idx] = Pattern.literalFailure(utf8);
-          shifts[idx] = Pattern.literalShifts(utf8);
-          idx++;
+
+        companion object {
+            fun create(info: SuffixInfo?): EndAnchoredSuffix? {
+                if (info == null || info.suffix == null || info.suffix.isEmpty()) {
+                    return null
+                }
+                val utf8: ByteArray = info.suffix.getBytes(StandardCharsets.UTF_8)
+                return EndAnchoredSuffix(
+                    info.suffix, utf8, info.wasDollar, info.unixLines, info.foldCase
+                )
+            }
+
+            private fun endsWith(
+                text: kotlin.String, suffix: kotlin.String, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean
+            ): Boolean {
+                val suffixLen: Int = suffix.length()
+                val textLen: Int = text.length()
+                if (textLen >= suffixLen
+                    && (if (foldCase)
+                        text.regionMatches(true, textLen - suffixLen, suffix, 0, suffixLen)
+                    else
+                        text.endsWith(suffix))
+                ) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record(suffixLen.toLong())
+                    }
+                    return true
+                }
+                if (!wasDollar || text.isEmpty()) {
+                    return false
+                }
+                val trailingStart: Int =
+                    StringInputScanner.Companion.trailingLineTerminatorStart(text, unixLines, textLen)
+                if (trailingStart >= suffixLen
+                    && (if (foldCase)
+                        text.regionMatches(true, trailingStart - suffixLen, suffix, 0, suffixLen)
+                    else
+                        text.startsWith(suffix, trailingStart - suffixLen))
+                ) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record(suffixLen.toLong())
+                    }
+                    return true
+                }
+                return false
+            }
         }
-      }
-      return new DisjointLiterals(literals, utf8Literals, failures, shifts);
     }
 
-    private static boolean hasUnpairedSurrogate(String s) {
-      int len = s.length();
-      for (int i = 0; i < len; i++) {
-        char c = s.charAt(i);
-        if (Character.isHighSurrogate(c)) {
-          if (i + 1 < len && Character.isLowSurrogate(s.charAt(i + 1))) {
-            i++;
-          } else {
-            return true;
-          }
-        } else if (Character.isLowSurrogate(c)) {
-          return true;
+    @JvmRecord
+    data class EndAnchoredCharClass(bitmap: AsciiBitmap?, wasDollar: Boolean, unixLines: Boolean) : RejectPrefilter {
+        override fun canReject(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions
+        ): Boolean {
+            if (!options.charClassMatchFastPaths) {
+                return false
+            }
+            if (text != null) {
+                return canReject(text)
+            }
+            if (scanner is Utf8InputScanner || scanner is StringRegionInputScanner) {
+                return canRejectTerminal(scanner)
+            }
+            return false
         }
-      }
-      return false;
-    }
 
-    @Override
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (!options.literalFastPaths() || searchFrom > 0) {
-        return false;
-      }
-      if (text != null) {
-        for (String literal : literals) {
-          int idx = text.indexOf(literal);
-          if (WorkCounterConfig.ENABLED) {
-            int scanned = idx >= 0 ? idx + literal.length() : text.length();
-            WorkCounter.record(scanned);
-          }
-          if (idx >= 0) {
-            return false;
-          }
+        private fun canRejectTerminal(scanner: InputScanner): Boolean {
+            val len = scanner.length()
+            if (len == 0) {
+                return true
+            }
+            val ascii = scanner.asciiAt(len - 1)
+            if (bitmap!!.contains(ascii)) {
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record(1)
+                }
+                return false
+            }
+            if (!wasDollar) {
+                return true
+            }
+            val prevPos = scanner.trailingLineTerminatorStart(unixLines, len)
+            if (prevPos > 0) {
+                val prevAscii = scanner.asciiAt(prevPos - 1)
+                if (bitmap.contains(prevAscii)) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record(1)
+                    }
+                    return false
+                }
+            }
+            return true
         }
-        return true;
-      }
-      if (scanner instanceof Utf8InputScanner utf8) {
-        for (int i = 0; i < utf8Literals.length; i++) {
-          if (utf8.indexOf(utf8Literals[i], failures[i], shifts[i], 0) >= 0) {
-            return false;
-          }
+
+        private fun canReject(text: kotlin.String): Boolean {
+            val len: Int = text.length()
+            if (len == 0) {
+                return true
+            }
+            val last: Char = text.charAt(len - 1)
+            if (bitmap!!.contains(last.code)) {
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record(1)
+                }
+                return false
+            }
+            if (!wasDollar) {
+                return true
+            }
+            val prevPos: Int = StringInputScanner.Companion.trailingLineTerminatorStart(text, unixLines, len)
+            if (prevPos > 0) {
+                val prev: Char = text.charAt(prevPos - 1)
+                if (bitmap.contains(prev.code)) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record(1)
+                    }
+                    return false
+                }
+            }
+            return true
         }
-        return true;
-      }
-      if (scanner instanceof StringRegionInputScanner regionScanner) {
-        for (String literal : literals) {
-          if (regionScanner.indexOf(literal, searchFrom, regionScanner.length()) >= 0) {
-            return false;
-          }
+
+        override fun strategy(): MatchStrategy {
+            return MatchStrategy.CHARACTER_CLASS
         }
-        return true;
-      }
-      return false;
-    }
 
-    @Override
-    public MatchStrategy strategy() {
-      return MatchStrategy.LITERAL;
-    }
-  }
+        val bitmap: AsciiBitmap?
+        val wasDollar: Boolean
+        val unixLines: Boolean
 
-  @SuppressWarnings("ArrayRecordComponent")
-  record EndAnchoredSuffix(
-      String suffix, byte[] suffixUtf8, boolean wasDollar, boolean unixLines, boolean foldCase)
-      implements RejectPrefilter {
-
-    static EndAnchoredSuffix create(SuffixInfo info) {
-      if (info == null || info.suffix() == null || info.suffix().isEmpty()) {
-        return null;
-      }
-      byte[] utf8 = info.suffix().getBytes(StandardCharsets.UTF_8);
-      return new EndAnchoredSuffix(
-          info.suffix(), utf8, info.wasDollar(), info.unixLines(), info.foldCase());
-    }
-
-    @Override
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (!options.literalFastPaths()) {
-        return false;
-      }
-      if (text != null) {
-        return !endsWith(text, suffix, wasDollar, unixLines, foldCase);
-      }
-      if (scanner instanceof Utf8InputScanner utf8Scanner) {
-        return !utf8Scanner.endsWith(suffixUtf8, wasDollar, unixLines, foldCase);
-      }
-      if (scanner instanceof StringRegionInputScanner regionScanner) {
-        return !regionScanner.endsWith(suffix, wasDollar, unixLines, foldCase);
-      }
-      return false;
-    }
-
-    @Override
-    public MatchStrategy strategy() {
-      return MatchStrategy.LITERAL;
-    }
-
-    private static boolean endsWith(
-        String text, String suffix, boolean wasDollar, boolean unixLines, boolean foldCase) {
-      int suffixLen = suffix.length();
-      int textLen = text.length();
-      if (textLen >= suffixLen
-          && (foldCase
-              ? text.regionMatches(true, textLen - suffixLen, suffix, 0, suffixLen)
-              : text.endsWith(suffix))) {
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(suffixLen);
+        init {
+            this.bitmap = bitmap
+            this.wasDollar = wasDollar
+            this.unixLines = unixLines
         }
-        return true;
-      }
-      if (!wasDollar || text.isEmpty()) {
-        return false;
-      }
-      int trailingStart = StringInputScanner.trailingLineTerminatorStart(text, unixLines, textLen);
-      if (trailingStart >= suffixLen
-          && (foldCase
-              ? text.regionMatches(true, trailingStart - suffixLen, suffix, 0, suffixLen)
-              : text.startsWith(suffix, trailingStart - suffixLen))) {
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(suffixLen);
+
+        companion object {
+            fun create(info: EndAnchoredCharClassInfo?): EndAnchoredCharClass? {
+                if (info == null || info.bitmap == null) {
+                    return null
+                }
+                return EndAnchoredCharClass(info.bitmap, info.wasDollar, info.unixLines)
+            }
         }
-        return true;
-      }
-      return false;
-    }
-  }
-
-  record EndAnchoredCharClass(AsciiBitmap bitmap, boolean wasDollar, boolean unixLines)
-      implements RejectPrefilter {
-    static EndAnchoredCharClass create(EndAnchoredCharClassInfo info) {
-      if (info == null || info.bitmap() == null) {
-        return null;
-      }
-      return new EndAnchoredCharClass(info.bitmap(), info.wasDollar(), info.unixLines());
     }
 
-    @Override
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      if (!options.charClassMatchFastPaths()) {
-        return false;
-      }
-      if (text != null) {
-        return canReject(text);
-      }
-      if (scanner instanceof Utf8InputScanner || scanner instanceof StringRegionInputScanner) {
-        return canRejectTerminal(scanner);
-      }
-      return false;
-    }
-
-    private boolean canRejectTerminal(InputScanner scanner) {
-      int len = scanner.length();
-      if (len == 0) {
-        return true;
-      }
-      int ascii = scanner.asciiAt(len - 1);
-      if (bitmap.contains(ascii)) {
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(1);
+    @JvmRecord
+    data class Composite(filters: Array<RejectPrefilter>?) : RejectPrefilter {
+        override fun canReject(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+        ): Boolean {
+            for (filter in filters!!) {
+                if (filter.canReject(text, scanner, searchFrom, options)) {
+                    return true
+                }
+            }
+            return false
         }
-        return false;
-      }
-      if (!wasDollar) {
-        return true;
-      }
-      int prevPos = scanner.trailingLineTerminatorStart(unixLines, len);
-      if (prevPos > 0) {
-        int prevAscii = scanner.asciiAt(prevPos - 1);
-        if (bitmap.contains(prevAscii)) {
-          if (WorkCounterConfig.ENABLED) {
-            WorkCounter.record(1);
-          }
-          return false;
+
+        override fun rejectionStrategy(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+        ): MatchStrategy? {
+            for (filter in filters!!) {
+                val strategy = filter.rejectionStrategy(text, scanner, searchFrom, options)
+                if (strategy != null) {
+                    return strategy
+                }
+            }
+            return null
         }
-      }
-      return true;
+
+        override fun canRejectTail(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+        ): Boolean {
+            for (filter in filters!!) {
+                if (filter.canRejectTail(text, scanner, searchFrom, options)) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        override fun tailRejectionStrategy(
+            text: kotlin.String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
+        ): MatchStrategy? {
+            for (filter in filters!!) {
+                val strategy = filter.tailRejectionStrategy(text, scanner, searchFrom, options)
+                if (strategy != null) {
+                    return strategy
+                }
+            }
+            return null
+        }
+
+        override fun strategy(): MatchStrategy? {
+            return filters!![0].strategy()
+        }
+
+        val filters: Array<RejectPrefilter>?
+
+        init {
+            this.filters = filters
+        }
     }
 
-    private boolean canReject(String text) {
-      int len = text.length();
-      if (len == 0) {
-        return true;
-      }
-      char last = text.charAt(len - 1);
-      if (bitmap.contains(last)) {
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(1);
+    companion object {
+        /**
+         * Drops [DisjointLiterals] when UTF-8 start acceleration is already active, so `find()` does not add multi-literal full-input scans ahead of a single-pass start accelerator.
+         */
+        fun withoutDisjointLiterals(filter: RejectPrefilter?): RejectPrefilter? {
+            if (filter is DisjointLiterals) {
+                return null
+            }
+            if (filter is) {
+                var kept: MutableList<RejectPrefilter?>? = null
+                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                if (kept == null) {
+                    return filter
+                }
+                if (kept.isEmpty()) {
+                    return null
+                }
+                return if (kept.size() == 1)
+                    kept.getFirst()
+                else
+                    Composite(kept.toArray<RejectPrefilter?>(IntFunction { _Dummy_.__Array__() }))
+            }
+            return filter
         }
-        return false;
-      }
-      if (!wasDollar) {
-        return true;
-      }
-      int prevPos = StringInputScanner.trailingLineTerminatorStart(text, unixLines, len);
-      if (prevPos > 0) {
-        char prev = text.charAt(prevPos - 1);
-        if (bitmap.contains(prev)) {
-          if (WorkCounterConfig.ENABLED) {
-            WorkCounter.record(1);
-          }
-          return false;
+
+        fun create(descriptor: MultiAnchorDescriptor?): RejectPrefilter? {
+            if (descriptor == null) {
+                return null
+            }
+            return create(descriptor.rejectPlan())
         }
-      }
-      return true;
-    }
 
-    @Override
-    public MatchStrategy strategy() {
-      return MatchStrategy.CHARACTER_CLASS;
-    }
-  }
-
-  @SuppressWarnings("ArrayRecordComponent")
-  record Composite(RejectPrefilter[] filters) implements RejectPrefilter {
-    @Override
-    public boolean canReject(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      for (RejectPrefilter filter : filters) {
-        if (filter.canReject(text, scanner, searchFrom, options)) {
-          return true;
+        fun create(plan: RejectPlan?): RejectPrefilter? {
+            if (plan == null || plan is RejectPlan.None) {
+                return null
+            }
+            return when (plan) {
+                -> null
+                -> Literal.Companion.create(l.literal)
+                -> CharClass.Companion.create(c.scanInfo)
+                -> DisjointLiterals.Companion.create(d.literals)
+                -> EndAnchoredSuffix.Companion.create(s.suffix)
+                -> EndAnchoredCharClass.Companion.create(ecc.charClass)
+                -> {
+                    val list: MutableList<RejectPrefilter?> = ArrayList<RejectPrefilter?>()
+                    for (p in comp.plans) {
+                        val filter: RejectPrefilter? = Companion.create(p)
+                        if (filter != null) {
+                            if (filter is Composite) {
+                                list.addAll(List.of<RejectPrefilter?>(*filter.filters))
+                            } else {
+                                list.add(filter)
+                            }
+                        }
+                    }
+                    if (list.isEmpty()) {
+                        null
+                    }
+                    if (list.size() == 1) {
+                        list.get(0)
+                    }
+                    Composite(list.toArray<RejectPrefilter?>(IntFunction { _Dummy_.__Array__() }))
+                }
+            }
         }
-      }
-      return false;
     }
-
-    @Override
-    public MatchStrategy rejectionStrategy(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      for (RejectPrefilter filter : filters) {
-        MatchStrategy strategy = filter.rejectionStrategy(text, scanner, searchFrom, options);
-        if (strategy != null) {
-          return strategy;
-        }
-      }
-      return null;
-    }
-
-    @Override
-    public boolean canRejectTail(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      for (RejectPrefilter filter : filters) {
-        if (filter.canRejectTail(text, scanner, searchFrom, options)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    @Override
-    public MatchStrategy tailRejectionStrategy(
-        String text, InputScanner scanner, int searchFrom, EnginePathOptions options) {
-      for (RejectPrefilter filter : filters) {
-        MatchStrategy strategy = filter.tailRejectionStrategy(text, scanner, searchFrom, options);
-        if (strategy != null) {
-          return strategy;
-        }
-      }
-      return null;
-    }
-
-    @Override
-    public MatchStrategy strategy() {
-      return filters[0].strategy();
-    }
-  }
 }

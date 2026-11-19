@@ -2,81 +2,78 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
 
 @DisabledForCrosscheck("uses the package-private array adapter to verify borrowed storage")
-class Utf8InputTest {
-  @Test
-  void wholeArrayFactoriesExposeLogicalLength() {
-    byte[] bytes = "aé😀".getBytes(UTF_8);
+internal class Utf8InputTest {
+    @Test
+    fun wholeArrayFactoriesExposeLogicalLength() {
+        val bytes = "aé😀".toByteArray(StandardCharsets.UTF_8)
 
-    assertThat(Utf8Input.trusted(bytes).length()).isEqualTo(bytes.length);
-    assertThat(Utf8Input.validated(bytes).length()).isEqualTo(bytes.length);
-  }
+        Assertions.assertThat(Utf8Input.trusted(bytes).length()).isEqualTo(bytes.size)
+        Assertions.assertThat(Utf8Input.validated(bytes).length()).isEqualTo(bytes.size)
+    }
 
-  @Test
-  void windowFactoriesUseRelativeCoordinates() {
-    byte[] logical = "é😀".getBytes(UTF_8);
-    byte[] storage = new byte[logical.length + 4];
-    System.arraycopy(logical, 0, storage, 2, logical.length);
+    @Test
+    fun windowFactoriesUseRelativeCoordinates() {
+        val logical = "é😀".toByteArray(StandardCharsets.UTF_8)
+        val storage = ByteArray(logical.size + 4)
+        System.arraycopy(logical, 0, storage, 2, logical.size)
 
-    Utf8Input trusted = Utf8Input.trusted(storage, 2, logical.length);
-    Utf8Input validated = Utf8Input.validated(storage, 2, logical.length);
+        val trusted = Utf8Input.trusted(storage, 2, logical.size)
+        val validated = Utf8Input.validated(storage, 2, logical.size)
 
-    assertThat(trusted.length()).isEqualTo(logical.length);
-    assertThat(validated.length()).isEqualTo(logical.length);
-  }
+        Assertions.assertThat(trusted.length()).isEqualTo(logical.size)
+        Assertions.assertThat(validated.length()).isEqualTo(logical.size)
+    }
 
-  @Test
-  void factoriesRejectNullAndInvalidBounds() {
-    assertThatNullPointerException().isThrownBy(() -> Utf8Input.trusted(null));
-    assertThatNullPointerException().isThrownBy(() -> Utf8Input.validated(null));
-    assertThatThrownBy(() -> Utf8Input.trusted(new byte[1], -1, 1))
-        .isInstanceOf(IndexOutOfBoundsException.class);
-    assertThatThrownBy(() -> Utf8Input.trusted(new byte[1], 0, Integer.MAX_VALUE))
-        .isInstanceOf(IndexOutOfBoundsException.class);
-  }
+    @Test
+    fun factoriesRejectNullAndInvalidBounds() {
+        Assertions.assertThatNullPointerException().isThrownBy(ThrowingCallable { Utf8Input.trusted(null) })
+        Assertions.assertThatNullPointerException().isThrownBy(ThrowingCallable { Utf8Input.validated(null) })
+        Assertions.assertThatThrownBy(ThrowingCallable { Utf8Input.trusted(ByteArray(1), -1, 1) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { Utf8Input.trusted(ByteArray(1), 0, Int.Companion.MAX_VALUE) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+    }
 
-  @Test
-  void validatedFactoryRejectsMalformedInputAtRelativeOffset() {
-    byte[] storage = {'x', 'a', (byte) 0xC0, (byte) 0x80, 'z'};
+    @Test
+    fun validatedFactoryRejectsMalformedInputAtRelativeOffset() {
+        val storage = byteArrayOf('x'.code.toByte(), 'a'.code.toByte(), 0xC0.toByte(), 0x80.toByte(), 'z'.code.toByte())
 
-    assertThatThrownBy(() -> Utf8Input.validated(storage, 1, 3))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("byte 1");
-  }
+        Assertions.assertThatThrownBy(ThrowingCallable { Utf8Input.validated(storage, 1, 3) })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("byte 1")
+    }
 
-  @Test
-  void trustedFactoryAcceptsMalformedInput() {
-    byte[] malformed = {(byte) 0xC0, (byte) 0x80};
+    @Test
+    fun trustedFactoryAcceptsMalformedInput() {
+        val malformed = byteArrayOf(0xC0.toByte(), 0x80.toByte())
 
-    assertThat(Utf8Input.trusted(malformed).length()).isEqualTo(2);
-  }
+        Assertions.assertThat(Utf8Input.trusted(malformed).length()).isEqualTo(2)
+    }
 
-  @Test
-  void factoriesBorrowCallerStorageRatherThanCopyingIt() {
-    byte[] storage = "borrowed".getBytes(UTF_8);
+    @Test
+    fun factoriesBorrowCallerStorageRatherThanCopyingIt() {
+        val storage = "borrowed".toByteArray(StandardCharsets.UTF_8)
 
-    ArrayUtf8Input input = (ArrayUtf8Input) Utf8Input.validated(storage);
+        val input = Utf8Input.validated(storage) as ArrayUtf8Input
 
-    assertThat(input.scanner().bytes()).isSameAs(storage);
-  }
+        Assertions.assertThat(input.scanner().bytes()).isSameAs(storage)
+    }
 
-  @Test
-  void mutationIsAnExplicitBorrowedStoragePreconditionBoundary() {
-    byte[] storage = "a".getBytes(UTF_8);
-    Utf8Input input = Utf8Input.trusted(storage);
+    @Test
+    fun mutationIsAnExplicitBorrowedStoragePreconditionBoundary() {
+        val storage = "a".toByteArray(StandardCharsets.UTF_8)
+        val input = Utf8Input.trusted(storage)
 
-    storage[0] = 'b';
+        storage[0] = 'b'.code.toByte()
 
-    assertThat(Pattern.compile("b").find(input)).isTrue();
-  }
+        Assertions.assertThat(Pattern.compile("b").find(input)).isTrue()
+    }
 }

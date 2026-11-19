@@ -2,11 +2,10 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-/** Whether a completed operation found at least one match. */
-public enum MatchOutcome {
-  MATCH,
-  NO_MATCH
+/** Whether a completed operation found at least one match.  */
+enum class MatchOutcome {
+    MATCH,
+    NO_MATCH
 }

@@ -2,16 +2,21 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import java.util.*
 
-import java.util.Objects;
+/** A strategy performing an auxiliary role during an operation.  */
+@JvmRecord
+data class StrategyParticipation(strategy: MatchStrategy?, role: StrategyRole?) {
+    val strategy: MatchStrategy?
+    val role: StrategyRole?
 
-/** A strategy performing an auxiliary role during an operation. */
-public record StrategyParticipation(MatchStrategy strategy, StrategyRole role) {
-  /** Creates a participation pair. */
-  public StrategyParticipation {
-    Objects.requireNonNull(strategy, "strategy");
-    Objects.requireNonNull(role, "role");
-  }
+    /** Creates a participation pair.  */
+    init {
+        this.role = role
+        this.strategy = strategy
+        Objects.requireNonNull<MatchStrategy?>(strategy, "strategy")
+        Objects.requireNonNull<StrategyRole?>(role, "role")
+    }
 }

@@ -2,77 +2,71 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import java.util.concurrent.TimeUnit
 
-import java.util.concurrent.TimeUnit;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-
-/** Complete uninstrumented adaptation cycles; requires explicit investigation selection. */
+/** Complete uninstrumented adaptation cycles; requires explicit investigation selection.  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Thread)
-public class AdaptiveCaptureBenchmark {
-  /** Explicit investigation-owned scenario. */
-  @Param({})
-  public String scenario;
+class AdaptiveCaptureBenchmark {
+    /** Explicit investigation-owned scenario.  */
+    @Param([])
+    var scenario: String? = null
 
-  /** Native String or UTF-8 execution. */
-  @Param({"string", "utf8"})
-  public String representation;
+    /** Native String or UTF-8 execution.  */
+    @Param(["string", "utf8"])
+    var representation: String? = null
 
-  /** Experimental library policy selected before Matcher initialization in each fresh fork. */
-  @Param({})
-  public String policy;
+    /** Experimental library policy selected before Matcher initialization in each fresh fork.  */
+    @Param([])
+    var policy: String? = null
 
-  /** Reproducible Matcher-local exploration seed. */
-  @Param({"1"})
-  public long seed;
+    /** Reproducible Matcher-local exploration seed.  */
+    @Param(["1"])
+    var seed: Long = 0
 
-  protected AdaptiveCaptureCase.Task task;
+    protected var task: AdaptiveCaptureCase.Task? = null
 
-  /** Validates against a separate JDK oracle without teaching the measurement Pattern. */
-  @Setup
-  public void setup() {
-    configure(policy, seed);
-    AdaptiveCaptureCase selected = AdaptiveCaptureCase.load(scenario, representation);
-    selected.validate();
-    verify(policy, seed);
-    task = selected.task(false);
-  }
-
-  static void configure(String policy, long seed) {
-    System.setProperty(
-        "safere.experimental.capturePolicy", policy.equals("patchedMain") ? "main" : policy);
-    System.setProperty("safere.experimental.captureSeed", Long.toString(seed));
-  }
-
-  static void verify(String policy, long seed) {
-    String actual = System.getProperty("safere.experimental.captureActualMode");
-    if (actual == null
-        && (policy.equals("main")
-            || policy.equals(System.getProperty("safere.experimental.bareControl")))) {
-      return;
+    /** Validates against a separate JDK oracle without teaching the measurement Pattern.  */
+    @Setup
+    fun setup() {
+        org.safere.benchmark.AdaptiveCaptureBenchmark.Companion.configure(policy, seed)
+        val selected: AdaptiveCaptureCase = AdaptiveCaptureCase.load(scenario, representation)
+        selected.validate()
+        org.safere.benchmark.AdaptiveCaptureBenchmark.Companion.verify(policy, seed)
+        task = selected.task(false)
     }
-    String expected = policy.equals("patchedMain") ? "main" : policy;
-    if (!expected.equals(actual)
-        || !Long.toString(seed)
-            .equals(System.getProperty("safere.experimental.captureActualSeed"))) {
-      throw new IllegalStateException(
-          "Experimental policy/seed initialized before benchmark setup");
-    }
-  }
 
-  /** Scans the declared phases and consumes capture checksums. */
-  @Benchmark
-  public long run() {
-    return task.run(null);
-  }
+    /** Scans the declared phases and consumes capture checksums.  */
+    @Benchmark
+    fun run(): Long {
+        return task.run(null)
+    }
+
+    companion object {
+        fun configure(policy: String, seed: Long) {
+            System.setProperty(
+                "safere.experimental.capturePolicy", if (policy.equals("patchedMain")) "main" else policy
+            )
+            System.setProperty("safere.experimental.captureSeed", Long.toString(seed))
+        }
+
+        fun verify(policy: String, seed: Long) {
+            val actual: String? = System.getProperty("safere.experimental.captureActualMode")
+            if (actual == null
+                && (policy.equals("main")
+                        || policy.equals(System.getProperty("safere.experimental.bareControl")))
+            ) {
+                return
+            }
+            val expected = if (policy.equals("patchedMain")) "main" else policy
+            kotlin.check(
+                !(!expected.equals(actual)
+                        || !Long.toString(seed)
+                    .equals(System.getProperty("safere.experimental.captureActualSeed")))
+            ) { "Experimental policy/seed initialized before benchmark setup" }
+        }
+    }
 }

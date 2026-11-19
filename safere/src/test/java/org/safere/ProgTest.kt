@@ -4,237 +4,234 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
+import java.util.List
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import org.junit.jupiter.api.Test;
-
-/** Tests for {@link Prog}. */
+/** Tests for [Prog].  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-class ProgTest {
-
-  @Test
-  void greedyAndLazyLoopMetadataCoexistRegardlessOfFirstAccess() {
-    for (boolean greedyFirst : List.of(false, true)) {
-      Prog prog = Pattern.compile("([a-z]*)(.*?)(z)").prog();
-      if (greedyFirst) {
-        assertThat(prog.greedyRunes()).isNotEmpty();
-      } else {
-        assertThat(prog.lazyRuneLoops()).isNotEmpty();
-      }
-      Inst[] greedy = prog.greedyRunes();
-      LazyRuneLoop[] lazy = prog.lazyRuneLoops();
-      assertThat(greedy).isNotEmpty();
-      assertThat(lazy).isNotEmpty();
-      for (int id = 0; id < prog.size(); id++) {
-        if (greedy[id] != null) {
-          assertThat(lazy[id]).isNull();
+internal class ProgTest {
+    @Test
+    fun greedyAndLazyLoopMetadataCoexistRegardlessOfFirstAccess() {
+        for (greedyFirst in mutableListOf<Boolean?>(false, true)) {
+            val prog = Pattern.compile("([a-z]*)(.*?)(z)").prog()
+            if (greedyFirst) {
+                Assertions.assertThat<Inst?>(prog.greedyRunes()).isNotEmpty()
+            } else {
+                Assertions.assertThat<LazyRuneLoop?>(prog.lazyRuneLoops()).isNotEmpty()
+            }
+            val greedy = prog.greedyRunes()
+            val lazy = prog.lazyRuneLoops()
+            Assertions.assertThat<Inst?>(greedy).isNotEmpty()
+            Assertions.assertThat<LazyRuneLoop?>(lazy).isNotEmpty()
+            for (id in 0..<prog.size()) {
+                if (greedy!![id] != null) {
+                    Assertions.assertThat<LazyRuneLoop?>(lazy!![id]).isNull()
+                }
+            }
+            Assertions.assertThat<Inst?>(prog.greedyRunes()).isSameAs(greedy)
+            Assertions.assertThat<LazyRuneLoop?>(prog.lazyRuneLoops()).isSameAs(lazy)
+            val copy = Prog(prog)
+            copy.freeze()
+            Assertions.assertThat<Inst?>(copy.greedyRunes()).isNotSameAs(greedy).isNotEmpty()
+            Assertions.assertThat<LazyRuneLoop?>(copy.lazyRuneLoops()).isNotSameAs(lazy).isNotEmpty()
         }
-      }
-      assertThat(prog.greedyRunes()).isSameAs(greedy);
-      assertThat(prog.lazyRuneLoops()).isSameAs(lazy);
-      Prog copy = new Prog(prog);
-      copy.freeze();
-      assertThat(copy.greedyRunes()).isNotSameAs(greedy).isNotEmpty();
-      assertThat(copy.lazyRuneLoops()).isNotSameAs(lazy).isNotEmpty();
     }
-  }
 
-  @Test
-  void greedyRuneMetadataRequiresAnImmediatePreferredConsumingCycle() {
-    for (String regex : List.of("a+", "[a-z]*b", "[é😀]+")) {
-      Prog prog = Pattern.compile(regex).prog();
-      Inst[] runes = prog.greedyRunes();
-      assertThat(runes).as(regex).isNotNull();
-      assertThat(prog.greedyRunes()).isSameAs(runes);
-    }
-    for (String regex : List.of("a+?", "(a)+", "(a?)*", "abc")) {
-      assertThat(Pattern.compile(regex).prog().greedyRunes()).as(regex).isNull();
-    }
-  }
-
-  @Test
-  void bitStateAnalysisIsSharedRegardlessOfFirstRequestedMetadata() {
-    for (boolean fusionFirst : new boolean[] {false, true}) {
-      Prog prog = Pattern.compile("(a)b(c)").prog();
-      CaptureRune[] captures;
-      boolean[] cycleAlts;
-      if (fusionFirst) {
-        captures = prog.captureRunes();
-        cycleAlts = prog.epsilonCycleAlts();
-      } else {
-        cycleAlts = prog.epsilonCycleAlts();
-        captures = prog.captureRunes();
-      }
-
-      assertThat(captures).isNotEmpty();
-      assertThat(prog.captureRunes()).isSameAs(captures);
-      assertThat(prog.epsilonCycleAlts()).isSameAs(cycleAlts);
-    }
-  }
-
-  @Test
-  void bitStateAnalysisCachesTheAbsenceOfFusion() {
-    Prog prog = Pattern.compile("a+").prog();
-    boolean[] cycleAlts = prog.epsilonCycleAlts();
-
-    assertThat(prog.captureRunes()).isNull();
-    assertThat(prog.captureRunes()).isNull();
-    assertThat(prog.epsilonCycleAlts()).isSameAs(cycleAlts);
-  }
-
-  @Test
-  void copiedProgramsComputeTheirOwnBitStateAnalysis() {
-    Prog original = Pattern.compile("(a)b(c)").prog();
-    CaptureRune[] originalCaptures = original.captureRunes();
-    boolean[] originalCycleAlts = original.epsilonCycleAlts();
-    Prog copy = new Prog(original);
-    copy.freeze();
-
-    assertThat(copy.captureRunes()).isNotNull().isNotSameAs(originalCaptures);
-    assertThat(copy.epsilonCycleAlts()).isNotSameAs(originalCycleAlts);
-  }
-
-  @Test
-  void concurrentFirstUsePublishesCompleteBitStateAnalysis() throws Exception {
-    try (var executor = Executors.newFixedThreadPool(2)) {
-      for (int iteration = 0; iteration < 8; iteration++) {
-        Prog prog = Pattern.compile("(a)b(c)").prog();
-        CyclicBarrier start = new CyclicBarrier(2);
-        Callable<int[]> search =
-            () -> {
-              start.await();
-              return BitState.search(prog, "abc", true, false, true, prog.numCaptures());
-            };
-        List<Future<int[]>> results = executor.invokeAll(List.of(search, search));
-        for (Future<int[]> result : results) {
-          assertThat(result.get()).containsExactly(0, 3, 0, 1, 2, 3);
+    @Test
+    fun greedyRuneMetadataRequiresAnImmediatePreferredConsumingCycle() {
+        for (regex in mutableListOf<String?>("a+", "[a-z]*b", "[é😀]+")) {
+            val prog = Pattern.compile(regex).prog()
+            val runes = prog.greedyRunes()
+            Assertions.assertThat<Inst?>(runes).`as`(regex).isNotNull()
+            Assertions.assertThat<Inst?>(prog.greedyRunes()).isSameAs(runes)
         }
-      }
+        for (regex in mutableListOf<String?>("a+?", "(a)+", "(a?)*", "abc")) {
+            Assertions.assertThat<Inst?>(Pattern.compile(regex).prog().greedyRunes()).`as`(regex).isNull()
+        }
     }
-  }
 
-  @Test
-  void epsilonCyclesAfterGraphemeConsumptionAreReachable() {
-    Prog prog = new Prog();
-    for (int i = 0; i < 5; i++) {
-      prog.allocInst();
+    @Test
+    fun bitStateAnalysisIsSharedRegardlessOfFirstRequestedMetadata() {
+        for (fusionFirst in booleanArrayOf(false, true)) {
+            val prog = Pattern.compile("(a)b(c)").prog()
+            val captures: Array<CaptureRune?>?
+            val cycleAlts: BooleanArray?
+            if (fusionFirst) {
+                captures = prog.captureRunes()
+                cycleAlts = prog.epsilonCycleAlts()
+            } else {
+                cycleAlts = prog.epsilonCycleAlts()
+                captures = prog.captureRunes()
+            }
+
+            Assertions.assertThat<CaptureRune?>(captures).isNotEmpty()
+            Assertions.assertThat<CaptureRune?>(prog.captureRunes()).isSameAs(captures)
+            Assertions.assertThat(prog.epsilonCycleAlts()).isSameAs(cycleAlts)
+        }
     }
-    prog.mutableInst(0).initFail();
-    prog.mutableInst(1).initGraphemeCluster(2);
-    prog.mutableInst(2).initAlt(3, 4);
-    prog.mutableInst(3).initNop(2);
-    prog.mutableInst(4).initMatch(0);
-    prog.setStart(1);
-    prog.setStartUnanchored(1);
-    prog.freeze();
 
-    assertThat(prog.epsilonCycleAlts()).containsExactly(false, false, true, false, false);
-  }
+    @Test
+    fun bitStateAnalysisCachesTheAbsenceOfFusion() {
+        val prog = Pattern.compile("a+").prog()
+        val cycleAlts = prog.epsilonCycleAlts()
 
-  @Test
-  void graphemeConsumptionBreaksEpsilonCycles() {
-    Prog prog = new Prog();
-    for (int i = 0; i < 4; i++) {
-      prog.allocInst();
+        Assertions.assertThat<CaptureRune?>(prog.captureRunes()).isNull()
+        Assertions.assertThat<CaptureRune?>(prog.captureRunes()).isNull()
+        Assertions.assertThat(prog.epsilonCycleAlts()).isSameAs(cycleAlts)
     }
-    prog.mutableInst(0).initFail();
-    prog.mutableInst(1).initAlt(2, 3);
-    prog.mutableInst(2).initGraphemeCluster(1);
-    prog.mutableInst(3).initMatch(0);
-    prog.setStart(1);
-    prog.setStartUnanchored(1);
-    prog.freeze();
 
-    assertThat(prog.epsilonCycleAlts()).containsExactly(false, false, false, false);
-  }
+    @Test
+    fun copiedProgramsComputeTheirOwnBitStateAnalysis() {
+        val original = Pattern.compile("(a)b(c)").prog()
+        val originalCaptures = original.captureRunes()
+        val originalCycleAlts = original.epsilonCycleAlts()
+        val copy = Prog(original)
+        copy.freeze()
 
-  @Test
-  void emptyProgram() {
-    Prog prog = new Prog();
-    assertThat(prog.size()).isEqualTo(0);
-  }
+        Assertions.assertThat<CaptureRune?>(copy.captureRunes()).isNotNull().isNotSameAs(originalCaptures)
+        Assertions.assertThat(copy.epsilonCycleAlts()).isNotSameAs(originalCycleAlts)
+    }
 
-  @Test
-  void allocInst_growsAndReturnsIndex() {
-    Prog prog = new Prog();
-    int i0 = prog.allocInst();
-    int i1 = prog.allocInst();
-    int i2 = prog.allocInst();
-    assertThat(i0).isEqualTo(0);
-    assertThat(i1).isEqualTo(1);
-    assertThat(i2).isEqualTo(2);
-    assertThat(prog.size()).isEqualTo(3);
-  }
+    @Test
+    @Throws(Exception::class)
+    fun concurrentFirstUsePublishesCompleteBitStateAnalysis() {
+        Executors.newFixedThreadPool(2).use { executor ->
+            for (iteration in 0..7) {
+                val prog = Pattern.compile("(a)b(c)").prog()
+                val start = CyclicBarrier(2)
+                val search =
+                    Callable {
+                        start.await()
+                        BitState.search(prog, "abc", true, false, true, prog.numCaptures())
+                    }
+                val results = executor.invokeAll<IntArray?>(List.of<Callable<IntArray?>?>(search, search))
+                for (result in results) {
+                    Assertions.assertThat(result.get()).containsExactly(0, 3, 0, 1, 2, 3)
+                }
+            }
+        }
+    }
 
-  @Test
-  void instReturnsCorrectInstruction() {
-    Prog prog = new Prog();
-    int idx = prog.allocInst();
-    prog.mutableInst(idx).initMatch(42);
-    prog.freeze();
-    assertThat(prog.inst(idx).op).isEqualTo(InstOp.MATCH);
-    assertThat(prog.inst(idx).arg).isEqualTo(42);
-  }
+    @Test
+    fun epsilonCyclesAfterGraphemeConsumptionAreReachable() {
+        val prog = Prog()
+        for (i in 0..4) {
+            prog.allocInst()
+        }
+        prog.mutableInst(0).initFail()
+        prog.mutableInst(1).initGraphemeCluster(2)
+        prog.mutableInst(2).initAlt(3, 4)
+        prog.mutableInst(3).initNop(2)
+        prog.mutableInst(4).initMatch(0)
+        prog.setStart(1)
+        prog.setStartUnanchored(1)
+        prog.freeze()
 
-  @Test
-  void startAndStartUnanchored() {
-    Prog prog = new Prog();
-    prog.allocInst();
-    prog.allocInst();
-    prog.setStart(0);
-    prog.setStartUnanchored(1);
-    assertThat(prog.start()).isEqualTo(0);
-    assertThat(prog.startUnanchored()).isEqualTo(1);
-  }
+        Assertions.assertThat(prog.epsilonCycleAlts()).containsExactly(false, false, true, false, false)
+    }
 
-  @Test
-  void numCaptures() {
-    Prog prog = new Prog();
-    prog.setNumCaptures(3);
-    assertThat(prog.numCaptures()).isEqualTo(3);
-  }
+    @Test
+    fun graphemeConsumptionBreaksEpsilonCycles() {
+        val prog = Prog()
+        for (i in 0..3) {
+            prog.allocInst()
+        }
+        prog.mutableInst(0).initFail()
+        prog.mutableInst(1).initAlt(2, 3)
+        prog.mutableInst(2).initGraphemeCluster(1)
+        prog.mutableInst(3).initMatch(0)
+        prog.setStart(1)
+        prog.setStartUnanchored(1)
+        prog.freeze()
 
-  @Test
-  void anchorFlags() {
-    Prog prog = new Prog();
-    prog.setAnchorStart(true);
-    prog.setAnchorEnd(true);
-    assertThat(prog.anchorStart()).isTrue();
-    assertThat(prog.anchorEnd()).isTrue();
-  }
+        Assertions.assertThat(prog.epsilonCycleAlts()).containsExactly(false, false, false, false)
+    }
 
-  @Test
-  void dump_formatsInstructions() {
-    Prog prog = new Prog();
-    prog.setStart(0);
-    int i0 = prog.allocInst();
-    int i1 = prog.allocInst();
-    prog.mutableInst(i0).initCharRange('a', 'a', false, 1);
-    prog.mutableInst(i1).initMatch(0);
-    prog.freeze();
+    @Test
+    fun emptyProgram() {
+        val prog = Prog()
+        Assertions.assertThat(prog.size()).isEqualTo(0)
+    }
 
-    String dump = prog.dump();
-    assertThat(dump).contains("char");
-    assertThat(dump).contains("match");
-  }
+    @Test
+    fun allocInst_growsAndReturnsIndex() {
+        val prog = Prog()
+        val i0 = prog.allocInst()
+        val i1 = prog.allocInst()
+        val i2 = prog.allocInst()
+        Assertions.assertThat(i0).isEqualTo(0)
+        Assertions.assertThat(i1).isEqualTo(1)
+        Assertions.assertThat(i2).isEqualTo(2)
+        Assertions.assertThat(prog.size()).isEqualTo(3)
+    }
 
-  @Test
-  void toStringShowsSummary() {
-    Prog prog = new Prog();
-    prog.allocInst();
-    prog.allocInst();
-    prog.setStart(0);
-    prog.setNumCaptures(1);
-    String s = prog.toString();
-    assertThat(s).contains("size=2");
-    assertThat(s).contains("captures=1");
-  }
+    @Test
+    fun instReturnsCorrectInstruction() {
+        val prog = Prog()
+        val idx = prog.allocInst()
+        prog.mutableInst(idx).initMatch(42)
+        prog.freeze()
+        Assertions.assertThat<InstOp?>(prog.inst(idx).op).isEqualTo(InstOp.MATCH)
+        Assertions.assertThat(prog.inst(idx).arg).isEqualTo(42)
+    }
+
+    @Test
+    fun startAndStartUnanchored() {
+        val prog = Prog()
+        prog.allocInst()
+        prog.allocInst()
+        prog.setStart(0)
+        prog.setStartUnanchored(1)
+        Assertions.assertThat(prog.start()).isEqualTo(0)
+        Assertions.assertThat(prog.startUnanchored()).isEqualTo(1)
+    }
+
+    @Test
+    fun numCaptures() {
+        val prog = Prog()
+        prog.setNumCaptures(3)
+        Assertions.assertThat(prog.numCaptures()).isEqualTo(3)
+    }
+
+    @Test
+    fun anchorFlags() {
+        val prog = Prog()
+        prog.setAnchorStart(true)
+        prog.setAnchorEnd(true)
+        Assertions.assertThat(prog.anchorStart()).isTrue()
+        Assertions.assertThat(prog.anchorEnd()).isTrue()
+    }
+
+    @Test
+    fun dump_formatsInstructions() {
+        val prog = Prog()
+        prog.setStart(0)
+        val i0 = prog.allocInst()
+        val i1 = prog.allocInst()
+        prog.mutableInst(i0).initCharRange('a'.code, 'a'.code, false, 1)
+        prog.mutableInst(i1).initMatch(0)
+        prog.freeze()
+
+        val dump = prog.dump()
+        Assertions.assertThat(dump).contains("char")
+        Assertions.assertThat(dump).contains("match")
+    }
+
+    @Test
+    fun toStringShowsSummary() {
+        val prog = Prog()
+        prog.allocInst()
+        prog.allocInst()
+        prog.setStart(0)
+        prog.setNumCaptures(1)
+        val s = prog.toString()
+        Assertions.assertThat(s).contains("size=2")
+        Assertions.assertThat(s).contains("captures=1")
+    }
 }

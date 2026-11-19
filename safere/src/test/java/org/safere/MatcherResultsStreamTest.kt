@@ -4,72 +4,68 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import java.util.regex.MatchResult
+import java.util.stream.Collectors
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+/** Tests for [Matcher.results].  */
+internal class MatcherResultsStreamTest {
+    @Test
+    @DisplayName("results() returns all matches as a stream")
+    fun resultsStream() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("abc 123 def 456 ghi")
+        val matches = m.results().map<String?> { obj: MatchResult? -> obj!!.group() }.collect(Collectors.toList())
+        Assertions.assertThat<String?>(matches).containsExactly("123", "456")
+    }
 
-import java.util.ConcurrentModificationException;
-import java.util.List;
-import java.util.regex.MatchResult;
-import java.util.stream.Collectors;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+    @Test
+    @DisplayName("results() returns empty stream when no matches")
+    fun resultsNoMatch() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("no digits here")
+        Assertions.assertThat(m.results().count()).isEqualTo(0)
+    }
 
-/** Tests for {@link Matcher#results()}. */
-class MatcherResultsStreamTest {
+    @Test
+    @DisplayName("results() match results have correct positions")
+    fun resultsPositions() {
+        val p = Pattern.compile("[a-z]+")
+        val m = p.matcher("123 abc 456 def")
+        val results = m.results().collect(Collectors.toList())
+        Assertions.assertThat<MatchResult?>(results).hasSize(2)
+        Assertions.assertThat(results.get(0)!!.start()).isEqualTo(4)
+        Assertions.assertThat(results.get(0)!!.end()).isEqualTo(7)
+        Assertions.assertThat(results.get(0)!!.hasMatch()).isTrue()
+        Assertions.assertThat(results.get(1)!!.start()).isEqualTo(12)
+        Assertions.assertThat(results.get(1)!!.end()).isEqualTo(15)
+        Assertions.assertThat(results.get(1)!!.hasMatch()).isTrue()
+    }
 
-  @Test
-  @DisplayName("results() returns all matches as a stream")
-  void resultsStream() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("abc 123 def 456 ghi");
-    List<String> matches = m.results().map(MatchResult::group).collect(Collectors.toList());
-    assertThat(matches).containsExactly("123", "456");
-  }
+    @Test
+    @DisabledForCrosscheck(
+        ("callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
+                + "bind mutation separately to each engine")
+    )
+    @DisplayName("results() detects matcher mutation during stream traversal")
+    fun resultsDetectsMatcherMutation() {
+        val p = Pattern.compile("a")
+        val m = p.matcher("aa")
 
-  @Test
-  @DisplayName("results() returns empty stream when no matches")
-  void resultsNoMatch() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("no digits here");
-    assertThat(m.results().count()).isEqualTo(0);
-  }
-
-  @Test
-  @DisplayName("results() match results have correct positions")
-  void resultsPositions() {
-    Pattern p = Pattern.compile("[a-z]+");
-    Matcher m = p.matcher("123 abc 456 def");
-    List<MatchResult> results = m.results().collect(Collectors.toList());
-    assertThat(results).hasSize(2);
-    assertThat(results.get(0).start()).isEqualTo(4);
-    assertThat(results.get(0).end()).isEqualTo(7);
-    assertThat(results.get(0).hasMatch()).isTrue();
-    assertThat(results.get(1).start()).isEqualTo(12);
-    assertThat(results.get(1).end()).isEqualTo(15);
-    assertThat(results.get(1).hasMatch()).isTrue();
-  }
-
-  @Test
-  @DisabledForCrosscheck(
-      "callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
-          + "bind mutation separately to each engine")
-  @DisplayName("results() detects matcher mutation during stream traversal")
-  void resultsDetectsMatcherMutation() {
-    Pattern p = Pattern.compile("a");
-    Matcher m = p.matcher("aa");
-
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 m.results()
-                    .map(
-                        result -> {
-                          m.find();
-                          return result.group();
-                        })
-                    .collect(Collectors.toList()))
-        .isInstanceOf(ConcurrentModificationException.class);
-  }
+                    .map<String?> { result: MatchResult? ->
+                        m.find()
+                        result!!.group()
+                    }
+                    .collect(Collectors.toList())
+            })
+            .isInstanceOf(ConcurrentModificationException::class.java)
+    }
 }

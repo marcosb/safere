@@ -2,55 +2,57 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.io.IOException;
-import java.lang.module.ModuleDescriptor;
-import java.lang.module.ModuleFinder;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.iterable.ThrowingExtractor
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
+import java.lang.module.ModuleDescriptor
+import java.lang.module.ModuleFinder
+import java.net.URISyntaxException
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.function.Predicate
+import java.util.function.Supplier
 
 @DisabledForCrosscheck("requires SafeRE's named module and the JDK Vector module")
-class ModuleDescriptorTest {
-  private static final String VECTOR_MODULE_NAME = "jdk.incubator.vector";
+internal class ModuleDescriptorTest {
+    @TempDir
+    var temporaryDirectory: Path? = null
 
-  @TempDir Path temporaryDirectory;
+    @Test
+    @Throws(URISyntaxException::class)
+    fun doesNotExposeIncubatorModulesToConsumers() {
+        val descriptor =
+            ModuleFinder.of(safeReModulePath())
+                .find("org.safere")
+                .orElseThrow<AssertionError?>(Supplier { AssertionError("SafeRE module descriptor not found") })
+                .descriptor()
 
-  @Test
-  void doesNotExposeIncubatorModulesToConsumers() throws URISyntaxException {
-    ModuleDescriptor descriptor =
-        ModuleFinder.of(safeReModulePath())
-            .find("org.safere")
-            .orElseThrow(() -> new AssertionError("SafeRE module descriptor not found"))
-            .descriptor();
+        Assertions.assertThat<ModuleDescriptor.Requires?>(descriptor.requires())
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { ModuleDescriptor.Requires.name() })
+            .noneMatch(Predicate { name: String? -> name!!.startsWith("jdk.incubator.") })
+    }
 
-    assertThat(descriptor.requires())
-        .extracting(ModuleDescriptor.Requires::name)
-        .noneMatch(name -> name.startsWith("jdk.incubator."));
-  }
-
-  @Test
-  void strictModularConsumerCanEnableVectorProvider()
-      throws IOException, InterruptedException, URISyntaxException {
-    Path sourceDirectory = temporaryDirectory.resolve("src");
-    Path packageDirectory = sourceDirectory.resolve("consumer");
-    Path classesDirectory = temporaryDirectory.resolve("classes");
-    Files.createDirectories(packageDirectory);
-    Files.createDirectories(classesDirectory);
-    Files.writeString(
-        sourceDirectory.resolve("module-info.java"),
-        "module safere.consumer { requires org.safere; }\n",
-        StandardCharsets.UTF_8);
-    Files.writeString(
-        packageDirectory.resolve("Main.java"),
-        """
+    @Test
+    @Throws(IOException::class, InterruptedException::class, URISyntaxException::class)
+    fun strictModularConsumerCanEnableVectorProvider() {
+        val sourceDirectory = temporaryDirectory!!.resolve("src")
+        val packageDirectory = sourceDirectory.resolve("consumer")
+        val classesDirectory = temporaryDirectory!!.resolve("classes")
+        Files.createDirectories(packageDirectory)
+        Files.createDirectories(classesDirectory)
+        Files.writeString(
+            sourceDirectory.resolve("module-info.java"),
+            "module safere.consumer { requires org.safere; }\n",
+            StandardCharsets.UTF_8
+        )
+        Files.writeString(
+            packageDirectory.resolve("Main.java"),
+            """
         package consumer;
 
         import java.util.Arrays;
@@ -67,49 +69,59 @@ class ModuleDescriptorTest {
             }
           }
         }
-        """,
-        StandardCharsets.UTF_8);
+        
+        """.trimIndent(),
+            StandardCharsets.UTF_8
+        )
 
-    Path safeReModulePath = safeReModulePath();
-    ProcessResult compilation =
-        run(
-            javaTool("javac"),
-            "-Werror",
-            "--module-path",
-            safeReModulePath.toString(),
-            "-d",
-            classesDirectory.toString(),
-            sourceDirectory.resolve("module-info.java").toString(),
-            packageDirectory.resolve("Main.java").toString());
-    assertThat(compilation.exitCode()).as(compilation.output()).isZero();
+        val safeReModulePath: Path = safeReModulePath()
+        val compilation: ProcessResult =
+            run(
+                javaTool("javac"),
+                "-Werror",
+                "--module-path",
+                safeReModulePath.toString(),
+                "-d",
+                classesDirectory.toString(),
+                sourceDirectory.resolve("module-info.java").toString(),
+                packageDirectory.resolve("Main.java").toString()
+            )
+        Assertions.assertThat(compilation.exitCode).`as`(compilation.output).isZero()
 
-    ProcessResult execution =
-        run(
-            javaTool("java"),
-            "--add-modules",
-            VECTOR_MODULE_NAME,
-            "-Dorg.safere.experimental.vectorScanProvider=vector",
-            "--module-path",
-            safeReModulePath + System.getProperty("path.separator") + classesDirectory,
-            "--module",
-            "safere.consumer/consumer.Main");
-    assertThat(execution.exitCode()).as(execution.output()).isZero();
-  }
+        val execution: ProcessResult =
+            run(
+                javaTool("java"),
+                "--add-modules",
+                VECTOR_MODULE_NAME,
+                "-Dorg.safere.experimental.vectorScanProvider=vector",
+                "--module-path",
+                safeReModulePath.toString() + System.getProperty("path.separator") + classesDirectory,
+                "--module",
+                "safere.consumer/consumer.Main"
+            )
+        Assertions.assertThat(execution.exitCode).`as`(execution.output).isZero()
+    }
 
-  private static String javaTool(String name) {
-    String suffix = System.getProperty("os.name").startsWith("Windows") ? ".exe" : "";
-    return Path.of(System.getProperty("java.home"), "bin", name + suffix).toString();
-  }
+    @JvmRecord
+    private data class ProcessResult(val exitCode: Int, val output: String?)
+    companion object {
+        private const val VECTOR_MODULE_NAME = "jdk.incubator.vector"
 
-  private static Path safeReModulePath() throws URISyntaxException {
-    return Path.of(Pattern.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-  }
+        private fun javaTool(name: String?): String {
+            val suffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
+            return Path.of(System.getProperty("java.home"), "bin", name + suffix).toString()
+        }
 
-  private static ProcessResult run(String... command) throws IOException, InterruptedException {
-    Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    return new ProcessResult(process.waitFor(), output);
-  }
+        @Throws(URISyntaxException::class)
+        private fun safeReModulePath(): Path {
+            return Path.of(Pattern::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
+        }
 
-  private record ProcessResult(int exitCode, String output) {}
+        @Throws(IOException::class, InterruptedException::class)
+        private fun run(vararg command: String?): ProcessResult {
+            val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+            val output = String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
+            return ProcessResult(process.waitFor(), output)
+        }
+    }
 }

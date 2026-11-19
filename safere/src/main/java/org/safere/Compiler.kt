@@ -4,905 +4,877 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*
 
 /**
- * Compiles a {@link Regexp} AST into a {@link Prog} (bytecode program) via Thompson NFA
- * construction. Each node in the AST is compiled into a {@link Frag} (instruction fragment) and
+ * Compiles a [Regexp] AST into a [Prog] (bytecode program) via Thompson NFA
+ * construction. Each node in the AST is compiled into a [Frag] (instruction fragment) and
  * fragments are combined using standard NFA construction rules.
- *
- * <p>This is a port of RE2's {@code compile.cc}, adapted for Java's Unicode code point model
+ * 
+ * 
+ * This is a port of RE2's `compile.cc`, adapted for Java's Unicode code point model
  * (instead of UTF-8 byte ranges).
- *
- * <p>Usage:
- *
+ * 
+ * 
+ * Usage:
+ * 
  * <pre>
- *   Regexp re = Parser.parse("a(b|c)*d", flags);
- *   Prog prog = Compiler.compile(re);
- * </pre>
+ * Regexp re = Parser.parse("a(b|c)*d", flags);
+ * Prog prog = Compiler.compile(re);
+</pre> * 
  */
-final class Compiler extends Walker<Compiler.Frag> {
+internal class Compiler private constructor(private val maxInst: Int = DEFAULT_MAX_INST) : Walker<Compiler.Frag>() {
+    private val prog: Prog
+    private var failed = false
+    private var reversed = false
+    private var forDfa = false
 
-  /** Maximum number of instructions allowed by default. */
-  private static final int DEFAULT_MAX_INST = 1_000_000;
+    private var nextLoopReg = 0
 
-  private final Prog prog;
-  private boolean failed;
-  private boolean reversed;
-  private boolean forDfa;
-
-  private final int maxInst;
-  private int nextLoopReg;
-
-  private Compiler() {
-    this(DEFAULT_MAX_INST);
-  }
-
-  private Compiler(int maxInst) {
-    this.prog = new Prog();
-    this.maxInst = maxInst;
-    // Instruction 0 is always the fail instruction (sentinel for PatchList).
-    int fail = prog.allocInst();
-    prog.mutableInst(fail).initFail();
-  }
-
-  /**
-   * Compiles the given regexp into a program.
-   *
-   * @param re the regexp to compile
-   * @return the compiled program, or null if compilation fails
-   */
-  static Prog compile(Regexp re) {
-    return compile(prepare(re), false, false);
-  }
-
-  /**
-   * Compiles the given regexp into a program.
-   *
-   * @param re the regexp to compile
-   * @param reversed if true, compile for backward matching
-   * @return the compiled program, or null if compilation fails
-   */
-  static Prog compile(Regexp re, boolean reversed) {
-    return compile(prepare(re), reversed, false);
-  }
-
-  static Prog compileForDfa(Regexp re) {
-    return compile(prepare(re), false, true);
-  }
-
-  static Prog compileForDfa(Regexp re, boolean reversed) {
-    return compile(prepare(re), reversed, true);
-  }
-
-  /**
-   * Direction-independent preparation shared by capture-aware and DFA compilers.
-   *
-   * <p>The prepared tree is encapsulated and read-only during compilation. Instruction arrays,
-   * patch lists, and loop registers belong to each individual compilation. Pattern construction
-   * releases this preparation after building the programs needed at construction time.
-   */
-  static final class Prepared {
-    private final Regexp root;
-    private final Regexp simplifiedSource;
-    private final int numCaptures;
-    private final boolean anchorStart;
-    private final boolean anchorEnd;
-    private final boolean dollarEnd;
-    private final boolean dollarUnixLines;
-
-    private Prepared(
-        Regexp root,
-        Regexp simplifiedSource,
-        int numCaptures,
-        boolean anchorStart,
-        boolean anchorEnd,
-        boolean dollarEnd,
-        boolean dollarUnixLines) {
-      this.root = root;
-      this.simplifiedSource = simplifiedSource;
-      this.numCaptures = numCaptures;
-      this.anchorStart = anchorStart;
-      this.anchorEnd = anchorEnd;
-      this.dollarEnd = dollarEnd;
-      this.dollarUnixLines = dollarUnixLines;
+    init {
+        this.prog = Prog()
+        // Instruction 0 is always the fail instruction (sentinel for PatchList).
+        val fail = prog.allocInst()
+        prog.mutableInst(fail).initFail()
     }
 
-    /** Returns {@code Simplifier.simplify(source)}, before anchor stripping. */
-    Regexp simplifiedSource() {
-      return simplifiedSource;
-    }
-  }
-
-  /** Simplifies a source AST once, preserving capture writes in every repeat copy. */
-  static Prepared prepare(Regexp re) {
-    int numCaptures = maxCapture(re) + 1;
-    // Repeat copies share source capture identities. Later accepted copies must still write
-    // their captures; retaining an earlier value is the engine's omission/rollback behavior.
-    Regexp sre = Simplifier.simplify(re);
-    if (sre == null) {
-      return null;
-    }
-
-    // Detect anchoring, stripping the anchor nodes.
-    boolean isAnchorStart = isAnchorStart(sre);
-    Regexp stripped = stripAnchorStart(sre);
-    boolean isAnchorEnd = isAnchorEnd(stripped);
-    boolean isDollarEnd = isAnchorEnd && isDollarAnchorEnd(stripped);
-    boolean dollarUnixLines = isDollarEnd && isUnixDollarAnchorEnd(stripped);
-    stripped = stripAnchorEnd(stripped);
-    return new Prepared(
-        stripped, sre, numCaptures, isAnchorStart, isAnchorEnd, isDollarEnd, dollarUnixLines);
-  }
-
-  static Prog compile(Prepared prepared, boolean reversed) {
-    return compile(prepared, reversed, false);
-  }
-
-  static Prog compileForDfa(Prepared prepared, boolean reversed) {
-    return compile(prepared, reversed, true);
-  }
-
-  private static Prog compile(Prepared prepared, boolean reversed, boolean forDfa) {
-    if (prepared == null) {
-      return null;
-    }
-    Compiler c = new Compiler();
-    c.reversed = reversed;
-    c.forDfa = forDfa;
-
-    // Walk the AST to produce fragments.
-    Frag all = c.walkExponential(prepared.root, Frag.NO_MATCH, 2 * c.maxInst);
-    if (c.failed) {
-      return null;
-    }
-
-    // Append Match(0).
-    c.reversed = false;
-    all = c.cat(all, c.match(0));
-    if (c.failed) {
-      return null;
-    }
-
-    c.prog.setReversed(reversed);
-    if (reversed) {
-      c.prog.setAnchorStart(prepared.anchorEnd);
-      c.prog.setAnchorEnd(prepared.anchorStart);
-    } else {
-      c.prog.setAnchorStart(prepared.anchorStart);
-      c.prog.setAnchorEnd(prepared.anchorEnd);
-      c.prog.setDollarAnchorEnd(prepared.dollarEnd);
-      c.prog.setDollarAnchorUnixLines(prepared.dollarUnixLines);
-    }
-
-    c.prog.setStart(all.begin);
-
-    if (!c.prog.anchorStart()) {
-      // Prepend .*? loop for unanchored matching.
-      all = c.cat(c.dotStar(), all);
-    }
-    c.prog.setStartUnanchored(all.begin);
-
-    // Freeze the instruction list into a flat array for fast indexed access.
-    c.prog.freeze();
-
-    c.prog.setNumCaptures(prepared.numCaptures);
-    c.prog.setNumLoopRegs(c.nextLoopReg);
-
-    return c.prog;
-  }
-
-  private static int maxCapture(Regexp re) {
-    int max = 0;
-    ArrayDeque<Regexp> stack = new ArrayDeque<>();
-    stack.push(re);
-    while (!stack.isEmpty()) {
-      Regexp node = stack.pop();
-      if (node.op == RegexpOp.CAPTURE && node.cap > max) {
-        max = node.cap;
-      }
-      if (node.subs != null) {
-        for (Regexp sub : node.subs) {
-          stack.push(sub);
+    /**
+     * Direction-independent preparation shared by capture-aware and DFA compilers.
+     * 
+     * 
+     * The prepared tree is encapsulated and read-only during compilation. Instruction arrays,
+     * patch lists, and loop registers belong to each individual compilation. Pattern construction
+     * releases this preparation after building the programs needed at construction time.
+     */
+    internal class Prepared private constructor(
+        private val root: Regexp?,
+        private val simplifiedSource: Regexp?,
+        private val numCaptures: Int,
+        private val anchorStart: Boolean,
+        private val anchorEnd: Boolean,
+        private val dollarEnd: Boolean,
+        private val dollarUnixLines: Boolean
+    ) {
+        /** Returns `Simplifier.simplify(source)`, before anchor stripping.  */
+        fun simplifiedSource(): Regexp? {
+            return simplifiedSource
         }
-      }
     }
-    return max;
-  }
 
-  // ---------------------------------------------------------------------------
-  // Anchor detection — approximate, like RE2's IsAnchorStart/IsAnchorEnd
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // PatchList — linked list threaded through unused instruction out fields
+    // ---------------------------------------------------------------------------
+    /**
+     * A patch list is a linked list of instruction output fields that need to be filled in
+     * ("patched") to point to the next instruction. The list is threaded through the unused out/out1
+     * fields of the instructions themselves.
+     * 
+     * 
+     * A patch list is packed into a primitive `long`: upper 32 bits are `head`, lower
+     * 32 bits are `tail`.
+     */
+    private object PatchList {
+        const val EMPTY: Long = 0L
 
-  static boolean isAnchorStart(Regexp re) {
-    return isAnchorStartImpl(re, 0);
-  }
-
-  private static boolean isAnchorStartImpl(Regexp re, int depth) {
-    if (re == null || depth >= 4) {
-      return false;
-    }
-    return switch (re.op) {
-      case BEGIN_TEXT -> true;
-      case CONCAT -> re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1);
-      case NON_CAPTURE, CAPTURE -> isAnchorStartImpl(re.sub(), depth + 1);
-      default -> false;
-    };
-  }
-
-  static Regexp stripAnchorStart(Regexp re) {
-    return stripAnchorStartImpl(re, 0);
-  }
-
-  private static Regexp stripAnchorStartImpl(Regexp re, int depth) {
-    if (re == null || depth >= 4) {
-      return re;
-    }
-    return switch (re.op) {
-      case BEGIN_TEXT -> Regexp.emptyMatch(re.flags);
-      case CONCAT -> {
-        if (re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1)) {
-          List<Regexp> newSubs = new ArrayList<>(re.subs);
-          newSubs.set(0, stripAnchorStartImpl(re.subs.getFirst(), depth + 1));
-          yield Regexp.concat(newSubs, re.flags);
+        fun mk(encoded: Int): Long {
+            return (encoded.toLong() shl 32) or (encoded.toLong() and 0xFFFFFFFFL)
         }
-        yield re;
-      }
-      case NON_CAPTURE -> {
-        if (isAnchorStartImpl(re.sub(), depth + 1)) {
-          yield Regexp.nonCapture(stripAnchorStartImpl(re.sub(), depth + 1), re.flags);
+
+        fun head(l: Long): Int {
+            return (l ushr 32).toInt()
         }
-        yield re;
-      }
-      case CAPTURE -> {
-        if (isAnchorStartImpl(re.sub(), depth + 1)) {
-          yield Regexp.capture(
-              stripAnchorStartImpl(re.sub(), depth + 1), re.flags, re.cap, re.name);
+
+        fun tail(l: Long): Int {
+            return l.toInt()
         }
-        yield re;
-      }
-      default -> re;
-    };
-  }
 
-  static boolean isAnchorEnd(Regexp re) {
-    return isAnchorEndImpl(re, 0);
-  }
-
-  /**
-   * Returns true if the trailing end anchor is {@code $} (WAS_DOLLAR), meaning the match may end
-   * before a trailing newline. Must only be called when {@link #isAnchorEnd} is true.
-   */
-  static boolean isDollarAnchorEnd(Regexp re) {
-    return isDollarAnchorEndImpl(re, 0);
-  }
-
-  private static boolean isUnixDollarAnchorEnd(Regexp re) {
-    // Follow exactly the bounded path used by end-anchor detection and stripping.
-    for (int depth = 0; re != null && depth < 4; depth++) {
-      switch (re.op) {
-        case END_TEXT -> {
-          return (re.flags & ParseFlags.UNIX_LINES) != 0;
+        fun patch(prog: Prog, l: Long, target: Int) {
+            var current: Int = head(l)
+            while (current != 0) {
+                val ip = prog.mutableInst(current shr 1)
+                if ((current and 1) != 0) {
+                    current = ip.out1
+                    ip.out1 = target
+                } else {
+                    current = ip.out
+                    ip.out = target
+                }
+            }
         }
-        case CONCAT -> re = re.nsub() == 0 ? null : re.subs.getLast();
-        case NON_CAPTURE, CAPTURE -> re = re.sub();
-        default -> {
-          return false;
+
+        fun append(prog: Prog, l1: Long, l2: Long): Long {
+            val h1: Int = head(l1)
+            if (h1 == 0) {
+                return l2
+            }
+            val h2: Int = head(l2)
+            if (h2 == 0) {
+                return l1
+            }
+            val t1: Int = tail(l1)
+            val ip = prog.mutableInst(t1 shr 1)
+            if ((t1 and 1) != 0) {
+                ip.out1 = h2
+            } else {
+                ip.out = h2
+            }
+            val t2: Int = tail(l2)
+            return (h1.toLong() shl 32) or (t2.toLong() and 0xFFFFFFFFL)
         }
-      }
-    }
-    return false;
-  }
-
-  private static boolean isDollarAnchorEndImpl(Regexp re, int depth) {
-    if (re == null || depth >= 4) {
-      return false;
-    }
-    return switch (re.op) {
-      case END_TEXT -> (re.flags & ParseFlags.WAS_DOLLAR) != 0;
-      case CONCAT -> re.nsub() > 0 && isDollarAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1);
-      case NON_CAPTURE, CAPTURE -> isDollarAnchorEndImpl(re.sub(), depth + 1);
-      default -> false;
-    };
-  }
-
-  private static boolean isAnchorEndImpl(Regexp re, int depth) {
-    if (re == null || depth >= 4) {
-      return false;
-    }
-    return switch (re.op) {
-      case END_TEXT -> true;
-      case CONCAT -> re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1);
-      case NON_CAPTURE, CAPTURE -> isAnchorEndImpl(re.sub(), depth + 1);
-      default -> false;
-    };
-  }
-
-  static Regexp stripAnchorEnd(Regexp re) {
-    return stripAnchorEndImpl(re, 0);
-  }
-
-  private static Regexp stripAnchorEndImpl(Regexp re, int depth) {
-    if (re == null || depth >= 4) {
-      return re;
-    }
-    return switch (re.op) {
-      case END_TEXT -> Regexp.emptyMatch(re.flags);
-      case CONCAT -> {
-        if (re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)) {
-          List<Regexp> newSubs = new ArrayList<>(re.subs);
-          int last = re.nsub() - 1;
-          newSubs.set(last, stripAnchorEndImpl(re.subs.get(last), depth + 1));
-          yield Regexp.concat(newSubs, re.flags);
-        }
-        yield re;
-      }
-      case NON_CAPTURE -> {
-        if (isAnchorEndImpl(re.sub(), depth + 1)) {
-          yield Regexp.nonCapture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags);
-        }
-        yield re;
-      }
-      case CAPTURE -> {
-        if (isAnchorEndImpl(re.sub(), depth + 1)) {
-          yield Regexp.capture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags, re.cap, re.name);
-        }
-        yield re;
-      }
-      default -> re;
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // PatchList — linked list threaded through unused instruction out fields
-  // ---------------------------------------------------------------------------
-
-  /**
-   * A patch list is a linked list of instruction output fields that need to be filled in
-   * ("patched") to point to the next instruction. The list is threaded through the unused out/out1
-   * fields of the instructions themselves.
-   *
-   * <p>A patch list is packed into a primitive {@code long}: upper 32 bits are {@code head}, lower
-   * 32 bits are {@code tail}.
-   */
-  private static final class PatchList {
-
-    static final long EMPTY = 0L;
-
-    static long mk(int encoded) {
-      return ((long) encoded << 32) | (encoded & 0xFFFFFFFFL);
     }
 
-    static int head(long l) {
-      return (int) (l >>> 32);
+    // ---------------------------------------------------------------------------
+    // Frag — compiled program fragment
+    // ---------------------------------------------------------------------------
+    /**
+     * A compiled program fragment with a beginning instruction, a patch list of unfilled outputs, and
+     * a nullable flag.
+     */
+    @JvmRecord
+    internal data class Frag(val begin: Int, val end: Long, val nullable: Boolean) {
+        companion object {
+            val NO_MATCH: Frag = Frag(0, PatchList.EMPTY, false)
+        }
     }
 
-    static int tail(long l) {
-      return (int) l;
+    // ---------------------------------------------------------------------------
+    // Fragment combinators
+    // ---------------------------------------------------------------------------
+    private fun allocInst(): Int {
+        if (failed || prog.size() >= maxInst) {
+            failed = true
+            return -1
+        }
+        return prog.allocInst()
     }
 
-    static void patch(Prog prog, long l, int target) {
-      int current = head(l);
-      while (current != 0) {
-        Inst ip = prog.mutableInst(current >> 1);
-        if ((current & 1) != 0) {
-          current = ip.out1;
-          ip.out1 = target;
+    private fun cat(a: Frag, b: Frag): Frag {
+        if (isNoMatch(a) || isNoMatch(b)) {
+            return Frag.Companion.NO_MATCH
+        }
+
+        // Elide no-op.
+        val begin = prog.mutableInst(a.begin)
+        if (begin.op == InstOp.NOP && PatchList.head(a.end) == (a.begin shl 1) && begin.out == 0) {
+            PatchList.patch(prog, a.end, b.begin)
+            return b
+        }
+
+        if (reversed) {
+            PatchList.patch(prog, b.end, a.begin)
+            return Frag(b.begin, a.end, b.nullable && a.nullable)
+        }
+
+        PatchList.patch(prog, a.end, b.begin)
+        return Frag(a.begin, b.end, a.nullable && b.nullable)
+    }
+
+    private fun alt(a: Frag, b: Frag): Frag {
+        if (isNoMatch(a)) {
+            return b
+        }
+        if (isNoMatch(b)) {
+            return a
+        }
+
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+
+        prog.mutableInst(id).initAlt(a.begin, b.begin)
+        return Frag(id, PatchList.append(prog, a.end, b.end), a.nullable || b.nullable)
+    }
+
+    private fun plus(a: Frag, nongreedy: Boolean): Frag {
+        // When the body is nullable (can match zero characters), insert a PROGRESS_CHECK at the
+        // loop entry to implement the JDK "zero-width match breaks repetition" rule.
+        //
+        // Fresh entry resets the loop register; the body end loops back to PROGRESS_CHECK directly.
+        // An enclosing repetition can re-enter this loop at the same position where it last exited,
+        // which must not be mistaken for a zero-width iteration of this loop.
+        // On progress, PROGRESS_CHECK acts like ALT(body, exit) with greediness preference.
+        // On zero-width, PROGRESS_CHECK forces exit only (terminates the loop).
+        if (a.nullable && !forDfa) {
+            val pcId = allocInst()
+            if (pcId < 0) {
+                return Frag.Companion.NO_MATCH
+            }
+            val entryId = allocInst()
+            if (entryId < 0) {
+                return Frag.Companion.NO_MATCH
+            }
+            val loopReg = nextLoopReg++
+            prog.mutableInst(entryId).initLoopEnter(loopReg, pcId)
+            prog.mutableInst(pcId).initProgressCheck(loopReg, a.begin, 0, nongreedy)
+            val pl: Long = PatchList.mk((pcId shl 1) or 1) // patch out1 (exit)
+
+            // Patch the body end to loop back to pcId.
+            PatchList.patch(prog, a.end, pcId)
+            return Frag(entryId, pl, true)
+        }
+
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        val pl: Long
+        if (nongreedy) {
+            prog.mutableInst(id).initAlt(0, a.begin)
+            pl = PatchList.mk(id shl 1)
         } else {
-          current = ip.out;
-          ip.out = target;
+            prog.mutableInst(id).initAlt(a.begin, 0)
+            pl = PatchList.mk((id shl 1) or 1)
         }
-      }
+        PatchList.patch(prog, a.end, id)
+        return Frag(a.begin, pl, a.nullable)
     }
 
-    static long append(Prog prog, long l1, long l2) {
-      int h1 = head(l1);
-      if (h1 == 0) {
-        return l2;
-      }
-      int h2 = head(l2);
-      if (h2 == 0) {
-        return l1;
-      }
-      int t1 = tail(l1);
-      Inst ip = prog.mutableInst(t1 >> 1);
-      if ((t1 & 1) != 0) {
-        ip.out1 = h2;
-      } else {
-        ip.out = h2;
-      }
-      int t2 = tail(l2);
-      return ((long) h1 << 32) | (t2 & 0xFFFFFFFFL);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Frag — compiled program fragment
-  // ---------------------------------------------------------------------------
-
-  /**
-   * A compiled program fragment with a beginning instruction, a patch list of unfilled outputs, and
-   * a nullable flag.
-   */
-  record Frag(int begin, long end, boolean nullable) {
-    static final Frag NO_MATCH = new Frag(0, PatchList.EMPTY, false);
-  }
-
-  private static boolean isNoMatch(Frag f) {
-    return f.begin == 0;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Fragment combinators
-  // ---------------------------------------------------------------------------
-
-  private int allocInst() {
-    if (failed || prog.size() >= maxInst) {
-      failed = true;
-      return -1;
-    }
-    return prog.allocInst();
-  }
-
-  private Frag cat(Frag a, Frag b) {
-    if (isNoMatch(a) || isNoMatch(b)) {
-      return Frag.NO_MATCH;
-    }
-
-    // Elide no-op.
-    Inst begin = prog.mutableInst(a.begin);
-    if (begin.op == InstOp.NOP && PatchList.head(a.end) == (a.begin << 1) && begin.out == 0) {
-      PatchList.patch(prog, a.end, b.begin);
-      return b;
-    }
-
-    if (reversed) {
-      PatchList.patch(prog, b.end, a.begin);
-      return new Frag(b.begin, a.end, b.nullable && a.nullable);
-    }
-
-    PatchList.patch(prog, a.end, b.begin);
-    return new Frag(a.begin, b.end, a.nullable && b.nullable);
-  }
-
-  private Frag alt(Frag a, Frag b) {
-    if (isNoMatch(a)) {
-      return b;
-    }
-    if (isNoMatch(b)) {
-      return a;
-    }
-
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-
-    prog.mutableInst(id).initAlt(a.begin, b.begin);
-    return new Frag(id, PatchList.append(prog, a.end, b.end), a.nullable || b.nullable);
-  }
-
-  private Frag plus(Frag a, boolean nongreedy) {
-    // When the body is nullable (can match zero characters), insert a PROGRESS_CHECK at the
-    // loop entry to implement the JDK "zero-width match breaks repetition" rule.
-    //
-    // Fresh entry resets the loop register; the body end loops back to PROGRESS_CHECK directly.
-    // An enclosing repetition can re-enter this loop at the same position where it last exited,
-    // which must not be mistaken for a zero-width iteration of this loop.
-    // On progress, PROGRESS_CHECK acts like ALT(body, exit) with greediness preference.
-    // On zero-width, PROGRESS_CHECK forces exit only (terminates the loop).
-    if (a.nullable && !forDfa) {
-      int pcId = allocInst();
-      if (pcId < 0) {
-        return Frag.NO_MATCH;
-      }
-      int entryId = allocInst();
-      if (entryId < 0) {
-        return Frag.NO_MATCH;
-      }
-      int loopReg = nextLoopReg++;
-      prog.mutableInst(entryId).initLoopEnter(loopReg, pcId);
-      prog.mutableInst(pcId).initProgressCheck(loopReg, a.begin, 0, nongreedy);
-      long pl = PatchList.mk((pcId << 1) | 1); // patch out1 (exit)
-
-      // Patch the body end to loop back to pcId.
-      PatchList.patch(prog, a.end, pcId);
-      return new Frag(entryId, pl, true);
-    }
-
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    long pl;
-    if (nongreedy) {
-      prog.mutableInst(id).initAlt(0, a.begin);
-      pl = PatchList.mk(id << 1);
-    } else {
-      prog.mutableInst(id).initAlt(a.begin, 0);
-      pl = PatchList.mk((id << 1) | 1);
-    }
-    PatchList.patch(prog, a.end, id);
-    return new Frag(a.begin, pl, a.nullable);
-  }
-
-  private Frag star(Frag a, boolean nongreedy) {
-    if (a.nullable) {
-      return quest(plus(a, nongreedy), nongreedy);
-    }
-
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    long pl;
-    if (nongreedy) {
-      prog.mutableInst(id).initAlt(0, a.begin);
-      pl = PatchList.mk(id << 1);
-    } else {
-      prog.mutableInst(id).initAlt(a.begin, 0);
-      pl = PatchList.mk((id << 1) | 1);
-    }
-    PatchList.patch(prog, a.end, id);
-    return new Frag(id, pl, true);
-  }
-
-  private Frag quest(Frag a, boolean nongreedy) {
-    if (isNoMatch(a)) {
-      return nop();
-    }
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    long pl;
-    if (nongreedy) {
-      prog.mutableInst(id).initAlt(0, a.begin);
-      pl = PatchList.mk(id << 1);
-    } else {
-      prog.mutableInst(id).initAlt(a.begin, 0);
-      pl = PatchList.mk((id << 1) | 1);
-    }
-    return new Frag(id, PatchList.append(prog, pl, a.end), true);
-  }
-
-  /** Compiles the copies of a nullable finite repetition as one minimum-respecting invocation. */
-  private Frag finiteRepeat(List<Frag> copies, int minimum, boolean nongreedy) {
-    int maximum = copies.size();
-    if (forDfa) {
-      // Unguarded copies preserve full-match existence, but not ordered paths or captures.
-      // matches() can fix group zero to the whole region and defer guarded capture extraction;
-      // prefix/search matching uses these copies only as a rejection filter.
-      Frag suffix = quest(copies.get(maximum - 1), nongreedy);
-      for (int i = maximum - 2; i >= minimum; i--) {
-        suffix = quest(cat(copies.get(i), suffix), nongreedy);
-      }
-      for (int i = minimum - 1; i >= 0; i--) {
-        suffix = cat(copies.get(i), suffix);
-      }
-      return suffix;
-    }
-
-    int first = Math.max(0, minimum - 1);
-    int loopReg = nextLoopReg++;
-    long exits = copies.get(maximum - 1).end;
-    int firstCheck = 0;
-    for (int i = first; i < maximum; i++) {
-      int check = allocInst();
-      if (check < 0) {
-        return Frag.NO_MATCH;
-      }
-      prog.mutableInst(check).initProgressCheck(loopReg, copies.get(i).begin, 0, nongreedy);
-      exits = PatchList.append(prog, exits, PatchList.mk((check << 1) | 1));
-      if (i == first) {
-        firstCheck = check;
-      } else {
-        PatchList.patch(prog, copies.get(i - 1).end, check);
-      }
-    }
-    int entry = allocInst();
-    if (entry < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(entry).initLoopEnter(loopReg, firstCheck);
-    Frag suffix = new Frag(entry, exits, true);
-    if (minimum == 0) {
-      return quest(suffix, nongreedy);
-    }
-    for (int i = first - 1; i >= 0; i--) {
-      suffix = cat(copies.get(i), suffix);
-    }
-    return suffix;
-  }
-
-  private Frag charRange(int lo, int hi, boolean foldCase) {
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initCharRange(lo, hi, foldCase, 0);
-    return new Frag(id, PatchList.mk(id << 1), false);
-  }
-
-  private Frag graphemeCluster() {
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initGraphemeCluster(0);
-    return new Frag(id, PatchList.mk(id << 1), false);
-  }
-
-  private Frag nop() {
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initNop(0);
-    return new Frag(id, PatchList.mk(id << 1), true);
-  }
-
-  private Frag match(int matchId) {
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initMatch(matchId);
-    return new Frag(id, PatchList.EMPTY, false);
-  }
-
-  private Frag emptyWidth(int emptyFlags) {
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initEmptyWidth(emptyFlags, 0);
-    return new Frag(id, PatchList.mk(id << 1), true);
-  }
-
-  private Frag capture(Frag a, int cap) {
-    if (isNoMatch(a)) {
-      return Frag.NO_MATCH;
-    }
-    // Need two instructions: one for capture-start, one for capture-end.
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    int id2 = allocInst();
-    if (id2 < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initCapture(2 * cap, a.begin);
-    prog.mutableInst(id2).initCapture(2 * cap + 1, 0);
-    PatchList.patch(prog, a.end, id2);
-    return new Frag(id, PatchList.mk(id2 << 1), a.nullable);
-  }
-
-  private Frag literal(int rune, int flags) {
-    boolean foldCase = (flags & ParseFlags.FOLD_CASE) != 0;
-    if (foldCase && (flags & ParseFlags.UNICODE_CASE) == 0) {
-      if (isAsciiLetter(rune)) {
-        // Parser keeps these as folded literals so literal/prefix accelerators can see them.
-        // Lower to an explicit ASCII class here to avoid Unicode simple-fold matching.
-        return asciiFoldedLiteral(rune);
-      }
-      foldCase = false;
-    }
-    // In our code-point model, a literal is just a single CHAR_RANGE.
-    return charRange(rune, rune, foldCase);
-  }
-
-  private Frag asciiFoldedLiteral(int rune) {
-    int lower = Ascii.toLowerCase(rune);
-    int upper = Ascii.toUpperCase(rune);
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
-    }
-    prog.mutableInst(id).initCharClass(0, new int[] {upper, upper, lower, lower});
-    return new Frag(id, PatchList.mk(id << 1), false);
-  }
-
-  private Frag literalString(int[] runes, int flags) {
-    if (runes == null || runes.length == 0) {
-      return nop();
-    }
-    if (runes.length == 1) {
-      return literal(runes[0], flags);
-    }
-    Frag first = literal(runes[0], flags);
-    if (isNoMatch(first)) {
-      return Frag.NO_MATCH;
-    }
-    Frag current = first;
-    for (int i = 1; i < runes.length; i++) {
-      Frag next = literal(runes[i], flags);
-      if (isNoMatch(next)) {
-        return Frag.NO_MATCH;
-      }
-      current = cat(current, next);
-    }
-    return current;
-  }
-
-  private static boolean isAsciiLetter(int rune) {
-    return Ascii.isAlpha(rune);
-  }
-
-  /** Compiles an "any code point" fragment. */
-  private Frag anyCodePoint() {
-    return charRange(0, Utils.MAX_RUNE, false);
-  }
-
-  /**
-   * Creates a {@code .*?} fragment for unanchored matching. The DotStar loops over any code point
-   * (non-greedy).
-   */
-  private Frag dotStar() {
-    return star(anyCodePoint(), true);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Walker overrides
-  // ---------------------------------------------------------------------------
-
-  @Override
-  protected int repeatVisits(Regexp re) {
-    return re.max;
-  }
-
-  @Override
-  protected Frag preVisit(Regexp re, Frag parentArg, boolean[] stop) {
-    if (failed) {
-      stop[0] = true;
-    }
-    return Frag.NO_MATCH;
-  }
-
-  @Override
-  protected Frag postVisit(Regexp re, Frag parentArg, Frag preArg, List<Frag> childArgs) {
-    if (failed) {
-      return Frag.NO_MATCH;
-    }
-
-    return switch (re.op) {
-      case REPEAT -> finiteRepeat(childArgs, re.min, re.nonGreedy());
-
-      case NO_MATCH -> Frag.NO_MATCH;
-
-      case EMPTY_MATCH -> nop();
-
-      case HAVE_MATCH -> match(re.matchId);
-
-      case CONCAT -> {
-        Frag f = childArgs.get(0);
-        for (int i = 1; i < childArgs.size(); i++) {
-          f = cat(f, childArgs.get(i));
+    private fun star(a: Frag, nongreedy: Boolean): Frag? {
+        if (a.nullable) {
+            return quest(plus(a, nongreedy), nongreedy)
         }
-        yield f;
-      }
 
-      case ALTERNATE -> {
-        Frag f = childArgs.get(0);
-        for (int i = 1; i < childArgs.size(); i++) {
-          f = alt(f, childArgs.get(i));
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
         }
-        yield f;
-      }
-
-      case NON_CAPTURE -> childArgs.get(0);
-
-      case STAR -> star(childArgs.get(0), re.nonGreedy());
-
-      case PLUS -> plus(childArgs.get(0), re.nonGreedy());
-
-      case QUEST -> quest(childArgs.get(0), re.nonGreedy());
-
-      case LITERAL -> literal(re.rune, re.flags);
-
-      case LITERAL_STRING -> literalString(re.runes, re.flags);
-
-      case ANY_CHAR -> anyCodePoint();
-
-      case GRAPHEME_CLUSTER -> graphemeCluster();
-
-      case CHAR_CLASS -> compileCharClass(re);
-
-      case CAPTURE -> {
-        if (re.cap < 0) {
-          yield childArgs.get(0);
+        val pl: Long
+        if (nongreedy) {
+            prog.mutableInst(id).initAlt(0, a.begin)
+            pl = PatchList.mk(id shl 1)
+        } else {
+            prog.mutableInst(id).initAlt(a.begin, 0)
+            pl = PatchList.mk((id shl 1) or 1)
         }
-        yield capture(childArgs.get(0), re.cap);
-      }
-
-      case BEGIN_LINE ->
-          emptyWidth(
-              (re.flags & ParseFlags.UNIX_LINES) != 0
-                  ? (reversed ? EmptyOp.UNIX_END_LINE : EmptyOp.UNIX_BEGIN_LINE)
-                  : (reversed ? EmptyOp.END_LINE : EmptyOp.BEGIN_LINE));
-
-      case END_LINE ->
-          emptyWidth(
-              (re.flags & ParseFlags.UNIX_LINES) != 0
-                  ? (reversed ? EmptyOp.UNIX_BEGIN_LINE : EmptyOp.UNIX_END_LINE)
-                  : (reversed ? EmptyOp.BEGIN_LINE : EmptyOp.END_LINE));
-
-      case BEGIN_TEXT -> emptyWidth(reversed ? EmptyOp.END_TEXT : EmptyOp.BEGIN_TEXT);
-
-      case END_TEXT -> {
-        if ((re.flags & ParseFlags.WAS_DOLLAR) != 0) {
-          // Keep the assertion's line mode and position semantics in either scan direction.
-          yield emptyWidth(
-              (re.flags & ParseFlags.UNIX_LINES) != 0
-                  ? EmptyOp.UNIX_DOLLAR_END
-                  : EmptyOp.DOLLAR_END);
-        }
-        yield emptyWidth(reversed ? EmptyOp.BEGIN_TEXT : EmptyOp.END_TEXT);
-      }
-
-      case WORD_BOUNDARY -> {
-        if ((re.flags & ParseFlags.UNICODE_CHAR_CLASS) != 0) {
-          yield emptyWidth(EmptyOp.UNICODE_WORD_BOUNDARY);
-        }
-        yield emptyWidth(EmptyOp.WORD_BOUNDARY);
-      }
-
-      case NO_WORD_BOUNDARY -> {
-        if ((re.flags & ParseFlags.UNICODE_CHAR_CLASS) != 0) {
-          yield emptyWidth(EmptyOp.UNICODE_NON_WORD_BOUNDARY);
-        }
-        yield emptyWidth(EmptyOp.NON_WORD_BOUNDARY);
-      }
-
-      case GRAPHEME_CLUSTER_BOUNDARY -> emptyWidth(EmptyOp.EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY);
-
-      default -> {
-        failed = true;
-        yield Frag.NO_MATCH;
-      }
-    };
-  }
-
-  @Override
-  protected Frag shortVisit(Regexp re, Frag parentArg) {
-    failed = true;
-    return Frag.NO_MATCH;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Character class compilation
-  // ---------------------------------------------------------------------------
-
-  private Frag compileCharClass(Regexp re) {
-    CharClass cc = re.charClass;
-    if (cc == null || cc.isEmpty()) {
-      return Frag.NO_MATCH;
+        PatchList.patch(prog, a.end, id)
+        return Frag(id, pl, true)
     }
 
-    int numRanges = cc.numRanges();
-
-    // Single range: use a simple CHAR_RANGE instruction (no ALT overhead).
-    if (numRanges == 1) {
-      return charRange(cc.lo(0), cc.hi(0), false);
+    private fun quest(a: Frag, nongreedy: Boolean): Frag {
+        if (isNoMatch(a)) {
+            return nop()
+        }
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        val pl: Long
+        if (nongreedy) {
+            prog.mutableInst(id).initAlt(0, a.begin)
+            pl = PatchList.mk(id shl 1)
+        } else {
+            prog.mutableInst(id).initAlt(a.begin, 0)
+            pl = PatchList.mk((id shl 1) or 1)
+        }
+        return Frag(id, PatchList.append(prog, pl, a.end), true)
     }
 
-    // Multi-range: emit a single CHAR_CLASS instruction with all ranges and an ASCII bitmap.
-    int[] ranges = new int[numRanges * 2];
-    for (int i = 0; i < numRanges; i++) {
-      ranges[i * 2] = cc.lo(i);
-      ranges[i * 2 + 1] = cc.hi(i);
+    /** Compiles the copies of a nullable finite repetition as one minimum-respecting invocation.  */
+    private fun finiteRepeat(copies: MutableList<Frag>, minimum: Int, nongreedy: Boolean): Frag {
+        val maximum: Int = copies.size()
+        if (forDfa) {
+            // Unguarded copies preserve full-match existence, but not ordered paths or captures.
+            // matches() can fix group zero to the whole region and defer guarded capture extraction;
+            // prefix/search matching uses these copies only as a rejection filter.
+            var suffix = quest(copies.get(maximum - 1), nongreedy)
+            for (i in maximum - 2 downTo minimum) {
+                suffix = quest(cat(copies.get(i), suffix), nongreedy)
+            }
+            for (i in minimum - 1 downTo 0) {
+                suffix = cat(copies.get(i), suffix)
+            }
+            return suffix
+        }
+
+        val first = Math.max(0, minimum - 1)
+        val loopReg = nextLoopReg++
+        var exits = copies.get(maximum - 1).end
+        var firstCheck = 0
+        for (i in first..<maximum) {
+            val check = allocInst()
+            if (check < 0) {
+                return Frag.Companion.NO_MATCH
+            }
+            prog.mutableInst(check).initProgressCheck(loopReg, copies.get(i).begin, 0, nongreedy)
+            exits = PatchList.append(prog, exits, PatchList.mk((check shl 1) or 1))
+            if (i == first) {
+                firstCheck = check
+            } else {
+                PatchList.patch(prog, copies.get(i - 1).end, check)
+            }
+        }
+        val entry = allocInst()
+        if (entry < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(entry).initLoopEnter(loopReg, firstCheck)
+        var suffix = Frag(entry, exits, true)
+        if (minimum == 0) {
+            return quest(suffix, nongreedy)
+        }
+        for (i in first - 1 downTo 0) {
+            suffix = cat(copies.get(i), suffix)
+        }
+        return suffix
     }
-    int id = allocInst();
-    if (id < 0) {
-      return Frag.NO_MATCH;
+
+    private fun charRange(lo: Int, hi: Int, foldCase: Boolean): Frag {
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initCharRange(lo, hi, foldCase, 0)
+        return Frag(id, PatchList.mk(id shl 1), false)
     }
-    prog.mutableInst(id).initCharClass(0, ranges);
-    return new Frag(id, PatchList.mk(id << 1), false);
-  }
+
+    private fun graphemeCluster(): Frag {
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initGraphemeCluster(0)
+        return Frag(id, PatchList.mk(id shl 1), false)
+    }
+
+    private fun nop(): Frag {
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initNop(0)
+        return Frag(id, PatchList.mk(id shl 1), true)
+    }
+
+    private fun match(matchId: Int): Frag {
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initMatch(matchId)
+        return Frag(id, PatchList.EMPTY, false)
+    }
+
+    private fun emptyWidth(emptyFlags: Int): Frag {
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initEmptyWidth(emptyFlags, 0)
+        return Frag(id, PatchList.mk(id shl 1), true)
+    }
+
+    private fun capture(a: Frag, cap: Int): Frag {
+        if (isNoMatch(a)) {
+            return Frag.Companion.NO_MATCH
+        }
+        // Need two instructions: one for capture-start, one for capture-end.
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        val id2 = allocInst()
+        if (id2 < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initCapture(2 * cap, a.begin)
+        prog.mutableInst(id2).initCapture(2 * cap + 1, 0)
+        PatchList.patch(prog, a.end, id2)
+        return Frag(id, PatchList.mk(id2 shl 1), a.nullable)
+    }
+
+    private fun literal(rune: Int, flags: Int): Frag {
+        var foldCase = (flags and ParseFlags.FOLD_CASE) != 0
+        if (foldCase && (flags and ParseFlags.UNICODE_CASE) == 0) {
+            if (isAsciiLetter(rune)) {
+                // Parser keeps these as folded literals so literal/prefix accelerators can see them.
+                // Lower to an explicit ASCII class here to avoid Unicode simple-fold matching.
+                return asciiFoldedLiteral(rune)
+            }
+            foldCase = false
+        }
+        // In our code-point model, a literal is just a single CHAR_RANGE.
+        return charRange(rune, rune, foldCase)
+    }
+
+    private fun asciiFoldedLiteral(rune: Int): Frag {
+        val lower = Ascii.toLowerCase(rune)
+        val upper = Ascii.toUpperCase(rune)
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initCharClass(0, intArrayOf(upper, upper, lower, lower))
+        return Frag(id, PatchList.mk(id shl 1), false)
+    }
+
+    private fun literalString(runes: IntArray?, flags: Int): Frag {
+        if (runes == null || runes.length == 0) {
+            return nop()
+        }
+        if (runes.length == 1) {
+            return literal(runes[0], flags)
+        }
+        val first = literal(runes[0], flags)
+        if (isNoMatch(first)) {
+            return Frag.Companion.NO_MATCH
+        }
+        var current = first
+        for (i in 1..<runes.length) {
+            val next = literal(runes[i], flags)
+            if (isNoMatch(next)) {
+                return Frag.Companion.NO_MATCH
+            }
+            current = cat(current, next)
+        }
+        return current
+    }
+
+    /** Compiles an "any code point" fragment.  */
+    private fun anyCodePoint(): Frag {
+        return charRange(0, Utils.MAX_RUNE, false)
+    }
+
+    /**
+     * Creates a `.*?` fragment for unanchored matching. The DotStar loops over any code point
+     * (non-greedy).
+     */
+    private fun dotStar(): Frag? {
+        return star(anyCodePoint(), true)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Walker overrides
+    // ---------------------------------------------------------------------------
+    override fun repeatVisits(re: Regexp): Int {
+        return re.max
+    }
+
+    override fun preVisit(re: Regexp?, parentArg: Frag?, stop: BooleanArray): Frag {
+        if (failed) {
+            stop[0] = true
+        }
+        return Frag.Companion.NO_MATCH
+    }
+
+    override fun postVisit(re: Regexp, parentArg: Frag?, preArg: Frag?, childArgs: MutableList<Frag>): Frag? {
+        if (failed) {
+            return Frag.Companion.NO_MATCH
+        }
+
+        return when (re.op) {
+            RegexpOp.REPEAT -> finiteRepeat(childArgs, re.min, re.nonGreedy())
+            RegexpOp.NO_MATCH -> Frag.Companion.NO_MATCH
+            RegexpOp.EMPTY_MATCH -> nop()
+            RegexpOp.HAVE_MATCH -> match(re.matchId)
+            RegexpOp.CONCAT -> {
+                var f = childArgs.get(0)
+                for (i in 1..<childArgs.size()) {
+                    f = cat(f, childArgs.get(i))
+                }
+                f
+            }
+
+            RegexpOp.ALTERNATE -> {
+                var f = childArgs.get(0)
+                for (i in 1..<childArgs.size()) {
+                    f = alt(f, childArgs.get(i))
+                }
+                f
+            }
+
+            RegexpOp.NON_CAPTURE -> childArgs.get(0)
+            RegexpOp.STAR -> star(childArgs.get(0), re.nonGreedy())
+            RegexpOp.PLUS -> plus(childArgs.get(0), re.nonGreedy())
+            RegexpOp.QUEST -> quest(childArgs.get(0), re.nonGreedy())
+            RegexpOp.LITERAL -> literal(re.rune, re.flags)
+            RegexpOp.LITERAL_STRING -> literalString(re.runes, re.flags)
+            RegexpOp.ANY_CHAR -> anyCodePoint()
+            RegexpOp.GRAPHEME_CLUSTER -> graphemeCluster()
+            RegexpOp.CHAR_CLASS -> compileCharClass(re)
+            RegexpOp.CAPTURE -> {
+                if (re.cap < 0) {
+                    childArgs.get(0)
+                }
+                capture(childArgs.get(0), re.cap)
+            }
+
+            RegexpOp.BEGIN_LINE -> emptyWidth(
+                if ((re.flags and ParseFlags.UNIX_LINES) != 0)
+                    (if (reversed) EmptyOp.UNIX_END_LINE else EmptyOp.UNIX_BEGIN_LINE)
+                else
+                    (if (reversed) EmptyOp.END_LINE else EmptyOp.BEGIN_LINE)
+            )
+
+            RegexpOp.END_LINE -> emptyWidth(
+                if ((re.flags and ParseFlags.UNIX_LINES) != 0)
+                    (if (reversed) EmptyOp.UNIX_BEGIN_LINE else EmptyOp.UNIX_END_LINE)
+                else
+                    (if (reversed) EmptyOp.BEGIN_LINE else EmptyOp.END_LINE)
+            )
+
+            RegexpOp.BEGIN_TEXT -> emptyWidth(if (reversed) EmptyOp.END_TEXT else EmptyOp.BEGIN_TEXT)
+            RegexpOp.END_TEXT -> {
+                if ((re.flags and ParseFlags.WAS_DOLLAR) != 0) {
+                    // Keep the assertion's line mode and position semantics in either scan direction.
+                    emptyWidth(
+                        if ((re.flags and ParseFlags.UNIX_LINES) != 0)
+                            EmptyOp.UNIX_DOLLAR_END
+                        else
+                            EmptyOp.DOLLAR_END
+                    )
+                }
+                emptyWidth(if (reversed) EmptyOp.BEGIN_TEXT else EmptyOp.END_TEXT)
+            }
+
+            RegexpOp.WORD_BOUNDARY -> {
+                if ((re.flags and ParseFlags.UNICODE_CHAR_CLASS) != 0) {
+                    emptyWidth(EmptyOp.UNICODE_WORD_BOUNDARY)
+                }
+                emptyWidth(EmptyOp.WORD_BOUNDARY)
+            }
+
+            RegexpOp.NO_WORD_BOUNDARY -> {
+                if ((re.flags and ParseFlags.UNICODE_CHAR_CLASS) != 0) {
+                    emptyWidth(EmptyOp.UNICODE_NON_WORD_BOUNDARY)
+                }
+                emptyWidth(EmptyOp.NON_WORD_BOUNDARY)
+            }
+
+            RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> emptyWidth(EmptyOp.EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY)
+            else -> {
+                failed = true
+                Frag.Companion.NO_MATCH
+            }
+        }
+    }
+
+    override fun shortVisit(re: Regexp?, parentArg: Frag?): Frag {
+        failed = true
+        return Frag.Companion.NO_MATCH
+    }
+
+    // ---------------------------------------------------------------------------
+    // Character class compilation
+    // ---------------------------------------------------------------------------
+    private fun compileCharClass(re: Regexp): Frag? {
+        val cc = re.charClass
+        if (cc == null || cc.isEmpty()) {
+            return Frag.Companion.NO_MATCH
+        }
+
+        val numRanges = cc.numRanges()
+
+        // Single range: use a simple CHAR_RANGE instruction (no ALT overhead).
+        if (numRanges == 1) {
+            return charRange(cc.lo(0), cc.hi(0), false)
+        }
+
+        // Multi-range: emit a single CHAR_CLASS instruction with all ranges and an ASCII bitmap.
+        val ranges = IntArray(numRanges * 2)
+        for (i in 0..<numRanges) {
+            ranges[i * 2] = cc.lo(i)
+            ranges[i * 2 + 1] = cc.hi(i)
+        }
+        val id = allocInst()
+        if (id < 0) {
+            return Frag.Companion.NO_MATCH
+        }
+        prog.mutableInst(id).initCharClass(0, ranges)
+        return Frag(id, PatchList.mk(id shl 1), false)
+    }
+
+    companion object {
+        /** Maximum number of instructions allowed by default.  */
+        private const val DEFAULT_MAX_INST = 1000000
+
+        /**
+         * Compiles the given regexp into a program.
+         * 
+         * @param re the regexp to compile
+         * @return the compiled program, or null if compilation fails
+         */
+        fun compile(re: Regexp): Prog? {
+            return compile(prepare(re), false, false)
+        }
+
+        /**
+         * Compiles the given regexp into a program.
+         * 
+         * @param re the regexp to compile
+         * @param reversed if true, compile for backward matching
+         * @return the compiled program, or null if compilation fails
+         */
+        fun compile(re: Regexp, reversed: Boolean): Prog? {
+            return compile(prepare(re), reversed, false)
+        }
+
+        fun compileForDfa(re: Regexp): Prog? {
+            return compile(prepare(re), false, true)
+        }
+
+        fun compileForDfa(re: Regexp, reversed: Boolean): Prog? {
+            return compile(prepare(re), reversed, true)
+        }
+
+        /** Simplifies a source AST once, preserving capture writes in every repeat copy.  */
+        fun prepare(re: Regexp): Prepared? {
+            val numCaptures: Int = maxCapture(re) + 1
+            // Repeat copies share source capture identities. Later accepted copies must still write
+            // their captures; retaining an earlier value is the engine's omission/rollback behavior.
+            val sre = Simplifier.simplify(re)
+            if (sre == null) {
+                return null
+            }
+
+            // Detect anchoring, stripping the anchor nodes.
+            val isAnchorStart: Boolean = isAnchorStart(sre)
+            var stripped: Regexp? = stripAnchorStart(sre)
+            val isAnchorEnd: Boolean = isAnchorEnd(stripped)
+            val isDollarEnd = isAnchorEnd && isDollarAnchorEnd(stripped)
+            val dollarUnixLines = isDollarEnd && isUnixDollarAnchorEnd(stripped)
+            stripped = stripAnchorEnd(stripped)
+            return Compiler.Prepared(
+                stripped, sre, numCaptures, isAnchorStart, isAnchorEnd, isDollarEnd, dollarUnixLines
+            )
+        }
+
+        fun compile(prepared: Prepared?, reversed: Boolean): Prog? {
+            return compile(prepared, reversed, false)
+        }
+
+        fun compileForDfa(prepared: Prepared?, reversed: Boolean): Prog? {
+            return compile(prepared, reversed, true)
+        }
+
+        private fun compile(prepared: Prepared?, reversed: Boolean, forDfa: Boolean): Prog? {
+            if (prepared == null) {
+                return null
+            }
+            val c = Compiler()
+            c.reversed = reversed
+            c.forDfa = forDfa
+
+            // Walk the AST to produce fragments.
+            var all = c.walkExponential(prepared.root, Frag.Companion.NO_MATCH, 2 * c.maxInst)
+            if (c.failed) {
+                return null
+            }
+
+            // Append Match(0).
+            c.reversed = false
+            all = c.cat(all, c.match(0))
+            if (c.failed) {
+                return null
+            }
+
+            c.prog.setReversed(reversed)
+            if (reversed) {
+                c.prog.setAnchorStart(prepared.anchorEnd)
+                c.prog.setAnchorEnd(prepared.anchorStart)
+            } else {
+                c.prog.setAnchorStart(prepared.anchorStart)
+                c.prog.setAnchorEnd(prepared.anchorEnd)
+                c.prog.setDollarAnchorEnd(prepared.dollarEnd)
+                c.prog.setDollarAnchorUnixLines(prepared.dollarUnixLines)
+            }
+
+            c.prog.setStart(all.begin)
+
+            if (!c.prog.anchorStart()) {
+                // Prepend .*? loop for unanchored matching.
+                all = c.cat(c.dotStar()!!, all)
+            }
+            c.prog.setStartUnanchored(all.begin)
+
+            // Freeze the instruction list into a flat array for fast indexed access.
+            c.prog.freeze()
+
+            c.prog.setNumCaptures(prepared.numCaptures)
+            c.prog.setNumLoopRegs(c.nextLoopReg)
+
+            return c.prog
+        }
+
+        private fun maxCapture(re: Regexp): Int {
+            var max = 0
+            val stack = ArrayDeque<Regexp>()
+            stack.push(re)
+            while (!stack.isEmpty()) {
+                val node = stack.pop()
+                if (node.op == RegexpOp.CAPTURE && node.cap > max) {
+                    max = node.cap
+                }
+                if (node.subs != null) {
+                    for (sub in node.subs) {
+                        stack.push(sub)
+                    }
+                }
+            }
+            return max
+        }
+
+        // ---------------------------------------------------------------------------
+        // Anchor detection — approximate, like RE2's IsAnchorStart/IsAnchorEnd
+        // ---------------------------------------------------------------------------
+        fun isAnchorStart(re: Regexp?): Boolean {
+            return isAnchorStartImpl(re, 0)
+        }
+
+        private fun isAnchorStartImpl(re: Regexp?, depth: Int): Boolean {
+            if (re == null || depth >= 4) {
+                return false
+            }
+            return when (re.op) {
+                RegexpOp.BEGIN_TEXT -> true
+                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1)
+                RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isAnchorStartImpl(re.sub(), depth + 1)
+                else -> false
+            }
+        }
+
+        fun stripAnchorStart(re: Regexp?): Regexp? {
+            return stripAnchorStartImpl(re, 0)
+        }
+
+        private fun stripAnchorStartImpl(re: Regexp?, depth: Int): Regexp? {
+            if (re == null || depth >= 4) {
+                return re
+            }
+            return when (re.op) {
+                RegexpOp.BEGIN_TEXT -> Regexp.Companion.emptyMatch(re.flags)
+                RegexpOp.CONCAT -> {
+                    if (re.nsub() > 0 && isAnchorStartImpl(re.subs.getFirst(), depth + 1)) {
+                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs)
+                        newSubs.set(0, stripAnchorStartImpl(re.subs.getFirst(), depth + 1))
+                        Regexp.Companion.concat(newSubs, re.flags)
+                    }
+                    re
+                }
+
+                RegexpOp.NON_CAPTURE -> {
+                    if (isAnchorStartImpl(re.sub(), depth + 1)) {
+                        Regexp.Companion.nonCapture(stripAnchorStartImpl(re.sub(), depth + 1), re.flags)
+                    }
+                    re
+                }
+
+                RegexpOp.CAPTURE -> {
+                    if (isAnchorStartImpl(re.sub(), depth + 1)) {
+                        Regexp.Companion.capture(
+                            stripAnchorStartImpl(re.sub(), depth + 1), re.flags, re.cap, re.name
+                        )
+                    }
+                    re
+                }
+
+                else -> re
+            }
+        }
+
+        fun isAnchorEnd(re: Regexp?): Boolean {
+            return isAnchorEndImpl(re, 0)
+        }
+
+        /**
+         * Returns true if the trailing end anchor is `$` (WAS_DOLLAR), meaning the match may end
+         * before a trailing newline. Must only be called when [.isAnchorEnd] is true.
+         */
+        fun isDollarAnchorEnd(re: Regexp?): Boolean {
+            return isDollarAnchorEndImpl(re, 0)
+        }
+
+        private fun isUnixDollarAnchorEnd(re: Regexp?): Boolean {
+            // Follow exactly the bounded path used by end-anchor detection and stripping.
+            var re = re
+            var depth = 0
+            while (re != null && depth < 4) {
+                when (re.op) {
+                    RegexpOp.END_TEXT -> {
+                        return (re.flags and ParseFlags.UNIX_LINES) != 0
+                    }
+
+                    RegexpOp.CONCAT -> re = if (re.nsub() == 0) null else re.subs.getLast()
+                    RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> re = re.sub()
+                    else -> {
+                        return false
+                    }
+                }
+                depth++
+            }
+            return false
+        }
+
+        private fun isDollarAnchorEndImpl(re: Regexp?, depth: Int): Boolean {
+            if (re == null || depth >= 4) {
+                return false
+            }
+            return when (re.op) {
+                RegexpOp.END_TEXT -> (re.flags and ParseFlags.WAS_DOLLAR) != 0
+                RegexpOp.CONCAT -> re.nsub() > 0 && isDollarAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)
+                RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isDollarAnchorEndImpl(re.sub(), depth + 1)
+                else -> false
+            }
+        }
+
+        private fun isAnchorEndImpl(re: Regexp?, depth: Int): Boolean {
+            if (re == null || depth >= 4) {
+                return false
+            }
+            return when (re.op) {
+                RegexpOp.END_TEXT -> true
+                RegexpOp.CONCAT -> re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)
+                RegexpOp.NON_CAPTURE, RegexpOp.CAPTURE -> isAnchorEndImpl(re.sub(), depth + 1)
+                else -> false
+            }
+        }
+
+        fun stripAnchorEnd(re: Regexp?): Regexp? {
+            return stripAnchorEndImpl(re, 0)
+        }
+
+        private fun stripAnchorEndImpl(re: Regexp?, depth: Int): Regexp? {
+            if (re == null || depth >= 4) {
+                return re
+            }
+            return when (re.op) {
+                RegexpOp.END_TEXT -> Regexp.Companion.emptyMatch(re.flags)
+                RegexpOp.CONCAT -> {
+                    if (re.nsub() > 0 && isAnchorEndImpl(re.subs.get(re.nsub() - 1), depth + 1)) {
+                        val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs)
+                        val last = re.nsub() - 1
+                        newSubs.set(last, stripAnchorEndImpl(re.subs.get(last), depth + 1))
+                        Regexp.Companion.concat(newSubs, re.flags)
+                    }
+                    re
+                }
+
+                RegexpOp.NON_CAPTURE -> {
+                    if (isAnchorEndImpl(re.sub(), depth + 1)) {
+                        Regexp.Companion.nonCapture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags)
+                    }
+                    re
+                }
+
+                RegexpOp.CAPTURE -> {
+                    if (isAnchorEndImpl(re.sub(), depth + 1)) {
+                        Regexp.Companion.capture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags, re.cap, re.name)
+                    }
+                    re
+                }
+
+                else -> re
+            }
+        }
+
+        private fun isNoMatch(f: Frag): Boolean {
+            return f.begin == 0
+        }
+
+        private fun isAsciiLetter(rune: Int): Boolean {
+            return Ascii.isAlpha(rune)
+        }
+    }
 }

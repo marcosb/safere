@@ -2,68 +2,67 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
+import org.safere.Pattern.CharClassMatchInfo
+import org.safere.Pattern.KeywordAlternation
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-class MatchDescriptorTest {
-
-  @Test
-  void noneDescriptorHasNoFastPath() {
-    assertThat(MatchDescriptor.NONE.hasFastPath()).isFalse();
-    assertThat(MatchDescriptor.NONE.literalMatch()).isNull();
-    assertThat(MatchDescriptor.NONE.singleCharClass()).isNull();
-    assertThat(MatchDescriptor.NONE.keywordAlternation()).isNull();
-    assertThat(MatchDescriptor.NONE.charClassMatch()).isNull();
-  }
-
-  @Test
-  void literalMatchPatternProducesLiteralDescriptor() {
-    Pattern p = Pattern.compile("hello");
-    MatchDescriptor desc = p.matchDescriptor();
-    assertThat(desc.hasFastPath()).isTrue();
-    assertThat(desc.literalMatch()).isEqualTo("hello");
-    assertThat(p.literalMatch()).isEqualTo("hello");
-  }
-
-  @Test
-  void singleCharClassPatternProducesSingleCharClassDescriptor() {
-    Pattern p = Pattern.compile("[a-z]");
-    MatchDescriptor desc = p.matchDescriptor();
-    assertThat(desc.hasFastPath()).isTrue();
-    assertThat(desc.singleCharClass()).isNotNull();
-    assertThat(desc.singleCharClass().isAscii()).isTrue();
-  }
-
-  @Test
-  void repeatedCharClassPatternProducesCharClassMatchDescriptor() {
-    Pattern p = Pattern.compile("[a-z]+");
-    MatchDescriptor desc = p.matchDescriptor();
-    assertThat(desc.hasFastPath()).isTrue();
-    assertThat(desc.charClassMatch()).isNotNull();
-    assertThat(desc.charClassMatch().ranges()).isNotNull();
-  }
-
-  @Test
-  void keywordAlternationPatternProducesKeywordAlternationDescriptor() {
-    Pattern p = Pattern.compile("foo|bar|baz", Pattern.CASE_INSENSITIVE);
-    MatchDescriptor desc = p.matchDescriptor();
-    if (desc.keywordAlternation() != null) {
-      assertThat(desc.hasFastPath()).isTrue();
-      assertThat(desc.keywordAlternation().keywords).isNotEmpty();
+internal class MatchDescriptorTest {
+    @Test
+    fun noneDescriptorHasNoFastPath() {
+        Assertions.assertThat(MatchDescriptor.NONE.hasFastPath()).isFalse()
+        Assertions.assertThat(MatchDescriptor.NONE.literalMatch).isNull()
+        Assertions.assertThat<CharClassScanInfo?>(MatchDescriptor.NONE.singleCharClass).isNull()
+        Assertions.assertThat<KeywordAlternation?>(MatchDescriptor.NONE.keywordAlternation).isNull()
+        Assertions.assertThat<CharClassMatchInfo?>(MatchDescriptor.NONE.charClassMatch).isNull()
     }
-  }
 
-  @Test
-  void complexPatternHasNoMatchFastPath() {
-    Pattern p = Pattern.compile("a(b|c)*d");
-    MatchDescriptor desc = p.matchDescriptor();
-    assertThat(desc.literalMatch()).isNull();
-    assertThat(desc.singleCharClass()).isNull();
-    assertThat(desc.charClassMatch()).isNull();
-  }
+    @Test
+    fun literalMatchPatternProducesLiteralDescriptor() {
+        val p = Pattern.compile("hello")
+        val desc = p.matchDescriptor()
+        Assertions.assertThat(desc.hasFastPath()).isTrue()
+        Assertions.assertThat(desc.literalMatch).isEqualTo("hello")
+        Assertions.assertThat(p.literalMatch()).isEqualTo("hello")
+    }
+
+    @Test
+    fun singleCharClassPatternProducesSingleCharClassDescriptor() {
+        val p = Pattern.compile("[a-z]")
+        val desc = p.matchDescriptor()
+        Assertions.assertThat(desc.hasFastPath()).isTrue()
+        Assertions.assertThat<CharClassScanInfo?>(desc.singleCharClass).isNotNull()
+        Assertions.assertThat(desc.singleCharClass.isAscii).isTrue()
+    }
+
+    @Test
+    fun repeatedCharClassPatternProducesCharClassMatchDescriptor() {
+        val p = Pattern.compile("[a-z]+")
+        val desc = p.matchDescriptor()
+        Assertions.assertThat(desc.hasFastPath()).isTrue()
+        Assertions.assertThat<CharClassMatchInfo?>(desc.charClassMatch).isNotNull()
+        Assertions.assertThat(desc.charClassMatch.ranges).isNotNull()
+    }
+
+    @Test
+    fun keywordAlternationPatternProducesKeywordAlternationDescriptor() {
+        val p = Pattern.compile("foo|bar|baz", Pattern.CASE_INSENSITIVE)
+        val desc = p.matchDescriptor()
+        if (desc.keywordAlternation != null) {
+            Assertions.assertThat(desc.hasFastPath()).isTrue()
+            Assertions.assertThat<String?>(desc.keywordAlternation.keywords).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun complexPatternHasNoMatchFastPath() {
+        val p = Pattern.compile("a(b|c)*d")
+        val desc = p.matchDescriptor()
+        Assertions.assertThat(desc.literalMatch).isNull()
+        Assertions.assertThat<CharClassScanInfo?>(desc.singleCharClass).isNull()
+        Assertions.assertThat<CharClassMatchInfo?>(desc.charClassMatch).isNull()
+    }
 }

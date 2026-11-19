@@ -2,203 +2,213 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.Test;
-
-/** Tests for {@link SafeReDiagnostics}. */
+/** Tests for [SafeReDiagnostics].  */
 @DisabledForCrosscheck("diagnostic exporter test uses SafeRE-specific bytecode shape")
-class SafeReDiagnosticsTest {
+internal class SafeReDiagnosticsTest {
+    @Test
+    fun exportsNfaProgramShapeFromPatternProg() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "literal-a",
+                "a",
+                0,
+                "a",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("a")
+            )
 
-  @Test
-  void exportsNfaProgramShapeFromPatternProg() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "literal-a",
-            "a",
-            0,
-            "a",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("a"));
+        Assertions.assertThat(json).contains("\"schema\":\"safere-bytecode-v1\"")
+        Assertions.assertThat(json).contains("\"producer\":{\"name\":\"safere\"}")
+        Assertions.assertThat(json).contains("\"matchKind\":\"FIRST_MATCH\"")
+        Assertions.assertThat(json).contains("\"shape\":\"nfa-prog\"")
+        Assertions.assertThat(json).contains("\"didFlatten\":false")
+        Assertions.assertThat(json).contains("\"requiresPikeNfaCaptureSemantics\":false")
+        Assertions.assertThat(json).contains("\"op\":\"CHAR_RANGE\"")
+        Assertions.assertThat(json).contains("\"lo\":97")
+        Assertions.assertThat(json).contains("\"hi\":97")
+        Assertions.assertThat(json).contains("\"foldCase\":false")
+        Assertions.assertThat(json).contains("\"op\":\"MATCH\"")
+    }
 
-    assertThat(json).contains("\"schema\":\"safere-bytecode-v1\"");
-    assertThat(json).contains("\"producer\":{\"name\":\"safere\"}");
-    assertThat(json).contains("\"matchKind\":\"FIRST_MATCH\"");
-    assertThat(json).contains("\"shape\":\"nfa-prog\"");
-    assertThat(json).contains("\"didFlatten\":false");
-    assertThat(json).contains("\"requiresPikeNfaCaptureSemantics\":false");
-    assertThat(json).contains("\"op\":\"CHAR_RANGE\"");
-    assertThat(json).contains("\"lo\":97");
-    assertThat(json).contains("\"hi\":97");
-    assertThat(json).contains("\"foldCase\":false");
-    assertThat(json).contains("\"op\":\"MATCH\"");
-  }
+    @Test
+    fun nestedRepeatsExportAcceptedPathCapturesWithLegacyMetadata() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "nested-repeat",
+                "(?:(a){0,2})*",
+                0,
+                "aaaa",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("(?:(a){0,2})*")
+            )
 
-  @Test
-  void nestedRepeatsExportAcceptedPathCapturesWithLegacyMetadata() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "nested-repeat",
-            "(?:(a){0,2})*",
-            0,
-            "aaaa",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("(?:(a){0,2})*"));
+        Assertions.assertThat(json).contains("\"requiresPikeNfaCaptureSemantics\":false")
+        Assertions.assertThat(json).contains("{\"group\":1,\"matched\":true,\"start\":3,\"end\":4}")
+    }
 
-    assertThat(json).contains("\"requiresPikeNfaCaptureSemantics\":false");
-    assertThat(json).contains("{\"group\":1,\"matched\":true,\"start\":3,\"end\":4}");
-  }
+    @Test
+    fun exportsAnchoredNfaCaptureGroups() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "capture",
+                "(a)",
+                0,
+                "a",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("(a)")
+            )
 
-  @Test
-  void exportsAnchoredNfaCaptureGroups() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "capture",
-            "(a)",
-            0,
-            "a",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("(a)"));
+        Assertions.assertThat(json).contains("\"matched\":true")
+        Assertions.assertThat(json).contains("\"numCaptures\":2")
+        Assertions.assertThat(json).contains("\"numCaptureSlots\":4")
+        Assertions.assertThat(json).contains("{\"group\":0,\"matched\":true,\"start\":0,\"end\":1}")
+        Assertions.assertThat(json).contains("{\"group\":1,\"matched\":true,\"start\":0,\"end\":1}")
+    }
 
-    assertThat(json).contains("\"matched\":true");
-    assertThat(json).contains("\"numCaptures\":2");
-    assertThat(json).contains("\"numCaptureSlots\":4");
-    assertThat(json).contains("{\"group\":0,\"matched\":true,\"start\":0,\"end\":1}");
-    assertThat(json).contains("{\"group\":1,\"matched\":true,\"start\":0,\"end\":1}");
-  }
+    @Test
+    fun exportsNonparticipatingCapturesWithExplicitMatchedFlagAndMinusOneOffsets() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "optional-capture",
+                "(a)?",
+                0,
+                "",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("(a)?")
+            )
 
-  @Test
-  void exportsNonparticipatingCapturesWithExplicitMatchedFlagAndMinusOneOffsets() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "optional-capture",
-            "(a)?",
-            0,
-            "",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("(a)?"));
+        Assertions.assertThat(json).contains("{\"group\":0,\"matched\":true,\"start\":0,\"end\":0}")
+        Assertions.assertThat(json).contains("{\"group\":1,\"matched\":false,\"start\":-1,\"end\":-1}")
+    }
 
-    assertThat(json).contains("{\"group\":0,\"matched\":true,\"start\":0,\"end\":0}");
-    assertThat(json).contains("{\"group\":1,\"matched\":false,\"start\":-1,\"end\":-1}");
-  }
+    @Test
+    fun exportsUnmatchedAnchoredNfaResult() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "miss",
+                "a",
+                0,
+                "b",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("a")
+            )
 
-  @Test
-  void exportsUnmatchedAnchoredNfaResult() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "miss",
-            "a",
-            0,
-            "b",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("a"));
+        Assertions.assertThat(json).contains("\"matched\":false")
+        Assertions.assertThat(json).contains("\"groups\":[]")
+    }
 
-    assertThat(json).contains("\"matched\":false");
-    assertThat(json).contains("\"groups\":[]");
-  }
+    @Test
+    fun compilesPatternInConvenienceOverload() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "compiled", "a", 0, "a", SafeReDiagnostics.BytecodeMatchMode.ANCHORED
+            )
 
-  @Test
-  void compilesPatternInConvenienceOverload() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "compiled", "a", 0, "a", SafeReDiagnostics.BytecodeMatchMode.ANCHORED);
+        Assertions.assertThat(json).contains("\"pattern\":\"a\"")
+        Assertions.assertThat(json).contains("\"matched\":true")
+        Assertions.assertThat(json).contains("\"op\":\"CHAR_RANGE\"")
+    }
 
-    assertThat(json).contains("\"pattern\":\"a\"");
-    assertThat(json).contains("\"matched\":true");
-    assertThat(json).contains("\"op\":\"CHAR_RANGE\"");
-  }
+    @Test
+    fun exportsCharClassRangesAsPairs() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "digits",
+                "[0-9A-Z]",
+                0,
+                "5",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("[0-9A-Z]")
+            )
 
-  @Test
-  void exportsCharClassRangesAsPairs() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "digits",
-            "[0-9A-Z]",
-            0,
-            "5",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("[0-9A-Z]"));
+        Assertions.assertThat(json).contains("\"op\":\"CHAR_CLASS\"")
+        Assertions.assertThat(json).contains("\"ranges\":[[48,57],[65,90]]")
+    }
 
-    assertThat(json).contains("\"op\":\"CHAR_CLASS\"");
-    assertThat(json).contains("\"ranges\":[[48,57],[65,90]]");
-  }
+    @Test
+    fun exportsFlagsAndEscapedStringsDeterministically() {
+        val flags = Pattern.CASE_INSENSITIVE or Pattern.MULTILINE
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "escape",
+                "a\\nb",
+                flags,
+                "a\nb",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("a\\nb", flags)
+            )
 
-  @Test
-  void exportsFlagsAndEscapedStringsDeterministically() {
-    int flags = Pattern.CASE_INSENSITIVE | Pattern.MULTILINE;
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "escape",
-            "a\\nb",
-            flags,
-            "a\nb",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("a\\nb", flags));
+        Assertions.assertThat(json).contains("\"pattern\":\"a\\\\nb\"")
+        Assertions.assertThat(json).contains("\"input\":\"a\\nb\"")
+        Assertions.assertThat(json).contains("\"flags\":[\"CASE_INSENSITIVE\",\"MULTILINE\"]")
+        Assertions.assertThat(json).contains("\"flagsValue\":" + flags)
+    }
 
-    assertThat(json).contains("\"pattern\":\"a\\\\nb\"");
-    assertThat(json).contains("\"input\":\"a\\nb\"");
-    assertThat(json).contains("\"flags\":[\"CASE_INSENSITIVE\",\"MULTILINE\"]");
-    assertThat(json).contains("\"flagsValue\":" + flags);
-  }
+    @Test
+    fun escapesLoneSurrogateCodeUnitsInJsonStrings() {
+        val loneHighSurrogate = 0xD800.toChar().toString()
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "surrogate",
+                "a",
+                0,
+                loneHighSurrogate,
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("a")
+            )
 
-  @Test
-  void escapesLoneSurrogateCodeUnitsInJsonStrings() {
-    String loneHighSurrogate = String.valueOf((char) 0xD800);
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "surrogate",
-            "a",
-            0,
-            loneHighSurrogate,
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("a"));
+        Assertions.assertThat(json).contains("\"input\":\"\\ud800\"")
+        Assertions.assertThat(json).doesNotContain(loneHighSurrogate)
+    }
 
-    assertThat(json).contains("\"input\":\"\\ud800\"");
-    assertThat(json).doesNotContain(loneHighSurrogate);
-  }
+    @Test
+    fun exportsProgressCheckGreedinessBySemanticName() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "nullable-loop",
+                "(?:a?)*?",
+                0,
+                "",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("(?:a?)*?")
+            )
 
-  @Test
-  void exportsProgressCheckGreedinessBySemanticName() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "nullable-loop",
-            "(?:a?)*?",
-            0,
-            "",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("(?:a?)*?"));
+        val progressCheck: String = instructionWithOp(json, "PROGRESS_CHECK")
+        Assertions.assertThat(progressCheck).contains("\"nonGreedy\":true")
+        Assertions.assertThat(progressCheck).doesNotContain("\"foldCase\"")
+    }
 
-    String progressCheck = instructionWithOp(json, "PROGRESS_CHECK");
-    assertThat(progressCheck).contains("\"nonGreedy\":true");
-    assertThat(progressCheck).doesNotContain("\"foldCase\"");
-  }
+    @Test
+    fun omitsUnsupportedMatcherEndpointMetadata() {
+        val json =
+            SafeReDiagnostics.bytecodeCaseToJsonLine(
+                "literal-a",
+                "a",
+                0,
+                "a",
+                SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
+                Pattern.compile("a")
+            )
 
-  @Test
-  void omitsUnsupportedMatcherEndpointMetadata() {
-    String json =
-        SafeReDiagnostics.bytecodeCaseToJsonLine(
-            "literal-a",
-            "a",
-            0,
-            "a",
-            SafeReDiagnostics.BytecodeMatchMode.ANCHORED,
-            Pattern.compile("a"));
+        Assertions.assertThat(json).doesNotContain("hitEnd")
+        Assertions.assertThat(json).doesNotContain("requireEnd")
+    }
 
-    assertThat(json).doesNotContain("hitEnd");
-    assertThat(json).doesNotContain("requireEnd");
-  }
-
-  private static String instructionWithOp(String json, String op) {
-    String marker = "\"op\":\"" + op + "\"";
-    int opIndex = json.indexOf(marker);
-    assertThat(opIndex).isGreaterThanOrEqualTo(0);
-    int start = json.lastIndexOf('{', opIndex);
-    int end = json.indexOf('}', opIndex);
-    assertThat(start).isGreaterThanOrEqualTo(0);
-    assertThat(end).isGreaterThan(opIndex);
-    return json.substring(start, end + 1);
-  }
+    companion object {
+        private fun instructionWithOp(json: String, op: String): String {
+            val marker = "\"op\":\"" + op + "\""
+            val opIndex = json.indexOf(marker)
+            Assertions.assertThat(opIndex).isGreaterThanOrEqualTo(0)
+            val start = json.lastIndexOf('{', opIndex)
+            val end = json.indexOf('}', opIndex)
+            Assertions.assertThat(start).isGreaterThanOrEqualTo(0)
+            Assertions.assertThat(end).isGreaterThan(opIndex)
+            return json.substring(start, end + 1)
+        }
+    }
 }

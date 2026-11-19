@@ -2,111 +2,121 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+/** Package-private deterministic work accounting for performance regression tests.  */
+internal object WorkCounter {
+    private val COUNTER = ThreadLocal<Counter?>()
 
-/** Package-private deterministic work accounting for performance regression tests. */
-final class WorkCounter {
-  private static final ThreadLocal<Counter> COUNTER = new ThreadLocal<>();
-
-  private WorkCounter() {}
-
-  private static final class Counter {
-    private long units;
-    private long forwardDfaSteps;
-    private long innerLiteralProbes;
-    private long startScanCalls;
-    private long startSkippedUnits;
-    private long quarantineCount;
-    private int largestQuarantine;
-  }
-
-  record StartAccelerationWork(
-      long calls, long skippedUnits, long quarantines, int largestQuarantine) {}
-
-  static long countForTesting(Runnable task) {
-    return count(task).units;
-  }
-
-  static long countWithForwardDfaStepsForTesting(Runnable task) {
-    Counter counter = count(task);
-    return counter.units + counter.forwardDfaSteps;
-  }
-
-  static long countForwardDfaStepsForTesting(Runnable task) {
-    return count(task).forwardDfaSteps;
-  }
-
-  static void recordForwardDfaStep() {
-    Counter counter = COUNTER.get();
-    if (counter != null) {
-      counter.forwardDfaSteps++;
+    fun countForTesting(task: Runnable): Long {
+        return count(task).units
     }
-  }
 
-  static long countInnerLiteralProbesForTesting(Runnable task) {
-    return count(task).innerLiteralProbes;
-  }
-
-  static void recordInnerLiteralProbe() {
-    Counter counter = COUNTER.get();
-    if (counter != null) {
-      counter.innerLiteralProbes++;
+    fun countWithForwardDfaStepsForTesting(task: Runnable): Long {
+        val counter = count(task)
+        return counter.units + counter.forwardDfaSteps
     }
-  }
 
-  static StartAccelerationWork countStartAccelerationForTesting(Runnable task) {
-    Counter counter = count(task);
-    return new StartAccelerationWork(
-        counter.startScanCalls,
-        counter.startSkippedUnits,
-        counter.quarantineCount,
-        counter.largestQuarantine);
-  }
-
-  private static Counter count(Runnable task) {
-    if (!WorkCounterConfig.ENABLED) {
-      throw new IllegalStateException("WorkCounter is disabled; run tests with -Pwork-counters");
+    fun countForwardDfaStepsForTesting(task: Runnable): Long {
+        return count(task).forwardDfaSteps
     }
-    Counter previous = COUNTER.get();
-    Counter current = new Counter();
-    COUNTER.set(current);
-    try {
-      task.run();
-      return current;
-    } finally {
-      if (previous == null) {
-        COUNTER.remove();
-      } else {
-        COUNTER.set(previous);
-      }
-    }
-  }
 
-  static void record() {
-    record(1);
-  }
-
-  static void record(long units) {
-    Counter counter = COUNTER.get();
-    if (counter != null) {
-      counter.units += units;
+    fun recordForwardDfaStep() {
+        val counter = COUNTER.get()
+        if (counter != null) {
+            counter.forwardDfaSteps++
+        }
     }
-  }
 
-  static void recordStartScan(int skippedUnits) {
-    Counter counter = COUNTER.get();
-    if (counter != null) {
-      counter.startScanCalls++;
-      counter.startSkippedUnits += skippedUnits;
+    fun countInnerLiteralProbesForTesting(task: Runnable): Long {
+        return count(task).innerLiteralProbes
     }
-  }
 
-  static void recordStartQuarantine(int window) {
-    Counter counter = COUNTER.get();
-    if (counter != null) {
-      counter.quarantineCount++;
-      counter.largestQuarantine = Math.max(counter.largestQuarantine, window);
+    fun recordInnerLiteralProbe() {
+        val counter = COUNTER.get()
+        if (counter != null) {
+            counter.innerLiteralProbes++
+        }
     }
-  }
+
+    fun countStartAccelerationForTesting(task: Runnable): StartAccelerationWork {
+        val counter = count(task)
+        return StartAccelerationWork(
+            counter.startScanCalls,
+            counter.startSkippedUnits,
+            counter.quarantineCount,
+            counter.largestQuarantine
+        )
+    }
+
+    private fun count(task: Runnable): Counter {
+        check(WorkCounterConfig.ENABLED) { "WorkCounter is disabled; run tests with -Pwork-counters" }
+        val previous = COUNTER.get()
+        val current = Counter()
+        COUNTER.set(current)
+        try {
+            task.run()
+            return current
+        } finally {
+            if (previous == null) {
+                COUNTER.remove()
+            } else {
+                COUNTER.set(previous)
+            }
+        }
+    }
+
+    @JvmOverloads
+    fun record(units: Long = 1) {
+        val counter = COUNTER.get()
+        if (counter != null) {
+            counter.units += units
+        }
+    }
+
+    fun recordStartScan(skippedUnits: Int) {
+        val counter = COUNTER.get()
+        if (counter != null) {
+            counter.startScanCalls++
+            counter.startSkippedUnits += skippedUnits.toLong()
+        }
+    }
+
+    fun recordStartQuarantine(window: Int) {
+        val counter = COUNTER.get()
+        if (counter != null) {
+            counter.quarantineCount++
+            counter.largestQuarantine = Math.max(counter.largestQuarantine, window)
+        }
+    }
+
+    private class Counter {
+        private var units: Long = 0
+        private var forwardDfaSteps: Long = 0
+        private var innerLiteralProbes: Long = 0
+        private var startScanCalls: Long = 0
+        private var startSkippedUnits: Long = 0
+        private var quarantineCount: Long = 0
+        private var largestQuarantine = 0
+    }
+
+    @JvmRecord
+    internal data class StartAccelerationWork(
+        calls: Long,
+        skippedUnits: Long,
+        quarantines: Long,
+        largestQuarantine: Int
+    ) {
+        val calls: Long
+        val skippedUnits: Long
+        val quarantines: Long
+        val largestQuarantine: Int
+
+        init {
+            this.calls = calls
+            this.skippedUnits = skippedUnits
+            this.quarantines = quarantines
+            this.largestQuarantine = largestQuarantine
+        }
+    }
 }

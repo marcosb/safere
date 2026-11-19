@@ -2,24 +2,27 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonParser
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.assertj.core.api.ThrowingConsumer
+import org.assertj.core.api.iterable.ThrowingExtractor
+import org.assertj.core.groups.Tuple
+import org.junit.jupiter.api.Test
+import org.safere.benchmark.DeclarativeBenchmarkPlan.*
+import java.util.*
+import java.util.List
+import java.util.function.Function
+import java.util.function.Predicate
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import com.google.gson.JsonParser;
-import java.util.EnumSet;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-
-class DeclarativeBenchmarkPlanTest {
-
-  @Test
-  void syntheticWorkloadAndEnginesExtendPlanWithoutPlannerBranches() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            """
+internal class DeclarativeBenchmarkPlanTest {
+    @Test
+    fun syntheticWorkloadAndEnginesExtendPlanWithoutPlannerBranches() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                """
             {
               "schemaVersion": 2,
               "inputs": [{
@@ -50,80 +53,98 @@ class DeclarativeBenchmarkPlanTest {
                 }
               }]
             }
-            """);
+            
+            """.trimIndent()
+            )
 
-    DeclarativeBenchmarkPlan.EngineDeclaration engine =
-        engine(
-            "test-string",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.FIND);
-    DeclarativeBenchmarkPlan.EngineDeclaration additionalEngine =
-        engine(
-            "additional-string",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.FIND);
-    DeclarativeBenchmarkPlan.ExpandedPlan first =
-        plan.expand(
-            List.of(engine, additionalEngine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
-    DeclarativeBenchmarkPlan.ExpandedPlan second =
-        plan.expand(
-            List.of(engine, additionalEngine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val engine: EngineDeclaration =
+            engine(
+                "test-string",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.FIND
+            )
+        val additionalEngine: EngineDeclaration =
+            engine(
+                "additional-string",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.FIND
+            )
+        val first =
+            plan.expand(
+                List.of<EngineDeclaration?>(engine, additionalEngine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
+        val second =
+            plan.expand(
+                List.of<EngineDeclaration?>(engine, additionalEngine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(plan.inputs().keySet()).containsExactly("generated.input.8", "generated.input.16");
-    assertThat(plan.inputs().get("generated.input.8").recipe().arguments().get("length"))
-        .isEqualTo(new DeclarativeBenchmarkPlan.RecipeInteger(8));
-    assertThat(first.workloads().stream().map(DeclarativeBenchmarkPlan.ExpandedWorkload::id))
-        .containsExactly(
-            "ScalingBenchmark.find.8.true",
-            "ScalingBenchmark.find.8.false",
-            "ScalingBenchmark.find.16.true",
-            "ScalingBenchmark.find.16.false");
-    assertThat(first.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id))
-        .containsExactlyElementsOf(
-            second.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id).toList())
-        .hasSize(8)
-        .allMatch(id -> id.endsWith("@test-string") || id.endsWith("@additional-string"));
-    assertThat(
-            first.workloads().stream().map(workload -> workload.expected().value().getAsBoolean()))
-        .containsExactly(true, false, true, false);
-  }
+        Assertions.assertThat<String?>(plan.inputs().keys).containsExactly("generated.input.8", "generated.input.16")
+        Assertions.assertThat<RecipeValue?>(plan.inputs().get("generated.input.8")!!.recipe.arguments.get("length"))
+            .isEqualTo(RecipeInteger(8))
+        Assertions.assertThat<String?>(first.workloads.stream().map<String?>(ExpandedWorkload::id))
+            .containsExactly(
+                "ScalingBenchmark.find.8.true",
+                "ScalingBenchmark.find.8.false",
+                "ScalingBenchmark.find.16.true",
+                "ScalingBenchmark.find.16.false"
+            )
+        Assertions.assertThat<String?>(first.trials.stream().map<String?> { id() })
+            .containsExactlyElementsOf(
+                second.trials.stream().map<String?> { id() }.toList()
+            )
+            .hasSize(8)
+            .allMatch(Predicate { id: String? -> id!!.endsWith("@test-string") || id.endsWith("@additional-string") })
+        Assertions.assertThat<Boolean?>(
+            first.workloads.stream()
+                .map<Boolean?> { workload: ExpandedWorkload? -> workload!!.expected.value().getAsBoolean() })
+            .containsExactly(true, false, true, false)
+    }
 
-  @Test
-  void patternAxisSubstitutionPreservesRegexBraceSyntax() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun patternAxisSubstitutionPreservesRegexBraceSyntax() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.braces.{suffix}",
                   "operation": "find",
-                  "patterns": ["\\\\x{feff}{suffix}"],
+                  "patterns": ["\\x{feff}{suffix}"],
                   "inputs": ["literal.input"],
                   "axes": {"suffix": ["x"]},
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
-    DeclarativeBenchmarkPlan.EngineDeclaration engine =
-        engine(
-            "string",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.FIND);
+                
+                """.trimIndent()
+                )
+            )
+        val engine: EngineDeclaration =
+            engine(
+                "string",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.FIND
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(List.of(engine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(engine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.workloads())
-        .singleElement()
-        .extracting(workload -> workload.patterns().getFirst())
-        .isEqualTo("\\x{feff}x");
-  }
+        Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
+            .singleElement()
+            .extracting<String?>(Function { workload: ExpandedWorkload? -> workload!!.patterns.getFirst() })
+            .isEqualTo("\\x{feff}x")
+    }
 
-  @Test
-  void labeledAxisSeparatesStableIdentityFromPatternValue() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            """
+    @Test
+    fun labeledAxisSeparatesStableIdentityFromPatternValue() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                """
             {
               "schemaVersion": 2,
               "inputs": [],
@@ -132,33 +153,38 @@ class DeclarativeBenchmarkPlanTest {
                   "operation": "compile",
                   "patterns": ["{regex}"],
                   "axes": {
-                    "regex": [{"id": "letter", "value": "\\\\p{L}+"}]
+                    "regex": [{"id": "letter", "value": "\\p{L}+"}]
                   },
                   "resultConsumption": "compiledObject",
                   "measurement": {"mode": "compileOnly", "timingUnit": "microseconds"}
               }]
             }
-            """);
-    DeclarativeBenchmarkPlan.EngineDeclaration engine =
-        engine("string", DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING);
+            
+            """.trimIndent()
+            )
+        val engine: EngineDeclaration =
+            engine("string", DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING)
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(List.of(engine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.COMPILE));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(engine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.COMPILE)
+            )
 
-    assertThat(expanded.workloads())
-        .singleElement()
-        .satisfies(
-            workload -> {
-              assertThat(workload.id()).isEqualTo("Synthetic.unicode.letter");
-              assertThat(workload.patterns()).containsExactly("\\p{L}+");
-            });
-  }
+        Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { workload: ExpandedWorkload? ->
+                    Assertions.assertThat(workload!!.id).isEqualTo("Synthetic.unicode.letter")
+                    Assertions.assertThat<String?>(workload.patterns).containsExactly("\\p{L}+")
+                })
+    }
 
-  @Test
-  void labeledAxisUsesRuntimeValueInRecipeAndOperationArguments() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            """
+    @Test
+    fun labeledAxisUsesRuntimeValueInRecipeAndOperationArguments() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                """
             {
               "schemaVersion": 2,
               "inputs": [{
@@ -174,42 +200,49 @@ class DeclarativeBenchmarkPlanTest {
                 "patterns": ["x"],
                 "inputs": ["generated.greeting"],
                 "axes": {
-                  "replacement": [{"id": "bang", "value": "$0!"}]
+                  "replacement": [{"id": "bang", "value": "${'$'}0!"}]
                 },
                 "arguments": {"replacement": "{replacement}"},
                 "resultConsumption": "string",
                 "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
               }]
             }
-            """);
-    DeclarativeBenchmarkPlan.EngineDeclaration engine =
-        engine(
-            "string",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.REPLACE);
+            
+            """.trimIndent()
+            )
+        val engine: EngineDeclaration =
+            engine(
+                "string",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.REPLACE
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(List.of(engine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(engine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL)
+            )
 
-    assertThat(plan.inputs()).containsKey("generated.greeting");
-    assertThat(plan.inputs().get("generated.greeting").recipe().arguments().get("text"))
-        .isEqualTo(new DeclarativeBenchmarkPlan.RecipeString("hello"));
-    assertThat(expanded.workloads())
-        .singleElement()
-        .satisfies(
-            workload -> {
-              assertThat(workload.id()).isEqualTo("Synthetic.replace.bang");
-              assertThat(workload.arguments().get("replacement"))
-                  .isEqualTo(new DeclarativeBenchmarkPlan.RecipeString("$0!"));
-            });
-  }
+        Assertions.assertThat<String?, DeclarativeBenchmarkPlan.InputDeclaration?>(plan.inputs())
+            .containsKey("generated.greeting")
+        Assertions.assertThat<RecipeValue?>(plan.inputs().get("generated.greeting")!!.recipe.arguments.get("text"))
+            .isEqualTo(RecipeString("hello"))
+        Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { workload: ExpandedWorkload? ->
+                    Assertions.assertThat(workload!!.id).isEqualTo("Synthetic.replace.bang")
+                    Assertions.assertThat<RecipeValue?>(workload.arguments.get("replacement"))
+                        .isEqualTo(RecipeString("$0!"))
+                })
+    }
 
-  @Test
-  void omittedInputRepresentationsAcceptsEveryEngineRepresentation() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun omittedInputRepresentationsAcceptsEveryEngineRepresentation() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.find",
                   "operation": "find",
@@ -219,37 +252,45 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(
-                engine(
-                    "string",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "utf8",
-                    DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "conversion",
-                    DeclarativeBenchmarkPlan.InputRepresentation
-                        .JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
-                    DeclarativeBenchmarkPlan.Feature.FIND)),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(
+                    engine(
+                        "string",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "utf8",
+                        DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "conversion",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    )
+                ),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id))
-        .containsExactly(
-            "Synthetic.find@string", "Synthetic.find@utf8", "Synthetic.find@conversion");
-  }
+        Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
+            .containsExactly(
+                "Synthetic.find@string", "Synthetic.find@utf8", "Synthetic.find@conversion"
+            )
+    }
 
-  @Test
-  void explicitInputRepresentationRestrictionFiltersEnginesAndPreservesReason() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun explicitInputRepresentationRestrictionFiltersEnginesAndPreservesReason() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.find",
                   "operation": "find",
@@ -262,44 +303,52 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(
-                engine(
-                    "string",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "utf8",
-                    DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-                    DeclarativeBenchmarkPlan.Feature.FIND)),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(
+                    engine(
+                        "string",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "utf8",
+                        DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    )
+                ),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.workloads())
-        .singleElement()
-        .extracting(DeclarativeBenchmarkPlan.ExpandedWorkload::inputRepresentationReason)
-        .isEqualTo("This workload measures an API whose input is a Java String.");
-    assertThat(expanded.trials())
-        .singleElement()
-        .extracting(DeclarativeBenchmarkPlan.Trial::id)
-        .isEqualTo("Synthetic.find@string");
-    assertThat(expanded.exclusions())
-        .singleElement()
-        .satisfies(
-            exclusion -> {
-              assertThat(exclusion.engineId()).isEqualTo("utf8");
-              assertThat(exclusion.kind())
-                  .isEqualTo(
-                      DeclarativeBenchmarkPlan.ExclusionKind.UNSUPPORTED_INPUT_REPRESENTATION);
-            });
-  }
+        Assertions.assertThat<ExpandedWorkload?>(expanded.workloads)
+            .singleElement()
+            .extracting<String?>(ExpandedWorkload::inputRepresentationReason)
+            .isEqualTo("This workload measures an API whose input is a Java String.")
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Trial?>(expanded.trials)
+            .singleElement()
+            .extracting<String?>(Function { id() })
+            .isEqualTo("Synthetic.find@string")
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                    Assertions.assertThat(exclusion!!.engineId).isEqualTo("utf8")
+                    Assertions.assertThat<ExclusionKind?>(exclusion.kind)
+                        .isEqualTo(
+                            ExclusionKind.UNSUPPORTED_INPUT_REPRESENTATION
+                        )
+                })
+    }
 
-  @Test
-  void explicitInputRepresentationsRequireANonblankReason() {
-    String workload =
-        """
+    @Test
+    fun explicitInputRepresentationsRequireANonblankReason() {
+        val workload =
+            """
         [{
           "id": "Synthetic.find",
           "operation": "find",
@@ -310,30 +359,37 @@ class DeclarativeBenchmarkPlanTest {
           "resultConsumption": "boolean",
           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
         }]
-        """;
+        
+        """.trimIndent()
 
-    assertThatThrownBy(() -> parse(planJson(workload)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(
-            "requires a nonblank inputRepresentationReason when inputRepresentations is set");
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(ThrowingCallable { parse(planJson(workload)) })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining(
+                "requires a nonblank inputRepresentationReason when inputRepresentations is set"
+            )
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         workload.replace(
                             "\"resultConsumption\"",
-                            "\"inputRepresentationReason\": \"  \","
-                                + System.lineSeparator()
-                                + "  \"resultConsumption\""))))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(
-            "requires a nonblank inputRepresentationReason when inputRepresentations is set");
-  }
+                            ("\"inputRepresentationReason\": \"  \","
+                                    + System.lineSeparator()
+                                    + "  \"resultConsumption\"")
+                        )
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining(
+                "requires a nonblank inputRepresentationReason when inputRepresentations is set"
+            )
+    }
 
-  @Test
-  void inputRepresentationReasonWithoutARestrictionIsRejected() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun inputRepresentationReasonWithoutARestrictionIsRejected() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -350,16 +406,21 @@ class DeclarativeBenchmarkPlanTest {
                             "timingUnit": "nanoseconds"
                           }
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(
-            "must not declare inputRepresentationReason without inputRepresentations");
-  }
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining(
+                "must not declare inputRepresentationReason without inputRepresentations"
+            )
+    }
 
-  @Test
-  void explicitlyListingEveryInputRepresentationIsRejected() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun explicitlyListingEveryInputRepresentationIsRejected() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -382,17 +443,21 @@ class DeclarativeBenchmarkPlanTest {
                             "timingUnit": "nanoseconds"
                           }
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("omit inputRepresentations instead");
-  }
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("omit inputRepresentations instead")
+    }
 
-  @Test
-  void addingWorkloadAndEngineAxesProducesEveryCompatiblePair() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun addingWorkloadAndEngineAxesProducesEveryCompatiblePair() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.find",
                   "operation": "find",
@@ -410,46 +475,54 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
-    DeclarativeBenchmarkPlan.EngineDeclaration stringEngine =
-        engine(
-            "string",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.FIND,
-            DeclarativeBenchmarkPlan.Feature.MATCHES);
-    DeclarativeBenchmarkPlan.EngineDeclaration utf8Engine =
-        engine(
-            "utf8",
-            DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
-            DeclarativeBenchmarkPlan.Feature.FIND);
+                
+                """.trimIndent()
+                )
+            )
+        val stringEngine: EngineDeclaration =
+            engine(
+                "string",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.FIND,
+                DeclarativeBenchmarkPlan.Feature.MATCHES
+            )
+        val utf8Engine: EngineDeclaration =
+            engine(
+                "utf8",
+                DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8,
+                DeclarativeBenchmarkPlan.Feature.FIND
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(stringEngine, utf8Engine),
-            EnumSet.of(
-                DeclarativeBenchmarkPlan.Operation.FIND,
-                DeclarativeBenchmarkPlan.Operation.MATCHES));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(stringEngine, utf8Engine),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
+                    DeclarativeBenchmarkPlan.Operation.FIND,
+                    DeclarativeBenchmarkPlan.Operation.MATCHES
+                )
+            )
 
-    assertThat(expanded.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id))
-        .containsExactly(
-            "Synthetic.find@string", "Synthetic.find@utf8", "Synthetic.matches@string");
-    assertThat(expanded.exclusions())
-        .singleElement()
-        .satisfies(
-            exclusion -> {
-              assertThat(exclusion.workloadId()).isEqualTo("Synthetic.matches");
-              assertThat(exclusion.engineId()).isEqualTo("utf8");
-              assertThat(exclusion.kind())
-                  .isEqualTo(DeclarativeBenchmarkPlan.ExclusionKind.UNSUPPORTED_FEATURE);
-            });
-  }
+        Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
+            .containsExactly(
+                "Synthetic.find@string", "Synthetic.find@utf8", "Synthetic.matches@string"
+            )
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                    Assertions.assertThat(exclusion!!.workloadId).isEqualTo("Synthetic.matches")
+                    Assertions.assertThat(exclusion.engineId).isEqualTo("utf8")
+                    Assertions.assertThat<ExclusionKind?>(exclusion.kind)
+                        .isEqualTo(ExclusionKind.UNSUPPORTED_FEATURE)
+                })
+    }
 
-  @Test
-  void operationsFlagsAndLifecycleDeriveEngineNeutralRequirements() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun operationsFlagsAndLifecycleDeriveEngineNeutralRequirements() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.region",
                   "operation": "matcherRegionFind",
@@ -463,25 +536,30 @@ class DeclarativeBenchmarkPlanTest {
                   },
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    assertThat(plan.workloads())
-        .singleElement()
-        .satisfies(
-            workload ->
-                assertThat(workload.requirements())
-                    .containsExactlyInAnyOrder(
-                        DeclarativeBenchmarkPlan.Feature.FIND,
-                        DeclarativeBenchmarkPlan.Feature.MATCHER_STATE,
-                        DeclarativeBenchmarkPlan.Feature.REGIONS));
-  }
+        Assertions.assertThat<WorkloadDeclaration?>(plan.workloads())
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { workload: WorkloadDeclaration? ->
+                    Assertions.assertThat<DeclarativeBenchmarkPlan.Feature?>(workload!!.requirements())
+                        .containsExactlyInAnyOrder(
+                            DeclarativeBenchmarkPlan.Feature.FIND,
+                            DeclarativeBenchmarkPlan.Feature.MATCHER_STATE,
+                            DeclarativeBenchmarkPlan.Feature.REGIONS
+                        )
+                })
+    }
 
-  @Test
-  void schemaRepresentsOrdinaryStatefulPatternSetMemoryAndColdStartWorkloads() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun schemaRepresentsOrdinaryStatefulPatternSetMemoryAndColdStartWorkloads() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.ordinary",
                   "operation": "replaceAll",
@@ -523,24 +601,28 @@ class DeclarativeBenchmarkPlanTest {
                     "constraints": ["freshProcessPerInvocation"]
                   }
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    assertThat(plan.workloads())
-        .extracting(DeclarativeBenchmarkPlan.WorkloadDeclaration::idTemplate)
-        .containsExactly(
-            "Synthetic.ordinary",
-            "Synthetic.patternSet",
-            "Synthetic.memory",
-            "Synthetic.compile",
-            "Synthetic.cold");
-  }
+        Assertions.assertThat<WorkloadDeclaration?>(plan.workloads())
+            .extracting<String?, RuntimeException?>(WorkloadDeclaration::idTemplate)
+            .containsExactly(
+                "Synthetic.ordinary",
+                "Synthetic.patternSet",
+                "Synthetic.memory",
+                "Synthetic.compile",
+                "Synthetic.cold"
+            )
+    }
 
-  @Test
-  void exclusionsDistinguishMissingAdapterFromSupportedTrials() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun exclusionsDistinguishMissingAdapterFromSupportedTrials() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.find",
                   "operation": "find",
@@ -550,46 +632,55 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.EngineDeclaration supported =
-        engine(
-            "supported",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            DeclarativeBenchmarkPlan.Feature.FIND);
-    DeclarativeBenchmarkPlan.EngineDeclaration missingAdapter =
-        new DeclarativeBenchmarkPlan.EngineDeclaration(
-            "missing-adapter",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            EnumSet.of(DeclarativeBenchmarkPlan.Feature.FIND),
-            EnumSet.allOf(DeclarativeBenchmarkPlan.Flag.class),
-            false);
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(supported, missingAdapter),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val supported: EngineDeclaration =
+            engine(
+                "supported",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                DeclarativeBenchmarkPlan.Feature.FIND
+            )
+        val missingAdapter =
+            EngineDeclaration(
+                "missing-adapter",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
+                EnumSet.allOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                false
+            )
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(supported, missingAdapter),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id))
-        .containsExactly("Synthetic.find@supported");
-    assertThat(expanded.exclusions())
-        .extracting(DeclarativeBenchmarkPlan.Exclusion::kind)
-        .containsExactly(DeclarativeBenchmarkPlan.ExclusionKind.MISSING_ENGINE_ADAPTER);
+        Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
+            .containsExactly("Synthetic.find@supported")
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .extracting<ExclusionKind?, RuntimeException?>(DeclarativeBenchmarkPlan.Exclusion::kind)
+            .containsExactly(ExclusionKind.MISSING_ENGINE_ADAPTER)
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 plan.expand(
-                    List.of(supported), EnumSet.of(DeclarativeBenchmarkPlan.Operation.MATCHES)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("produces no supported trials")
-        .hasMessageContaining("MISSING_OPERATION_IMPLEMENTATION");
-  }
+                    List.of<EngineDeclaration?>(supported),
+                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.MATCHES)
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("produces no supported trials")
+            .hasMessageContaining("MISSING_OPERATION_IMPLEMENTATION")
+    }
 
-  @Test
-  void trialExclusionsSelectExactExpandedEnginePairs() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun trialExclusionsSelectExactExpandedEnginePairs() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "RealWorldRegexBenchmark.runBenchmark.recitation.{matchLabel}.{size}",
                   "operation": "replaceAll",
@@ -608,58 +699,72 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "string",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(
-                engine(
-                    "safere-string",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.REPLACE),
-                engine(
-                    "jdk-string",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.REPLACE)),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(
+                    engine(
+                        "safere-string",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.REPLACE
+                    ),
+                    engine(
+                        "jdk-string",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.REPLACE
+                    )
+                ),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.REPLACE_ALL)
+            )
 
-    assertThat(expanded.exclusions())
-        .extracting(
-            exclusion -> exclusion.workloadId() + "@" + exclusion.engineId(),
-            DeclarativeBenchmarkPlan.Exclusion::kind,
-            DeclarativeBenchmarkPlan.Exclusion::reason)
-        .containsExactly(
-            org.assertj.core.groups.Tuple.tuple(
-                "RealWorldRegexBenchmark.runBenchmark.recitation.match.10000@jdk-string",
-                DeclarativeBenchmarkPlan.ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
-                "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"),
-            org.assertj.core.groups.Tuple.tuple(
-                "RealWorldRegexBenchmark.runBenchmark.recitation.match.100000@jdk-string",
-                DeclarativeBenchmarkPlan.ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
-                "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"),
-            org.assertj.core.groups.Tuple.tuple(
-                "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.10000@jdk-string",
-                DeclarativeBenchmarkPlan.ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
-                "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"),
-            org.assertj.core.groups.Tuple.tuple(
-                "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.100000@jdk-string",
-                DeclarativeBenchmarkPlan.ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
-                "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"));
-    assertThat(expanded.trials().stream().map(DeclarativeBenchmarkPlan.Trial::id))
-        .hasSize(8)
-        .contains(
-            "RealWorldRegexBenchmark.runBenchmark.recitation.match.1000@jdk-string",
-            "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.1000@jdk-string")
-        .filteredOn(id -> id.endsWith("@safere-string"))
-        .hasSize(6);
-  }
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .extracting(
+                Function { exclusion: DeclarativeBenchmarkPlan.Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId },
+                DeclarativeBenchmarkPlan.Exclusion::kind,
+                DeclarativeBenchmarkPlan.Exclusion::reason
+            )
+            .containsExactly(
+                Tuple.tuple(
+                    "RealWorldRegexBenchmark.runBenchmark.recitation.match.10000@jdk-string",
+                    ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
+                    "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"
+                ),
+                Tuple.tuple(
+                    "RealWorldRegexBenchmark.runBenchmark.recitation.match.100000@jdk-string",
+                    ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
+                    "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"
+                ),
+                Tuple.tuple(
+                    "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.10000@jdk-string",
+                    ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
+                    "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"
+                ),
+                Tuple.tuple(
+                    "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.100000@jdk-string",
+                    ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
+                    "OpenJDK 26.0.2 throws StackOverflowError for the nested quantifiers"
+                )
+            )
+        Assertions.assertThat<String?>(expanded.trials.stream().map<String?> { id() })
+            .hasSize(8)
+            .contains(
+                "RealWorldRegexBenchmark.runBenchmark.recitation.match.1000@jdk-string",
+                "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.1000@jdk-string"
+            )
+            .filteredOn(Predicate { id: String? -> id!!.endsWith("@safere-string") })
+            .hasSize(6)
+    }
 
-  @Test
-  void trialExclusionsSupportConjunctiveLabeledSelectorsAndWorkloadWideRules() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun trialExclusionsSupportConjunctiveLabeledSelectorsAndWorkloadWideRules() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.find.{case}.{size}",
                   "operation": "find",
@@ -681,71 +786,89 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(
-                engine(
-                    "first",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "second",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "third",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND),
-                engine(
-                    "unexcluded",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND)),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(
+                    engine(
+                        "first",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "second",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "third",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    ),
+                    engine(
+                        "unexcluded",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    )
+                ),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.exclusions())
-        .extracting(exclusion -> exclusion.workloadId() + "@" + exclusion.engineId())
-        .containsExactly(
-            "Synthetic.find.hit.8@third",
-            "Synthetic.find.hit.16@first",
-            "Synthetic.find.hit.16@second",
-            "Synthetic.find.hit.16@third",
-            "Synthetic.find.miss.8@third",
-            "Synthetic.find.miss.16@third");
-  }
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { exclusion: DeclarativeBenchmarkPlan.Exclusion? -> exclusion!!.workloadId + "@" + exclusion.engineId })
+            .containsExactly(
+                "Synthetic.find.hit.8@third",
+                "Synthetic.find.hit.16@first",
+                "Synthetic.find.hit.16@second",
+                "Synthetic.find.hit.16@third",
+                "Synthetic.find.miss.8@third",
+                "Synthetic.find.miss.16@third"
+            )
+    }
 
-  @Test
-  void trialExclusionsRejectInvalidSelectorsAndOverlaps() {
-    assertInvalidTrialExclusion("{}", "requires engineIds");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [], \"reason\": \"reason\"}", "requires at least one engine ID");
-    assertInvalidTrialExclusion("{\"engineIds\": [\"jdk-string\"]}", "requires reason");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\", \"jdk-string\"], \"reason\": \"reason\"}",
-        "duplicate engine ID");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"reason\": \"  \"}", "reason must not be blank");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"when\": {\"unknown\": [8]},"
-            + " \"reason\": \"reason\"}",
-        "references unknown axis");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": []}," + " \"reason\": \"reason\"}",
-        "selector must not be empty");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [32]},"
-            + " \"reason\": \"reason\"}",
-        "selects undeclared axis value");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [8, 8]},"
-            + " \"reason\": \"reason\"}",
-        "duplicate axis value");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"reason\": \"reason\"," + " \"unknown\": true}",
-        "has unknown field: unknown");
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun trialExclusionsRejectInvalidSelectorsAndOverlaps() {
+        assertInvalidTrialExclusion("{}", "requires engineIds")
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [], \"reason\": \"reason\"}", "requires at least one engine ID"
+        )
+        assertInvalidTrialExclusion("{\"engineIds\": [\"jdk-string\"]}", "requires reason")
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\", \"jdk-string\"], \"reason\": \"reason\"}",
+            "duplicate engine ID"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"reason\": \"  \"}", "reason must not be blank"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"when\": {\"unknown\": [8]},"
+                    + " \"reason\": \"reason\"}",
+            "references unknown axis"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": []}," + " \"reason\": \"reason\"}",
+            "selector must not be empty"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [32]},"
+                    + " \"reason\": \"reason\"}",
+            "selects undeclared axis value"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [8, 8]},"
+                    + " \"reason\": \"reason\"}",
+            "duplicate axis value"
+        )
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"reason\": \"reason\"," + " \"unknown\": true}",
+            "has unknown field: unknown"
+        )
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -758,15 +881,20 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("trialExclusions must be an array");
-    assertInvalidTrialExclusion(
-        "{\"engineIds\": [\"jdk-string\"], \"when\": [], \"reason\": \"reason\"}",
-        "when must be an object");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("trialExclusions must be an array")
+        assertInvalidTrialExclusion(
+            "{\"engineIds\": [\"jdk-string\"], \"when\": [], \"reason\": \"reason\"}",
+            "when must be an object"
+        )
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -783,47 +911,61 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("must not declare both disabledReason and trialExclusions");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("must not declare both disabledReason and trialExclusions")
 
-    DeclarativeBenchmarkPlan unknownEngine =
-        planWithTrialExclusions("{\"engineIds\": [\"jdk-string\"], \"reason\": \"reason\"}");
-    assertThatThrownBy(
-            () ->
+        val unknownEngine: DeclarativeBenchmarkPlan =
+            planWithTrialExclusions("{\"engineIds\": [\"jdk-string\"], \"reason\": \"reason\"}")
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 unknownEngine.expand(
-                    List.of(
+                    List.of<EngineDeclaration?>(
                         engine(
                             "safere-string",
-                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING)),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("references unknown engine ID: jdk-string");
+                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING
+                        )
+                    ),
+                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("references unknown engine ID: jdk-string")
 
-    DeclarativeBenchmarkPlan overlap =
-        planWithTrialExclusions(
-            "{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [8]},"
-                + " \"reason\": \"first\"},"
-                + "{\"engineIds\": [\"jdk-string\"], \"reason\": \"second\"}");
-    assertThatThrownBy(
-            () ->
+        val overlap: DeclarativeBenchmarkPlan =
+            planWithTrialExclusions(
+                ("{\"engineIds\": [\"jdk-string\"], \"when\": {\"size\": [8]},"
+                        + " \"reason\": \"first\"},"
+                        + "{\"engineIds\": [\"jdk-string\"], \"reason\": \"second\"}")
+            )
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 overlap.expand(
-                    List.of(
+                    List.of<EngineDeclaration?>(
                         engine(
                             "jdk-string",
-                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING)),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(
-            "Synthetic.find.8 has overlapping trial exclusions for engine jdk-string");
-  }
+                            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING
+                        )
+                    ),
+                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining(
+                "Synthetic.find.8 has overlapping trial exclusions for engine jdk-string"
+            )
+    }
 
-  @Test
-  void unsupportedFlagsHaveAMachineReadableExclusion() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun unsupportedFlagsHaveAMachineReadableExclusion() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.comments",
                   "operation": "find",
@@ -833,27 +975,36 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
-    DeclarativeBenchmarkPlan.EngineDeclaration engine =
-        new DeclarativeBenchmarkPlan.EngineDeclaration(
-            "without-comments",
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            EnumSet.of(DeclarativeBenchmarkPlan.Feature.FIND),
-            EnumSet.noneOf(DeclarativeBenchmarkPlan.Flag.class),
-            true);
+                
+                """.trimIndent()
+                )
+            )
+        val engine =
+            EngineDeclaration(
+                "without-comments",
+                DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
+                EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                true
+            )
 
-    assertThatThrownBy(
-            () -> plan.expand(List.of(engine), EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("UNSUPPORTED_FLAG");
-  }
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
+                plan.expand(
+                    List.of<EngineDeclaration?>(engine),
+                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("UNSUPPORTED_FLAG")
+    }
 
-  @Test
-  void disabledReasonExplainsAnEmptyTrialMatrix() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun disabledReasonExplainsAnEmptyTrialMatrix() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.disabled",
                   "operation": "find",
@@ -864,32 +1015,39 @@ class DeclarativeBenchmarkPlanTest {
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"},
                   "disabledReason": "awaiting the dedicated UTF-8 runner"
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    DeclarativeBenchmarkPlan.ExpandedPlan expanded =
-        plan.expand(
-            List.of(
-                engine(
-                    "string",
-                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                    DeclarativeBenchmarkPlan.Feature.FIND)),
-            EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND));
+        val expanded =
+            plan.expand(
+                List.of<EngineDeclaration?>(
+                    engine(
+                        "string",
+                        DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                        DeclarativeBenchmarkPlan.Feature.FIND
+                    )
+                ),
+                EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+            )
 
-    assertThat(expanded.trials()).isEmpty();
-    assertThat(expanded.exclusions())
-        .singleElement()
-        .satisfies(
-            exclusion ->
-                assertThat(exclusion.kind())
-                    .isEqualTo(DeclarativeBenchmarkPlan.ExclusionKind.WORKLOAD_DISABLED));
-  }
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Trial?>(expanded.trials).isEmpty()
+        Assertions.assertThat<DeclarativeBenchmarkPlan.Exclusion?>(expanded.exclusions)
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { exclusion: DeclarativeBenchmarkPlan.Exclusion? ->
+                    Assertions.assertThat<ExclusionKind?>(exclusion!!.kind)
+                        .isEqualTo(ExclusionKind.WORKLOAD_DISABLED)
+                })
+    }
 
-  @Test
-  void unexplainedEmptyTrialMatrixIsRejected() {
-    DeclarativeBenchmarkPlan plan =
-        parse(
-            planJson(
-                """
+    @Test
+    fun unexplainedEmptyTrialMatrixIsRejected() {
+        val plan: DeclarativeBenchmarkPlan =
+            parse(
+                planJson(
+                    """
                 [{
                   "id": "Synthetic.utf8Only",
                   "operation": "find",
@@ -899,26 +1057,33 @@ class DeclarativeBenchmarkPlanTest {
                   "resultConsumption": "boolean",
                   "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                 }]
-                """));
+                
+                """.trimIndent()
+                )
+            )
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 plan.expand(
-                    List.of(
+                    List.of<EngineDeclaration?>(
                         engine(
                             "string",
                             DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-                            DeclarativeBenchmarkPlan.Feature.FIND)),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("produces no supported trials")
-        .hasMessageContaining("disabledReason");
-  }
+                            DeclarativeBenchmarkPlan.Feature.FIND
+                        )
+                    ),
+                    EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("produces no supported trials")
+            .hasMessageContaining("disabledReason")
+    }
 
-  @Test
-  void strictLoadingRejectsUnknownFieldsAndEnumValues() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun strictLoadingRejectsUnknownFieldsAndEnumValues() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -926,12 +1091,15 @@ class DeclarativeBenchmarkPlanTest {
                       "inputs": [],
                       "workloads": []
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unsupported benchmark plan schema version: 1");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unsupported benchmark plan schema version: 1")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -939,12 +1107,15 @@ class DeclarativeBenchmarkPlanTest {
                       "inputs": [],
                       "workloads": []
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unsupported benchmark plan schema version: 3");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unsupported benchmark plan schema version: 3")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -953,12 +1124,15 @@ class DeclarativeBenchmarkPlanTest {
                       "workloads": [],
                       "family": "Regex"
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("plan has unknown field: family");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("plan has unknown field: family")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -970,15 +1144,19 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unknown benchmark operation: familySpecificOperation");
-  }
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unknown benchmark operation: familySpecificOperation")
+    }
 
-  @Test
-  void loadingRejectsDuplicateIdsInvalidReferencesAndUnstableAxes() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun loadingRejectsDuplicateIdsInvalidReferencesAndUnstableAxes() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -996,12 +1174,15 @@ class DeclarativeBenchmarkPlanTest {
                         "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                       }]
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Duplicate benchmark input ID: same");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Duplicate benchmark input ID: same")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1013,12 +1194,16 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Synthetic.find references unknown expanded benchmark input: missing.input");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Synthetic.find references unknown expanded benchmark input: missing.input")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1031,13 +1216,17 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("ID omits expansion axes")
-        .hasMessageContaining("size");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("ID omits expansion axes")
+            .hasMessageContaining("size")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -1054,16 +1243,20 @@ class DeclarativeBenchmarkPlanTest {
                         "measurement": {"mode": "compileOnly", "timingUnit": "nanoseconds"}
                       }]
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage(
-            "Benchmark input is not referenced by a workload and is not shared: orphaned.input");
-  }
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage(
+                "Benchmark input is not referenced by a workload and is not shared: orphaned.input"
+            )
+    }
 
-  @Test
-  void loadingRejectsMalformedExpectedLifecycleAndMeasurementDeclarations() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun loadingRejectsMalformedExpectedLifecycleAndMeasurementDeclarations() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1076,12 +1269,16 @@ class DeclarativeBenchmarkPlanTest {
                           "expected": {"type": "integer", "value": 1},
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("requires expected type boolean");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("requires expected type boolean")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1093,12 +1290,16 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("requires lifecycle");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("requires lifecycle")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1112,12 +1313,16 @@ class DeclarativeBenchmarkPlanTest {
                             "timingUnit": "milliseconds"
                           }
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("freshProcessPerInvocation");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("freshProcessPerInvocation")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1129,12 +1334,16 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "integer",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("find cannot use result consumption integer");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("find cannot use result consumption integer")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1146,12 +1355,16 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "string",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("replaceAll requires arguments [replacement]");
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("replaceAll requires arguments [replacement]")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     planJson(
                         """
@@ -1164,15 +1377,19 @@ class DeclarativeBenchmarkPlanTest {
                           "resultConsumption": "boolean",
                           "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                         }]
-                        """)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Synthetic.find operation find has unknown argument: family");
-  }
+                        
+                        """.trimIndent()
+                    )
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Synthetic.find operation find has unknown argument: family")
+    }
 
-  @Test
-  void boundedRecipeVocabularyRejectsUnknownKindsAndArguments() {
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun boundedRecipeVocabularyRejectsUnknownKindsAndArguments() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -1190,12 +1407,15 @@ class DeclarativeBenchmarkPlanTest {
                         "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                       }]
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unknown input recipe kind: executeJava");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unknown input recipe kind: executeJava")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -1217,12 +1437,15 @@ class DeclarativeBenchmarkPlanTest {
                         "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                       }]
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("bad.input recipe has unknown field: family");
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("bad.input recipe has unknown field: family")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 parse(
                     """
                     {
@@ -1244,25 +1467,29 @@ class DeclarativeBenchmarkPlanTest {
                         "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
                       }]
                     }
-                    """))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Recipe field unit must not be empty");
-  }
+                    
+                    """.trimIndent()
+                )
+            })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Recipe field unit must not be empty")
+    }
 
-  private static DeclarativeBenchmarkPlan parse(String json) {
-    return DeclarativeBenchmarkPlan.parse(JsonParser.parseString(json).getAsJsonObject());
-  }
+    companion object {
+        private fun parse(json: String): DeclarativeBenchmarkPlan {
+            return DeclarativeBenchmarkPlan.Companion.parse(JsonParser.parseString(json).getAsJsonObject())
+        }
 
-  private static void assertInvalidTrialExclusion(String exclusion, String message) {
-    assertThatThrownBy(() -> planWithTrialExclusions(exclusion))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(message);
-  }
+        private fun assertInvalidTrialExclusion(exclusion: String?, message: String?) {
+            Assertions.assertThatThrownBy(ThrowingCallable { planWithTrialExclusions(exclusion) })
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining(message)
+        }
 
-  private static DeclarativeBenchmarkPlan planWithTrialExclusions(String exclusions) {
-    return parse(
-        planJson(
-            """
+        private fun planWithTrialExclusions(exclusions: String?): DeclarativeBenchmarkPlan {
+            return parse(
+                planJson(
+                    """
             [{
               "id": "Synthetic.find.{size}",
               "operation": "find",
@@ -1273,12 +1500,16 @@ class DeclarativeBenchmarkPlanTest {
               "resultConsumption": "boolean",
               "measurement": {"mode": "averageTime", "timingUnit": "nanoseconds"}
             }]
+            
             """
-                .formatted(exclusions)));
-  }
+                        .trimIndent()
+                        .formatted(exclusions)
+                )
+            )
+        }
 
-  private static String planJson(String workloads) {
-    return """
+        private fun planJson(workloads: String?): String {
+            return """
     {
       "schemaVersion": 2,
       "inputs": [{
@@ -1287,18 +1518,27 @@ class DeclarativeBenchmarkPlanTest {
       }],
       "workloads": %s
     }
+    
     """
-        .formatted(workloads);
-  }
+                .trimIndent()
+                .formatted(workloads)
+        }
 
-  private static DeclarativeBenchmarkPlan.EngineDeclaration engine(
-      String id,
-      DeclarativeBenchmarkPlan.InputRepresentation representation,
-      DeclarativeBenchmarkPlan.Feature... features) {
-    EnumSet<DeclarativeBenchmarkPlan.Feature> featureSet =
-        EnumSet.noneOf(DeclarativeBenchmarkPlan.Feature.class);
-    featureSet.addAll(List.of(features));
-    return new DeclarativeBenchmarkPlan.EngineDeclaration(
-        id, representation, featureSet, EnumSet.allOf(DeclarativeBenchmarkPlan.Flag.class), true);
-  }
+        private fun engine(
+            id: String?,
+            representation: DeclarativeBenchmarkPlan.InputRepresentation?,
+            vararg features: DeclarativeBenchmarkPlan.Feature?
+        ): EngineDeclaration {
+            val featureSet =
+                EnumSet.noneOf<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature::class.java)
+            featureSet.addAll(List.of<DeclarativeBenchmarkPlan.Feature?>(*features))
+            return EngineDeclaration(
+                id,
+                representation,
+                featureSet,
+                EnumSet.allOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                true
+            )
+        }
+    }
 }

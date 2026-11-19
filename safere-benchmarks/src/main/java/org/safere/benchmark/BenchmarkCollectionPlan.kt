@@ -2,450 +2,530 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import org.safere.benchmark.CrossEngineWorkload.TimingGroup
+import org.safere.benchmark.DeclarativeBenchmarkPlan.ExecutionConstraint
+import org.safere.benchmark.DeclarativeBenchmarkPlan.MeasurementMode
+import java.lang.String
+import java.util.*
+import java.util.List
+import java.util.function.Consumer
+import java.util.function.Predicate
+import java.util.function.Supplier
+import java.util.regex.Pattern
+import java.util.stream.Collectors
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.IllegalArgumentException
+import kotlin.check
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashSet
+import kotlin.collections.MutableList
+import kotlin.collections.MutableSet
+import kotlin.collections.contains
+import kotlin.collections.forEach
+import kotlin.collections.lastIndexOf
+import kotlin.collections.mutableListOf
+import kotlin.collections.mutableSetOf
+import kotlin.collections.plus
+import kotlin.plus
+import kotlin.require
+import kotlin.sequences.lastIndexOf
+import kotlin.sequences.plus
+import kotlin.text.get
+import kotlin.text.lastIndexOf
+import kotlin.text.plus
+import kotlin.text.replace
+import kotlin.text.startsWith
+import kotlin.text.substring
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-/** Discovers generic benchmark runners, trials, and report identities from the declared plan. */
-final class BenchmarkCollectionPlan {
-  private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
-
-  private final CrossEngineBenchmarkPlan crossEngine;
-  private final SpecializedBenchmarkPlan specialized;
-  private final String scanProvider;
-
-  private BenchmarkCollectionPlan(
-      CrossEngineBenchmarkPlan crossEngine,
-      SpecializedBenchmarkPlan specialized,
-      String scanProvider) {
-    this.crossEngine = crossEngine;
-    this.specialized = specialized;
-    this.scanProvider = scanProvider;
-  }
-
-  static BenchmarkCollectionPlan load() {
-    return new BenchmarkCollectionPlan(
-        CrossEngineBenchmarkPlan.load(), SpecializedBenchmarkPlan.load(), null);
-  }
-
-  BenchmarkCollectionPlan forScanProvider(String provider) {
-    if (!provider.equals("default") && !provider.equals("vector")) {
-      throw new IllegalArgumentException("Unknown benchmark scan provider: " + provider);
+/** Discovers generic benchmark runners, trials, and report identities from the declared plan.  */
+internal class BenchmarkCollectionPlan private constructor(
+    private val crossEngine: CrossEngineBenchmarkPlan,
+    private val specialized: SpecializedBenchmarkPlan,
+    private val scanProvider: String?
+) {
+    fun forScanProvider(provider: String): BenchmarkCollectionPlan {
+        require(!(provider != "default" && provider != "vector")) { "Unknown benchmark scan provider: " + provider }
+        return BenchmarkCollectionPlan(crossEngine, specialized, provider)
     }
-    return new BenchmarkCollectionPlan(crossEngine, specialized, provider);
-  }
 
-  static boolean matchesScanProvider(String trialId, String provider) {
-    String variant = trialId.substring(trialId.lastIndexOf('@') + 1);
-    return RegexEngineVariant.fromId(variant).scanProvider().equals(provider);
-  }
-
-  List<Runner> executionRunners(boolean allocation, boolean smoke) {
-    List<Runner> result = new ArrayList<>();
-    // Pick the smoke workload before splitting, so both providers measure the same row.
-    for (Runner runner : allocation ? allocationRunners() : runners()) {
-      List<String> ids = smoke ? smokeTrialIds(runner) : runner.trialIds();
-      for (String provider : List.of("default", "vector")) {
-        List<String> selected =
-            ids.stream().filter(id -> matchesScanProvider(id, provider)).toList();
-        if (!selected.isEmpty()) {
-          result.add(
-              new Runner(runner.profile(), runner.benchmark(), runner.parameter(), selected));
+    fun executionRunners(allocation: Boolean, smoke: Boolean): MutableList<Runner> {
+        val result: MutableList<Runner?> = ArrayList<Runner?>()
+        // Pick the smoke workload before splitting, so both providers measure the same row.
+        for (runner in if (allocation) allocationRunners() else runners()) {
+            val ids = if (smoke) smokeTrialIds(runner) else runner.trialIds
+            for (provider in mutableListOf<String?>("default", "vector")) {
+                val selected: MutableList<String> =
+                    ids.stream().filter { id: String -> matchesScanProvider(id, provider) }.toList()
+                if (!selected.isEmpty()) {
+                    result.add(
+                        Runner(runner.profile, runner.benchmark, runner.parameter, selected)
+                    )
+                }
+            }
         }
-      }
+        return List.copyOf<Runner?>(result)
     }
-    return List.copyOf(result);
-  }
 
-  List<Runner> runners() {
-    Set<String> allocationOnly = allocationOnlyTrialIds();
-    return filterRunners(allRunners(), trialId -> !allocationOnly.contains(trialId), false);
-  }
-
-  List<Runner> runnersMatching(String benchmarkRegex) {
-    Pattern pattern = Pattern.compile(benchmarkRegex);
-    return allRunners().stream()
-        .filter(runner -> pattern.matcher(runner.benchmark()).find())
-        .toList();
-  }
-
-  List<String> launcherArguments(
-      String benchmarkRegex, String benchmarkJar, Set<String> overriddenParameters) {
-    return launcherArguments(runnersMatching(benchmarkRegex), benchmarkJar, overriddenParameters);
-  }
-
-  List<String> declaredLauncherArguments(
-      String benchmark, String benchmarkJar, boolean allocation, boolean smoke, String provider) {
-    List<Runner> selected =
-        (allocation ? allocationRunners() : runners())
-            .stream()
-                .filter(runner -> runner.benchmark().equals(benchmark))
-                .map(
-                    runner ->
-                        new Runner(
-                            runner.profile(),
-                            runner.benchmark(),
-                            runner.parameter(),
-                            (smoke ? smokeTrialIds(runner) : runner.trialIds())
-                                .stream()
-                                    .filter(
-                                        id -> provider == null || matchesScanProvider(id, provider))
-                                    .toList()))
-                .filter(runner -> !runner.trialIds().isEmpty())
-                .toList();
-    if (selected.isEmpty()) {
-      throw new IllegalArgumentException("Unknown declared benchmark runner: " + benchmark);
+    fun runners(): MutableList<Runner> {
+        val allocationOnly = allocationOnlyTrialIds()
+        return filterRunners(allRunners(), Predicate { trialId: String? -> !allocationOnly.contains(trialId) }, false)
     }
-    if (selected.size() > 1) {
-      throw new IllegalArgumentException("Ambiguous declared benchmark runner: " + benchmark);
+
+    fun runnersMatching(benchmarkRegex: String): MutableList<Runner?> {
+        val pattern = Pattern.compile(benchmarkRegex)
+        return allRunners().stream()
+            .filter { runner: Runner? -> pattern.matcher(runner!!.benchmark).find() }
+            .toList()
     }
-    return launcherArguments(selected, benchmarkJar, Set.of());
-  }
 
-  private static List<String> launcherArguments(
-      List<Runner> runners, String benchmarkJar, Set<String> overriddenParameters) {
-    List<String> arguments = new ArrayList<>();
-    arguments.add("-jar");
-    arguments.add(argumentFileToken(benchmarkJar));
-    runners.stream()
-        .filter(runner -> !overriddenParameters.contains(runner.parameter()))
-        .forEach(
-            runner -> {
-              arguments.add("-p");
-              arguments.add(
-                  argumentFileToken(
-                      runner.parameter() + "=" + String.join(",", runner.trialIds())));
-            });
-    return List.copyOf(arguments);
-  }
+    fun launcherArguments(
+        benchmarkRegex: String, benchmarkJar: String, overriddenParameters: MutableSet<String?>
+    ): MutableList<String?> {
+        return launcherArguments(runnersMatching(benchmarkRegex), benchmarkJar, overriddenParameters)
+    }
 
-  private List<Runner> allRunners() {
-    List<Runner> runners = unfilteredRunners();
-    return scanProvider == null
-        ? runners
-        : filterRunners(runners, id -> matchesScanProvider(id, scanProvider), false);
-  }
+    fun declaredLauncherArguments(
+        benchmark: String?, benchmarkJar: String, allocation: Boolean, smoke: Boolean, provider: String?
+    ): MutableList<String?> {
+        val selected =
+            (if (allocation) allocationRunners() else runners())
+                .stream()
+                .filter { runner: Runner? -> runner!!.benchmark == benchmark }
+                .map<Runner?> { runner: Runner? ->
+                    BenchmarkCollectionPlan.Runner(
+                        runner!!.profile,
+                        runner.benchmark,
+                        runner.parameter,
+                        (if (smoke) Companion.smokeTrialIds(runner) else runner.trialIds)!!
+                            .stream()
+                            .filter { id: String? -> provider == null || Companion.matchesScanProvider(id!!, provider) }
+                            .toList())
+                }
+                .filter { runner: Runner? -> !runner!!.trialIds!!.isEmpty() }
+                .toList()
+        require(!selected.isEmpty()) { "Unknown declared benchmark runner: " + benchmark }
+        require(selected.size <= 1) { "Ambiguous declared benchmark runner: " + benchmark }
+        return launcherArguments(selected, benchmarkJar, mutableSetOf<String?>())
+    }
 
-  private List<Runner> unfilteredRunners() {
-    return List.of(
-        runner(
-            "standard",
-            CrossEngineBenchmark.class,
-            "crossEngineTrial",
-            crossEngine.trials(
-                CrossEngineWorkload.TimingGroup.NANOSECONDS,
-                DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME,
-                false)),
-        runner(
-            "standard",
-            CrossEngineScalingBenchmark.class,
-            "crossEngineScalingTrial",
-            crossEngine.trials(CrossEngineWorkload.TimingGroup.MICROSECONDS).stream()
-                .filter(
-                    trial ->
-                        !trial
-                            .workload()
-                            .measurement()
+    private fun allRunners(): MutableList<Runner?> {
+        val runners = unfilteredRunners()
+        return if (scanProvider == null)
+            runners
+        else
+            filterRunners(
+                runners,
+                Predicate { id: String? -> Companion.matchesScanProvider(id!!, scanProvider) },
+                false
+            )
+    }
+
+    private fun unfilteredRunners(): MutableList<Runner?> {
+        return List.of<Runner?>(
+            runner(
+                "standard",
+                CrossEngineBenchmark::class.java,
+                "crossEngineTrial",
+                crossEngine.trials(
+                    TimingGroup.NANOSECONDS,
+                    MeasurementMode.AVERAGE_TIME,
+                    false
+                )
+            ),
+            runner(
+                "standard",
+                CrossEngineScalingBenchmark::class.java,
+                "crossEngineScalingTrial",
+                crossEngine.trials(TimingGroup.MICROSECONDS).stream()
+                    .filter { trial: CrossEngineBenchmarkPlan.Trial? ->
+                        !trial!!
+                            .workload
+                            .measurement
                             .constraints()
-                            .contains(DeclarativeBenchmarkPlan.ExecutionConstraint.NO_FORK))
-                .toList()),
-        runner(
-            "noFork",
-            CrossEngineNoForkBenchmark.class,
-            "crossEngineNoForkTrial",
-            crossEngine.trials(
-                CrossEngineWorkload.TimingGroup.MICROSECONDS,
-                DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME,
-                true)),
-        runner(
-            "coldStart",
-            CrossEngineColdStartBenchmark.class,
-            "crossEngineColdStartTrial",
-            crossEngine.trials(
-                CrossEngineWorkload.TimingGroup.MILLISECONDS,
-                DeclarativeBenchmarkPlan.MeasurementMode.SINGLE_SHOT_COLD_START,
-                false)),
-        new Runner(
-            "standard",
-            SpecializedBenchmark.class.getName() + ".run",
-            "specializedTrial",
-            specialized.averageTimeTrials().stream()
-                .map(SpecializedBenchmarkPlan.Trial::id)
-                .toList()));
-  }
+                            .contains(ExecutionConstraint.NO_FORK)
+                    }
+                    .toList()),
+            runner(
+                "noFork",
+                CrossEngineNoForkBenchmark::class.java,
+                "crossEngineNoForkTrial",
+                crossEngine.trials(
+                    TimingGroup.MICROSECONDS,
+                    MeasurementMode.AVERAGE_TIME,
+                    true
+                )
+            ),
+            runner(
+                "coldStart",
+                CrossEngineColdStartBenchmark::class.java,
+                "crossEngineColdStartTrial",
+                crossEngine.trials(
+                    TimingGroup.MILLISECONDS,
+                    MeasurementMode.SINGLE_SHOT_COLD_START,
+                    false
+                )
+            ),
+            Runner(
+                "standard",
+                SpecializedBenchmark::class.java.getName() + ".run",
+                "specializedTrial",
+                specialized.averageTimeTrials().stream()
+                    .map<String?> { id() }
+                    .toList()))
+    }
 
-  List<Runner> allocationRunners() {
-    List<String> prefixes =
-        BenchmarkData.get().getStringList("configuration.collection.allocationWorkloadPrefixes");
-    Set<String> allocationOnly = allocationOnlyTrialIds();
-    return filterRunners(
-        allRunners(),
-        trialId ->
-            allocationOnly.contains(trialId)
-                || prefixes.stream()
-                    .anyMatch(trialId.substring(0, trialId.lastIndexOf('@'))::startsWith),
-        true);
-  }
+    fun allocationRunners(): MutableList<Runner> {
+        val prefixes: MutableList<String?> =
+            BenchmarkData.Companion.get().getStringList("configuration.collection.allocationWorkloadPrefixes")
+        val allocationOnly = allocationOnlyTrialIds()
+        return filterRunners(
+            allRunners(),
+            Predicate { trialId: String? ->
+                allocationOnly.contains(trialId)
+                        || prefixes.stream()
+                    .anyMatch { prefix: String? ->
+                        trialId!!.substring(0, trialId.lastIndexOf('@')).startsWith(prefix!!)
+                    }
+            },
+            true
+        )
+    }
 
-  private static List<Runner> filterRunners(
-      List<Runner> runners, Predicate<String> includeTrial, boolean standardOnly) {
-    return runners.stream()
-        .filter(runner -> !standardOnly || runner.profile().equals("standard"))
-        .map(
-            runner ->
-                new Runner(
-                    runner.profile(),
-                    runner.benchmark(),
-                    runner.parameter(),
-                    runner.trialIds().stream().filter(includeTrial).toList()))
-        .filter(runner -> !runner.trialIds().isEmpty())
-        .toList();
-  }
-
-  private Set<String> allocationOnlyTrialIds() {
-    return trials(Query.ALL).stream()
-        .filter(
-            trial ->
-                trial
-                    .measurement()
+    private fun allocationOnlyTrialIds(): MutableSet<String?> {
+        return trials(Query.Companion.ALL).stream()
+            .filter { trial: CollectionTrial? ->
+                trial!!
+                    .measurement!!
                     .constraints()
-                    .contains(DeclarativeBenchmarkPlan.ExecutionConstraint.ALLOCATION_PROFILE))
-        .map(CollectionTrial::id)
-        .collect(Collectors.toUnmodifiableSet());
-  }
-
-  private static Runner runner(
-      String profile,
-      Class<?> runnerClass,
-      String parameter,
-      List<CrossEngineBenchmarkPlan.Trial> trials) {
-    return new Runner(
-        profile,
-        runnerClass.getName() + ".run",
-        parameter,
-        trials.stream().map(CrossEngineBenchmarkPlan.Trial::id).toList());
-  }
-
-  List<CollectionTrial> trials(Query query) {
-    List<CollectionTrial> trials = new ArrayList<>();
-    for (CrossEngineWorkload.TimingGroup group : CrossEngineWorkload.TimingGroup.values()) {
-      for (CrossEngineBenchmarkPlan.Trial trial : crossEngine.trials(group)) {
-        trials.add(
-            new CollectionTrial(
-                trial.id(),
-                trial.workload().id(),
-                trial.variant().id(),
-                trial.workload().measurement(),
-                trial.variant().scanProvider()));
-      }
-    }
-    for (SpecializedBenchmarkPlan.Trial trial : specialized.averageTimeTrials()) {
-      trials.add(
-          new CollectionTrial(
-              trial.id(),
-              trial.workload().id(),
-              trial.variant().id(),
-              trial.workload().measurement(),
-              trial.variant().scanProvider()));
-    }
-    return trials.stream().filter(query::matches).toList();
-  }
-
-  ReportPlan reportPlan() {
-    return reportPlan(false);
-  }
-
-  ReportPlan reportPlan(boolean smoke) {
-    Set<String> collectedTrialIds =
-        runners().stream()
-            .flatMap(runner -> (smoke ? smokeTrialIds(runner) : runner.trialIds()).stream())
-            .collect(Collectors.toUnmodifiableSet());
-    List<CollectionTrial> trials =
-        trials(Query.ALL).stream().filter(trial -> collectedTrialIds.contains(trial.id())).toList();
-    Set<String> workloadIds =
-        trials.stream()
-            .map(CollectionTrial::workloadId)
-            .collect(Collectors.toCollection(LinkedHashSet::new));
-    List<ReportExclusion> exclusions = new ArrayList<>();
-    crossEngine.exclusions().stream()
-        .filter(exclusion -> workloadIds.contains(exclusion.workloadId()))
-        .map(ReportExclusion::from)
-        .forEach(exclusions::add);
-    specialized.exclusions().stream()
-        .filter(exclusion -> workloadIds.contains(exclusion.workloadId()))
-        .map(ReportExclusion::from)
-        .forEach(exclusions::add);
-    return new ReportPlan(trials, exclusions.stream().distinct().toList());
-  }
-
-  public static void main(String[] args) {
-    if (args.length == 0) {
-      throw new IllegalArgumentException(
-          "Usage: BenchmarkCollectionPlan"
-              + " <runners|allocation-runners|runner-arguments|declared-runner-arguments|trials|report-plan>"
-              + " [query options]");
-    }
-    BenchmarkCollectionPlan plan = load();
-    String provider = System.getProperty("safere.benchmark.scanProvider");
-    if (provider != null
-        && !args[0].equals("report-plan")
-        && !args[0].equals("declared-runner-arguments")) {
-      plan = plan.forScanProvider(provider);
-    }
-    switch (args[0]) {
-      case "execution-runners", "allocation-execution-runners" -> {
-        boolean smoke = args.length == 2 && args[1].equals("--smoke");
-        if (args.length > 2 || (args.length == 2 && !smoke)) {
-          throw new IllegalArgumentException("Usage: " + args[0] + " [--smoke]");
-        }
-        for (Runner runner : plan.executionRunners(args[0].startsWith("allocation-"), smoke)) {
-          String scanProvider =
-              RegexEngineVariant.fromId(
-                      runner
-                          .trialIds()
-                          .getFirst()
-                          .substring(runner.trialIds().getFirst().lastIndexOf('@') + 1))
-                  .scanProvider();
-          System.out.printf(
-              "%s\t%s\t%s\t%s\t%s%n",
-              runner.profile(),
-              runner.benchmark(),
-              runner.parameter(),
-              String.join(",", runner.trialIds()),
-              scanProvider);
-        }
-      }
-      case "runners", "allocation-runners" -> {
-        boolean smoke = args.length == 2 && args[1].equals("--smoke");
-        if (args.length > 2 || (args.length == 2 && !smoke)) {
-          throw new IllegalArgumentException(
-              "Usage: BenchmarkCollectionPlan " + args[0] + " [--smoke]");
-        }
-        List<Runner> runners =
-            args[0].equals("runners") ? plan.runners() : plan.allocationRunners();
-        runners.forEach(
-            runner ->
-                System.out.printf(
-                    "%s\t%s\t%s\t%s%n",
-                    runner.profile(),
-                    runner.benchmark(),
-                    runner.parameter(),
-                    String.join(",", smoke ? smokeTrialIds(runner) : runner.trialIds())));
-      }
-      case "runner-arguments" -> {
-        if (args.length < 3) {
-          throw new IllegalArgumentException(
-              "Usage: BenchmarkCollectionPlan runner-arguments "
-                  + "<benchmark-regex> <benchmark-jar> [parameter ...]");
-        }
-        Set<String> overriddenParameters =
-            new LinkedHashSet<>(Arrays.asList(Arrays.copyOfRange(args, 3, args.length)));
-        plan.launcherArguments(args[1], args[2], overriddenParameters).forEach(System.out::println);
-      }
-      case "declared-runner-arguments" -> {
-        boolean smoke = args.length == 5 && args[4].equals("--smoke");
-        if ((args.length != 4 && !smoke)
-            || (!args[1].equals("runners") && !args[1].equals("allocation-runners"))) {
-          throw new IllegalArgumentException(
-              "Usage: BenchmarkCollectionPlan declared-runner-arguments "
-                  + "<runners|allocation-runners> <benchmark> <benchmark-jar> [--smoke]");
-        }
-        plan.declaredLauncherArguments(
-                args[2], args[3], args[1].equals("allocation-runners"), smoke, provider)
-            .forEach(System.out::println);
-      }
-      case "trials" -> {
-        Query query = Query.parse(Arrays.copyOfRange(args, 1, args.length));
-        List<CollectionTrial> selected = plan.trials(query);
-        if (selected.isEmpty()) {
-          throw new IllegalStateException("No declared trials match the query");
-        }
-        System.out.println(
-            selected.stream().map(CollectionTrial::id).collect(Collectors.joining(",")));
-      }
-      case "report-plan" -> {
-        boolean smoke = args.length == 2 && args[1].equals("--smoke");
-        if (args.length > 2 || (args.length == 2 && !smoke)) {
-          throw new IllegalArgumentException(
-              "Usage: BenchmarkCollectionPlan report-plan [--smoke]");
-        }
-        System.out.println(GSON.toJson(plan.reportPlan(smoke)));
-      }
-      default -> throw new IllegalArgumentException("Unknown collection-plan command: " + args[0]);
-    }
-  }
-
-  static String argumentFileToken(String argument) {
-    return "\"" + argument.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-  }
-
-  private static List<String> smokeTrialIds(Runner runner) {
-    String firstTrial = runner.trialIds().getFirst();
-    String firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'));
-    return runner.trialIds().stream()
-        .filter(trialId -> trialId.startsWith(firstWorkload + "@"))
-        .toList();
-  }
-
-  record Runner(String profile, String benchmark, String parameter, List<String> trialIds) {}
-
-  record CollectionTrial(
-      String id,
-      String workloadId,
-      String executionVariant,
-      DeclarativeBenchmarkPlan.Measurement measurement,
-      String requestedScanProvider) {}
-
-  record ReportExclusion(String workloadId, String executionVariant, String kind, String reason) {
-    static ReportExclusion from(MaterializedExecutionPlan.Entry exclusion) {
-      return new ReportExclusion(
-          exclusion.workloadId(),
-          exclusion.engineId(),
-          exclusion.exclusion().kind(),
-          exclusion.exclusion().reason());
-    }
-  }
-
-  record ReportPlan(List<CollectionTrial> trials, List<ReportExclusion> exclusions) {}
-
-  record Query(String mode, String timing, String prefix, String variant) {
-    private static final Query ALL = new Query(null, null, null, null);
-
-    static Query parse(String[] args) {
-      String mode = null;
-      String timing = null;
-      String prefix = null;
-      String variant = null;
-      for (int index = 0; index < args.length; index += 2) {
-        if (index + 1 >= args.length) {
-          throw new IllegalArgumentException("Missing value for query option " + args[index]);
-        }
-        switch (args[index]) {
-          case "--mode" -> mode = args[index + 1];
-          case "--timing" -> timing = args[index + 1];
-          case "--prefix" -> prefix = args[index + 1];
-          case "--variant" -> variant = args[index + 1];
-          default -> throw new IllegalArgumentException("Unknown query option: " + args[index]);
-        }
-      }
-      return new Query(mode, timing, prefix, variant);
+                    .contains(ExecutionConstraint.ALLOCATION_PROFILE)
+            }
+            .map<String?>(CollectionTrial::id)
+            .collect(Collectors.toUnmodifiableSet())
     }
 
-    boolean matches(CollectionTrial trial) {
-      return (mode == null || trial.measurement().mode().jsonName().equals(mode))
-          && (timing == null || trial.measurement().timingUnit().jsonName().equals(timing))
-          && (prefix == null || trial.workloadId().startsWith(prefix))
-          && (variant == null || trial.executionVariant().equals(variant));
+    fun trials(query: Query): MutableList<CollectionTrial?> {
+        val trials: MutableList<CollectionTrial?> = ArrayList<CollectionTrial?>()
+        for (group in TimingGroup.entries) {
+            for (trial in crossEngine.trials(group)) {
+                trials.add(
+                    CollectionTrial(
+                        trial.id(),
+                        trial.workload.id,
+                        trial.variant.id(),
+                        trial.workload.measurement,
+                        trial.variant.scanProvider()
+                    )
+                )
+            }
+        }
+        for (trial in specialized.averageTimeTrials()) {
+            trials.add(
+                CollectionTrial(
+                    trial.id(),
+                    trial.workload.id,
+                    trial.variant.id(),
+                    trial.workload.measurement,
+                    trial.variant.scanProvider()
+                )
+            )
+        }
+        return trials.stream().filter { trial: CollectionTrial? -> query.matches(trial!!) }.toList()
     }
-  }
+
+    @JvmOverloads
+    fun reportPlan(smoke: Boolean = false): ReportPlan {
+        val collectedTrialIds =
+            runners().stream()
+                .flatMap<String?> { runner: Runner? -> (if (smoke) Companion.smokeTrialIds(runner!!) else runner!!.trialIds)!!.stream() }
+                .collect(Collectors.toUnmodifiableSet())
+        val trials =
+            trials(Query.Companion.ALL).stream()
+                .filter { trial: CollectionTrial? -> collectedTrialIds.contains(trial!!.id) }.toList()
+        val workloadIds: MutableSet<String?> =
+            trials.stream()
+                .map<String?>(CollectionTrial::workloadId)
+                .collect(Collectors.toCollection(Supplier { LinkedHashSet() }))
+        val exclusions: MutableList<ReportExclusion?> = ArrayList<ReportExclusion?>()
+        crossEngine.exclusions().stream()
+            .filter { exclusion: MaterializedExecutionPlan.Entry? -> workloadIds.contains(exclusion!!.workloadId) }
+            .map<ReportExclusion?> { exclusion: MaterializedExecutionPlan.Entry? ->
+                ReportExclusion.Companion.from(
+                    exclusion!!
+                )
+            }
+            .forEach { e: ReportExclusion? -> exclusions.add(e) }
+        specialized.exclusions().stream()
+            .filter { exclusion: MaterializedExecutionPlan.Entry? -> workloadIds.contains(exclusion!!.workloadId) }
+            .map<ReportExclusion?> { exclusion: MaterializedExecutionPlan.Entry? ->
+                ReportExclusion.Companion.from(
+                    exclusion!!
+                )
+            }
+            .forEach { e: ReportExclusion? -> exclusions.add(e) }
+        return ReportPlan(trials, exclusions.stream().distinct().toList())
+    }
+
+    @JvmRecord
+    internal data class Runner(
+        val profile: String?,
+        val benchmark: String?,
+        val parameter: String?,
+        val trialIds: MutableList<String>?
+    )
+
+    @JvmRecord
+    internal data class CollectionTrial(
+        val id: String?,
+        val workloadId: String?,
+        val executionVariant: String?,
+        val measurement: DeclarativeBenchmarkPlan.Measurement?,
+        val requestedScanProvider: String?
+    )
+
+    @JvmRecord
+    internal data class ReportExclusion(
+        val workloadId: String?,
+        val executionVariant: String?,
+        val kind: String?,
+        val reason: String?
+    ) {
+        companion object {
+            fun from(exclusion: MaterializedExecutionPlan.Entry): ReportExclusion {
+                return ReportExclusion(
+                    exclusion.workloadId,
+                    exclusion.engineId,
+                    exclusion.exclusion.kind,
+                    exclusion.exclusion.reason
+                )
+            }
+        }
+    }
+
+    @JvmRecord
+    internal data class ReportPlan(
+        val trials: MutableList<CollectionTrial?>?,
+        val exclusions: MutableList<ReportExclusion?>?
+    )
+
+    @JvmRecord
+    internal data class Query(val mode: String?, val timing: String?, val prefix: String?, val variant: String?) {
+        fun matches(trial: CollectionTrial): Boolean {
+            return (mode == null || trial.measurement!!.mode.jsonName() == mode)
+                    && (timing == null || trial.measurement!!.timingUnit.jsonName() == timing)
+                    && (prefix == null || trial.workloadId!!.startsWith(prefix))
+                    && (variant == null || trial.executionVariant == variant)
+        }
+
+        companion object {
+            private val ALL = Query(null, null, null, null)
+
+            fun parse(args: Array<String?>): Query {
+                var mode: String? = null
+                var timing: String? = null
+                var prefix: String? = null
+                var variant: String? = null
+                var index = 0
+                while (index < args.size) {
+                    require(index + 1 < args.size) { "Missing value for query option " + args[index] }
+                    when (args[index]) {
+                        "--mode" -> mode = args[index + 1]
+                        "--timing" -> timing = args[index + 1]
+                        "--prefix" -> prefix = args[index + 1]
+                        "--variant" -> variant = args[index + 1]
+                        else -> throw IllegalArgumentException("Unknown query option: " + args[index])
+                    }
+                    index += 2
+                }
+                return Query(mode, timing, prefix, variant)
+            }
+        }
+    }
+
+    companion object {
+        private val GSON: Gson = GsonBuilder().disableHtmlEscaping().create()
+
+        fun load(): BenchmarkCollectionPlan {
+            return BenchmarkCollectionPlan(
+                CrossEngineBenchmarkPlan.Companion.load(), SpecializedBenchmarkPlan.Companion.load(), null
+            )
+        }
+
+        fun matchesScanProvider(trialId: String, provider: String?): Boolean {
+            val variant = trialId.substring(trialId.lastIndexOf('@') + 1)
+            return RegexEngineVariant.Companion.fromId(variant).scanProvider() == provider
+        }
+
+        private fun launcherArguments(
+            runners: MutableList<Runner?>, benchmarkJar: String, overriddenParameters: MutableSet<String?>
+        ): MutableList<String?> {
+            val arguments: MutableList<String?> = ArrayList<String?>()
+            arguments.add("-jar")
+            arguments.add(argumentFileToken(benchmarkJar))
+            runners.stream()
+                .filter { runner: Runner? -> !overriddenParameters.contains(runner!!.parameter) }
+                .forEach { runner: Runner? ->
+                    arguments.add("-p")
+                    arguments.add(
+                        argumentFileToken(
+                            runner!!.parameter + "=" + String.join(",", runner.trialIds)
+                        )
+                    )
+                }
+            return List.copyOf<kotlin.String?>(arguments)
+        }
+
+        private fun filterRunners(
+            runners: MutableList<Runner?>, includeTrial: Predicate<kotlin.String?>?, standardOnly: Boolean
+        ): MutableList<Runner> {
+            return runners.stream()
+                .filter { runner: Runner? -> !standardOnly || runner!!.profile == "standard" }
+                .map<Runner?> { runner: Runner? ->
+                    Runner(
+                        runner!!.profile,
+                        runner.benchmark,
+                        runner.parameter,
+                        runner.trialIds!!.stream().filter(includeTrial).toList()
+                    )
+                }
+                .filter { runner: Runner? -> !runner!!.trialIds!!.isEmpty() }
+                .toList()
+        }
+
+        private fun runner(
+            profile: kotlin.String?,
+            runnerClass: Class<*>,
+            parameter: kotlin.String?,
+            trials: MutableList<CrossEngineBenchmarkPlan.Trial?>
+        ): Runner {
+            return Runner(
+                profile,
+                runnerClass.getName() + ".run",
+                parameter,
+                trials.stream().map<kotlin.String?> { id() }.toList()
+            )
+        }
+
+        @JvmStatic
+        fun main(args: Array<kotlin.String>) {
+            require(args.size != 0) {
+                ("Usage: BenchmarkCollectionPlan"
+                        + " <runners|allocation-runners|runner-arguments|declared-runner-arguments|trials|report-plan>"
+                        + " [query options]")
+            }
+            var plan: BenchmarkCollectionPlan = load()
+            val provider = System.getProperty("safere.benchmark.scanProvider")
+            if (provider != null && (args[0] != "report-plan") && (args[0] != "declared-runner-arguments")) {
+                plan = plan.forScanProvider(provider)
+            }
+            when (args[0]) {
+                "execution-runners", "allocation-execution-runners" -> {
+                    val smoke = args.size == 2 && args[1] == "--smoke"
+                    require(!(args.size > 2 || (args.size == 2 && !smoke))) { "Usage: " + args[0] + " [--smoke]" }
+                    for (runner in plan.executionRunners(args[0].startsWith("allocation-"), smoke)) {
+                        val scanProvider: kotlin.String? =
+                            RegexEngineVariant.Companion.fromId(
+                                runner
+                                    .trialIds
+                                    .getFirst()
+                                    .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                            )
+                                .scanProvider()
+                        System.out.printf(
+                            "%s\t%s\t%s\t%s\t%s%n",
+                            runner.profile,
+                            runner.benchmark,
+                            runner.parameter,
+                            String.join(",", runner.trialIds),
+                            scanProvider
+                        )
+                    }
+                }
+
+                "runners", "allocation-runners" -> {
+                    val smoke = args.size == 2 && args[1] == "--smoke"
+                    require(!(args.size > 2 || (args.size == 2 && !smoke))) { "Usage: BenchmarkCollectionPlan " + args[0] + " [--smoke]" }
+                    val runners =
+                        if (args[0] == "runners") plan.runners() else plan.allocationRunners()
+                    runners.forEach(
+                        Consumer { runner: Runner? ->
+                            System.out.printf(
+                                "%s\t%s\t%s\t%s%n",
+                                runner!!.profile,
+                                runner.benchmark,
+                                runner.parameter,
+                                String.join(",", if (smoke) Companion.smokeTrialIds(runner) else runner.trialIds)
+                            )
+                        })
+                }
+
+                "runner-arguments" -> {
+                    require(args.size >= 3) {
+                        ("Usage: BenchmarkCollectionPlan runner-arguments "
+                                + "<benchmark-regex> <benchmark-jar> [parameter ...]")
+                    }
+                    val overriddenParameters: MutableSet<kotlin.String?> =
+                        LinkedHashSet<kotlin.String?>(
+                            Arrays.asList<kotlin.String?>(
+                                *Arrays.copyOfRange<kotlin.String?>(
+                                    args,
+                                    3,
+                                    args.size
+                                )
+                            )
+                        )
+                    plan.launcherArguments(args[1], args[2], overriddenParameters)
+                        .forEach(Consumer { x: kotlin.String? -> println(x) })
+                }
+
+                "declared-runner-arguments" -> {
+                    val smoke = args.size == 5 && args[4] == "--smoke"
+                    require(
+                        !((args.size != 4 && !smoke)
+                                || (args[1] != "runners" && args[1] != "allocation-runners"))
+                    ) {
+                        ("Usage: BenchmarkCollectionPlan declared-runner-arguments "
+                                + "<runners|allocation-runners> <benchmark> <benchmark-jar> [--smoke]")
+                    }
+                    plan.declaredLauncherArguments(
+                        args[2], args[3], args[1] == "allocation-runners", smoke, provider
+                    )
+                        .forEach(Consumer { x: kotlin.String? -> println(x) })
+                }
+
+                "trials" -> {
+                    val query: Query = Query.Companion.parse(Arrays.copyOfRange<kotlin.String?>(args, 1, args.size))
+                    val selected = plan.trials(query)
+                    check(!selected.isEmpty()) { "No declared trials match the query" }
+                    println(
+                        selected.stream().map<kotlin.String?>(CollectionTrial::id).collect(Collectors.joining(","))
+                    )
+                }
+
+                "report-plan" -> {
+                    val smoke = args.size == 2 && args[1] == "--smoke"
+                    require(!(args.size > 2 || (args.size == 2 && !smoke))) { "Usage: BenchmarkCollectionPlan report-plan [--smoke]" }
+                    println(GSON.toJson(plan.reportPlan(smoke)))
+                }
+
+                else -> throw IllegalArgumentException("Unknown collection-plan command: " + args[0])
+            }
+        }
+
+        fun argumentFileToken(argument: kotlin.String): kotlin.String {
+            return "\"" + argument.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        }
+
+        private fun smokeTrialIds(runner: Runner): MutableList<kotlin.String?> {
+            val firstTrial: kotlin.String = runner.trialIds.getFirst()
+            val firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'))
+            return runner.trialIds!!.stream()
+                .filter { trialId: kotlin.String? -> trialId!!.startsWith(firstWorkload + "@") }
+                .toList()
+        }
+    }
 }

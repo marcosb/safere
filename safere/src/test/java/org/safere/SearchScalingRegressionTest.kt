@@ -4,2045 +4,2334 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.function.IntFunction;
-import java.util.function.IntPredicate;
-import java.util.function.IntSupplier;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
+import java.util.function.IntFunction
+import java.util.function.IntPredicate
+import java.util.function.IntSupplier
+import kotlin.math.max
 
 @DisabledForCrosscheck("WorkCounter is an internal SafeRE API")
 @Tag("work-counter")
-class SearchScalingRegressionTest {
-
-  @Test
-  void opaqueRequiredClassesReuseScansAcrossFindsAndAdvancingRegions() {
-    for (boolean advanceRegion : new boolean[] {false, true}) {
-      Pattern pattern = Pattern.compile("\\X?\\uDE00");
-      assertFindAllWorkIsLinear(
-          size -> {
-            String input = "a" + "😀".repeat(size) + "\uDE00!";
-            Matcher matcher = pattern.matcher(input).region(1, input.length());
-            return () -> {
-              boolean found = matcher.find();
-              if (found && advanceRegion) {
-                matcher.region(matcher.end(), input.length());
-              }
-              return found;
-            };
-          },
-          "opaque class scans, advancing region=" + advanceRegion);
+internal class SearchScalingRegressionTest {
+    @Test
+    fun opaqueRequiredClassesReuseScansAcrossFindsAndAdvancingRegions() {
+        for (advanceRegion in booleanArrayOf(false, true)) {
+            val pattern = Pattern.compile("\\X?\\uDE00")
+            assertFindAllWorkIsLinear(
+                IntFunction { size: Int ->
+                    val input = "a" + "😀".repeat(size) + "\uDE00!"
+                    val matcher = pattern.matcher(input).region(1, input.length)
+                    FindIterator {
+                        val found = matcher.find()
+                        if (found && advanceRegion) {
+                            matcher.region(matcher.end(), input.length)
+                        }
+                        found
+                    }
+                },
+                "opaque class scans, advancing region=" + advanceRegion
+            )
+        }
     }
-  }
 
-  @Test
-  void shrinkingOpaqueRegionsReuseTheAbsentScalarInterior() {
-    Pattern pattern = Pattern.compile("\\X?\\uDE00");
-    long[] work = new long[2];
-    for (int index = 0; index < work.length; index++) {
-      int pairs = index == 0 ? 200 : 1000;
-      String input = "a" + "😀".repeat(pairs) + "\uDE00!";
-      Matcher matcher = pattern.matcher(input);
-      work[index] =
-          WorkCounter.countForTesting(
-              () -> {
-                for (int end = input.length(); end >= 1; end--) {
-                  matcher.region(1, end);
-                  assertThat(matcher.find()).isEqualTo(end >= input.length() - 1);
+    @Test
+    fun shrinkingOpaqueRegionsReuseTheAbsentScalarInterior() {
+        val pattern = Pattern.compile("\\X?\\uDE00")
+        val work = LongArray(2)
+        for (index in work.indices) {
+            val pairs = if (index == 0) 200 else 1000
+            val input = "a" + "😀".repeat(pairs) + "\uDE00!"
+            val matcher = pattern.matcher(input)
+            work[index] =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        for (end in input.length downTo 1) {
+                            matcher.region(1, end)
+                            Assertions.assertThat(matcher.find()).isEqualTo(end >= input.length - 1)
+                        }
+                    })
+        }
+        Assertions.assertThat(work[0]).isPositive()
+        Assertions.assertThat(work[1]).`as`("shrinking regions must not repeat tail scans").isLessThan(work[0] * 6)
+    }
+
+    @Test
+    fun backwardMovingOpaqueRegionsReuseTheAbsentScalarInterior() {
+        for (regex in arrayOf<String>("\\X?\\p{Cs}", "\\X?[\\uD83D\\uDE00]")) {
+            val pattern = Pattern.compile(regex)
+            val work = LongArray(2)
+            for (index in work.indices) {
+                val pairs = if (index == 0) 200 else 1000
+                val input = "a" + "😀".repeat(pairs) + "\uD83Dxy"
+                val matcher = pattern.matcher(input)
+                work[index] =
+                    WorkCounter.countForTesting(
+                        Runnable {
+                            var start = 2 * pairs - 1
+                            while (start >= 1) {
+                                matcher.region(start, input.length)
+                                Assertions.assertThat(matcher.find()).isTrue()
+                                start -= 2
+                            }
+                        })
+            }
+            Assertions.assertThat(work[0]).isPositive()
+            Assertions.assertThat(work[1])
+                .`as`("backward region starts must not repeat tail scans: %s", regex)
+                .isLessThan(work[0] * 6)
+        }
+    }
+
+    @Test
+    fun exposedRegionEndWitnessDoesNotDelayTheFirstGraphemeMatch() {
+        val pattern = Pattern.compile("\\X?\\p{Cs}")
+        val work = LongArray(2)
+        for (index in work.indices) {
+            val pairs = if (index == 0) 128 else 8192
+            val input = "a" + "😀".repeat(pairs + 1) + "!"
+            val matcher = pattern.matcher(input).region(1, 2 * pairs + 2)
+            work[index] =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        Assertions.assertThat(matcher.find()).isTrue()
+                        Assertions.assertThat(matcher.start()).isEqualTo(2)
+                        Assertions.assertThat(matcher.end()).isEqualTo(3)
+                    })
+        }
+        Assertions.assertThat(work[0]).isPositive()
+        Assertions.assertThat(work[1]).`as`("first result must not scan the tail").isEqualTo(work[0])
+    }
+
+    @Test
+    fun nestedNullableLoopEntryResetsKeepFindWorkLinear() {
+        for (options in arrayOf<EnginePathOptions>(
+            EnginePathOptions.builder().onePass(false).bitState(false).build(),
+            EnginePathOptions.builder().dfa(false).onePass(false).build(),
+            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+        )) {
+            val pattern = Pattern.compile("(?:(?:x|)+?)*", 0, options)
+            assertFindAllWorkIsLinear(IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher("x".repeat(size)).find()
                 }
-              });
+            }, "String loops")
+            assertFindAllWorkIsLinear(
+                IntFunction { size: Int ->
+                    FindIterator {
+                        pattern.matcher(
+                            Utf8Input.trusted(
+                                "x".repeat(size).toByteArray(
+                                    StandardCharsets.UTF_8
+                                )
+                            )
+                        ).find()
+                    }
+                },
+                "UTF-8 loops"
+            )
+        }
     }
-    assertThat(work[0]).isPositive();
-    assertThat(work[1]).as("shrinking regions must not repeat tail scans").isLessThan(work[0] * 6);
-  }
 
-  @Test
-  void backwardMovingOpaqueRegionsReuseTheAbsentScalarInterior() {
-    for (String regex : new String[] {"\\X?\\p{Cs}", "\\X?[\\uD83D\\uDE00]"}) {
-      Pattern pattern = Pattern.compile(regex);
-      long[] work = new long[2];
-      for (int index = 0; index < work.length; index++) {
-        int pairs = index == 0 ? 200 : 1000;
-        String input = "a" + "😀".repeat(pairs) + "\uD83Dxy";
-        Matcher matcher = pattern.matcher(input);
-        work[index] =
+    @Test
+    fun nullableLoopEpsilonRevisitsKeepFindWorkLinear() {
+        val nfaOnly =
+            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+        for (regex in arrayOf<String>("(?:a?(?:|.))+", "(?:a?(?:\\b|.))+")) {
+            val pattern = Pattern.compile(regex, 0, nfaOnly)
+            assertFindAllWorkIsLinear(
+                IntFunction { size: Int -> FindIterator { pattern.matcher("!a!".repeat(size)).find() } },
+                "String epsilon revisits"
+            )
+            assertFindAllWorkIsLinear(
+                IntFunction { size: Int ->
+                    FindIterator {
+                        pattern.matcher(
+                            Utf8Input.trusted(
+                                "!a!".repeat(size).toByteArray(
+                                    StandardCharsets.UTF_8
+                                )
+                            )
+                        ).find()
+                    }
+                },
+                "UTF-8 epsilon revisits"
+            )
+        }
+    }
+
+    @Test
+    fun nestedNullableEpsilonRevisitsKeepFindWorkLinear() {
+        val nfaOnly =
+            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+        for (body in arrayOf<String>("(?:a?(?:|.))", "(?:a?(?:\\b|.))")) {
+            for (firstQuantifier in arrayOf<String>("+", "+?")) {
+                var regex = body
+                var quantifier = firstQuantifier
+                for (depth in 1..7) {
+                    regex = "(?:" + regex + ")" + quantifier
+                    quantifier = if (quantifier == "+") "+?" else "+"
+                    val pattern = Pattern.compile(regex, 0, nfaOnly)
+                    assertFindAllWorkIsLinear(
+                        IntFunction { size: Int -> FindIterator { pattern.matcher("!a!".repeat(size) + "z").find() } },
+                        "String nested epsilon revisits " + regex
+                    )
+                    assertFindAllWorkIsLinear(
+                        IntFunction { size: Int ->
+                            FindIterator {
+                                pattern.matcher(
+                                    Utf8Input.trusted(
+                                        ("!a!".repeat(size) + "z").toByteArray(
+                                            StandardCharsets.UTF_8
+                                        )
+                                    )
+                                )
+                                    .find()
+                            }
+                        },
+                        "UTF-8 nested epsilon revisits " + regex
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun optionalEpsilonChainsKeepWorkLinearInPatternSize() {
+        for (template in arrayOf<String>("(?:\\b?){%d}a", "(?:(?:|b)?){%d}a")) {
+            val work = LongArray(2)
+            for (index in work.indices) {
+                val pattern = Pattern.compile(template.formatted(8 * (index + 1)))
+                val matcher = pattern.matcher("a!").region(0, 1).useTransparentBounds(true)
+                work[index] =
+                    WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.lookingAt()).isTrue() })
+            }
+            Assertions.assertThat(work[0]).`as`("epsilon work must be observed for %s", template).isPositive()
+            Assertions.assertThat(work[1])
+                .`as`("doubling optional epsilon chains must not enumerate their paths: %s", template)
+                .isLessThan(work[0] * 4)
+        }
+    }
+
+    @Test
+    fun alternatingNestedNullableLoopWorkIsPolynomialInDepth() {
+        // Alternating lazy and greedy nullable loops do not simplify away. Each fresh entry must be
+        // expanded at most once per position, or every enclosing iteration re-expands the inner loops
+        // and per-position work grows exponentially with the nesting depth.
+        val nfaOnly =
+            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+        val input = "x".repeat(64)
+        val work = LongArray(13)
+        var depth = 4
+        while (depth <= 12) {
+            val pattern = Pattern.compile(alternatingNullableLoops(depth), 0, nfaOnly)
+            work[depth] =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        val matcher = pattern.matcher(input)
+                        while (matcher.find()) {
+                        }
+                    })
+            depth += 4
+        }
+        // Measured at 4,296 / 21,780 / 96,624 units for depths 4 / 8 / 12. Re-expanding each fresh
+        // entry once per enclosing iteration measured 8,768 / 1,220,228 / 1,162,878,680.
+        Assertions.assertThat(work[12])
+            .`as`("depth 4/8/12 work %d/%d/%d", work[4], work[8], work[12])
+            .isLessThan(8 * work[8])
+    }
+
+    @Test
+    fun endAnchoredSearchSkipsUnrelatedPrefix() {
+        for (regex in arrayOf<String>("abc$", "(ab)c\\z", "[YZ]abc$", "a+b$", "(?i:abc)$")) {
+            val pattern = Pattern.compile(regex)
+            val tail = if (regex.startsWith("[YZ]")) "Yabc" else if (regex == "a+b$") "aaab" else "abc"
+            for (prefix in arrayOf<String>("x", "é😀")) {
+                val small = prefix.repeat(2000) + tail
+                val large = prefix.repeat(20000) + tail
+                val smallUtf8 = Utf8Input.trusted(small.toByteArray(StandardCharsets.UTF_8))
+                val largeUtf8 = Utf8Input.trusted(large.toByteArray(StandardCharsets.UTF_8))
+
+                assertBoundedEndSearchWork(
+                    Runnable { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
+                    Runnable { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
+                    regex + " String"
+                )
+                assertBoundedEndSearchWork(
+                    Runnable { Assertions.assertThat(pattern.matcher(smallUtf8).find()).isTrue() },
+                    Runnable { Assertions.assertThat(pattern.matcher(largeUtf8).find()).isTrue() },
+                    regex + " UTF-8 matcher"
+                )
+                assertBoundedEndSearchWork(
+                    Runnable { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
+                    Runnable { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
+                    regex + " UTF-8 existence"
+                )
+            }
+        }
+    }
+
+    @Test
+    fun longLiteralSuffixFitsPatternSizedProbe() {
+        for (suffix in arrayOf<String>("a".repeat(100) + "z", "é😀".repeat(50))) {
+            val pattern = Pattern.compile(suffix + "$")
+            val small = "x".repeat(2000) + suffix
+            val large = "x".repeat(20000) + suffix
+            val smallUtf8 = Utf8Input.trusted(small.toByteArray(StandardCharsets.UTF_8))
+            val largeUtf8 = Utf8Input.trusted(large.toByteArray(StandardCharsets.UTF_8))
+            assertBoundedEndSearchWork(
+                Runnable { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
+                Runnable { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
+                "long literal String suffix"
+            )
+            assertBoundedEndSearchWork(
+                Runnable { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
+                Runnable { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
+                "long literal UTF-8 suffix"
+            )
+        }
+    }
+
+    @Test
+    fun reverseProbeWorkStaysBoundedWithCachedAsciiTransitions() {
+        for (size in intArrayOf(2000, 20000)) {
+            val text = "x".repeat(size)
+            for (scanner in arrayOf<InputScanner>(
+                StringInputScanner(text), Utf8InputScanner(
+                    text.toByteArray(
+                        StandardCharsets.UTF_8
+                    )
+                )
+            )) {
+                val reverse = Pattern.compile("needle.*$").reverseDfa()
+                for (pass in 0..1) {
+                    val work =
+                        WorkCounter.countForTesting(
+                            Runnable {
+                                val result =
+                                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64)
+                                Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+                                Assertions.assertThat(result!!.scanLimitReached).isTrue()
+                            })
+                    Assertions.assertThat(work).isBetween(64L, 256L)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun endAnchoredExistenceSearchStopsAtVerifiedSuffix() {
+        val pattern = Pattern.compile("(?s:.*)abc$")
+        for (prefix in arrayOf<String>("x", "é😀")) {
+            for (terminator in arrayOf<String>("", "\n", "\r\n")) {
+                val small =
+                    Utf8Input.trusted((prefix.repeat(2000) + "abc" + terminator).toByteArray(StandardCharsets.UTF_8))
+                val large =
+                    Utf8Input.trusted((prefix.repeat(20000) + "abc" + terminator).toByteArray(StandardCharsets.UTF_8))
+                assertBoundedEndSearchWork(
+                    Runnable { Assertions.assertThat(pattern.find(small)).isTrue() },
+                    Runnable { Assertions.assertThat(pattern.find(large)).isTrue() },
+                    "UTF-8 existence with greedy prefix"
+                )
+            }
+        }
+    }
+
+    @Test
+    fun endAnchoredLeadingExpansionNoMatchWorkIsIndependentOfInputLength() {
+        // A leading expansion (\\s*) gives these patterns a start accelerator. A failing search must
+        // still be decided by the reverse-first search from the end of the input, not by a forward scan
+        // from the first candidate.
+        for (regex in arrayOf<String>("(?i)\\s*(foo|fax)$", "\\s*(foo|fax)\\z")) {
+            val pattern = Pattern.compile(regex)
+            val text = IntFunction { size: Int -> "fine food offer ".repeat(size / 16) + "end" }
+            val smallerString =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(text.apply(2000)).find()).isFalse() })
+            val largerString =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(text.apply(64000)).find()).isFalse() })
+            val smallerUtf8 =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        Assertions.assertThat(
+                            pattern
+                                .matcher(Utf8Input.trusted(text.apply(2000)!!.toByteArray(StandardCharsets.UTF_8)))
+                                .find()
+                        )
+                            .isFalse()
+                    })
+            val largerUtf8 =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        Assertions.assertThat(
+                            pattern
+                                .matcher(Utf8Input.trusted(text.apply(64000)!!.toByteArray(StandardCharsets.UTF_8)))
+                                .find()
+                        )
+                            .isFalse()
+                    })
+
+            Assertions.assertThat(largerString).`as`("%s String", regex).isLessThan(smallerString * 2 + 64)
+            Assertions.assertThat(largerUtf8).`as`("%s UTF-8", regex).isLessThan(smallerUtf8 * 2 + 64)
+        }
+    }
+
+    @Test
+    fun utf8FindEndAnchoredNoMatchWorkIsIndependentOfInputLength() {
+        for (regex in arrayOf<String>("(foo|fax)$", "(?i)(foo|fax)\\z")) {
+            val pattern = Pattern.compile(regex)
+            val text =
+                IntFunction { size: Int -> ("fine food offer ".repeat(size / 16) + "end").toByteArray(StandardCharsets.UTF_8) }
+            val smaller =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(2000)))).isFalse() })
+            val larger =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(64000)))).isFalse() })
+
+            Assertions.assertThat(larger).`as`(regex).isLessThan(smaller * 2 + 64)
+        }
+    }
+
+    @Test
+    fun guardedGapRetriesReuseDelimiterScanWork() {
+        val pattern = Pattern.compile("AAAA[^;]*RAREBBB")
+
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("A".repeat(size) + ";RAREBBB").find() } },
+            "String"
+        )
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(
+                            ("A".repeat(size) + ";RAREBBB").toByteArray(
+                                StandardCharsets.UTF_8
+                            )
+                        )
+                    )
+                        .find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun guardedGapRetriesReuseSuccessfulSliceValidation() {
+        val pattern = Pattern.compile("AAAA[^;]*RAREBBB[^;]X")
+
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher("X" + "AAAA".repeat(size) + "RAREBBBy").find()
+                }
+            }, "String"
+        )
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(("X" + "AAAA".repeat(size) + "RAREBBBy").toByteArray(StandardCharsets.UTF_8))
+                    )
+                        .find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun reluctantGuardedTrailingGapFindAllWorkIsLinear() {
+        val pattern = Pattern.compile("AAA[^;]*?")
+
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int ->
+                val matcher = pattern.matcher("AAA".repeat(size))
+                FindIterator { matcher.find() }
+            },
+            "String"
+        )
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int ->
+                val matcher =
+                    pattern.matcher(Utf8Input.trusted("AAA".repeat(size).toByteArray(StandardCharsets.UTF_8)))
+                FindIterator { matcher.find() }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun reluctantGuardedAnchorSearchStopsAtDelimiter() {
+        val pattern = Pattern.compile("AAA[^;]*?BBB")
+
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(("AAA" + "x".repeat(100) + ";").repeat(size) + "BBB").find()
+                }
+            },
+            "String"
+        )
+        assertGuardedGapRetryWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(
+                            (("AAA" + "x".repeat(100) + ";").repeat(size) + "BBB").toByteArray(StandardCharsets.UTF_8)
+                        )
+                    )
+                        .find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    /**
+     * Searching a two-character class as one `String.indexOf` per member must not rescan the
+     * rest of the input for a member that never occurs, on each `find()` or DFA restart.
+     */
+    @Test
+    fun smallSetFindAllWorkIsLinearWhenOneMemberIsAbsent() {
+        val ascii = Pattern.compile("[ab][0-9]")
+        assertFindAllWorkIsLinear(IntFunction { size: Int ->
+            FindIterator {
+                ascii.matcher("b1 ".repeat(size)).find()
+            }
+        }, "ASCII pair")
+
+        val citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]")
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(size)).find() } },
+            "full-width citation"
+        )
+    }
+
+    @Test
+    fun smallSetReplaceAllWorkIsLinearWhenOneMemberIsAbsent() {
+        val citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]")
+        val smallerWork =
             WorkCounter.countForTesting(
-                () -> {
-                  for (int start = 2 * pairs - 1; start >= 1; start -= 2) {
-                    matcher.region(start, input.length());
-                    assertThat(matcher.find()).isTrue();
-                  }
-                });
-      }
-      assertThat(work[0]).isPositive();
-      assertThat(work[1])
-          .as("backward region starts must not repeat tail scans: %s", regex)
-          .isLessThan(work[0] * 6);
-    }
-  }
+                Runnable { citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(200)).replaceAll("") })
+        val largerWork =
+            WorkCounter.countForTesting(
+                Runnable { citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(1000)).replaceAll("") })
 
-  @Test
-  void exposedRegionEndWitnessDoesNotDelayTheFirstGraphemeMatch() {
-    Pattern pattern = Pattern.compile("\\X?\\p{Cs}");
-    long[] work = new long[2];
-    for (int index = 0; index < work.length; index++) {
-      int pairs = index == 0 ? 128 : 8192;
-      String input = "a" + "😀".repeat(pairs + 1) + "!";
-      Matcher matcher = pattern.matcher(input).region(1, 2 * pairs + 2);
-      work[index] =
-          WorkCounter.countForTesting(
-              () -> {
-                assertThat(matcher.find()).isTrue();
-                assertThat(matcher.start()).isEqualTo(2);
-                assertThat(matcher.end()).isEqualTo(3);
-              });
+        Assertions.assertThat(smallerWork).isPositive()
+        Assertions.assertThat(largerWork)
+            .`as`("replaceAll over a two-character leading class should scale linearly")
+            .isLessThan(smallerWork * 6)
     }
-    assertThat(work[0]).isPositive();
-    assertThat(work[1]).as("first result must not scan the tail").isEqualTo(work[0]);
-  }
 
-  @Test
-  void nestedNullableLoopEntryResetsKeepFindWorkLinear() {
-    for (EnginePathOptions options :
-        new EnginePathOptions[] {
-          EnginePathOptions.builder().onePass(false).bitState(false).build(),
-          EnginePathOptions.builder().dfa(false).onePass(false).build(),
-          EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
-        }) {
-      Pattern pattern = Pattern.compile("(?:(?:x|)+?)*", 0, options);
-      assertFindAllWorkIsLinear(size -> pattern.matcher("x".repeat(size))::find, "String loops");
-      assertFindAllWorkIsLinear(
-          size -> pattern.matcher(Utf8Input.trusted("x".repeat(size).getBytes(UTF_8)))::find,
-          "UTF-8 loops");
-    }
-  }
+    /**
+     * Like the tests above, but with candidates spaced farther apart than the scalar prologue of
+     * `StringInputScanner.indexOfSmallSet`, so every search falls through to the per-member
+     * searches. Unless those are window-bounded, each rescans the rest of the input for a member that
+     * is absent or occurs only at the end.
+     */
+    @Test
+    fun smallSetWorkIsLinearWhenCandidatesAreBeyondTheProbe() {
+        val gap = "x".repeat(64)
 
-  @Test
-  void nullableLoopEpsilonRevisitsKeepFindWorkLinear() {
-    EnginePathOptions nfaOnly =
-        EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build();
-    for (String regex : new String[] {"(?:a?(?:|.))+", "(?:a?(?:\\b|.))+"}) {
-      Pattern pattern = Pattern.compile(regex, 0, nfaOnly);
-      assertFindAllWorkIsLinear(
-          size -> pattern.matcher("!a!".repeat(size))::find, "String epsilon revisits");
-      assertFindAllWorkIsLinear(
-          size -> pattern.matcher(Utf8Input.trusted("!a!".repeat(size).getBytes(UTF_8)))::find,
-          "UTF-8 epsilon revisits");
-    }
-  }
+        val ascii = Pattern.compile("[ab][0-9]")
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { ascii.matcher(("b1" + gap).repeat(size)).find() } },
+            "ASCII pair, member absent"
+        )
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { ascii.matcher(("b1" + gap).repeat(size) + "a").find() } },
+            "ASCII pair, member late"
+        )
 
-  @Test
-  void nestedNullableEpsilonRevisitsKeepFindWorkLinear() {
-    EnginePathOptions nfaOnly =
-        EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build();
-    for (String body : new String[] {"(?:a?(?:|.))", "(?:a?(?:\\b|.))"}) {
-      for (String firstQuantifier : new String[] {"+", "+?"}) {
-        String regex = body;
-        String quantifier = firstQuantifier;
-        for (int depth = 1; depth <= 7; depth++) {
-          regex = "(?:" + regex + ")" + quantifier;
-          quantifier = quantifier.equals("+") ? "+?" : "+";
-          Pattern pattern = Pattern.compile(regex, 0, nfaOnly);
-          assertFindAllWorkIsLinear(
-              size -> pattern.matcher("!a!".repeat(size) + "z")::find,
-              "String nested epsilon revisits " + regex);
-          assertFindAllWorkIsLinear(
-              size ->
-                  pattern.matcher(Utf8Input.trusted(("!a!".repeat(size) + "z").getBytes(UTF_8)))
-                      ::find,
-              "UTF-8 nested epsilon revisits " + regex);
+        val citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]")
+        val fullWidth = "\uFF3B1.2.3\uFF3D" + gap
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { citation.matcher(fullWidth.repeat(size)).find() } },
+            "full-width citation, '[' absent"
+        )
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { citation.matcher(fullWidth.repeat(size) + "[").find() } },
+            "full-width citation, '[' late"
+        )
+        // Full-width brackets with no digits: every candidate is rejected after the bracket.
+        assertFindAllWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { citation.matcher(("\uFF3Bx\uFF3D" + gap).repeat(size)).find() } },
+            "full-width brackets, no match"
+        )
+
+        for (suffix in arrayOf<String>("", "[")) {
+            val smallerWork =
+                WorkCounter.countForTesting(
+                    Runnable { citation.matcher(fullWidth.repeat(200) + suffix).replaceAll("") })
+            val largerWork =
+                WorkCounter.countForTesting(
+                    Runnable { citation.matcher(fullWidth.repeat(1000) + suffix).replaceAll("") })
+            Assertions.assertThat(smallerWork).isPositive()
+            Assertions.assertThat(largerWork)
+                .`as`("replaceAll with spaced candidates and suffix '%s' should scale linearly", suffix)
+                .isLessThan(smallerWork * 6)
         }
-      }
     }
-  }
 
-  @Test
-  void optionalEpsilonChainsKeepWorkLinearInPatternSize() {
-    for (String template : new String[] {"(?:\\b?){%d}a", "(?:(?:|b)?){%d}a"}) {
-      long[] work = new long[2];
-      for (int index = 0; index < work.length; index++) {
-        Pattern pattern = Pattern.compile(template.formatted(8 * (index + 1)));
-        Matcher matcher = pattern.matcher("a!").region(0, 1).useTransparentBounds(true);
-        work[index] = WorkCounter.countForTesting(() -> assertThat(matcher.lookingAt()).isTrue());
-      }
-      assertThat(work[0]).as("epsilon work must be observed for %s", template).isPositive();
-      assertThat(work[1])
-          .as("doubling optional epsilon chains must not enumerate their paths: %s", template)
-          .isLessThan(work[0] * 4);
+    @Test
+    fun variableGapCandidateFailuresRemainLinear() {
+        val pattern = Pattern.compile("AAA[A-Z]+RAREST_TOKEN")
+
+        val smallerWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(pattern.matcher("AAA".repeat(2000) + "xRAREST_TOKEN").find())
+                        .isFalse()
+                })
+        val largerWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(pattern.matcher("AAA".repeat(10000) + "xRAREST_TOKEN").find())
+                        .isFalse()
+                })
+
+        Assertions.assertThat(smallerWork).isPositive()
+        Assertions.assertThat(largerWork)
+            .`as`("variable-gap candidate failures must not rescan overlapping suffixes")
+            .isLessThan(smallerWork * 6)
     }
-  }
 
-  @Test
-  void alternatingNestedNullableLoopWorkIsPolynomialInDepth() {
-    // Alternating lazy and greedy nullable loops do not simplify away. Each fresh entry must be
-    // expanded at most once per position, or every enclosing iteration re-expands the inner loops
-    // and per-position work grows exponentially with the nesting depth.
-    EnginePathOptions nfaOnly =
-        EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build();
-    String input = "x".repeat(64);
-    long[] work = new long[13];
-    for (int depth = 4; depth <= 12; depth += 4) {
-      Pattern pattern = Pattern.compile(alternatingNullableLoops(depth), 0, nfaOnly);
-      work[depth] =
-          WorkCounter.countForTesting(
-              () -> {
-                Matcher matcher = pattern.matcher(input);
-                while (matcher.find()) {}
-              });
+    @Test
+    fun multiAnchorCompilationDoesNotRepeatAstAnalysis() {
+        val regexp = Parser.parse("foo.*bar.*baz", Pattern.toParseFlags(0))
+
+        val analysisWork = WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.analyze(regexp) })
+        val compilationWork =
+            WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.compile(regexp, 0) })
+
+        Assertions.assertThat(analysisWork).isPositive()
+        Assertions.assertThat(compilationWork)
+            .`as`(
+                "Compilation work includes one analysis and descriptor assembly, "
+                        + "analysisWork=%d compilationWork=%d",
+                analysisWork, compilationWork
+            )
+            .isLessThan(analysisWork * 3)
     }
-    // Measured at 4,296 / 21,780 / 96,624 units for depths 4 / 8 / 12. Re-expanding each fresh
-    // entry once per enclosing iteration measured 8,768 / 1,220,228 / 1,162,878,680.
-    assertThat(work[12])
-        .as("depth 4/8/12 work %d/%d/%d", work[4], work[8], work[12])
-        .isLessThan(8 * work[8]);
-  }
 
-  private static String alternatingNullableLoops(int depth) {
-    StringBuilder regex = new StringBuilder("(?:x|)");
-    for (int i = 0; i < depth; i++) {
-      regex.insert(0, "(?:").append(')').append(i % 2 == 0 ? "+?" : "*");
+    @Test
+    fun shiftDfaTransitionsAreCountedForStringInput() {
+        val pattern = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*")
+        val input = "a".repeat(10000)
+
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).matches()).isTrue() })
+
+        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.length.toLong())
     }
-    return regex.toString();
-  }
 
-  @Test
-  void endAnchoredSearchSkipsUnrelatedPrefix() {
-    for (String regex : new String[] {"abc$", "(ab)c\\z", "[YZ]abc$", "a+b$", "(?i:abc)$"}) {
-      Pattern pattern = Pattern.compile(regex);
-      String tail = regex.startsWith("[YZ]") ? "Yabc" : regex.equals("a+b$") ? "aaab" : "abc";
-      for (String prefix : new String[] {"x", "é😀"}) {
-        String small = prefix.repeat(2_000) + tail;
-        String large = prefix.repeat(20_000) + tail;
-        Utf8Input smallUtf8 = Utf8Input.trusted(small.getBytes(UTF_8));
-        Utf8Input largeUtf8 = Utf8Input.trusted(large.getBytes(UTF_8));
+    @Test
+    fun shiftDfaTransitionsAreCountedForUtf8Input() {
+        val pattern = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*")
+        val input = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
 
-        assertBoundedEndSearchWork(
-            () -> assertThat(pattern.matcher(small).find()).isTrue(),
-            () -> assertThat(pattern.matcher(large).find()).isTrue(),
-            regex + " String");
-        assertBoundedEndSearchWork(
-            () -> assertThat(pattern.matcher(smallUtf8).find()).isTrue(),
-            () -> assertThat(pattern.matcher(largeUtf8).find()).isTrue(),
-            regex + " UTF-8 matcher");
-        assertBoundedEndSearchWork(
-            () -> assertThat(pattern.find(smallUtf8)).isTrue(),
-            () -> assertThat(pattern.find(largeUtf8)).isTrue(),
-            regex + " UTF-8 existence");
-      }
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue() })
+
+        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.size.toLong())
     }
-  }
 
-  private static void assertBoundedEndSearchWork(Runnable small, Runnable large, String label) {
-    long smallWork = WorkCounter.countForTesting(small);
-    long largeWork = WorkCounter.countForTesting(large);
-    assertThat(smallWork).as("%s work must be observed", label).isPositive();
-    assertThat(largeWork)
-        .as("%s should inspect only the matching suffix", label)
-        .isLessThanOrEqualTo(smallWork * 2);
-  }
-
-  @Test
-  void longLiteralSuffixFitsPatternSizedProbe() {
-    for (String suffix : new String[] {"a".repeat(100) + "z", "é😀".repeat(50)}) {
-      Pattern pattern = Pattern.compile(suffix + "$");
-      String small = "x".repeat(2_000) + suffix;
-      String large = "x".repeat(20_000) + suffix;
-      Utf8Input smallUtf8 = Utf8Input.trusted(small.getBytes(UTF_8));
-      Utf8Input largeUtf8 = Utf8Input.trusted(large.getBytes(UTF_8));
-      assertBoundedEndSearchWork(
-          () -> assertThat(pattern.matcher(small).find()).isTrue(),
-          () -> assertThat(pattern.matcher(large).find()).isTrue(),
-          "long literal String suffix");
-      assertBoundedEndSearchWork(
-          () -> assertThat(pattern.find(smallUtf8)).isTrue(),
-          () -> assertThat(pattern.find(largeUtf8)).isTrue(),
-          "long literal UTF-8 suffix");
+    @Test
+    fun reverseDfaSuffixFailureIsConstantWorkForStringInput() {
+        val pattern = Pattern.compile("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$")
+        assertReverseDfaSuffixFailureIsConstantWork(IntPredicate { size: Int ->
+            pattern.matcher("a".repeat(size)).find()
+        })
     }
-  }
 
-  @Test
-  void reverseProbeWorkStaysBoundedWithCachedAsciiTransitions() {
-    for (int size : new int[] {2_000, 20_000}) {
-      String text = "x".repeat(size);
-      for (InputScanner scanner :
-          new InputScanner[] {
-            new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8))
-          }) {
-        Dfa reverse = Pattern.compile("needle.*$").reverseDfa();
-        for (int pass = 0; pass < 2; pass++) {
-          long work =
-              WorkCounter.countForTesting(
-                  () -> {
-                    Dfa.SearchResult result =
-                        reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64);
-                    assertThat(result).isNotNull();
-                    assertThat(result.scanLimitReached()).isTrue();
-                  });
-          assertThat(work).isBetween(64L, 256L);
-        }
-      }
-    }
-  }
-
-  @Test
-  void endAnchoredExistenceSearchStopsAtVerifiedSuffix() {
-    Pattern pattern = Pattern.compile("(?s:.*)abc$");
-    for (String prefix : new String[] {"x", "é😀"}) {
-      for (String terminator : new String[] {"", "\n", "\r\n"}) {
-        Utf8Input small =
-            Utf8Input.trusted((prefix.repeat(2_000) + "abc" + terminator).getBytes(UTF_8));
-        Utf8Input large =
-            Utf8Input.trusted((prefix.repeat(20_000) + "abc" + terminator).getBytes(UTF_8));
-        assertBoundedEndSearchWork(
-            () -> assertThat(pattern.find(small)).isTrue(),
-            () -> assertThat(pattern.find(large)).isTrue(),
-            "UTF-8 existence with greedy prefix");
-      }
-    }
-  }
-
-  @Test
-  void endAnchoredLeadingExpansionNoMatchWorkIsIndependentOfInputLength() {
-    // A leading expansion (\\s*) gives these patterns a start accelerator. A failing search must
-    // still be decided by the reverse-first search from the end of the input, not by a forward scan
-    // from the first candidate.
-    for (String regex : new String[] {"(?i)\\s*(foo|fax)$", "\\s*(foo|fax)\\z"}) {
-      Pattern pattern = Pattern.compile(regex);
-      IntFunction<String> text = size -> "fine food offer ".repeat(size / 16) + "end";
-      long smallerString =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.matcher(text.apply(2_000)).find()).isFalse());
-      long largerString =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.matcher(text.apply(64_000)).find()).isFalse());
-      long smallerUtf8 =
-          WorkCounter.countForTesting(
-              () ->
-                  assertThat(
-                          pattern
-                              .matcher(Utf8Input.trusted(text.apply(2_000).getBytes(UTF_8)))
-                              .find())
-                      .isFalse());
-      long largerUtf8 =
-          WorkCounter.countForTesting(
-              () ->
-                  assertThat(
-                          pattern
-                              .matcher(Utf8Input.trusted(text.apply(64_000).getBytes(UTF_8)))
-                              .find())
-                      .isFalse());
-
-      assertThat(largerString).as("%s String", regex).isLessThan(smallerString * 2 + 64);
-      assertThat(largerUtf8).as("%s UTF-8", regex).isLessThan(smallerUtf8 * 2 + 64);
-    }
-  }
-
-  @Test
-  void utf8FindEndAnchoredNoMatchWorkIsIndependentOfInputLength() {
-    for (String regex : new String[] {"(foo|fax)$", "(?i)(foo|fax)\\z"}) {
-      Pattern pattern = Pattern.compile(regex);
-      IntFunction<byte[]> text =
-          size -> ("fine food offer ".repeat(size / 16) + "end").getBytes(UTF_8);
-      long smaller =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.find(Utf8Input.trusted(text.apply(2_000)))).isFalse());
-      long larger =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.find(Utf8Input.trusted(text.apply(64_000)))).isFalse());
-
-      assertThat(larger).as(regex).isLessThan(smaller * 2 + 64);
-    }
-  }
-
-  @Test
-  void guardedGapRetriesReuseDelimiterScanWork() {
-    Pattern pattern = Pattern.compile("AAAA[^;]*RAREBBB");
-
-    assertGuardedGapRetryWorkIsLinear(
-        size -> pattern.matcher("A".repeat(size) + ";RAREBBB")::find, "String");
-    assertGuardedGapRetryWorkIsLinear(
-        size ->
-            pattern.matcher(Utf8Input.trusted(("A".repeat(size) + ";RAREBBB").getBytes(UTF_8)))
-                ::find,
-        "UTF-8");
-  }
-
-  @Test
-  void guardedGapRetriesReuseSuccessfulSliceValidation() {
-    Pattern pattern = Pattern.compile("AAAA[^;]*RAREBBB[^;]X");
-
-    assertGuardedGapRetryWorkIsLinear(
-        size -> pattern.matcher("X" + "AAAA".repeat(size) + "RAREBBBy")::find, "String");
-    assertGuardedGapRetryWorkIsLinear(
-        size ->
-            pattern.matcher(
-                    Utf8Input.trusted(("X" + "AAAA".repeat(size) + "RAREBBBy").getBytes(UTF_8)))
-                ::find,
-        "UTF-8");
-  }
-
-  @Test
-  void reluctantGuardedTrailingGapFindAllWorkIsLinear() {
-    Pattern pattern = Pattern.compile("AAA[^;]*?");
-
-    assertFindAllWorkIsLinear(
-        size -> {
-          Matcher matcher = pattern.matcher("AAA".repeat(size));
-          return matcher::find;
-        },
-        "String");
-    assertFindAllWorkIsLinear(
-        size -> {
-          Utf8Matcher matcher =
-              pattern.matcher(Utf8Input.trusted("AAA".repeat(size).getBytes(UTF_8)));
-          return matcher::find;
-        },
-        "UTF-8");
-  }
-
-  @Test
-  void reluctantGuardedAnchorSearchStopsAtDelimiter() {
-    Pattern pattern = Pattern.compile("AAA[^;]*?BBB");
-
-    assertGuardedGapRetryWorkIsLinear(
-        size -> pattern.matcher(("AAA" + "x".repeat(100) + ";").repeat(size) + "BBB")::find,
-        "String");
-    assertGuardedGapRetryWorkIsLinear(
-        size ->
-            pattern.matcher(
+    @Test
+    fun reverseDfaSuffixFailureIsConstantWorkForUtf8Input() {
+        val pattern = Pattern.compile("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$")
+        assertReverseDfaSuffixFailureIsConstantWork(
+            IntPredicate { size: Int ->
+                pattern.matcher(
                     Utf8Input.trusted(
-                        (("AAA" + "x".repeat(100) + ";").repeat(size) + "BBB").getBytes(UTF_8)))
-                ::find,
-        "UTF-8");
-  }
-
-  /**
-   * Searching a two-character class as one {@code String.indexOf} per member must not rescan the
-   * rest of the input for a member that never occurs, on each {@code find()} or DFA restart.
-   */
-  @Test
-  void smallSetFindAllWorkIsLinearWhenOneMemberIsAbsent() {
-    Pattern ascii = Pattern.compile("[ab][0-9]");
-    assertFindAllWorkIsLinear(size -> ascii.matcher("b1 ".repeat(size))::find, "ASCII pair");
-
-    Pattern citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]");
-    assertFindAllWorkIsLinear(
-        size -> citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(size))::find, "full-width citation");
-  }
-
-  @Test
-  void smallSetReplaceAllWorkIsLinearWhenOneMemberIsAbsent() {
-    Pattern citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]");
-    long smallerWork =
-        WorkCounter.countForTesting(
-            () -> citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(200)).replaceAll(""));
-    long largerWork =
-        WorkCounter.countForTesting(
-            () -> citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(1_000)).replaceAll(""));
-
-    assertThat(smallerWork).isPositive();
-    assertThat(largerWork)
-        .as("replaceAll over a two-character leading class should scale linearly")
-        .isLessThan(smallerWork * 6);
-  }
-
-  /**
-   * Like the tests above, but with candidates spaced farther apart than the scalar prologue of
-   * {@code StringInputScanner.indexOfSmallSet}, so every search falls through to the per-member
-   * searches. Unless those are window-bounded, each rescans the rest of the input for a member that
-   * is absent or occurs only at the end.
-   */
-  @Test
-  void smallSetWorkIsLinearWhenCandidatesAreBeyondTheProbe() {
-    String gap = "x".repeat(64);
-
-    Pattern ascii = Pattern.compile("[ab][0-9]");
-    assertFindAllWorkIsLinear(
-        size -> ascii.matcher(("b1" + gap).repeat(size))::find, "ASCII pair, member absent");
-    assertFindAllWorkIsLinear(
-        size -> ascii.matcher(("b1" + gap).repeat(size) + "a")::find, "ASCII pair, member late");
-
-    Pattern citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]");
-    String fullWidth = "\uFF3B1.2.3\uFF3D" + gap;
-    assertFindAllWorkIsLinear(
-        size -> citation.matcher(fullWidth.repeat(size))::find, "full-width citation, '[' absent");
-    assertFindAllWorkIsLinear(
-        size -> citation.matcher(fullWidth.repeat(size) + "[")::find,
-        "full-width citation, '[' late");
-    // Full-width brackets with no digits: every candidate is rejected after the bracket.
-    assertFindAllWorkIsLinear(
-        size -> citation.matcher(("\uFF3Bx\uFF3D" + gap).repeat(size))::find,
-        "full-width brackets, no match");
-
-    for (String suffix : new String[] {"", "["}) {
-      long smallerWork =
-          WorkCounter.countForTesting(
-              () -> citation.matcher(fullWidth.repeat(200) + suffix).replaceAll(""));
-      long largerWork =
-          WorkCounter.countForTesting(
-              () -> citation.matcher(fullWidth.repeat(1_000) + suffix).replaceAll(""));
-      assertThat(smallerWork).isPositive();
-      assertThat(largerWork)
-          .as("replaceAll with spaced candidates and suffix '%s' should scale linearly", suffix)
-          .isLessThan(smallerWork * 6);
+                        "a".repeat(size).toByteArray(StandardCharsets.UTF_8)
+                    )
+                ).find()
+            })
     }
-  }
 
-  private static void assertFindAllWorkIsLinear(
-      IntFunction<FindIterator> matcher, String inputKind) {
-    long smallerWork = WorkCounter.countForTesting(() -> consumeMatches(matcher.apply(200)));
-    long largerWork = WorkCounter.countForTesting(() -> consumeMatches(matcher.apply(1_000)));
-
-    assertThat(smallerWork).as("%s find-all work must be observed", inputKind).isPositive();
-    assertThat(largerWork)
-        .as("%s find-all iteration should scale linearly", inputKind)
-        .isLessThan(smallerWork * 6);
-  }
-
-  private static void consumeMatches(FindIterator matcher) {
-    while (matcher.find()) {
-      // Consume every match so repeated find() work is included.
+    @Test
+    fun greedyKeywordAlternationSuccessNearEndIsConstantWorkForUtf8Input() {
+        val pattern = Pattern.compile("(?is).*\\b(you|your)\\b.*")
+        assertConstantWork(
+            IntPredicate { size: Int ->
+                pattern
+                    .matcher(Utf8Input.trusted(("a".repeat(size) + " YOUR tail").toByteArray(StandardCharsets.UTF_8)))
+                    .find()
+            },
+            "UTF-8 keyword search"
+        )
     }
-  }
 
-  private static void assertGuardedGapRetryWorkIsLinear(
-      IntFunction<FindIterator> matcher, String inputKind) {
-    long smallerWork =
-        WorkCounter.countForTesting(() -> assertThat(matcher.apply(2_000).find()).isFalse());
-    long largerWork =
-        WorkCounter.countForTesting(() -> assertThat(matcher.apply(10_000).find()).isFalse());
+    @Test
+    fun disjointRequiredLiteralPrefilterIsLinearAcrossStringFindIteration() {
+        val pattern = Pattern.compile("(?:banana\\d|apple\\d)")
+        assertRepeatedFindWorkIsLinear(IntFunction { size: Int ->
+            FindIterator {
+                pattern.matcher("apple0 ".repeat(size)).find()
+            }
+        }, "String")
+    }
 
-    assertThat(smallerWork).as("%s guarded-gap work must be observed", inputKind).isPositive();
-    assertThat(largerWork)
-        .as("%s guarded-gap retries should scale linearly", inputKind)
-        .isLessThan(smallerWork * 6);
-  }
+    @Test
+    fun disjointRequiredLiteralPrefilterIsLinearAcrossUtf8FindIteration() {
+        val pattern = Pattern.compile("(?:banana\\d|apple\\d)")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(
+                            "apple0 ".repeat(size).toByteArray(
+                                StandardCharsets.UTF_8
+                            )
+                        )
+                    ).find()
+                }
+            },
+            "UTF-8"
+        )
+    }
 
-  @Test
-  void variableGapCandidateFailuresRemainLinear() {
-    Pattern pattern = Pattern.compile("AAA[A-Z]+RAREST_TOKEN");
+    @Test
+    fun replaceAllWithoutCaptureReferencesSkipsCaptureResolutionWork() {
+        val pattern = Pattern.compile("x(a+)y([0-9]+)z")
+        val input = "xay1z xay2z"
 
-    long smallerWork =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(pattern.matcher("AAA".repeat(2_000) + "xRAREST_TOKEN").find())
-                    .isFalse());
-    long largerWork =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(pattern.matcher("AAA".repeat(10_000) + "xRAREST_TOKEN").find())
-                    .isFalse());
+        Assertions.assertThat(pattern.innerCapturesObserved()).isFalse()
+        val replacedLiteral = pattern.matcher(input).replaceAll("REPLACED")
+        Assertions.assertThat(replacedLiteral).isEqualTo("REPLACED REPLACED")
+        Assertions.assertThat(pattern.innerCapturesObserved())
+            .`as`("Literal replacement must not mark inner captures as observed")
+            .isFalse()
 
-    assertThat(smallerWork).isPositive();
-    assertThat(largerWork)
-        .as("variable-gap candidate failures must not rescan overlapping suffixes")
-        .isLessThan(smallerWork * 6);
-  }
+        val replacedWithCaptures = pattern.matcher(input).replaceAll("$1-$2")
+        Assertions.assertThat(replacedWithCaptures).isEqualTo("a-1 a-2")
+        Assertions.assertThat(pattern.innerCapturesObserved())
+            .`as`("Replacement with capture references must mark inner captures as observed")
+            .isTrue()
+    }
 
-  @Test
-  void multiAnchorCompilationDoesNotRepeatAstAnalysis() {
-    Regexp regexp = Parser.parse("foo.*bar.*baz", Pattern.toParseFlags(0));
+    @Test
+    fun observedCaptureDemandAvoidsRepeatingExactFallbackSearch() {
+        val input = "a".repeat(1024) + "y"
+        for (options in arrayOf<EnginePathOptions>(
+            EnginePathOptions.allEnabled(),
+            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+        )) {
+            for (utf8 in booleanArrayOf(false, true)) {
+                val pattern = Pattern.compile("(a?)*y", 0, options)
+                val priming = pattern.matcher(input)
+                Assertions.assertThat(priming.find()).isTrue()
+                Assertions.assertThat(priming.group(1)).isEmpty()
 
-    long analysisWork = WorkCounter.countForTesting(() -> MultiAnchorCompiler.analyze(regexp));
-    long compilationWork =
-        WorkCounter.countForTesting(() -> MultiAnchorCompiler.compile(regexp, 0));
-
-    assertThat(analysisWork).isPositive();
-    assertThat(compilationWork)
-        .as(
-            "Compilation work includes one analysis and descriptor assembly, "
-                + "analysisWork=%d compilationWork=%d",
-            analysisWork, compilationWork)
-        .isLessThan(analysisWork * 3);
-  }
-
-  @Test
-  void shiftDfaTransitionsAreCountedForStringInput() {
-    Pattern pattern = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*");
-    String input = "a".repeat(10_000);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).matches()).isTrue());
-
-    assertThat(work).isGreaterThanOrEqualTo(input.length());
-  }
-
-  @Test
-  void shiftDfaTransitionsAreCountedForUtf8Input() {
-    Pattern pattern = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*");
-    byte[] input = "a".repeat(10_000).getBytes(UTF_8);
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue());
-
-    assertThat(work).isGreaterThanOrEqualTo(input.length);
-  }
-
-  @Test
-  void reverseDfaSuffixFailureIsConstantWorkForStringInput() {
-    Pattern pattern = Pattern.compile("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$");
-    assertReverseDfaSuffixFailureIsConstantWork(size -> pattern.matcher("a".repeat(size)).find());
-  }
-
-  @Test
-  void reverseDfaSuffixFailureIsConstantWorkForUtf8Input() {
-    Pattern pattern = Pattern.compile("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$");
-    assertReverseDfaSuffixFailureIsConstantWork(
-        size -> pattern.matcher(Utf8Input.trusted("a".repeat(size).getBytes(UTF_8))).find());
-  }
-
-  @Test
-  void greedyKeywordAlternationSuccessNearEndIsConstantWorkForUtf8Input() {
-    Pattern pattern = Pattern.compile("(?is).*\\b(you|your)\\b.*");
-    assertConstantWork(
-        size ->
-            pattern
-                .matcher(Utf8Input.trusted(("a".repeat(size) + " YOUR tail").getBytes(UTF_8)))
-                .find(),
-        "UTF-8 keyword search");
-  }
-
-  @Test
-  void disjointRequiredLiteralPrefilterIsLinearAcrossStringFindIteration() {
-    Pattern pattern = Pattern.compile("(?:banana\\d|apple\\d)");
-    assertRepeatedFindWorkIsLinear(size -> pattern.matcher("apple0 ".repeat(size))::find, "String");
-  }
-
-  @Test
-  void disjointRequiredLiteralPrefilterIsLinearAcrossUtf8FindIteration() {
-    Pattern pattern = Pattern.compile("(?:banana\\d|apple\\d)");
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher(Utf8Input.trusted("apple0 ".repeat(size).getBytes(UTF_8)))::find,
-        "UTF-8");
-  }
-
-  @Test
-  void replaceAllWithoutCaptureReferencesSkipsCaptureResolutionWork() {
-    Pattern pattern = Pattern.compile("x(a+)y([0-9]+)z");
-    String input = "xay1z xay2z";
-
-    assertThat(pattern.innerCapturesObserved()).isFalse();
-    String replacedLiteral = pattern.matcher(input).replaceAll("REPLACED");
-    assertThat(replacedLiteral).isEqualTo("REPLACED REPLACED");
-    assertThat(pattern.innerCapturesObserved())
-        .as("Literal replacement must not mark inner captures as observed")
-        .isFalse();
-
-    String replacedWithCaptures = pattern.matcher(input).replaceAll("$1-$2");
-    assertThat(replacedWithCaptures).isEqualTo("a-1 a-2");
-    assertThat(pattern.innerCapturesObserved())
-        .as("Replacement with capture references must mark inner captures as observed")
-        .isTrue();
-  }
-
-  @Test
-  void observedCaptureDemandAvoidsRepeatingExactFallbackSearch() {
-    String input = "a".repeat(1_024) + "y";
-    for (EnginePathOptions options :
-        new EnginePathOptions[] {
-          EnginePathOptions.allEnabled(),
-          EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
-        }) {
-      for (boolean utf8 : new boolean[] {false, true}) {
-        Pattern pattern = Pattern.compile("(a?)*y", 0, options);
-        Matcher priming = pattern.matcher(input);
-        assertThat(priming.find()).isTrue();
-        assertThat(priming.group(1)).isEmpty();
-
-        IntSupplier captureStart;
-        IntSupplier captureEnd;
-        if (utf8) {
-          Utf8Matcher matcher = pattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8)));
-          assertThat(matcher.find()).isTrue();
-          captureStart = () -> matcher.start(1);
-          captureEnd = () -> matcher.end(1);
-        } else {
-          Matcher matcher = pattern.matcher(input);
-          assertThat(matcher.find()).isTrue();
-          captureStart = () -> matcher.start(1);
-          captureEnd = () -> matcher.end(1);
+                val captureStart: IntSupplier?
+                val captureEnd: IntSupplier?
+                if (utf8) {
+                    val matcher = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    captureStart = IntSupplier { matcher.start(1) }
+                    captureEnd = IntSupplier { matcher.end(1) }
+                } else {
+                    val matcher = pattern.matcher(input)
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    captureStart = IntSupplier { matcher.start(1) }
+                    captureEnd = IntSupplier { matcher.end(1) }
+                }
+                val captureWork =
+                    WorkCounter.countForTesting(
+                        Runnable {
+                            Assertions.assertThat(captureStart.getAsInt()).isEqualTo(1024)
+                            Assertions.assertThat(captureEnd.getAsInt()).isEqualTo(1024)
+                        })
+                Assertions.assertThat(captureWork)
+                    .`as`("Known-demand captures should already be available after exact fallback")
+                    .isZero()
+            }
         }
-        long captureWork =
-            WorkCounter.countForTesting(
-                () -> {
-                  assertThat(captureStart.getAsInt()).isEqualTo(1_024);
-                  assertThat(captureEnd.getAsInt()).isEqualTo(1_024);
-                });
-        assertThat(captureWork)
-            .as("Known-demand captures should already be available after exact fallback")
-            .isZero();
-      }
-    }
-  }
-
-  @Test
-  void observedCaptureDemandDoesNotMakeFindWalkTheInputWithTheCaptureEngine() {
-    String regex = "(error:\\[)[A-Z](\\] code:500)";
-    String input =
-        "2026-08-27 12:00:00 error:[x] code:500 msg:ok\n".repeat(9)
-            + "2026-08-27 12:00:00 error:[C] code:500 msg:crash\n";
-
-    Pattern withoutDemand = Pattern.compile(regex);
-    long deferredWork =
-        WorkCounter.countForTesting(() -> assertThat(withoutDemand.matcher(input).find()).isTrue());
-
-    Pattern withDemand = Pattern.compile(regex);
-    Matcher priming = withDemand.matcher(input);
-    assertThat(priming.find()).isTrue();
-    assertThat(priming.group(1)).isEqualTo("error:[");
-    assertThat(withDemand.innerCapturesObserved()).isTrue();
-
-    long eagerWork =
-        WorkCounter.countForTesting(() -> assertThat(withDemand.matcher(input).find()).isTrue());
-
-    assertThat(deferredWork).isPositive();
-    assertThat(eagerWork)
-        .as(
-            "Preferring the capture engine must not cost more than a bounded speculation on the"
-                + " accelerated start, deferredWork=%d eagerWork=%d",
-            deferredWork, eagerWork)
-        .isLessThan(deferredWork * 2);
-  }
-
-  @Test
-  void literalReplaceWithGroupZeroReferenceUsesFastPathWithLinearWork() {
-    Pattern pattern = Pattern.compile("(abc)");
-    String input = "abc ".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> {
-              String replaced = pattern.matcher(input).replaceAll("[$0]");
-              assertThat(replaced).isNotNull();
-            });
-
-    assertThat(work)
-        .as("Literal replacement with group zero reference must scan the input only once")
-        .isLessThanOrEqualTo(input.length());
-  }
-
-  @Test
-  void literalReplaceFirstReusesLatePreflightMatch() {
-    Pattern pattern = Pattern.compile("(needle)");
-    String input = "x".repeat(10_000) + "needle";
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(input).replaceFirst("[$0]")).endsWith("[needle]"));
-
-    assertThat(work)
-        .as("Literal replaceFirst must not rescan the prefix after finding the first match")
-        .isLessThanOrEqualTo(input.length());
-  }
-
-  @Test
-  void literalSplitWithParenthesesUsesFastPathWithoutDfaWork() {
-    Pattern pattern = Pattern.compile("(delim)");
-    String input = "item delim ".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> {
-              String[] parts = pattern.split(input);
-              assertThat(parts).hasSize(1_001);
-            });
-
-    assertThat(work)
-        .as("Literal split on parenthesized pattern should execute on fast path without DFA work")
-        .isEqualTo(0);
-  }
-
-  @Test
-  void caseInsensitivePrefixRepeatedFindIsLinearAcrossString() {
-    Pattern pattern = Pattern.compile("(?i)keyword_to_find");
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher("KEYWORD_TO_FIND ".repeat(size))::find, "String");
-  }
-
-  @Test
-  void caseInsensitiveSingleCharacterRepeatedFindIsLinearAcrossString() {
-    Pattern pattern = Pattern.compile("(?i)z");
-    assertRepeatedFindWorkIsLinear(size -> pattern.matcher("z".repeat(size))::find, "String");
-  }
-
-  @Test
-  void caseInsensitiveSparseFalseCandidatesAreLinearAcrossString() {
-    Pattern pattern = Pattern.compile("(?i)zq");
-    IntFunction<String> input = size -> ("zX" + "a".repeat(32)).repeat(size) + "Zq";
-
-    long smallerWork = countAllMatches(pattern.matcher(input.apply(100))::find, 1);
-    long largerWork = countAllMatches(pattern.matcher(input.apply(400))::find, 1);
-
-    assertThat(largerWork)
-        .as("String sparse false-candidate work should scale linearly")
-        .isLessThanOrEqualTo(smallerWork * 6);
-  }
-
-  @Test
-  void sparseLongLiteralFalseCandidatesAreLinearAcrossString() {
-    long smallerWork = sparseLongLiteralFalseCandidateWork(64);
-    long largerWork = sparseLongLiteralFalseCandidateWork(256);
-
-    assertThat(largerWork)
-        .as("Sparse long-literal false-candidate work should scale linearly")
-        .isLessThanOrEqualTo(smallerWork * 6);
-  }
-
-  private static long sparseLongLiteralFalseCandidateWork(int blocks) {
-    String block = "q" + "a".repeat(63);
-    StringBuilder literal = new StringBuilder(block.repeat(blocks / 2));
-    literal.setCharAt(literal.length() - 2, 'e');
-    Pattern pattern = Pattern.compile("[xy]" + literal);
-    String input = block.repeat(blocks);
-    return WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-  }
-
-  @Test
-  void caseInsensitivePrefixRepeatedFindIsLinearAcrossUtf8() {
-    Pattern pattern = Pattern.compile("(?i)keyword_to_find");
-    assertRepeatedFindWorkIsLinear(
-        size ->
-            pattern.matcher(Utf8Input.trusted("KEYWORD_TO_FIND ".repeat(size).getBytes(UTF_8)))
-                ::find,
-        "UTF-8");
-  }
-
-  @Test
-  void caseInsensitiveDensePrefixFailureIsLinearForStringInput() {
-    Pattern pattern =
-        Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab");
-    String input = "a".repeat(10_000);
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-    assertThat(work)
-        .as("Dense false candidate prefix verification on String must remain linearly bounded")
-        .isLessThan(input.length() * 3L);
-  }
-
-  @Test
-  void caseInsensitiveDensePrefixFailureIsLinearForUtf8Input() {
-    Pattern pattern =
-        Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab");
-    String input = "a".repeat(10_000);
-    long work =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(pattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8))).find())
-                    .isFalse());
-    assertThat(work)
-        .as("Dense false candidate prefix verification on UTF-8 must remain linearly bounded")
-        .isLessThan(input.length() * 3L);
-  }
-
-  @Test
-  void disjointRequiredLiteralOptimizationDoesNotAddRedundantUtf8Scans() {
-    String regex = "(?:banana\\d|apple\\d)";
-    Pattern defaultPattern = Pattern.compile(regex);
-    Pattern withoutLiteralFastPaths =
-        Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build());
-    Utf8Input input = Utf8Input.trusted("x".repeat(32_768).getBytes(UTF_8));
-
-    long defaultWork = countAllMatches(defaultPattern.matcher(input)::find, 0);
-    long fallbackWork = countAllMatches(withoutLiteralFastPaths.matcher(input)::find, 0);
-
-    assertThat(defaultWork)
-        .as("UTF-8 literal optimization should not add full-input scans before the DFA")
-        .isLessThanOrEqualTo(fallbackWork);
-  }
-
-  @Test
-  void disjointRequiredLiteralOptimizationDoesNotScanStartAnchoredInput() {
-    Pattern pattern = Pattern.compile("^(?:banana\\d|apple\\d)");
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher("x".repeat(32_768)).find()).isFalse());
-
-    assertThat(work)
-        .as("start-anchored rejection should inspect only the viable start position")
-        .isLessThan(100);
-  }
-
-  @Test
-  void startAnchoredLiteralFindRejectionIsConstantWorkForStringInput() {
-    Pattern pattern = Pattern.compile("^target");
-    assertConstantRejectionWork(
-        size -> pattern.matcher("x".repeat(size) + "target").find(), "String literal");
-  }
-
-  @Test
-  void startAnchoredLiteralFindRejectionIsConstantWorkForUtf8Input() {
-    Pattern pattern = Pattern.compile("^target");
-    assertConstantRejectionWork(
-        size ->
-            pattern
-                .matcher(Utf8Input.trusted(("x".repeat(size) + "target").getBytes(UTF_8)))
-                .find(),
-        "UTF-8 literal");
-  }
-
-  @Test
-  void startAnchoredCharClassFindRejectionIsConstantWorkForStringInput() {
-    Pattern pattern = Pattern.compile("^[a-z]");
-    assertConstantRejectionWork(
-        size -> pattern.matcher("9".repeat(size) + "a").find(), "String char-class");
-  }
-
-  @Test
-  void startAnchoredCharClassFindRejectionIsConstantWorkForUtf8Input() {
-    Pattern pattern = Pattern.compile("^[a-z]");
-    assertConstantRejectionWork(
-        size -> pattern.matcher(Utf8Input.trusted(("9".repeat(size) + "a").getBytes(UTF_8))).find(),
-        "UTF-8 char-class");
-  }
-
-  @Test
-  void startAnchoredKeywordAlternationFindRejectionIsConstantWorkForStringInput() {
-    Pattern pattern = Pattern.compile("(?i)^(?:apple|banana)");
-    assertConstantRejectionWork(
-        size -> pattern.matcher("x".repeat(size) + "apple").find(), "String keyword");
-  }
-
-  @Test
-  void startAnchoredKeywordAlternationFindRejectionIsConstantWorkForUtf8Input() {
-    Pattern pattern = Pattern.compile("(?i)^(?:apple|banana)");
-    assertConstantRejectionWork(
-        size ->
-            pattern.matcher(Utf8Input.trusted(("x".repeat(size) + "apple").getBytes(UTF_8))).find(),
-        "UTF-8 keyword");
-  }
-
-  @Test
-  void startAnchoredFindFromNonZeroIsConstantWork() {
-    Pattern pattern = Pattern.compile("^abc");
-    assertConstantRejectionWork(
-        size -> pattern.matcher("abc" + "x".repeat(size)).find(1), "find(1) on ^abc");
-  }
-
-  @Test
-  void startAnchoredRepeatedFindTerminatesInConstantWork() {
-    Pattern pattern = Pattern.compile("^abc");
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> {
-              Matcher m = pattern.matcher("abc" + "x".repeat(2_000));
-              int matches = 0;
-              while (m.find()) {
-                matches++;
-              }
-              assertThat(matches).isEqualTo(1);
-            });
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> {
-              Matcher m = pattern.matcher("abc" + "x".repeat(10_000));
-              int matches = 0;
-              while (m.find()) {
-                matches++;
-              }
-              assertThat(matches).isEqualTo(1);
-            });
-
-    assertThat(work2000).as("Short input repeated find work").isLessThan(50);
-    assertThat(work10000).as("Long input repeated find work").isLessThan(50);
-    assertThat(work10000)
-        .as("Subsequent find() on start-anchored pattern must not scale with input size")
-        .isLessThanOrEqualTo(Math.max(10, work2000 * 2));
-  }
-
-  @Test
-  void disjointRequiredLiteralCandidateIsScannedOnlyOnce() {
-    Pattern pattern = Pattern.compile(".*(?:apple|banana|cherry).*");
-    String input = "x".repeat(32_768) + "cherry";
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isTrue());
-
-    assertThat(work)
-        .as("a positive disjoint-literal candidate should not repeat every full-input scan")
-        .isLessThan(input.length() * 5L);
-  }
-
-  @Test
-  void fixedOffsetLiteralSelectsRareTokenToAvoidCandidateVerificationWork() {
-    // "____" has length 4 with common underscores.
-    // "zq" has length 2 with rare letters 'z' and 'q'.
-    Pattern pattern = Pattern.compile("[0-9]{2}____[a-z]zq[a-z]");
-    String input = "user_name_field_data____common_suffix\n".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-
-    assertThat(work)
-        .as("RarityOracle selection must avoid false candidate verification work on common tokens")
-        .isLessThanOrEqualTo(input.length() + 100);
-  }
-
-  @Test
-  void requiredLiteralSelectsRareTokenToRejectNoiseWithMinimalWork() {
-    // "____________" has length 12 with common underscores.
-    // "404_ERR" has length 7 with high-rarity digits and uppercase letters.
-    Pattern pattern = Pattern.compile(".*(____________).*?(404_ERR).*");
-    String input = "log_entry_line_with____________separators_and_delimiters\n".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-
-    assertThat(work)
-        .as("Required literal prefilter must reject on the selective token with minimal work")
-        .isLessThanOrEqualTo(input.length() + 100);
-  }
-
-  @Test
-  void exactCaseFixedOffsetSelectsUppercaseAnchorToAvoidCandidateWork() {
-    // "AbstractBeanFactory" contains uppercase 'B' and 'F'.
-    // The input is filled with lowercase vowels and common consonants ('e', 'a', 't', 'r', 's',
-    // 'c').
-    Pattern pattern = Pattern.compile("[0-9]{3}AbstractBeanFactory[0-9]{3}");
-    String input = "the create starter test transaction context service\n".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-
-    assertThat(work)
-        .as(
-            "Exact-case RarityOracle must anchor on uppercase letters to avoid false candidates in"
-                + " lowercase text")
-        .isLessThanOrEqualTo(input.length() + 100);
-  }
-
-  @Test
-  void caseInsensitiveStartAccelerationIsInvariantToPatternCapitalization() {
-    Pattern pLower = Pattern.compile("(?i)userid");
-    Pattern pUpper = Pattern.compile("(?i)USERID");
-    Pattern pMixed = Pattern.compile("(?i)UserId");
-    String input = "the_quick_brown_fox_jumps_over_the_lazy_dog\n".repeat(500);
-
-    long workLower =
-        WorkCounter.countForTesting(() -> assertThat(pLower.matcher(input).find()).isFalse());
-    long workUpper =
-        WorkCounter.countForTesting(() -> assertThat(pUpper.matcher(input).find()).isFalse());
-    long workMixed =
-        WorkCounter.countForTesting(() -> assertThat(pMixed.matcher(input).find()).isFalse());
-
-    assertThat(workLower)
-        .as(
-            "Case-folded RarityOracle must produce identical work counts regardless of pattern"
-                + " casing")
-        .isEqualTo(workUpper)
-        .isEqualTo(workMixed);
-  }
-
-  @Test
-  void requiredInfixLiteralRejectsDensePrefixNoiseWithSinglePassWork() {
-    // Prefix "{Link:" is common (appears 1,000 times).
-    // Infix "<<!nav>>" is rare and absent.
-    Pattern pattern = Pattern.compile("(\\{Link:[^}]*?)<<!nav>>([^}]*?\\})");
-    String input = "{Link: target=home_page, category=general, priority=high}\n".repeat(1_000);
-    Utf8Input utf8 = Utf8Input.trusted(input.getBytes(UTF_8));
-
-    assertThat(
-            WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse()))
-        .as("String Matcher.find must reject dense-prefix noise in a single pass")
-        .isLessThanOrEqualTo(input.length() + 100);
-    assertThat(
-            WorkCounter.countForTesting(() -> assertThat(pattern.matcher(utf8).find()).isFalse()))
-        .as("Utf8Matcher.find must reject dense-prefix noise in a single pass")
-        .isLessThanOrEqualTo(input.length() + 100);
-    assertThat(WorkCounter.countForTesting(() -> assertThat(pattern.find(utf8)).isFalse()))
-        .as("Pattern.find(Utf8Input) must reject dense-prefix noise in a single pass")
-        .isLessThanOrEqualTo(input.length() + 100);
-    assertThat(
-            WorkCounter.countForTesting(
-                () -> assertThat(pattern.asPredicate().test(input)).isFalse()))
-        .as("Pattern.asPredicate must reject dense-prefix noise in a single pass")
-        .isLessThanOrEqualTo(input.length() + 100);
-  }
-
-  @Test
-  void literalStartAcceleratorAvoidsRedundantInfixPrefilterScan() {
-    for (String regex :
-        new String[] {"status=3\\d\\d took=(\\d+)ms", "[ab]status=3\\d\\d took=(\\d+)ms"}) {
-      Pattern pattern = Pattern.compile(regex);
-      // On a short input, the required infix literal (" took=") appears halfway through while the
-      // start literal ("status=3") is absent. Running the infix prefilter before start
-      // acceleration would scan [0, 200] for " took=" and then rescan the whole input for
-      // "status=3".
-      String missingPrefix = "x".repeat(200) + " took=12ms\n" + "y".repeat(200);
-      Utf8Input missingPrefixUtf8 = Utf8Input.trusted(missingPrefix.getBytes(UTF_8));
-
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.matcher(missingPrefix).find()).isFalse()))
-          .as("%s String Matcher.find should scan once when start literal is absent", regex)
-          .isLessThanOrEqualTo(missingPrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.matcher(missingPrefixUtf8).find()).isFalse()))
-          .as("%s Utf8Matcher.find should scan once when start literal is absent", regex)
-          .isLessThanOrEqualTo(missingPrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.find(missingPrefixUtf8)).isFalse()))
-          .as("%s Pattern.find(Utf8Input) should scan once when start literal is absent", regex)
-          .isLessThanOrEqualTo(missingPrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.asPredicate().test(missingPrefix)).isFalse()))
-          .as("%s Pattern.asPredicate should scan once when start literal is absent", regex)
-          .isLessThanOrEqualTo(missingPrefix.length() + 64);
-
-      // Longer inputs keep the single-pass infix prefilter first: when the start literal appears at
-      // 4,000 and repeats densely without the infix literal, the prefilter rejects in one pass.
-      String lateDensePrefix = "x".repeat(4_000) + "astatus=300 nope\n".repeat(250);
-      Utf8Input lateDensePrefixUtf8 = Utf8Input.trusted(lateDensePrefix.getBytes(UTF_8));
-
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.matcher(lateDensePrefix).find()).isFalse()))
-          .as("%s String Matcher.find should reject long dense prefix noise in one pass", regex)
-          .isLessThanOrEqualTo(lateDensePrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.matcher(lateDensePrefixUtf8).find()).isFalse()))
-          .as("%s Utf8Matcher.find should reject long dense prefix noise in one pass", regex)
-          .isLessThanOrEqualTo(lateDensePrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.find(lateDensePrefixUtf8)).isFalse()))
-          .as("%s Pattern.find(Utf8Input) should reject long dense prefix noise in one pass", regex)
-          .isLessThanOrEqualTo(lateDensePrefix.length() + 64);
-      assertThat(
-              WorkCounter.countForTesting(
-                  () -> assertThat(pattern.asPredicate().test(lateDensePrefix)).isFalse()))
-          .as("%s Pattern.asPredicate should reject long dense prefix noise in one pass", regex)
-          .isLessThanOrEqualTo(lateDensePrefix.length() + 64);
     }
 
-    // Overlapping start and required literals across short and long windows.
-    Pattern overlapping = Pattern.compile("abc[0-9]?bcd");
-    for (String prefix : new String[] {"", "z".repeat(1_000)}) {
-      for (String tail : new String[] {"", "z".repeat(1_000)}) {
-        for (String hit : new String[] {"abcbcd", "abc7bcd"}) {
-          String s = prefix + hit + tail;
-          Utf8Input u = Utf8Input.trusted(s.getBytes(UTF_8));
-          assertThat(overlapping.matcher(s).find()).isTrue();
-          assertThat(overlapping.matcher(u).find()).isTrue();
-          assertThat(overlapping.find(u)).isTrue();
-          assertThat(overlapping.asPredicate().test(s)).isTrue();
+    @Test
+    fun observedCaptureDemandDoesNotMakeFindWalkTheInputWithTheCaptureEngine() {
+        val regex = "(error:\\[)[A-Z](\\] code:500)"
+        val input =
+            ("2026-08-27 12:00:00 error:[x] code:500 msg:ok\n".repeat(9)
+                    + "2026-08-27 12:00:00 error:[C] code:500 msg:crash\n")
+
+        val withoutDemand = Pattern.compile(regex)
+        val deferredWork =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(withoutDemand.matcher(input).find()).isTrue()
+            })
+
+        val withDemand = Pattern.compile(regex)
+        val priming = withDemand.matcher(input)
+        Assertions.assertThat(priming.find()).isTrue()
+        Assertions.assertThat(priming.group(1)).isEqualTo("error:[")
+        Assertions.assertThat(withDemand.innerCapturesObserved()).isTrue()
+
+        val eagerWork =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(withDemand.matcher(input).find()).isTrue() })
+
+        Assertions.assertThat(deferredWork).isPositive()
+        Assertions.assertThat(eagerWork)
+            .`as`(
+                "Preferring the capture engine must not cost more than a bounded speculation on the"
+                        + " accelerated start, deferredWork=%d eagerWork=%d",
+                deferredWork, eagerWork
+            )
+            .isLessThan(deferredWork * 2)
+    }
+
+    @Test
+    fun literalReplaceWithGroupZeroReferenceUsesFastPathWithLinearWork() {
+        val pattern = Pattern.compile("(abc)")
+        val input = "abc ".repeat(1000)
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val replaced = pattern.matcher(input).replaceAll("[$0]")
+                    Assertions.assertThat(replaced).isNotNull()
+                })
+
+        Assertions.assertThat(work)
+            .`as`("Literal replacement with group zero reference must scan the input only once")
+            .isLessThanOrEqualTo(input.length.toLong())
+    }
+
+    @Test
+    fun literalReplaceFirstReusesLatePreflightMatch() {
+        val pattern = Pattern.compile("(needle)")
+        val input = "x".repeat(10000) + "needle"
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(input).replaceFirst("[$0]")).endsWith("[needle]") })
+
+        Assertions.assertThat(work)
+            .`as`("Literal replaceFirst must not rescan the prefix after finding the first match")
+            .isLessThanOrEqualTo(input.length.toLong())
+    }
+
+    @Test
+    fun literalSplitWithParenthesesUsesFastPathWithoutDfaWork() {
+        val pattern = Pattern.compile("(delim)")
+        val input = "item delim ".repeat(1000)
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val parts = pattern.split(input)
+                    Assertions.assertThat<String?>(parts).hasSize(1001)
+                })
+
+        Assertions.assertThat(work)
+            .`as`("Literal split on parenthesized pattern should execute on fast path without DFA work")
+            .isEqualTo(0)
+    }
+
+    @Test
+    fun caseInsensitivePrefixRepeatedFindIsLinearAcrossString() {
+        val pattern = Pattern.compile("(?i)keyword_to_find")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("KEYWORD_TO_FIND ".repeat(size)).find() } },
+            "String"
+        )
+    }
+
+    @Test
+    fun caseInsensitiveSingleCharacterRepeatedFindIsLinearAcrossString() {
+        val pattern = Pattern.compile("(?i)z")
+        assertRepeatedFindWorkIsLinear(IntFunction { size: Int ->
+            FindIterator {
+                pattern.matcher("z".repeat(size)).find()
+            }
+        }, "String")
+    }
+
+    @Test
+    fun caseInsensitiveSparseFalseCandidatesAreLinearAcrossString() {
+        val pattern = Pattern.compile("(?i)zq")
+        val input = IntFunction { size: Int -> ("zX" + "a".repeat(32)).repeat(size) + "Zq" }
+
+        val smallerWork: Long = countAllMatches(FindIterator { pattern.matcher(input.apply(100)).find() }, 1)
+        val largerWork: Long = countAllMatches(FindIterator { pattern.matcher(input.apply(400)).find() }, 1)
+
+        Assertions.assertThat(largerWork)
+            .`as`("String sparse false-candidate work should scale linearly")
+            .isLessThanOrEqualTo(smallerWork * 6)
+    }
+
+    @Test
+    fun sparseLongLiteralFalseCandidatesAreLinearAcrossString() {
+        val smallerWork: Long = sparseLongLiteralFalseCandidateWork(64)
+        val largerWork: Long = sparseLongLiteralFalseCandidateWork(256)
+
+        Assertions.assertThat(largerWork)
+            .`as`("Sparse long-literal false-candidate work should scale linearly")
+            .isLessThanOrEqualTo(smallerWork * 6)
+    }
+
+    @Test
+    fun caseInsensitivePrefixRepeatedFindIsLinearAcrossUtf8() {
+        val pattern = Pattern.compile("(?i)keyword_to_find")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(
+                            "KEYWORD_TO_FIND ".repeat(size).toByteArray(
+                                StandardCharsets.UTF_8
+                            )
+                        )
+                    )
+                        .find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun caseInsensitiveDensePrefixFailureIsLinearForStringInput() {
+        val pattern =
+            Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")
+        val input = "a".repeat(10000)
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+        Assertions.assertThat(work)
+            .`as`("Dense false candidate prefix verification on String must remain linearly bounded")
+            .isLessThan(input.length * 3L)
+    }
+
+    @Test
+    fun caseInsensitiveDensePrefixFailureIsLinearForUtf8Input() {
+        val pattern =
+            Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")
+        val input = "a".repeat(10000)
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(
+                        pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))).find()
+                    )
+                        .isFalse()
+                })
+        Assertions.assertThat(work)
+            .`as`("Dense false candidate prefix verification on UTF-8 must remain linearly bounded")
+            .isLessThan(input.length * 3L)
+    }
+
+    @Test
+    fun disjointRequiredLiteralOptimizationDoesNotAddRedundantUtf8Scans() {
+        val regex = "(?:banana\\d|apple\\d)"
+        val defaultPattern = Pattern.compile(regex)
+        val withoutLiteralFastPaths =
+            Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
+        val input = Utf8Input.trusted("x".repeat(32768).toByteArray(StandardCharsets.UTF_8))
+
+        val defaultWork: Long = countAllMatches(FindIterator { defaultPattern.matcher(input).find() }, 0)
+        val fallbackWork: Long = countAllMatches(FindIterator { withoutLiteralFastPaths.matcher(input).find() }, 0)
+
+        Assertions.assertThat(defaultWork)
+            .`as`("UTF-8 literal optimization should not add full-input scans before the DFA")
+            .isLessThanOrEqualTo(fallbackWork)
+    }
+
+    @Test
+    fun disjointRequiredLiteralOptimizationDoesNotScanStartAnchoredInput() {
+        val pattern = Pattern.compile("^(?:banana\\d|apple\\d)")
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher("x".repeat(32768)).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`("start-anchored rejection should inspect only the viable start position")
+            .isLessThan(100)
+    }
+
+    @Test
+    fun startAnchoredLiteralFindRejectionIsConstantWorkForStringInput() {
+        val pattern = Pattern.compile("^target")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int -> pattern.matcher("x".repeat(size) + "target").find() }, "String literal"
+        )
+    }
+
+    @Test
+    fun startAnchoredLiteralFindRejectionIsConstantWorkForUtf8Input() {
+        val pattern = Pattern.compile("^target")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int ->
+                pattern
+                    .matcher(Utf8Input.trusted(("x".repeat(size) + "target").toByteArray(StandardCharsets.UTF_8)))
+                    .find()
+            },
+            "UTF-8 literal"
+        )
+    }
+
+    @Test
+    fun startAnchoredCharClassFindRejectionIsConstantWorkForStringInput() {
+        val pattern = Pattern.compile("^[a-z]")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int -> pattern.matcher("9".repeat(size) + "a").find() }, "String char-class"
+        )
+    }
+
+    @Test
+    fun startAnchoredCharClassFindRejectionIsConstantWorkForUtf8Input() {
+        val pattern = Pattern.compile("^[a-z]")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int ->
+                pattern.matcher(
+                    Utf8Input.trusted(
+                        ("9".repeat(size) + "a").toByteArray(
+                            StandardCharsets.UTF_8
+                        )
+                    )
+                ).find()
+            },
+            "UTF-8 char-class"
+        )
+    }
+
+    @Test
+    fun startAnchoredKeywordAlternationFindRejectionIsConstantWorkForStringInput() {
+        val pattern = Pattern.compile("(?i)^(?:apple|banana)")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int -> pattern.matcher("x".repeat(size) + "apple").find() }, "String keyword"
+        )
+    }
+
+    @Test
+    fun startAnchoredKeywordAlternationFindRejectionIsConstantWorkForUtf8Input() {
+        val pattern = Pattern.compile("(?i)^(?:apple|banana)")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int ->
+                pattern.matcher(
+                    Utf8Input.trusted(
+                        ("x".repeat(size) + "apple").toByteArray(
+                            StandardCharsets.UTF_8
+                        )
+                    )
+                ).find()
+            },
+            "UTF-8 keyword"
+        )
+    }
+
+    @Test
+    fun startAnchoredFindFromNonZeroIsConstantWork() {
+        val pattern = Pattern.compile("^abc")
+        assertConstantRejectionWork(
+            IntPredicate { size: Int -> pattern.matcher("abc" + "x".repeat(size)).find(1) }, "find(1) on ^abc"
+        )
+    }
+
+    @Test
+    fun startAnchoredRepeatedFindTerminatesInConstantWork() {
+        val pattern = Pattern.compile("^abc")
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val m = pattern.matcher("abc" + "x".repeat(2000))
+                    var matches = 0
+                    while (m.find()) {
+                        matches++
+                    }
+                    Assertions.assertThat(matches).isEqualTo(1)
+                })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val m = pattern.matcher("abc" + "x".repeat(10000))
+                    var matches = 0
+                    while (m.find()) {
+                        matches++
+                    }
+                    Assertions.assertThat(matches).isEqualTo(1)
+                })
+
+        Assertions.assertThat(work2000).`as`("Short input repeated find work").isLessThan(50)
+        Assertions.assertThat(work10000).`as`("Long input repeated find work").isLessThan(50)
+        Assertions.assertThat(work10000)
+            .`as`("Subsequent find() on start-anchored pattern must not scale with input size")
+            .isLessThanOrEqualTo(max(10, work2000 * 2))
+    }
+
+    @Test
+    fun disjointRequiredLiteralCandidateIsScannedOnlyOnce() {
+        val pattern = Pattern.compile(".*(?:apple|banana|cherry).*")
+        val input = "x".repeat(32768) + "cherry"
+
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() })
+
+        Assertions.assertThat(work)
+            .`as`("a positive disjoint-literal candidate should not repeat every full-input scan")
+            .isLessThan(input.length * 5L)
+    }
+
+    @Test
+    fun fixedOffsetLiteralSelectsRareTokenToAvoidCandidateVerificationWork() {
+        // "____" has length 4 with common underscores.
+        // "zq" has length 2 with rare letters 'z' and 'q'.
+        val pattern = Pattern.compile("[0-9]{2}____[a-z]zq[a-z]")
+        val input = "user_name_field_data____common_suffix\n".repeat(1000)
+
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`("RarityOracle selection must avoid false candidate verification work on common tokens")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+    }
+
+    @Test
+    fun requiredLiteralSelectsRareTokenToRejectNoiseWithMinimalWork() {
+        // "____________" has length 12 with common underscores.
+        // "404_ERR" has length 7 with high-rarity digits and uppercase letters.
+        val pattern = Pattern.compile(".*(____________).*?(404_ERR).*")
+        val input = "log_entry_line_with____________separators_and_delimiters\n".repeat(1000)
+
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`("Required literal prefilter must reject on the selective token with minimal work")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+    }
+
+    @Test
+    fun exactCaseFixedOffsetSelectsUppercaseAnchorToAvoidCandidateWork() {
+        // "AbstractBeanFactory" contains uppercase 'B' and 'F'.
+        // The input is filled with lowercase vowels and common consonants ('e', 'a', 't', 'r', 's',
+        // 'c').
+        val pattern = Pattern.compile("[0-9]{3}AbstractBeanFactory[0-9]{3}")
+        val input = "the create starter test transaction context service\n".repeat(1000)
+
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`(
+                "Exact-case RarityOracle must anchor on uppercase letters to avoid false candidates in"
+                        + " lowercase text"
+            )
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+    }
+
+    @Test
+    fun caseInsensitiveStartAccelerationIsInvariantToPatternCapitalization() {
+        val pLower = Pattern.compile("(?i)userid")
+        val pUpper = Pattern.compile("(?i)USERID")
+        val pMixed = Pattern.compile("(?i)UserId")
+        val input = "the_quick_brown_fox_jumps_over_the_lazy_dog\n".repeat(500)
+
+        val workLower =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pLower.matcher(input).find()).isFalse() })
+        val workUpper =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pUpper.matcher(input).find()).isFalse() })
+        val workMixed =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pMixed.matcher(input).find()).isFalse() })
+
+        Assertions.assertThat(workLower)
+            .`as`(
+                "Case-folded RarityOracle must produce identical work counts regardless of pattern"
+                        + " casing"
+            )
+            .isEqualTo(workUpper)
+            .isEqualTo(workMixed)
+    }
+
+    @Test
+    fun requiredInfixLiteralRejectsDensePrefixNoiseWithSinglePassWork() {
+        // Prefix "{Link:" is common (appears 1,000 times).
+        // Infix "<<!nav>>" is rare and absent.
+        val pattern = Pattern.compile("(\\{Link:[^}]*?)<<!nav>>([^}]*?\\})")
+        val input = "{Link: target=home_page, category=general, priority=high}\n".repeat(1000)
+        val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
+
+        Assertions.assertThat(
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+        )
+            .`as`("String Matcher.find must reject dense-prefix noise in a single pass")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+        Assertions.assertThat(
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
+        )
+            .`as`("Utf8Matcher.find must reject dense-prefix noise in a single pass")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+        Assertions.assertThat(WorkCounter.countForTesting(Runnable {
+            Assertions.assertThat(pattern.find(utf8)).isFalse()
+        }))
+            .`as`("Pattern.find(Utf8Input) must reject dense-prefix noise in a single pass")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+        Assertions.assertThat(
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.asPredicate().test(input)).isFalse() })
+        )
+            .`as`("Pattern.asPredicate must reject dense-prefix noise in a single pass")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
+    }
+
+    @Test
+    fun literalStartAcceleratorAvoidsRedundantInfixPrefilterScan() {
+        for (regex in arrayOf<String>("status=3\\d\\d took=(\\d+)ms", "[ab]status=3\\d\\d took=(\\d+)ms")) {
+            val pattern = Pattern.compile(regex)
+            // On a short input, the required infix literal (" took=") appears halfway through while the
+            // start literal ("status=3") is absent. Running the infix prefilter before start
+            // acceleration would scan [0, 200] for " took=" and then rescan the whole input for
+            // "status=3".
+            val missingPrefix = "x".repeat(200) + " took=12ms\n" + "y".repeat(200)
+            val missingPrefixUtf8 = Utf8Input.trusted(missingPrefix.toByteArray(StandardCharsets.UTF_8))
+
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(missingPrefix).find()).isFalse() })
+            )
+                .`as`("%s String Matcher.find should scan once when start literal is absent", regex)
+                .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(missingPrefixUtf8).find()).isFalse() })
+            )
+                .`as`("%s Utf8Matcher.find should scan once when start literal is absent", regex)
+                .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.find(missingPrefixUtf8)).isFalse() })
+            )
+                .`as`("%s Pattern.find(Utf8Input) should scan once when start literal is absent", regex)
+                .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.asPredicate().test(missingPrefix)).isFalse() })
+            )
+                .`as`("%s Pattern.asPredicate should scan once when start literal is absent", regex)
+                .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
+
+            // Longer inputs keep the single-pass infix prefilter first: when the start literal appears at
+            // 4,000 and repeats densely without the infix literal, the prefilter rejects in one pass.
+            val lateDensePrefix = "x".repeat(4000) + "astatus=300 nope\n".repeat(250)
+            val lateDensePrefixUtf8 = Utf8Input.trusted(lateDensePrefix.toByteArray(StandardCharsets.UTF_8))
+
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(lateDensePrefix).find()).isFalse() })
+            )
+                .`as`("%s String Matcher.find should reject long dense prefix noise in one pass", regex)
+                .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(lateDensePrefixUtf8).find()).isFalse() })
+            )
+                .`as`("%s Utf8Matcher.find should reject long dense prefix noise in one pass", regex)
+                .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.find(lateDensePrefixUtf8)).isFalse() })
+            )
+                .`as`("%s Pattern.find(Utf8Input) should reject long dense prefix noise in one pass", regex)
+                .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
+            Assertions.assertThat(
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.asPredicate().test(lateDensePrefix)).isFalse() })
+            )
+                .`as`("%s Pattern.asPredicate should reject long dense prefix noise in one pass", regex)
+                .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
         }
-        String miss = prefix + "abc7bcz" + tail;
-        Utf8Input uMiss = Utf8Input.trusted(miss.getBytes(UTF_8));
-        assertThat(overlapping.matcher(miss).find()).isFalse();
-        assertThat(overlapping.matcher(uMiss).find()).isFalse();
-        assertThat(overlapping.find(uMiss)).isFalse();
-        assertThat(overlapping.asPredicate().test(miss)).isFalse();
-      }
-    }
 
-    // When the start literal is case-folded or has a much weaker anchor than the required infix
-    // literal, RejectPrefilter runs first so frequent false start-anchor hits do not add work.
-    Pattern weakPrefix = Pattern.compile("er\\d+<<!nav>>\\d+");
-    String denseR = "re ra ri ro ru rt rg ".repeat(400);
-    Utf8Input denseRUtf8 = Utf8Input.trusted(denseR.getBytes(UTF_8));
-    assertThat(
+        // Overlapping start and required literals across short and long windows.
+        val overlapping = Pattern.compile("abc[0-9]?bcd")
+        for (prefix in arrayOf<String>("", "z".repeat(1000))) {
+            for (tail in arrayOf<String>("", "z".repeat(1000))) {
+                for (hit in arrayOf<String>("abcbcd", "abc7bcd")) {
+                    val s = prefix + hit + tail
+                    val u = Utf8Input.trusted(s.toByteArray(StandardCharsets.UTF_8))
+                    Assertions.assertThat(overlapping.matcher(s).find()).isTrue()
+                    Assertions.assertThat(overlapping.matcher(u).find()).isTrue()
+                    Assertions.assertThat(overlapping.find(u)).isTrue()
+                    Assertions.assertThat(overlapping.asPredicate().test(s)).isTrue()
+                }
+                val miss = prefix + "abc7bcz" + tail
+                val uMiss = Utf8Input.trusted(miss.toByteArray(StandardCharsets.UTF_8))
+                Assertions.assertThat(overlapping.matcher(miss).find()).isFalse()
+                Assertions.assertThat(overlapping.matcher(uMiss).find()).isFalse()
+                Assertions.assertThat(overlapping.find(uMiss)).isFalse()
+                Assertions.assertThat(overlapping.asPredicate().test(miss)).isFalse()
+            }
+        }
+
+        // When the start literal is case-folded or has a much weaker anchor than the required infix
+        // literal, RejectPrefilter runs first so frequent false start-anchor hits do not add work.
+        val weakPrefix = Pattern.compile("er\\d+<<!nav>>\\d+")
+        val denseR = "re ra ri ro ru rt rg ".repeat(400)
+        val denseRUtf8 = Utf8Input.trusted(denseR.toByteArray(StandardCharsets.UTF_8))
+        Assertions.assertThat(
             WorkCounter.countForTesting(
-                () -> assertThat(weakPrefix.matcher(denseR).find()).isFalse()))
-        .isLessThanOrEqualTo(denseR.length() + 32);
-    assertThat(
+                Runnable { Assertions.assertThat(weakPrefix.matcher(denseR).find()).isFalse() })
+        )
+            .isLessThanOrEqualTo((denseR.length + 32).toLong())
+        Assertions.assertThat(
             WorkCounter.countForTesting(
-                () -> assertThat(weakPrefix.matcher(denseRUtf8).find()).isFalse()))
-        .isLessThanOrEqualTo(denseR.length() + 32);
-    assertThat(WorkCounter.countForTesting(() -> assertThat(weakPrefix.find(denseRUtf8)).isFalse()))
-        .isLessThanOrEqualTo(denseR.length() + 32);
-    assertThat(
+                Runnable { Assertions.assertThat(weakPrefix.matcher(denseRUtf8).find()).isFalse() })
+        )
+            .isLessThanOrEqualTo((denseR.length + 32).toLong())
+        Assertions.assertThat(WorkCounter.countForTesting(Runnable {
+            Assertions.assertThat(weakPrefix.find(denseRUtf8)).isFalse()
+        }))
+            .isLessThanOrEqualTo((denseR.length + 32).toLong())
+        Assertions.assertThat(
             WorkCounter.countForTesting(
-                () -> assertThat(weakPrefix.asPredicate().test(denseR)).isFalse()))
-        .isLessThanOrEqualTo(denseR.length() + 32);
-  }
-
-  @Test
-  void requiredInfixLiteralRejectsDensePrefixNoiseInSplitWithSinglePassWork() {
-    Pattern pattern = Pattern.compile("(\\{Link:[^}]*?)<<!nav>>([^}]*?\\})");
-    String input = "{Link: target=home_page, category=general, priority=high}\n".repeat(1_000);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.split(input)).containsExactly(input));
-
-    assertThat(work)
-        .as("Split must reject dense-prefix noise in a single pass without DFA churn")
-        .isLessThanOrEqualTo(input.length() + 100);
-  }
-
-  @Test
-  void literalSelectivityScoringIsLinearInPatternSize() {
-    long smallerWork = WorkCounter.countForTesting(() -> Pattern.compile(selectivityPattern(100)));
-    long largerWork = WorkCounter.countForTesting(() -> Pattern.compile(selectivityPattern(400)));
-
-    assertThat(largerWork)
-        .as("Literal selectivity scoring should scale linearly with pattern size")
-        .isLessThanOrEqualTo(smallerWork * 6);
-  }
-
-  @Test
-  void cachedDriverSelectionCompilationIsLinearInSegmentCount() {
-    long smallerWork =
-        WorkCounter.countForTesting(() -> Pattern.compile(driverSelectionPattern(50)));
-    long largerWork =
-        WorkCounter.countForTesting(() -> Pattern.compile(driverSelectionPattern(200)));
-
-    assertThat(largerWork)
-        .as("Cached driver selection should scale linearly with the number of segments")
-        .isLessThanOrEqualTo(smallerWork * 6);
-  }
-
-  private static void assertConstantRejectionWork(IntPredicate find, String description) {
-    long work2000 = WorkCounter.countForTesting(() -> assertThat(find.test(2_000)).isFalse());
-    long work10000 = WorkCounter.countForTesting(() -> assertThat(find.test(10_000)).isFalse());
-
-    assertThat(work2000).as("%s rejection on short input", description).isLessThan(100);
-    assertThat(work10000).as("%s rejection on long input", description).isLessThan(100);
-    assertThat(work10000)
-        .as("%s rejection work should not scale with trailing input size", description)
-        .isLessThanOrEqualTo(Math.max(10, work2000 * 2));
-  }
-
-  @Test
-  void caseInsensitiveSingleCharRejectionIsSinglePass() {
-    Pattern pattern = Pattern.compile("(?i)z");
-    int size = 10_000;
-    String input = "a".repeat(size);
-
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input).find()).isFalse());
-
-    assertThat(work)
-        .as("Case-insensitive single char search must inspect text in a single pass")
-        .isEqualTo(size);
-  }
-
-  @Test
-  void caseInsensitiveDenseFalseCandidatesScaleLinearly() {
-    // Pattern has anchor 'a' matching every position, but candidate fails on second char 'b'
-    Pattern pattern = Pattern.compile("(?i)ab");
-
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher("a".repeat(2_000)).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher("a".repeat(10_000)).find()).isFalse());
-
-    // Without KMP fallback, work would be 2 * N. With KMP fallback after work exhaustion,
-    // it must remain strictly linear (work(10000) <= work(2000) * 6).
-    assertThat(work10000)
-        .as("Dense false candidate verification must fall back to linear KMP")
-        .isLessThanOrEqualTo(work2000 * 6);
-  }
-
-  @Test
-  void caseInsensitivePairDenseFalseCandidatesScaleLinearlyForUtf8Input() {
-    Pattern pattern = Pattern.compile("(?i)keyword_to_find");
-    byte[] input2000 = "kind knowledge token lock keep track ".repeat(50).getBytes(UTF_8);
-    byte[] input10000 = "kind knowledge token lock keep track ".repeat(250).getBytes(UTF_8);
-
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse());
-
-    assertThat(work10000)
-        .as("UTF-8 case-insensitive false candidate search must remain linearly bounded")
-        .isLessThanOrEqualTo(work2000 * 6);
-  }
-
-  @Test
-  void caseInsensitiveLiteralFindWorkIsLinear() {
-    Pattern pattern = Pattern.compile("(?i)keyword_to_find");
-
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher("KEYWORD_TO_FIND ".repeat(size))::find,
-        "Case-insensitive literal find");
-  }
-
-  @Test
-  void utf8RareByteLiteralPrefixFindWorkIsLinearAcrossFalseCandidates() {
-    Pattern pattern = Pattern.compile("aaaaQaaaa[0-9]+");
-    byte[] smaller = "aaaaQaaaaX".repeat(500).getBytes(UTF_8);
-    byte[] larger = "aaaaQaaaaX".repeat(2_000).getBytes(UTF_8);
-
-    long smallerWork =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(smaller)).find()).isFalse());
-    long largerWork =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(larger)).find()).isFalse());
-
-    assertThat(largerWork)
-        .as("UTF-8 literal-prefix search must scale with repeated false candidates")
-        .isLessThanOrEqualTo(smallerWork * 5);
-  }
-
-  @Test
-  void preselectedUtf8DfaCandidateSkipsRedundantStartScan() {
-    Pattern pattern = Pattern.compile("\\d{3}/\\d{3}/\\d{4}");
-    byte[] bytes = ("123/456/7890" + "x".repeat(100)).getBytes(UTF_8);
-    Utf8InputScanner scanner = new Utf8InputScanner(bytes, 0, bytes.length);
-    int candidate =
-        Utf8StartAccelerator.findNextCandidate(pattern.utf8StartAccelerator(), scanner, 0);
-    Dfa dfa = pattern.forwardFirstMatchDfa();
-
-    assertThat(candidate).isZero();
-    dfa.doSearch(scanner, candidate, false, false, false);
-    long ordinaryWork =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(dfa.doSearch(scanner, candidate, false, false, false).matched())
-                    .isTrue());
-    long preselectedWork =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(dfa.doSearch(scanner, candidate, false, false, true).matched())
-                    .isTrue());
-
-    assertThat(preselectedWork)
-        .as("DFA must trust a candidate already selected by the caller")
-        .isLessThan(ordinaryWork);
-  }
-
-  private static void assertRepeatedFindWorkIsLinear(
-      IntFunction<FindIterator> matcherFactory, String description) {
-    long smallerWork = countAllMatches(matcherFactory.apply(500), 500);
-    long largerWork = countAllMatches(matcherFactory.apply(2_000), 2_000);
-
-    assertThat(largerWork)
-        .as("%s repeated find work should scale linearly", description)
-        .isLessThanOrEqualTo(Math.max(10, smallerWork * 6));
-  }
-
-  private static String selectivityPattern(int size) {
-    StringBuilder pattern = new StringBuilder("[0-9]").append("z".repeat(size));
-    for (int i = 0; i < size; i++) {
-      pattern.append("[0-9]aa");
+                Runnable { Assertions.assertThat(weakPrefix.asPredicate().test(denseR)).isFalse() })
+        )
+            .isLessThanOrEqualTo((denseR.length + 32).toLong())
     }
-    return pattern.toString();
-  }
 
-  private static String driverSelectionPattern(int segments) {
-    return "(?:aa|bb)[0-9]".repeat(segments);
-  }
+    @Test
+    fun requiredInfixLiteralRejectsDensePrefixNoiseInSplitWithSinglePassWork() {
+        val pattern = Pattern.compile("(\\{Link:[^}]*?)<<!nav>>([^}]*?\\})")
+        val input = "{Link: target=home_page, category=general, priority=high}\n".repeat(1000)
 
-  private static long countAllMatches(FindIterator matcher, int expectedMatches) {
-    return WorkCounter.countForTesting(
-        () -> {
-          int matches = 0;
-          while (matcher.find()) {
-            matches++;
-          }
-          assertThat(matches).isEqualTo(expectedMatches);
-        });
-  }
+        val work =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input)
+            })
 
-  @FunctionalInterface
-  private interface FindIterator {
-    boolean find();
-  }
-
-  private static void assertReverseDfaSuffixFailureIsConstantWork(IntPredicate find) {
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> {
-              boolean matched = find.test(2_000);
-              assertThat(matched).isFalse();
-            });
-
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> {
-              boolean matched = find.test(10_000);
-              assertThat(matched).isFalse();
-            });
-
-    // If a required-content prefilter runs first, it scans the entire input, resulting in at least
-    // 2,000 and 10,000 operations respectively.
-    //
-    // Under reverse DFA suffix acceleration, it rejects after inspecting only a few characters
-    // from the end of the text, executing in constant time independent of text size.
-    assertThat(work2000)
-        .as("Short text failing scan should run in constant-time reverse DFA setup")
-        .isGreaterThanOrEqualTo(0)
-        .isLessThan(200);
-
-    assertThat(work10000)
-        .as("Long text failing scan should also run in constant-time reverse DFA setup")
-        .isGreaterThanOrEqualTo(0)
-        .isLessThan(200);
-
-    // Assert that scaling is sub-linear (effectively constant)
-    assertThat(work10000)
-        .as("Work scaling should be flat, not linear with input size increase")
-        .isLessThanOrEqualTo(Math.max(10, work2000 * 2));
-  }
-
-  private static void assertConstantWork(IntPredicate find, String description) {
-    long work2000 = WorkCounter.countForTesting(() -> assertThat(find.test(2_000)).isTrue());
-    long work10000 = WorkCounter.countForTesting(() -> assertThat(find.test(10_000)).isTrue());
-
-    assertThat(work2000).as("%s on short input", description).isPositive().isLessThan(200);
-    assertThat(work10000).as("%s on long input", description).isPositive().isLessThan(200);
-    assertThat(work10000)
-        .as("%s should not scale with the prefix", description)
-        .isLessThan(work2000 * 2);
-  }
-
-  @Test
-  void stateAcceleratorEscapedQuoteScanIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("\"[^\"]*\"");
-    String input2000 = "\"" + "a".repeat(2_000) + "\"";
-    String input10000 = "\"" + "a".repeat(10_000) + "\"";
-
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isTrue());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isTrue());
-
-    assertThat(work10000)
-        .as("DFA self-loop state accelerator on String should scale linearly with input size")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void stateAcceleratorEscapedQuoteScanIsLinearForUtf8Input() {
-    Pattern pattern = Pattern.compile("\"[^\"]*\"");
-    byte[] input2000 = ("\"" + "a".repeat(2_000) + "\"").getBytes(UTF_8);
-    byte[] input10000 = ("\"" + "a".repeat(10_000) + "\"").getBytes(UTF_8);
-
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isTrue());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isTrue());
-
-    assertThat(work10000)
-        .as("DFA self-loop state accelerator on UTF-8 should scale linearly with input size")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void stateAcceleratorEscapedNewlineScanIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("[^,\\n]*\\n");
-    String input2000 = "a".repeat(2_000) + "\n";
-    String input10000 = "a".repeat(10_000) + "\n";
-
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isTrue());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isTrue());
-
-    assertThat(work10000)
-        .as("DFA self-loop state accelerator with newline on String should scale linearly")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void dfaReacceleratesStartStateAfterFalseCandidateWorkIsLinear() {
-    Pattern pattern = Pattern.compile("fo[0-9]+");
-    String input2000 = "foox" + "a".repeat(2_000) + "fo123";
-    String input10000 = "foox" + "a".repeat(10_000) + "fo123";
-
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isTrue());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isTrue());
-
-    assertThat(work10000)
-        .as("DFA start state re-acceleration work must scale linearly with non-matching span")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void dfaInteriorSelfLoopEscapeAccelerationIsLinearOnWarmDfa() {
-    Pattern pattern = Pattern.compile("\"[^\"]*\"");
-    String input2000 = "\"" + "a".repeat(2_000) + "\"";
-    String input10000 = "\"" + "a".repeat(10_000) + "\"";
-    Dfa dfa = pattern.forwardFirstMatchDfa();
-
-    // Warm up DFA transitions
-    dfa.doSearch(new StringInputScanner(input2000), 0, false, false);
-
-    long work2000 =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(
-                        dfa.doSearch(new StringInputScanner(input2000), 0, false, false).matched())
-                    .isTrue());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(
-                        dfa.doSearch(new StringInputScanner(input10000), 0, false, false).matched())
-                    .isTrue());
-
-    assertThat(work10000)
-        .as("Warm DFA should scale linearly on interior self-loop escape")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void singleCharClassFindFastPathIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("\\d");
-    String input2000 = "a".repeat(2_000);
-    String input10000 = "a".repeat(10_000);
-
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
-
-    assertThat(work10000)
-        .as("Single character class find on String should scale linearly")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void singleCharClassFindFastPathIsLinearForUtf8Input() {
-    Pattern pattern = Pattern.compile("\\d");
-    byte[] input2000 = "a".repeat(2_000).getBytes(UTF_8);
-    byte[] input10000 = "a".repeat(10_000).getBytes(UTF_8);
-
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse());
-
-    assertThat(work10000)
-        .as("Single character class find on UTF-8 should scale linearly")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void negatedSingleCharClassFindFastPathIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("[^a-z]");
-    String input2000 = "a".repeat(2_000);
-    String input10000 = "a".repeat(10_000);
-
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
-
-    assertThat(work10000)
-        .as("Negated character class find on String should scale linearly")
-        .isLessThan(work2000 * 6);
-  }
-
-  @Test
-  void searchScalingMaintainsParityAcrossLatin1Utf16AndUtf8() {
-    Pattern pattern = Pattern.compile("[0-9]{3}-[A-Z]{3}");
-    int size = 5_000;
-    String latin1 = "abc ".repeat(size / 4);
-    // Include a non-Latin1 character at the start so coder becomes UTF16
-    String utf16 = "\u4e2d" + latin1.substring(1);
-    byte[] utf8 = latin1.getBytes(UTF_8);
-
-    long workLatin1 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(latin1).find()).isFalse());
-    long workUtf16 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(utf16).find()).isFalse());
-    long workUtf8 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(utf8)).find()).isFalse());
-
-    assertThat(workLatin1).as("Latin-1 search work").isLessThan(size * 4L);
-    assertThat(workUtf16)
-        .as("UTF-16 search work should remain within a reasonable factor of Latin-1")
-        .isLessThan(workLatin1 * 4L + 100);
-    assertThat(workUtf8)
-        .as("UTF-8 search work should remain within a reasonable factor of Latin-1")
-        .isLessThan(workLatin1 * 4L + 100);
-  }
-
-  @Test
-  void vectorAndSwarScansFindMatchesAcrossChunkBoundaries() {
-    int[] ranges = {'0', '9'};
-    for (int len = 1; len <= 65; len++) {
-      byte[] absent = "a".repeat(len).getBytes(UTF_8);
-      byte[] matchAtEnd = absent.clone();
-      matchAtEnd[len - 1] = '5';
-
-      assertThat(ByteSwarScan.indexOfAsciiClass(absent, 0, len, ranges, 0))
-          .as("SWAR absent result for length %d", len)
-          .isEqualTo(-1);
-      assertThat(ByteSwarScan.indexOfAsciiClass(matchAtEnd, 0, len, ranges, 0))
-          .as("SWAR end match for length %d", len)
-          .isEqualTo(len - 1);
-      assertThat(ByteSwarScan.indexOfBytePair(absent, 0, len, (byte) 'y', (byte) 'z', 0))
-          .as("SWAR pair absent result for length %d", len)
-          .isEqualTo(-1);
-      assertThat(
-              ByteSwarScan.indexOfByteTriple(absent, 0, len, (byte) 'x', (byte) 'y', (byte) 'z', 0))
-          .as("SWAR triple absent result for length %d", len)
-          .isEqualTo(-1);
-
-      if (isVectorApiAvailable()) {
-        assertThat(ByteVectorScan.indexOfAsciiClass(absent, 0, len, ranges, 0))
-            .as("vector absent result for length %d", len)
-            .isEqualTo(-1);
-        assertThat(ByteVectorScan.indexOfAsciiClass(matchAtEnd, 0, len, ranges, 0))
-            .as("vector end match for length %d", len)
-            .isEqualTo(len - 1);
-        assertThat(ByteVectorScan.indexOfBytePair(absent, 0, len, (byte) 'y', (byte) 'z', 0))
-            .as("vector pair absent result for length %d", len)
-            .isEqualTo(-1);
-        assertThat(
-                ByteVectorScan.indexOfByteTriple(
-                    absent, 0, len, (byte) 'x', (byte) 'y', (byte) 'z', 0))
-            .as("vector triple absent result for length %d", len)
-            .isEqualTo(-1);
-      }
+        Assertions.assertThat(work)
+            .`as`("Split must reject dense-prefix noise in a single pass without DFA churn")
+            .isLessThanOrEqualTo((input.length + 100).toLong())
     }
-  }
 
-  @Test
-  void startAnchoredLiteralRejectsDisplacedCandidateWithConstantWorkForString() {
-    Pattern pattern = Pattern.compile("^abc");
-    String displaced = "x".repeat(10_000) + "abc";
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(displaced).find()).isFalse());
-    assertThat(work)
-        .as("Start-anchored pattern with displaced candidate must reject in constant work")
-        .isLessThan(20);
-  }
+    @Test
+    fun literalSelectivityScoringIsLinearInPatternSize() {
+        val smallerWork = WorkCounter.countForTesting(Runnable { Pattern.compile(selectivityPattern(100)) })
+        val largerWork = WorkCounter.countForTesting(Runnable { Pattern.compile(selectivityPattern(400)) })
 
-  @Test
-  void startAnchoredLiteralRejectsDisplacedCandidateWithConstantWorkForUtf8() {
-    Pattern pattern = Pattern.compile("^abc");
-    byte[] displaced = ("x".repeat(10_000) + "abc").getBytes(UTF_8);
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(displaced)).find()).isFalse());
-    assertThat(work)
-        .as("Start-anchored UTF-8 pattern with displaced candidate must reject in constant work")
-        .isLessThan(20);
-  }
-
-  @Test
-  void startAnchoredCharClassRejectsDisplacedCandidateWithConstantWork() {
-    Pattern pattern = Pattern.compile("^[0-9]");
-    String displaced = "a".repeat(10_000) + "5";
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(displaced).find()).isFalse());
-    assertThat(work)
-        .as("Start-anchored char-class with displaced match must reject in constant work")
-        .isLessThan(20);
-  }
-
-  @Test
-  void repeatedFindWithAlternatingCaseIsLinearForString() {
-    Pattern pattern = Pattern.compile("(?i)needle");
-    assertRepeatedFindWorkIsLinear(
-        size -> {
-          StringBuilder sb = new StringBuilder();
-          String[] variants = {"Needle ", "needle ", "NEEDLE ", "nEeDlE "};
-          for (int i = 0; i < size; i++) {
-            sb.append(variants[i % variants.length]);
-          }
-          return pattern.matcher(sb.toString())::find;
-        },
-        "String");
-  }
-
-  @Test
-  void repeatedFindWithAlternatingCaseIsLinearForUtf8() {
-    Pattern pattern = Pattern.compile("(?i)needle");
-    assertRepeatedFindWorkIsLinear(
-        size -> {
-          StringBuilder sb = new StringBuilder();
-          String[] variants = {"Needle ", "needle ", "NEEDLE ", "nEeDlE "};
-          for (int i = 0; i < size; i++) {
-            sb.append(variants[i % variants.length]);
-          }
-          return pattern.matcher(Utf8Input.trusted(sb.toString().getBytes(UTF_8)))::find;
-        },
-        "UTF-8");
-  }
-
-  @Test
-  void repeatedFindWithMultiBranchAlternationIsLinear() {
-    Pattern pattern = Pattern.compile("(?:apple|banana|cherry|date)");
-    assertRepeatedFindWorkIsLinear(
-        size -> {
-          StringBuilder sb = new StringBuilder();
-          String[] variants = {"apple ", "banana ", "cherry ", "date "};
-          for (int i = 0; i < size; i++) {
-            sb.append(variants[i % variants.length]);
-          }
-          return pattern.matcher(sb.toString())::find;
-        },
-        "String");
-  }
-
-  @Test
-  void classHashChainAchievesSublinearWorkOnCaseInsensitiveLiteralForStringInput() {
-    ClassHashChain chc = ClassHashChain.compileCaseInsensitive("content_length_header");
-    String text = "The quick brown fox jumps over the lazy dog. ".repeat(5); // 225 chars
-    long work =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length())))
-                    .isEqualTo(-1));
-
-    // 225 / 6 = ~37 operations (vs 225 operations for linear scan)
-    assertThat(work)
-        .as(
-            "Class-HashChain must perform sublinear work on case-insensitive patterns for String"
-                + " input")
-        .isLessThanOrEqualTo(text.length() / 6 + 10);
-  }
-
-  @Test
-  void classHashChainAchievesSublinearWorkOnNonAsciiCaseInsensitiveLiteralForStringInput() {
-    ClassHashChain chc = ClassHashChain.compileCaseInsensitive("конфигурация_сервера"); // M = 20
-    String text = "текст_без_совпадений_для_проверки_производительности_".repeat(5); // 270 chars
-    long work =
-        WorkCounter.countForTesting(
-            () ->
-                assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length())))
-                    .isEqualTo(-1));
-
-    // Sublinear bound: 270 / 19 = ~14 operations (vs 270 for linear scan)
-    assertThat(work)
-        .as(
-            "ClassHashChain must perform sublinear work on non-ASCII case-insensitive patterns"
-                + " for String input")
-        .isLessThanOrEqualTo(text.length() / 15 + 10);
-  }
-
-  @Test
-  void unicodeCaseInsensitiveUtf8LiteralFilterIsLinearOnDenseFalseCandidates() {
-    Pattern pattern = Pattern.compile("(?iu)Шерлок Холмс");
-    for (String falseCandidate : new String[] {"шЕРЛОК ХолмX ", "ШЕРЛОК ХОЛМX "}) {
-      Utf8Input shortInput = Utf8Input.validated(falseCandidate.repeat(500).getBytes(UTF_8));
-      Utf8Input longInput = Utf8Input.validated(falseCandidate.repeat(2_500).getBytes(UTF_8));
-
-      long shortWork =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.matcher(shortInput).find()).isFalse());
-      long longWork =
-          WorkCounter.countForTesting(
-              () -> assertThat(pattern.matcher(longInput).find()).isFalse());
-
-      assertThat(longWork)
-          .as("Unicode-folded UTF-8 filtering should scale linearly for %s", falseCandidate)
-          .isLessThan(shortWork * 6);
+        Assertions.assertThat(largerWork)
+            .`as`("Literal selectivity scoring should scale linearly with pattern size")
+            .isLessThanOrEqualTo(smallerWork * 6)
     }
-  }
 
-  @Test
-  void unicodeCaseInsensitiveUtf8LiteralFilterIsLinearAcrossSuccessfulFinds() {
-    Pattern pattern = Pattern.compile("(?iu)Шx[0-9]");
-    for (String match : new String[] {"Шx1 ", "шx1 "}) {
-      assertRepeatedFindWorkIsLinear(
-          size -> pattern.matcher(Utf8Input.validated(match.repeat(size).getBytes(UTF_8)))::find,
-          "Unicode-folded UTF-8 " + match);
+    @Test
+    fun cachedDriverSelectionCompilationIsLinearInSegmentCount() {
+        val smallerWork =
+            WorkCounter.countForTesting(Runnable { Pattern.compile(driverSelectionPattern(50)) })
+        val largerWork =
+            WorkCounter.countForTesting(Runnable { Pattern.compile(driverSelectionPattern(200)) })
+
+        Assertions.assertThat(largerWork)
+            .`as`("Cached driver selection should scale linearly with the number of segments")
+            .isLessThanOrEqualTo(smallerWork * 6)
     }
-  }
 
-  @Test
-  void hybridCaseInsensitiveSearchIsImmuneToFalseAnchorStormsForStringInput() {
-    Pattern pattern = Pattern.compile("(?i)keyword_to_find"); // anchor is 'k' / 'K'
-    String text = "k_other_words_".repeat(20); // 280 chars with 20 'k' false anchors
-    long work =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(text).find()).isFalse());
+    @Test
+    fun caseInsensitiveSingleCharRejectionIsSinglePass() {
+        val pattern = Pattern.compile("(?i)z")
+        val size = 10000
+        val input = "a".repeat(size)
 
-    // shiftAt skips forward on false anchors, keeping work well below quadratic O(N * M)
-    assertThat(work)
-        .as("Hybrid search with shiftAt must avoid quadratic work on false anchor floods")
-        .isLessThanOrEqualTo(text.length() * 2);
-  }
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
 
-  @Test
-  void unicodeCaseInsensitiveLinearChainUsesOnePassForSubmatchExtraction() {
-    // (?iu) triggers inst.foldCase = true on literal runes (e.g. Kelvin sign K <-> K <-> k)
-    Pattern pattern = Pattern.compile("(?iu)key:([0-9]+)");
-    assertThat(pattern.canOnePassSubmatch()).isTrue();
-    assertThat(pattern.onePass()).isNotNull();
-
-    String input = "prefix noise KEY:98765 trailing text";
-    Matcher matcher = pattern.matcher(input);
-    assertThat(matcher.find()).isTrue();
-    long groupReadWork =
-        WorkCounter.countForTesting(
-            () -> {
-              assertThat(matcher.group(0)).isEqualTo("KEY:98765");
-              assertThat(matcher.group(1)).isEqualTo("98765");
-            });
-    assertThat(groupReadWork)
-        .as(
-            "Unicode case-insensitive linear chain submatch extraction must run in OnePass with"
-                + " zero NFA allocations")
-        .isLessThanOrEqualTo(30);
-  }
-
-  @Test
-  void unanchoredLinearChainSubmatchWorkIsBoundedByMatchSlice() {
-    Pattern pattern = Pattern.compile("([a-z]+)@([a-z]+)\\.com");
-    String prefix = "noise ".repeat(500);
-    String match = "alice@google.com";
-    String suffix = " trailing".repeat(500);
-    String input = prefix + match + suffix;
-    Matcher matcher = pattern.matcher(input);
-    assertThat(matcher.find()).isTrue();
-    long groupReadWork =
-        WorkCounter.countForTesting(
-            () -> {
-              assertThat(matcher.group(1)).isEqualTo("alice");
-              assertThat(matcher.group(2)).isEqualTo("google");
-            });
-    assertThat(groupReadWork)
-        .as(
-            "Submatch extraction work must be strictly bounded by match slice length, not haystack"
-                + " length")
-        .isLessThanOrEqualTo(match.length() * 2L + 20);
-  }
-
-  @Test
-  void directDfaStartStateAcceleratesUnanchoredAlternationOnString() {
-    Prog prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL));
-    Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-    String input = "x".repeat(10_000) + "cherry";
-    long work =
-        WorkCounter.countForTesting(
-            () -> {
-              Dfa.SearchResult res = dfa.doSearch(input, false, false);
-              assertThat(res).isNotNull();
-              assertThat(res.matched()).isTrue();
-            });
-    assertThat(work)
-        .as("Direct DFA start state acceleration must scan input linearly")
-        .isLessThanOrEqualTo(input.length() + 20);
-  }
-
-  @Test
-  void multiLiteralPrefilterOnDenseCandidateNoiseIsBoundedByWorkLimit() {
-    // Dense first bytes would select the UTF-8 literal-alternation search, which scans once per
-    // literal (see LiteralAlternationWorkTest); this test covers the start accelerator instead.
-    Pattern pattern =
-        Pattern.compile(
-            "APPLE|BANANA|CHERRY", 0, EnginePathOptions.builder().literalFastPaths(false).build());
-    byte[] noise = "A B C A B C ".repeat(10_000).getBytes(UTF_8);
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse());
-
-    assertThat(work)
-        .as("Multi-literal candidate verification must be bounded by WorkLimit on dense noise")
-        .isLessThan(500);
-  }
-
-  @Test
-  void matchesWithCapturesDefersNfaWorkUntilGroupIsRead() {
-    // Non-OnePass pattern due to ambiguous repetition where b is part of [a-z]
-    Pattern pattern = Pattern.compile("([a-z]+)b([a-z]+)");
-    String input = "helloworldbwelcome";
-    Matcher matcher = pattern.matcher(input);
-    long matchWork = WorkCounter.countForTesting(() -> assertThat(matcher.matches()).isTrue());
-    assertThat(matcher.group(0)).isEqualTo(input);
-    long groupReadWork =
-        WorkCounter.countForTesting(
-            () -> {
-              assertThat(matcher.group(1)).isEqualTo("helloworld");
-              assertThat(matcher.group(2)).isEqualTo("welcome");
-            });
-    assertThat(matchWork)
-        .as("matches() must only run forward DFA work without eager NFA state building")
-        .isLessThanOrEqualTo(input.length() * 2L + 20);
-    assertThat(groupReadWork)
-        .as("Submatch extraction happens on-demand when group(k) is read")
-        .isLessThanOrEqualTo(input.length() * 5L + 20);
-  }
-
-  @Test
-  void matchesWithCapturesRejectsNonMatchingInputInLinearWork() {
-    Pattern pattern = Pattern.compile("([a-z]+)b([a-z]+)");
-    String input = "x".repeat(10_000);
-    Matcher matcher = pattern.matcher(input);
-    long work = WorkCounter.countForTesting(() -> assertThat(matcher.matches()).isFalse());
-    assertThat(work)
-        .as("Non-matching input in matches() must reject in linear DFA steps without NFA work")
-        .isLessThanOrEqualTo(input.length() + 20);
-  }
-
-  @Test
-  void directDfaStartStateAcceleratesUnanchoredAlternationOnUtf8() {
-    Prog prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL));
-    Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-    byte[] input = ("x".repeat(10_000) + "cherry").getBytes(UTF_8);
-    long work =
-        WorkCounter.countForTesting(
-            () -> {
-              Dfa.SearchResult res =
-                  dfa.doSearch(new Utf8InputScanner(input, 0, input.length), 0, false, false);
-              assertThat(res).isNotNull();
-              assertThat(res.matched()).isTrue();
-            });
-    assertThat(work)
-        .as("Direct DFA start state acceleration on UTF-8 must scan input linearly")
-        .isLessThanOrEqualTo(input.length + 20);
-  }
-
-  @Test
-  void lookingAtWithCapturesDefersNfaWorkUntilGroupIsRead() {
-    // Non-OnePass pattern due to overlapping alternation branches
-    Pattern pattern = Pattern.compile("(?:apple|application|apply):([0-9]+)");
-    String input = "application:12345 " + "x".repeat(10_000);
-    Matcher matcher = pattern.matcher(input);
-    long lookingAtWork =
-        WorkCounter.countForTesting(() -> assertThat(matcher.lookingAt()).isTrue());
-    assertThat(lookingAtWork)
-        .as(
-            "lookingAt() must only execute DFA prefix scan bounded by matched prefix, not trailing"
-                + " 10k chars")
-        .isLessThanOrEqualTo(50);
-    assertThat(matcher.group(0)).isEqualTo("application:12345");
-    assertThat(matcher.group(1)).isEqualTo("12345");
-  }
-
-  @Test
-  void multiLiteralPrefilterDoesNotRestartScalarVerificationAfterLateDenseCandidates() {
-    int literalLength = 512;
-    Pattern pattern =
-        Pattern.compile("A".repeat(literalLength - 1) + "B|" + "B".repeat(literalLength - 1) + "C");
-    byte[] noise = ("x".repeat(256) + "A".repeat(8_192)).getBytes(UTF_8);
-
-    long work =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse());
-
-    assertThat(work)
-        .as("WorkLimit exhaustion must resume with the normal matcher without a scalar rescan")
-        .isLessThan((long) noise.length * 10);
-  }
-
-  private static boolean isVectorApiAvailable() {
-    try {
-      Class.forName("jdk.incubator.vector.ByteVector");
-      return true;
-    } catch (ClassNotFoundException e) {
-      return false;
+        Assertions.assertThat(work)
+            .`as`("Case-insensitive single char search must inspect text in a single pass")
+            .isEqualTo(size.toLong())
     }
-  }
 
-  @Test
-  void leadingWhitespaceCharClassExpansionIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]");
-    String input2000 = "a".repeat(2_000);
-    String input10000 = "a".repeat(10_000);
+    @Test
+    fun caseInsensitiveDenseFalseCandidatesScaleLinearly() {
+        // Pattern has anchor 'a' matching every position, but candidate fails on second char 'b'
+        val pattern = Pattern.compile("(?i)ab")
 
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher("a".repeat(2000)).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher("a".repeat(10000)).find()).isFalse() })
 
-    assertThat(work10000)
-        .as("Leading expansion char class find on String should scale linearly")
-        .isLessThan(work2000 * 6);
+        // Without KMP fallback, work would be 2 * N. With KMP fallback after work exhaustion,
+        // it must remain strictly linear (work(10000) <= work(2000) * 6).
+        Assertions.assertThat(work10000)
+            .`as`("Dense false candidate verification must fall back to linear KMP")
+            .isLessThanOrEqualTo(work2000 * 6)
+    }
 
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher("   [123] ".repeat(size))::find, "String");
-  }
+    @Test
+    fun caseInsensitivePairDenseFalseCandidatesScaleLinearlyForUtf8Input() {
+        val pattern = Pattern.compile("(?i)keyword_to_find")
+        val input2000 = "kind knowledge token lock keep track ".repeat(50).toByteArray(StandardCharsets.UTF_8)
+        val input10000 = "kind knowledge token lock keep track ".repeat(250).toByteArray(StandardCharsets.UTF_8)
 
-  @Test
-  void leadingWhitespaceCharClassExpansionIsLinearForUtf8Input() {
-    Pattern pattern = Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]");
-    byte[] input2000 = "a".repeat(2_000).getBytes(UTF_8);
-    byte[] input10000 = "a".repeat(10_000).getBytes(UTF_8);
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
 
-    long work2000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(
-            () -> assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse());
+        Assertions.assertThat(work10000)
+            .`as`("UTF-8 case-insensitive false candidate search must remain linearly bounded")
+            .isLessThanOrEqualTo(work2000 * 6)
+    }
 
-    assertThat(work10000)
-        .as("Leading expansion char class find on UTF-8 should scale linearly")
-        .isLessThan(work2000 * 6);
+    @Test
+    fun caseInsensitiveLiteralFindWorkIsLinear() {
+        val pattern = Pattern.compile("(?i)keyword_to_find")
 
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher(Utf8Input.trusted("   [123] ".repeat(size).getBytes(UTF_8)))::find,
-        "UTF-8");
-  }
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("KEYWORD_TO_FIND ".repeat(size)).find() } },
+            "Case-insensitive literal find"
+        )
+    }
 
-  @Test
-  void leadingWhitespaceLiteralExpansionIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("\\s+https?://\\w+");
-    String input2000 = "a".repeat(2_000);
-    String input10000 = "a".repeat(10_000);
+    @Test
+    fun utf8RareByteLiteralPrefixFindWorkIsLinearAcrossFalseCandidates() {
+        val pattern = Pattern.compile("aaaaQaaaa[0-9]+")
+        val smaller = "aaaaQaaaaX".repeat(500).toByteArray(StandardCharsets.UTF_8)
+        val larger = "aaaaQaaaaX".repeat(2000).toByteArray(StandardCharsets.UTF_8)
 
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
+        val smallerWork =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(smaller)).find()).isFalse() })
+        val largerWork =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(larger)).find()).isFalse() })
 
-    assertThat(work10000)
-        .as("Leading expansion literal find on String should scale linearly")
-        .isLessThan(work2000 * 6);
+        Assertions.assertThat(largerWork)
+            .`as`("UTF-8 literal-prefix search must scale with repeated false candidates")
+            .isLessThanOrEqualTo(smallerWork * 5)
+    }
 
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher("  http://example ".repeat(size))::find, "String");
-  }
+    @Test
+    fun preselectedUtf8DfaCandidateSkipsRedundantStartScan() {
+        val pattern = Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
+        val bytes = ("123/456/7890" + "x".repeat(100)).toByteArray(StandardCharsets.UTF_8)
+        val scanner = Utf8InputScanner(bytes, 0, bytes.size)
+        val candidate =
+            Utf8StartAccelerator.findNextCandidate(pattern.utf8StartAccelerator(), scanner, 0)
+        val dfa = pattern.forwardFirstMatchDfa()
 
-  @Test
-  void leadingWhitespaceMultiLiteralExpansionIsLinearForStringInput() {
-    Pattern pattern = Pattern.compile("\\s*(?:apple|banana|cherry)");
-    String input2000 = "x".repeat(2_000);
-    String input10000 = "x".repeat(10_000);
+        Assertions.assertThat(candidate).isZero()
+        dfa.doSearch(scanner, candidate, false, false, false)
+        val ordinaryWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, false).matched)
+                        .isTrue()
+                })
+        val preselectedWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, true).matched)
+                        .isTrue()
+                })
 
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
+        Assertions.assertThat(preselectedWork)
+            .`as`("DFA must trust a candidate already selected by the caller")
+            .isLessThan(ordinaryWork)
+    }
 
-    assertThat(work10000)
-        .as("Leading expansion multi-literal find on String should scale linearly")
-        .isLessThan(work2000 * 6);
-  }
+    private fun interface FindIterator {
+        fun find(): Boolean
+    }
 
-  @Test
-  void leadingUnicodeExpansionIsLinearForStringAndUtf8Input() {
-    Pattern pattern = Pattern.compile("[\\u00e9\\u00e8]+:target");
-    String input2000 = "x".repeat(2_000);
-    String input10000 = "x".repeat(10_000);
+    @Test
+    fun stateAcceleratorEscapedQuoteScanIsLinearForStringInput() {
+        val pattern = Pattern.compile("\"[^\"]*\"")
+        val input2000 = "\"" + "a".repeat(2000) + "\""
+        val input10000 = "\"" + "a".repeat(10000) + "\""
 
-    long work2000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input2000).find()).isFalse());
-    long work10000 =
-        WorkCounter.countForTesting(() -> assertThat(pattern.matcher(input10000).find()).isFalse());
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
 
-    assertThat(work10000)
-        .as("Leading expansion unicode find on String should scale linearly")
-        .isLessThan(work2000 * 6);
+        Assertions.assertThat(work10000)
+            .`as`("DFA self-loop state accelerator on String should scale linearly with input size")
+            .isLessThan(work2000 * 6)
+    }
 
-    assertRepeatedFindWorkIsLinear(
-        size -> pattern.matcher("  \u00e9\u00e9:target ".repeat(size))::find, "String");
-    assertRepeatedFindWorkIsLinear(
-        size ->
-            pattern.matcher(
-                    Utf8Input.trusted("  \u00e9\u00e9:target ".repeat(size).getBytes(UTF_8)))
-                ::find,
-        "UTF-8");
-  }
+    @Test
+    fun stateAcceleratorEscapedQuoteScanIsLinearForUtf8Input() {
+        val pattern = Pattern.compile("\"[^\"]*\"")
+        val input2000 = ("\"" + "a".repeat(2000) + "\"").toByteArray(StandardCharsets.UTF_8)
+        val input10000 = ("\"" + "a".repeat(10000) + "\"").toByteArray(StandardCharsets.UTF_8)
+
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isTrue() })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isTrue() })
+
+        Assertions.assertThat(work10000)
+            .`as`("DFA self-loop state accelerator on UTF-8 should scale linearly with input size")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun stateAcceleratorEscapedNewlineScanIsLinearForStringInput() {
+        val pattern = Pattern.compile("[^,\\n]*\\n")
+        val input2000 = "a".repeat(2000) + "\n"
+        val input10000 = "a".repeat(10000) + "\n"
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
+
+        Assertions.assertThat(work10000)
+            .`as`("DFA self-loop state accelerator with newline on String should scale linearly")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun dfaReacceleratesStartStateAfterFalseCandidateWorkIsLinear() {
+        val pattern = Pattern.compile("fo[0-9]+")
+        val input2000 = "foox" + "a".repeat(2000) + "fo123"
+        val input10000 = "foox" + "a".repeat(10000) + "fo123"
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
+
+        Assertions.assertThat(work10000)
+            .`as`("DFA start state re-acceleration work must scale linearly with non-matching span")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun dfaInteriorSelfLoopEscapeAccelerationIsLinearOnWarmDfa() {
+        val pattern = Pattern.compile("\"[^\"]*\"")
+        val input2000 = "\"" + "a".repeat(2000) + "\""
+        val input10000 = "\"" + "a".repeat(10000) + "\""
+        val dfa = pattern.forwardFirstMatchDfa()
+
+        // Warm up DFA transitions
+        dfa.doSearch(StringInputScanner(input2000), 0, false, false)
+
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(
+                        dfa.doSearch(StringInputScanner(input2000), 0, false, false).matched
+                    )
+                        .isTrue()
+                })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(
+                        dfa.doSearch(StringInputScanner(input10000), 0, false, false).matched
+                    )
+                        .isTrue()
+                })
+
+        Assertions.assertThat(work10000)
+            .`as`("Warm DFA should scale linearly on interior self-loop escape")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun singleCharClassFindFastPathIsLinearForStringInput() {
+        val pattern = Pattern.compile("\\d")
+        val input2000 = "a".repeat(2000)
+        val input10000 = "a".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Single character class find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun singleCharClassFindFastPathIsLinearForUtf8Input() {
+        val pattern = Pattern.compile("\\d")
+        val input2000 = "a".repeat(2000).toByteArray(StandardCharsets.UTF_8)
+        val input10000 = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
+
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
+
+        Assertions.assertThat(work10000)
+            .`as`("Single character class find on UTF-8 should scale linearly")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun negatedSingleCharClassFindFastPathIsLinearForStringInput() {
+        val pattern = Pattern.compile("[^a-z]")
+        val input2000 = "a".repeat(2000)
+        val input10000 = "a".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Negated character class find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun searchScalingMaintainsParityAcrossLatin1Utf16AndUtf8() {
+        val pattern = Pattern.compile("[0-9]{3}-[A-Z]{3}")
+        val size = 5000
+        val latin1 = "abc ".repeat(size / 4)
+        // Include a non-Latin1 character at the start so coder becomes UTF16
+        val utf16 = "\u4e2d" + latin1.substring(1)
+        val utf8 = latin1.toByteArray(StandardCharsets.UTF_8)
+
+        val workLatin1 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(latin1).find()).isFalse() })
+        val workUtf16 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(utf16).find()).isFalse() })
+        val workUtf8 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(utf8)).find()).isFalse() })
+
+        Assertions.assertThat(workLatin1).`as`("Latin-1 search work").isLessThan(size * 4L)
+        Assertions.assertThat(workUtf16)
+            .`as`("UTF-16 search work should remain within a reasonable factor of Latin-1")
+            .isLessThan(workLatin1 * 4L + 100)
+        Assertions.assertThat(workUtf8)
+            .`as`("UTF-8 search work should remain within a reasonable factor of Latin-1")
+            .isLessThan(workLatin1 * 4L + 100)
+    }
+
+    @Test
+    fun vectorAndSwarScansFindMatchesAcrossChunkBoundaries() {
+        val ranges = intArrayOf('0'.code, '9'.code)
+        for (len in 1..65) {
+            val absent = "a".repeat(len).toByteArray(StandardCharsets.UTF_8)
+            val matchAtEnd = absent.clone()
+            matchAtEnd[len - 1] = '5'.code.toByte()
+
+            Assertions.assertThat(ByteSwarScan.indexOfAsciiClass(absent, 0, len, ranges, 0))
+                .`as`("SWAR absent result for length %d", len)
+                .isEqualTo(-1)
+            Assertions.assertThat(ByteSwarScan.indexOfAsciiClass(matchAtEnd, 0, len, ranges, 0))
+                .`as`("SWAR end match for length %d", len)
+                .isEqualTo(len - 1)
+            Assertions.assertThat(ByteSwarScan.indexOfBytePair(absent, 0, len, 'y'.code.toByte(), 'z'.code.toByte(), 0))
+                .`as`("SWAR pair absent result for length %d", len)
+                .isEqualTo(-1)
+            Assertions.assertThat(
+                ByteSwarScan.indexOfByteTriple(
+                    absent,
+                    0,
+                    len,
+                    'x'.code.toByte(),
+                    'y'.code.toByte(),
+                    'z'.code.toByte(),
+                    0
+                )
+            )
+                .`as`("SWAR triple absent result for length %d", len)
+                .isEqualTo(-1)
+
+            if (isVectorApiAvailable) {
+                Assertions.assertThat(ByteVectorScan.indexOfAsciiClass(absent, 0, len, ranges, 0))
+                    .`as`("vector absent result for length %d", len)
+                    .isEqualTo(-1)
+                Assertions.assertThat(ByteVectorScan.indexOfAsciiClass(matchAtEnd, 0, len, ranges, 0))
+                    .`as`("vector end match for length %d", len)
+                    .isEqualTo(len - 1)
+                Assertions.assertThat(
+                    ByteVectorScan.indexOfBytePair(
+                        absent,
+                        0,
+                        len,
+                        'y'.code.toByte(),
+                        'z'.code.toByte(),
+                        0
+                    )
+                )
+                    .`as`("vector pair absent result for length %d", len)
+                    .isEqualTo(-1)
+                Assertions.assertThat(
+                    ByteVectorScan.indexOfByteTriple(
+                        absent, 0, len, 'x'.code.toByte(), 'y'.code.toByte(), 'z'.code.toByte(), 0
+                    )
+                )
+                    .`as`("vector triple absent result for length %d", len)
+                    .isEqualTo(-1)
+            }
+        }
+    }
+
+    @Test
+    fun startAnchoredLiteralRejectsDisplacedCandidateWithConstantWorkForString() {
+        val pattern = Pattern.compile("^abc")
+        val displaced = "x".repeat(10000) + "abc"
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
+        Assertions.assertThat(work)
+            .`as`("Start-anchored pattern with displaced candidate must reject in constant work")
+            .isLessThan(20)
+    }
+
+    @Test
+    fun startAnchoredLiteralRejectsDisplacedCandidateWithConstantWorkForUtf8() {
+        val pattern = Pattern.compile("^abc")
+        val displaced = ("x".repeat(10000) + "abc").toByteArray(StandardCharsets.UTF_8)
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(displaced)).find()).isFalse() })
+        Assertions.assertThat(work)
+            .`as`("Start-anchored UTF-8 pattern with displaced candidate must reject in constant work")
+            .isLessThan(20)
+    }
+
+    @Test
+    fun startAnchoredCharClassRejectsDisplacedCandidateWithConstantWork() {
+        val pattern = Pattern.compile("^[0-9]")
+        val displaced = "a".repeat(10000) + "5"
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
+        Assertions.assertThat(work)
+            .`as`("Start-anchored char-class with displaced match must reject in constant work")
+            .isLessThan(20)
+    }
+
+    @Test
+    fun repeatedFindWithAlternatingCaseIsLinearForString() {
+        val pattern = Pattern.compile("(?i)needle")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                val sb = StringBuilder()
+                val variants = arrayOf<String?>("Needle ", "needle ", "NEEDLE ", "nEeDlE ")
+                for (i in 0..<size) {
+                    sb.append(variants[i % variants.size])
+                }
+                FindIterator { pattern.matcher(sb.toString()).find() }
+            },
+            "String"
+        )
+    }
+
+    @Test
+    fun repeatedFindWithAlternatingCaseIsLinearForUtf8() {
+        val pattern = Pattern.compile("(?i)needle")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                val sb = StringBuilder()
+                val variants = arrayOf<String?>("Needle ", "needle ", "NEEDLE ", "nEeDlE ")
+                for (i in 0..<size) {
+                    sb.append(variants[i % variants.size])
+                }
+                FindIterator {
+                    pattern.matcher(Utf8Input.trusted(sb.toString().toByteArray(StandardCharsets.UTF_8))).find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun repeatedFindWithMultiBranchAlternationIsLinear() {
+        val pattern = Pattern.compile("(?:apple|banana|cherry|date)")
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                val sb = StringBuilder()
+                val variants = arrayOf<String?>("apple ", "banana ", "cherry ", "date ")
+                for (i in 0..<size) {
+                    sb.append(variants[i % variants.size])
+                }
+                FindIterator { pattern.matcher(sb.toString()).find() }
+            },
+            "String"
+        )
+    }
+
+    @Test
+    fun classHashChainAchievesSublinearWorkOnCaseInsensitiveLiteralForStringInput() {
+        val chc = ClassHashChain.compileCaseInsensitive("content_length_header")
+        val text = "The quick brown fox jumps over the lazy dog. ".repeat(5) // 225 chars
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length)))
+                        .isEqualTo(-1)
+                })
+
+        // 225 / 6 = ~37 operations (vs 225 operations for linear scan)
+        Assertions.assertThat(work)
+            .`as`(
+                "Class-HashChain must perform sublinear work on case-insensitive patterns for String"
+                        + " input"
+            )
+            .isLessThanOrEqualTo((text.length / 6 + 10).toLong())
+    }
+
+    @Test
+    fun classHashChainAchievesSublinearWorkOnNonAsciiCaseInsensitiveLiteralForStringInput() {
+        val chc = ClassHashChain.compileCaseInsensitive("конфигурация_сервера") // M = 20
+        val text = "текст_без_совпадений_для_проверки_производительности_".repeat(5) // 270 chars
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length)))
+                        .isEqualTo(-1)
+                })
+
+        // Sublinear bound: 270 / 19 = ~14 operations (vs 270 for linear scan)
+        Assertions.assertThat(work)
+            .`as`(
+                "ClassHashChain must perform sublinear work on non-ASCII case-insensitive patterns"
+                        + " for String input"
+            )
+            .isLessThanOrEqualTo((text.length / 15 + 10).toLong())
+    }
+
+    @Test
+    fun unicodeCaseInsensitiveUtf8LiteralFilterIsLinearOnDenseFalseCandidates() {
+        val pattern = Pattern.compile("(?iu)Шерлок Холмс")
+        for (falseCandidate in arrayOf<String>("шЕРЛОК ХолмX ", "ШЕРЛОК ХОЛМX ")) {
+            val shortInput = Utf8Input.validated(falseCandidate.repeat(500).toByteArray(StandardCharsets.UTF_8))
+            val longInput = Utf8Input.validated(falseCandidate.repeat(2500).toByteArray(StandardCharsets.UTF_8))
+
+            val shortWork =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(shortInput).find()).isFalse() })
+            val longWork =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(pattern.matcher(longInput).find()).isFalse() })
+
+            Assertions.assertThat(longWork)
+                .`as`("Unicode-folded UTF-8 filtering should scale linearly for %s", falseCandidate)
+                .isLessThan(shortWork * 6)
+        }
+    }
+
+    @Test
+    fun unicodeCaseInsensitiveUtf8LiteralFilterIsLinearAcrossSuccessfulFinds() {
+        val pattern = Pattern.compile("(?iu)Шx[0-9]")
+        for (match in arrayOf<String>("Шx1 ", "шx1 ")) {
+            assertRepeatedFindWorkIsLinear(
+                IntFunction { size: Int ->
+                    FindIterator {
+                        pattern.matcher(
+                            Utf8Input.validated(
+                                match.repeat(size).toByteArray(
+                                    StandardCharsets.UTF_8
+                                )
+                            )
+                        ).find()
+                    }
+                },
+                "Unicode-folded UTF-8 " + match
+            )
+        }
+    }
+
+    @Test
+    fun hybridCaseInsensitiveSearchIsImmuneToFalseAnchorStormsForStringInput() {
+        val pattern = Pattern.compile("(?i)keyword_to_find") // anchor is 'k' / 'K'
+        val text = "k_other_words_".repeat(20) // 280 chars with 20 'k' false anchors
+        val work =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+
+        // shiftAt skips forward on false anchors, keeping work well below quadratic O(N * M)
+        Assertions.assertThat(work)
+            .`as`("Hybrid search with shiftAt must avoid quadratic work on false anchor floods")
+            .isLessThanOrEqualTo((text.length * 2).toLong())
+    }
+
+    @Test
+    fun unicodeCaseInsensitiveLinearChainUsesOnePassForSubmatchExtraction() {
+        // (?iu) triggers inst.foldCase = true on literal runes (e.g. Kelvin sign K <-> K <-> k)
+        val pattern = Pattern.compile("(?iu)key:([0-9]+)")
+        Assertions.assertThat(pattern.canOnePassSubmatch()).isTrue()
+        Assertions.assertThat<OnePass?>(pattern.onePass()).isNotNull()
+
+        val input = "prefix noise KEY:98765 trailing text"
+        val matcher = pattern.matcher(input)
+        Assertions.assertThat(matcher.find()).isTrue()
+        val groupReadWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(matcher.group(0)).isEqualTo("KEY:98765")
+                    Assertions.assertThat(matcher.group(1)).isEqualTo("98765")
+                })
+        Assertions.assertThat(groupReadWork)
+            .`as`(
+                "Unicode case-insensitive linear chain submatch extraction must run in OnePass with"
+                        + " zero NFA allocations"
+            )
+            .isLessThanOrEqualTo(30)
+    }
+
+    @Test
+    fun unanchoredLinearChainSubmatchWorkIsBoundedByMatchSlice() {
+        val pattern = Pattern.compile("([a-z]+)@([a-z]+)\\.com")
+        val prefix = "noise ".repeat(500)
+        val match = "alice@google.com"
+        val suffix = " trailing".repeat(500)
+        val input = prefix + match + suffix
+        val matcher = pattern.matcher(input)
+        Assertions.assertThat(matcher.find()).isTrue()
+        val groupReadWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(matcher.group(1)).isEqualTo("alice")
+                    Assertions.assertThat(matcher.group(2)).isEqualTo("google")
+                })
+        Assertions.assertThat(groupReadWork)
+            .`as`(
+                "Submatch extraction work must be strictly bounded by match slice length, not haystack"
+                        + " length"
+            )
+            .isLessThanOrEqualTo(match.length * 2L + 20)
+    }
+
+    @Test
+    fun directDfaStartStateAcceleratesUnanchoredAlternationOnString() {
+        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL))
+        val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+        val input = "x".repeat(10000) + "cherry"
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val res = dfa.doSearch(input, false, false)
+                    Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
+                    Assertions.assertThat(res!!.matched).isTrue()
+                })
+        Assertions.assertThat(work)
+            .`as`("Direct DFA start state acceleration must scan input linearly")
+            .isLessThanOrEqualTo((input.length + 20).toLong())
+    }
+
+    @Test
+    fun multiLiteralPrefilterOnDenseCandidateNoiseIsBoundedByWorkLimit() {
+        // Dense first bytes would select the UTF-8 literal-alternation search, which scans once per
+        // literal (see LiteralAlternationWorkTest); this test covers the start accelerator instead.
+        val pattern =
+            Pattern.compile(
+                "APPLE|BANANA|CHERRY", 0, EnginePathOptions.builder().literalFastPaths(false).build()
+            )
+        val noise = "A B C A B C ".repeat(10000).toByteArray(StandardCharsets.UTF_8)
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`("Multi-literal candidate verification must be bounded by WorkLimit on dense noise")
+            .isLessThan(500)
+    }
+
+    @Test
+    fun matchesWithCapturesDefersNfaWorkUntilGroupIsRead() {
+        // Non-OnePass pattern due to ambiguous repetition where b is part of [a-z]
+        val pattern = Pattern.compile("([a-z]+)b([a-z]+)")
+        val input = "helloworldbwelcome"
+        val matcher = pattern.matcher(input)
+        val matchWork = WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.matches()).isTrue() })
+        Assertions.assertThat(matcher.group(0)).isEqualTo(input)
+        val groupReadWork =
+            WorkCounter.countForTesting(
+                Runnable {
+                    Assertions.assertThat(matcher.group(1)).isEqualTo("helloworld")
+                    Assertions.assertThat(matcher.group(2)).isEqualTo("welcome")
+                })
+        Assertions.assertThat(matchWork)
+            .`as`("matches() must only run forward DFA work without eager NFA state building")
+            .isLessThanOrEqualTo(input.length * 2L + 20)
+        Assertions.assertThat(groupReadWork)
+            .`as`("Submatch extraction happens on-demand when group(k) is read")
+            .isLessThanOrEqualTo(input.length * 5L + 20)
+    }
+
+    @Test
+    fun matchesWithCapturesRejectsNonMatchingInputInLinearWork() {
+        val pattern = Pattern.compile("([a-z]+)b([a-z]+)")
+        val input = "x".repeat(10000)
+        val matcher = pattern.matcher(input)
+        val work = WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.matches()).isFalse() })
+        Assertions.assertThat(work)
+            .`as`("Non-matching input in matches() must reject in linear DFA steps without NFA work")
+            .isLessThanOrEqualTo((input.length + 20).toLong())
+    }
+
+    @Test
+    fun directDfaStartStateAcceleratesUnanchoredAlternationOnUtf8() {
+        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL))
+        val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+        val input = ("x".repeat(10000) + "cherry").toByteArray(StandardCharsets.UTF_8)
+        val work =
+            WorkCounter.countForTesting(
+                Runnable {
+                    val res =
+                        dfa.doSearch(Utf8InputScanner(input, 0, input.size), 0, false, false)
+                    Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
+                    Assertions.assertThat(res!!.matched).isTrue()
+                })
+        Assertions.assertThat(work)
+            .`as`("Direct DFA start state acceleration on UTF-8 must scan input linearly")
+            .isLessThanOrEqualTo((input.size + 20).toLong())
+    }
+
+    @Test
+    fun lookingAtWithCapturesDefersNfaWorkUntilGroupIsRead() {
+        // Non-OnePass pattern due to overlapping alternation branches
+        val pattern = Pattern.compile("(?:apple|application|apply):([0-9]+)")
+        val input = "application:12345 " + "x".repeat(10000)
+        val matcher = pattern.matcher(input)
+        val lookingAtWork =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.lookingAt()).isTrue() })
+        Assertions.assertThat(lookingAtWork)
+            .`as`(
+                "lookingAt() must only execute DFA prefix scan bounded by matched prefix, not trailing"
+                        + " 10k chars"
+            )
+            .isLessThanOrEqualTo(50)
+        Assertions.assertThat(matcher.group(0)).isEqualTo("application:12345")
+        Assertions.assertThat(matcher.group(1)).isEqualTo("12345")
+    }
+
+    @Test
+    fun multiLiteralPrefilterDoesNotRestartScalarVerificationAfterLateDenseCandidates() {
+        val literalLength = 512
+        val pattern =
+            Pattern.compile("A".repeat(literalLength - 1) + "B|" + "B".repeat(literalLength - 1) + "C")
+        val noise = ("x".repeat(256) + "A".repeat(8192)).toByteArray(StandardCharsets.UTF_8)
+
+        val work =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
+
+        Assertions.assertThat(work)
+            .`as`("WorkLimit exhaustion must resume with the normal matcher without a scalar rescan")
+            .isLessThan(noise.size.toLong() * 10)
+    }
+
+    @Test
+    fun leadingWhitespaceCharClassExpansionIsLinearForStringInput() {
+        val pattern = Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]")
+        val input2000 = "a".repeat(2000)
+        val input10000 = "a".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Leading expansion char class find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("   [123] ".repeat(size)).find() } }, "String"
+        )
+    }
+
+    @Test
+    fun leadingWhitespaceCharClassExpansionIsLinearForUtf8Input() {
+        val pattern = Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]")
+        val input2000 = "a".repeat(2000).toByteArray(StandardCharsets.UTF_8)
+        val input10000 = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
+
+        val work2000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
+
+        Assertions.assertThat(work10000)
+            .`as`("Leading expansion char class find on UTF-8 should scale linearly")
+            .isLessThan(work2000 * 6)
+
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted(
+                            "   [123] ".repeat(size).toByteArray(
+                                StandardCharsets.UTF_8
+                            )
+                        )
+                    ).find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    @Test
+    fun leadingWhitespaceLiteralExpansionIsLinearForStringInput() {
+        val pattern = Pattern.compile("\\s+https?://\\w+")
+        val input2000 = "a".repeat(2000)
+        val input10000 = "a".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Leading expansion literal find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("  http://example ".repeat(size)).find() } },
+            "String"
+        )
+    }
+
+    @Test
+    fun leadingWhitespaceMultiLiteralExpansionIsLinearForStringInput() {
+        val pattern = Pattern.compile("\\s*(?:apple|banana|cherry)")
+        val input2000 = "x".repeat(2000)
+        val input10000 = "x".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Leading expansion multi-literal find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+    }
+
+    @Test
+    fun leadingUnicodeExpansionIsLinearForStringAndUtf8Input() {
+        val pattern = Pattern.compile("[\\u00e9\\u00e8]+:target")
+        val input2000 = "x".repeat(2000)
+        val input10000 = "x".repeat(10000)
+
+        val work2000 =
+            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+        val work10000 =
+            WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
+            })
+
+        Assertions.assertThat(work10000)
+            .`as`("Leading expansion unicode find on String should scale linearly")
+            .isLessThan(work2000 * 6)
+
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int -> FindIterator { pattern.matcher("  \u00e9\u00e9:target ".repeat(size)).find() } },
+            "String"
+        )
+        assertRepeatedFindWorkIsLinear(
+            IntFunction { size: Int ->
+                FindIterator {
+                    pattern.matcher(
+                        Utf8Input.trusted("  \u00e9\u00e9:target ".repeat(size).toByteArray(StandardCharsets.UTF_8))
+                    )
+                        .find()
+                }
+            },
+            "UTF-8"
+        )
+    }
+
+    companion object {
+        private fun alternatingNullableLoops(depth: Int): String {
+            val regex = StringBuilder("(?:x|)")
+            for (i in 0..<depth) {
+                regex.insert(0, "(?:").append(')').append(if (i % 2 == 0) "+?" else "*")
+            }
+            return regex.toString()
+        }
+
+        private fun assertBoundedEndSearchWork(small: Runnable?, large: Runnable?, label: String?) {
+            val smallWork = WorkCounter.countForTesting(small)
+            val largeWork = WorkCounter.countForTesting(large)
+            Assertions.assertThat(smallWork).`as`("%s work must be observed", label).isPositive()
+            Assertions.assertThat(largeWork)
+                .`as`("%s should inspect only the matching suffix", label)
+                .isLessThanOrEqualTo(smallWork * 2)
+        }
+
+        private fun assertFindAllWorkIsLinear(
+            matcher: IntFunction<FindIterator?>, inputKind: String?
+        ) {
+            val smallerWork = WorkCounter.countForTesting(Runnable { Companion.consumeMatches(matcher.apply(200)!!) })
+            val largerWork = WorkCounter.countForTesting(Runnable { Companion.consumeMatches(matcher.apply(1000)!!) })
+
+            Assertions.assertThat(smallerWork).`as`("%s find-all work must be observed", inputKind).isPositive()
+            Assertions.assertThat(largerWork)
+                .`as`("%s find-all iteration should scale linearly", inputKind)
+                .isLessThan(smallerWork * 6)
+        }
+
+        private fun consumeMatches(matcher: FindIterator) {
+            while (matcher.find()) {
+                // Consume every match so repeated find() work is included.
+            }
+        }
+
+        private fun assertGuardedGapRetryWorkIsLinear(
+            matcher: IntFunction<FindIterator?>, inputKind: String?
+        ) {
+            val smallerWork =
+                WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.apply(2000)!!.find()).isFalse() })
+            val largerWork =
+                WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.apply(10000)!!.find()).isFalse() })
+
+            Assertions.assertThat(smallerWork).`as`("%s guarded-gap work must be observed", inputKind).isPositive()
+            Assertions.assertThat(largerWork)
+                .`as`("%s guarded-gap retries should scale linearly", inputKind)
+                .isLessThan(smallerWork * 6)
+        }
+
+        private fun sparseLongLiteralFalseCandidateWork(blocks: Int): Long {
+            val block = "q" + "a".repeat(63)
+            val literal = StringBuilder(block.repeat(blocks / 2))
+            literal.setCharAt(literal.length - 2, 'e')
+            val pattern = Pattern.compile("[xy]" + literal)
+            val input = block.repeat(blocks)
+            return WorkCounter.countForTesting(Runnable {
+                Assertions.assertThat(pattern.matcher(input).find()).isFalse()
+            })
+        }
+
+        private fun assertConstantRejectionWork(find: IntPredicate, description: String?) {
+            val work2000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(2000)).isFalse() })
+            val work10000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(10000)).isFalse() })
+
+            Assertions.assertThat(work2000).`as`("%s rejection on short input", description).isLessThan(100)
+            Assertions.assertThat(work10000).`as`("%s rejection on long input", description).isLessThan(100)
+            Assertions.assertThat(work10000)
+                .`as`("%s rejection work should not scale with trailing input size", description)
+                .isLessThanOrEqualTo(max(10, work2000 * 2))
+        }
+
+        private fun assertRepeatedFindWorkIsLinear(
+            matcherFactory: IntFunction<FindIterator?>, description: String?
+        ) {
+            val smallerWork: Long = Companion.countAllMatches(matcherFactory.apply(500)!!, 500)
+            val largerWork: Long = Companion.countAllMatches(matcherFactory.apply(2000)!!, 2000)
+
+            Assertions.assertThat(largerWork)
+                .`as`("%s repeated find work should scale linearly", description)
+                .isLessThanOrEqualTo(max(10, smallerWork * 6))
+        }
+
+        private fun selectivityPattern(size: Int): String {
+            val pattern = StringBuilder("[0-9]").append("z".repeat(size))
+            for (i in 0..<size) {
+                pattern.append("[0-9]aa")
+            }
+            return pattern.toString()
+        }
+
+        private fun driverSelectionPattern(segments: Int): String {
+            return "(?:aa|bb)[0-9]".repeat(segments)
+        }
+
+        private fun countAllMatches(matcher: FindIterator, expectedMatches: Int): Long {
+            return WorkCounter.countForTesting(
+                Runnable {
+                    var matches = 0
+                    while (matcher.find()) {
+                        matches++
+                    }
+                    Assertions.assertThat(matches).isEqualTo(expectedMatches)
+                })
+        }
+
+        private fun assertReverseDfaSuffixFailureIsConstantWork(find: IntPredicate) {
+            val work2000 =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        val matched = find.test(2000)
+                        Assertions.assertThat(matched).isFalse()
+                    })
+
+            val work10000 =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        val matched = find.test(10000)
+                        Assertions.assertThat(matched).isFalse()
+                    })
+
+            // If a required-content prefilter runs first, it scans the entire input, resulting in at least
+            // 2,000 and 10,000 operations respectively.
+            //
+            // Under reverse DFA suffix acceleration, it rejects after inspecting only a few characters
+            // from the end of the text, executing in constant time independent of text size.
+            Assertions.assertThat(work2000)
+                .`as`("Short text failing scan should run in constant-time reverse DFA setup")
+                .isGreaterThanOrEqualTo(0)
+                .isLessThan(200)
+
+            Assertions.assertThat(work10000)
+                .`as`("Long text failing scan should also run in constant-time reverse DFA setup")
+                .isGreaterThanOrEqualTo(0)
+                .isLessThan(200)
+
+            // Assert that scaling is sub-linear (effectively constant)
+            Assertions.assertThat(work10000)
+                .`as`("Work scaling should be flat, not linear with input size increase")
+                .isLessThanOrEqualTo(max(10, work2000 * 2))
+        }
+
+        private fun assertConstantWork(find: IntPredicate, description: String?) {
+            val work2000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(2000)).isTrue() })
+            val work10000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(10000)).isTrue() })
+
+            Assertions.assertThat(work2000).`as`("%s on short input", description).isPositive().isLessThan(200)
+            Assertions.assertThat(work10000).`as`("%s on long input", description).isPositive().isLessThan(200)
+            Assertions.assertThat(work10000)
+                .`as`("%s should not scale with the prefix", description)
+                .isLessThan(work2000 * 2)
+        }
+
+        private val isVectorApiAvailable: Boolean
+            get() {
+                try {
+                    Class.forName("jdk.incubator.vector.ByteVector")
+                    return true
+                } catch (e: ClassNotFoundException) {
+                    return false
+                }
+            }
+    }
 }

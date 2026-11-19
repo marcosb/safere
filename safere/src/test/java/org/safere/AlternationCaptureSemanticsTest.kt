@@ -2,139 +2,146 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import java.util.regex.MatchResult
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import java.util.stream.Stream
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.regex.MatchResult;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-
-/** Differential coverage for JDK-visible captures across alternation branches. */
+/** Differential coverage for JDK-visible captures across alternation branches.  */
 @DisabledForCrosscheck("differential test already compares SafeRE with java.util.regex")
-class AlternationCaptureSemanticsTest {
-  private static Stream<Arguments> alternationCaptureCases() {
-    return Stream.of(
-        Arguments.of("()|\\W+", 0, " "),
-        Arguments.of("(a)|b", 0, "b"),
-        Arguments.of("b|(a)", 0, "b"),
-        Arguments.of("(|a)(b)", 0, "ab"),
-        Arguments.of("a(|b)|ac", 0, "ac"),
-        Arguments.of("(?:|(a))b", 0, "b"),
-        Arguments.of("(?:a|(b)|())", 0, "a"),
-        Arguments.of(".|(){2}", Pattern.MULTILINE | Pattern.UNICODE_CASE, "a"),
-        Arguments.of(".|(?:()){2}", 0, "a"),
-        Arguments.of("a|(){2}", 0, "a"),
-        Arguments.of("a|(?:(b)?){2}", 0, "a"),
-        Arguments.of("(?:(a)|^)", 0, ""),
-        Arguments.of(
-            "|#\\^@G\uE000\\^@\\^A\\^@\\b(..|^)|" + "k\\^N\uFBA1aaaaaaaaa0aaaaaaa\\^@\\^@\\^@m",
-            Pattern.CASE_INSENSITIVE | Pattern.COMMENTS,
-            ""));
-  }
+internal class AlternationCaptureSemanticsTest {
+    @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
+    @MethodSource("alternationCaptureCases")
+    @DisplayName("compiled alternations preserve JDK-visible capture group count")
+    fun compiledAlternationsPreserveCaptureGroupCount(regex: String, flags: Int, input: String) {
+        val jdkPattern = Pattern.compile(regex, flags)
+        val saferePattern = org.safere.Pattern.compile(regex, flags)
 
-  @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
-  @MethodSource("alternationCaptureCases")
-  @DisplayName("compiled alternations preserve JDK-visible capture group count")
-  void compiledAlternationsPreserveCaptureGroupCount(String regex, int flags, String input) {
-    java.util.regex.Pattern jdkPattern = java.util.regex.Pattern.compile(regex, flags);
-    Pattern saferePattern = Pattern.compile(regex, flags);
-
-    assertThat(saferePattern.matcher(input).groupCount())
-        .as("groupCount before match for /%s/ on %s", regex, input)
-        .isEqualTo(jdkPattern.matcher(input).groupCount());
-  }
-
-  @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
-  @MethodSource("alternationCaptureCases")
-  @DisplayName("find() exposes alternation captures like java.util.regex")
-  void findExposesAlternationCapturesLikeJdk(String regex, int flags, String input) {
-    assertSingleOperationMatchesJdk(regex, flags, input, Operation.FIND);
-  }
-
-  @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
-  @MethodSource("alternationCaptureCases")
-  @DisplayName("lookingAt() exposes alternation captures like java.util.regex")
-  void lookingAtExposesAlternationCapturesLikeJdk(String regex, int flags, String input) {
-    assertSingleOperationMatchesJdk(regex, flags, input, Operation.LOOKING_AT);
-  }
-
-  @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
-  @MethodSource("alternationCaptureCases")
-  @DisplayName("matches() exposes alternation captures like java.util.regex")
-  void matchesExposesAlternationCapturesLikeJdk(String regex, int flags, String input) {
-    assertSingleOperationMatchesJdk(regex, flags, input, Operation.MATCHES);
-  }
-
-  private static void assertSingleOperationMatchesJdk(
-      String regex, int flags, String input, Operation operation) {
-    java.util.regex.Matcher jdk = java.util.regex.Pattern.compile(regex, flags).matcher(input);
-    Matcher safere = Pattern.compile(regex, flags).matcher(input);
-
-    boolean jdkMatched =
-        switch (operation) {
-          case FIND -> jdk.find();
-          case LOOKING_AT -> jdk.lookingAt();
-          case MATCHES -> jdk.matches();
-        };
-    boolean safereMatched =
-        switch (operation) {
-          case FIND -> safere.find();
-          case LOOKING_AT -> safere.lookingAt();
-          case MATCHES -> safere.matches();
-        };
-
-    assertThat(safereMatched)
-        .as("%s result for /%s/ on %s", operation, regex, input)
-        .isEqualTo(jdkMatched);
-    assertGroupsMatch(regex, input, jdkMatched, jdk, safere);
-    if (jdkMatched) {
-      assertMatchResultMatchesJdk(regex, input, jdk.toMatchResult(), safere.toMatchResult());
+        Assertions.assertThat(saferePattern.matcher(input).groupCount())
+            .`as`("groupCount before match for /%s/ on %s", regex, input)
+            .isEqualTo(jdkPattern.matcher(input).groupCount())
     }
-  }
 
-  private static void assertGroupsMatch(
-      String regex, String input, boolean matched, java.util.regex.Matcher jdk, Matcher safere) {
-    assertThat(safere.groupCount()).isEqualTo(jdk.groupCount());
-    if (!matched) {
-      return;
+    @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
+    @MethodSource("alternationCaptureCases")
+    @DisplayName("find() exposes alternation captures like java.util.regex")
+    fun findExposesAlternationCapturesLikeJdk(regex: String, flags: Int, input: String) {
+        assertSingleOperationMatchesJdk(regex, flags, input, Operation.FIND)
     }
-    for (int group = 0; group <= jdk.groupCount(); group++) {
-      assertThat(safere.group(group))
-          .as("group(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.group(group));
-      assertThat(safere.start(group))
-          .as("start(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.start(group));
-      assertThat(safere.end(group))
-          .as("end(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.end(group));
-    }
-  }
 
-  private static void assertMatchResultMatchesJdk(
-      String regex, String input, MatchResult jdk, MatchResult safere) {
-    assertThat(safere.groupCount()).isEqualTo(jdk.groupCount());
-    for (int group = 0; group <= jdk.groupCount(); group++) {
-      assertThat(safere.group(group))
-          .as("toMatchResult group(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.group(group));
-      assertThat(safere.start(group))
-          .as("toMatchResult start(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.start(group));
-      assertThat(safere.end(group))
-          .as("toMatchResult end(%d) for /%s/ on %s", group, regex, input)
-          .isEqualTo(jdk.end(group));
+    @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
+    @MethodSource("alternationCaptureCases")
+    @DisplayName("lookingAt() exposes alternation captures like java.util.regex")
+    fun lookingAtExposesAlternationCapturesLikeJdk(regex: String, flags: Int, input: String) {
+        assertSingleOperationMatchesJdk(regex, flags, input, Operation.LOOKING_AT)
     }
-  }
 
-  private enum Operation {
-    FIND,
-    LOOKING_AT,
-    MATCHES
-  }
+    @ParameterizedTest(name = "[{index}] /{0}/ flags={1} on \"{2}\"")
+    @MethodSource("alternationCaptureCases")
+    @DisplayName("matches() exposes alternation captures like java.util.regex")
+    fun matchesExposesAlternationCapturesLikeJdk(regex: String, flags: Int, input: String) {
+        assertSingleOperationMatchesJdk(regex, flags, input, Operation.MATCHES)
+    }
+
+    private enum class Operation {
+        FIND,
+        LOOKING_AT,
+        MATCHES
+    }
+
+    companion object {
+        private fun alternationCaptureCases(): Stream<Arguments?> {
+            return Stream.of<Arguments?>(
+                Arguments.of("()|\\W+", 0, " "),
+                Arguments.of("(a)|b", 0, "b"),
+                Arguments.of("b|(a)", 0, "b"),
+                Arguments.of("(|a)(b)", 0, "ab"),
+                Arguments.of("a(|b)|ac", 0, "ac"),
+                Arguments.of("(?:|(a))b", 0, "b"),
+                Arguments.of("(?:a|(b)|())", 0, "a"),
+                Arguments.of(".|(){2}", org.safere.Pattern.MULTILINE or org.safere.Pattern.UNICODE_CASE, "a"),
+                Arguments.of(".|(?:()){2}", 0, "a"),
+                Arguments.of("a|(){2}", 0, "a"),
+                Arguments.of("a|(?:(b)?){2}", 0, "a"),
+                Arguments.of("(?:(a)|^)", 0, ""),
+                Arguments.of(
+                    "|#\\^@G\uE000\\^@\\^A\\^@\\b(..|^)|" + "k\\^N\uFBA1aaaaaaaaa0aaaaaaa\\^@\\^@\\^@m",
+                    org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.COMMENTS,
+                    ""
+                )
+            )
+        }
+
+        private fun assertSingleOperationMatchesJdk(
+            regex: String, flags: Int, input: String, operation: Operation
+        ) {
+            val jdk = Pattern.compile(regex, flags).matcher(input)
+            val safere = org.safere.Pattern.compile(regex, flags).matcher(input)
+
+            val jdkMatched =
+                when (operation) {
+                    Operation.FIND -> jdk.find()
+                    Operation.LOOKING_AT -> jdk.lookingAt()
+                    Operation.MATCHES -> jdk.matches()
+                }
+            val safereMatched =
+                when (operation) {
+                    Operation.FIND -> safere.find()
+                    Operation.LOOKING_AT -> safere.lookingAt()
+                    Operation.MATCHES -> safere.matches()
+                }
+
+            Assertions.assertThat(safereMatched)
+                .`as`("%s result for /%s/ on %s", operation, regex, input)
+                .isEqualTo(jdkMatched)
+            assertGroupsMatch(regex, input, jdkMatched, jdk, safere)
+            if (jdkMatched) {
+                assertMatchResultMatchesJdk(regex, input, jdk.toMatchResult(), safere.toMatchResult())
+            }
+        }
+
+        private fun assertGroupsMatch(
+            regex: String?, input: String?, matched: Boolean, jdk: Matcher, safere: org.safere.Matcher
+        ) {
+            Assertions.assertThat(safere.groupCount()).isEqualTo(jdk.groupCount())
+            if (!matched) {
+                return
+            }
+            for (group in 0..jdk.groupCount()) {
+                Assertions.assertThat(safere.group(group))
+                    .`as`("group(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.group(group))
+                Assertions.assertThat(safere.start(group))
+                    .`as`("start(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.start(group))
+                Assertions.assertThat(safere.end(group))
+                    .`as`("end(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.end(group))
+            }
+        }
+
+        private fun assertMatchResultMatchesJdk(
+            regex: String?, input: String?, jdk: MatchResult, safere: MatchResult
+        ) {
+            Assertions.assertThat(safere.groupCount()).isEqualTo(jdk.groupCount())
+            for (group in 0..jdk.groupCount()) {
+                Assertions.assertThat(safere.group(group))
+                    .`as`("toMatchResult group(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.group(group))
+                Assertions.assertThat(safere.start(group))
+                    .`as`("toMatchResult start(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.start(group))
+                Assertions.assertThat(safere.end(group))
+                    .`as`("toMatchResult end(%d) for /%s/ on %s", group, regex, input)
+                    .isEqualTo(jdk.end(group))
+            }
+        }
+    }
 }

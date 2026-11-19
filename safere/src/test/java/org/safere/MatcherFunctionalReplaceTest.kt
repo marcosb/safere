@@ -4,152 +4,155 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import java.util.function.Function
+import java.util.regex.MatchResult
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+/** Tests for [Matcher] functional replacement methods.  */
+internal class MatcherFunctionalReplaceTest {
+    @Test
+    @DisplayName("replaceAll(Function) expands group references in returned replacement")
+    fun replaceAllFunctionExpandsGroupReferences() {
+        val p = Pattern.compile("(\\w+)")
+        val m = p.matcher("hello world")
+        Assertions.assertThat(m.replaceAll(Function { result: MatchResult? -> "[$1]" })).isEqualTo("[hello] [world]")
+    }
 
-import java.util.ConcurrentModificationException;
-import java.util.function.Function;
-import java.util.regex.MatchResult;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+    @Test
+    @DisplayName("replaceFirst(Function) expands group references in returned replacement")
+    fun replaceFirstFunctionExpandsGroupReferences() {
+        val p = Pattern.compile("(\\w+)")
+        val m = p.matcher("hello world")
+        Assertions.assertThat(m.replaceFirst(Function { result: MatchResult? -> "[$1]" })).isEqualTo("[hello] world")
+    }
 
-/** Tests for {@link Matcher} functional replacement methods. */
-class MatcherFunctionalReplaceTest {
+    @Test
+    @DisplayName("replaceAll(Function) rejects null replacement result")
+    fun replaceAllFunctionRejectsNullReplacementResult() {
+        val p = Pattern.compile("a")
+        val m = p.matcher("a")
+        Assertions.assertThatThrownBy(ThrowingCallable { m.replaceAll(Function { result: MatchResult? -> null }) })
+            .isInstanceOf(
+                NullPointerException::class.java
+            )
+    }
 
-  @Test
-  @DisplayName("replaceAll(Function) expands group references in returned replacement")
-  void replaceAllFunctionExpandsGroupReferences() {
-    Pattern p = Pattern.compile("(\\w+)");
-    Matcher m = p.matcher("hello world");
-    assertThat(m.replaceAll(result -> "[$1]")).isEqualTo("[hello] [world]");
-  }
+    @Test
+    @DisplayName("replaceFirst(Function) rejects null replacement result")
+    fun replaceFirstFunctionRejectsNullReplacementResult() {
+        val p = Pattern.compile("a")
+        val m = p.matcher("a")
+        Assertions.assertThatThrownBy(ThrowingCallable { m.replaceFirst(Function { result: MatchResult? -> null }) })
+            .isInstanceOf(NullPointerException::class.java)
+    }
 
-  @Test
-  @DisplayName("replaceFirst(Function) expands group references in returned replacement")
-  void replaceFirstFunctionExpandsGroupReferences() {
-    Pattern p = Pattern.compile("(\\w+)");
-    Matcher m = p.matcher("hello world");
-    assertThat(m.replaceFirst(result -> "[$1]")).isEqualTo("[hello] world");
-  }
+    @Test
+    @DisplayName("replaceAll(Function) replaces all matches using function")
+    fun replaceAllFunction() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("a1b22c333")
+        val result = m.replaceAll(Function { mr: MatchResult? -> "[" + mr!!.group() + "]" })
+        Assertions.assertThat(result).isEqualTo("a[1]b[22]c[333]")
+    }
 
-  @Test
-  @DisplayName("replaceAll(Function) rejects null replacement result")
-  void replaceAllFunctionRejectsNullReplacementResult() {
-    Pattern p = Pattern.compile("a");
-    Matcher m = p.matcher("a");
-    assertThatThrownBy(() -> m.replaceAll(result -> null)).isInstanceOf(NullPointerException.class);
-  }
+    @Test
+    @DisplayName("replaceFirst(Function) replaces only first match using function")
+    fun replaceFirstFunction() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("a1b22c333")
+        val result = m.replaceFirst(Function { mr: MatchResult? -> "[" + mr!!.group() + "]" })
+        Assertions.assertThat(result).isEqualTo("a[1]b22c333")
+    }
 
-  @Test
-  @DisplayName("replaceFirst(Function) rejects null replacement result")
-  void replaceFirstFunctionRejectsNullReplacementResult() {
-    Pattern p = Pattern.compile("a");
-    Matcher m = p.matcher("a");
-    assertThatThrownBy(() -> m.replaceFirst(result -> null))
-        .isInstanceOf(NullPointerException.class);
-  }
+    @Test
+    @DisplayName("replaceAll(Function) with no matches returns original")
+    fun replaceAllFunctionNoMatch() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("no digits")
+        val result = m.replaceAll(Function { mr: MatchResult? -> "X" })
+        Assertions.assertThat(result).isEqualTo("no digits")
+    }
 
-  @Test
-  @DisplayName("replaceAll(Function) replaces all matches using function")
-  void replaceAllFunction() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("a1b22c333");
-    String result = m.replaceAll(mr -> "[" + mr.group() + "]");
-    assertThat(result).isEqualTo("a[1]b[22]c[333]");
-  }
+    @Test
+    @DisplayName("replaceFirst(Function) with no matches returns original")
+    fun replaceFirstFunctionNoMatch() {
+        val p = Pattern.compile("\\d+")
+        val m = p.matcher("no digits")
+        val result = m.replaceFirst(Function { mr: MatchResult? -> "X" })
+        Assertions.assertThat(result).isEqualTo("no digits")
+    }
 
-  @Test
-  @DisplayName("replaceFirst(Function) replaces only first match using function")
-  void replaceFirstFunction() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("a1b22c333");
-    String result = m.replaceFirst(mr -> "[" + mr.group() + "]");
-    assertThat(result).isEqualTo("a[1]b22c333");
-  }
+    @Test
+    @DisplayName("replaceAll(Function) can access capture groups")
+    fun replaceAllFunctionWithGroups() {
+        val p = Pattern.compile("(\\w+)=(\\w+)")
+        val m = p.matcher("a=1 b=2")
+        val result = m.replaceAll(Function { mr: MatchResult? -> mr!!.group(2) + ":" + mr.group(1) })
+        Assertions.assertThat(result).isEqualTo("1:a 2:b")
+    }
 
-  @Test
-  @DisplayName("replaceAll(Function) with no matches returns original")
-  void replaceAllFunctionNoMatch() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("no digits");
-    String result = m.replaceAll(mr -> "X");
-    assertThat(result).isEqualTo("no digits");
-  }
+    @Test
+    @DisplayName("replaceAll(Function) throws on null replacer")
+    fun replaceAllFunctionNullThrows() {
+        val p = Pattern.compile("x")
+        val m = p.matcher("x")
+        Assertions.assertThatThrownBy(ThrowingCallable { m.replaceAll(null as Function<MatchResult?, String?>?) })
+            .isInstanceOf(NullPointerException::class.java)
+    }
 
-  @Test
-  @DisplayName("replaceFirst(Function) with no matches returns original")
-  void replaceFirstFunctionNoMatch() {
-    Pattern p = Pattern.compile("\\d+");
-    Matcher m = p.matcher("no digits");
-    String result = m.replaceFirst(mr -> "X");
-    assertThat(result).isEqualTo("no digits");
-  }
+    @Test
+    @DisplayName("replaceFirst(Function) throws on null replacer")
+    fun replaceFirstFunctionNullThrows() {
+        val p = Pattern.compile("x")
+        val m = p.matcher("x")
+        Assertions.assertThatThrownBy(ThrowingCallable { m.replaceFirst(null as Function<MatchResult?, String?>?) })
+            .isInstanceOf(NullPointerException::class.java)
+    }
 
-  @Test
-  @DisplayName("replaceAll(Function) can access capture groups")
-  void replaceAllFunctionWithGroups() {
-    Pattern p = Pattern.compile("(\\w+)=(\\w+)");
-    Matcher m = p.matcher("a=1 b=2");
-    String result = m.replaceAll(mr -> mr.group(2) + ":" + mr.group(1));
-    assertThat(result).isEqualTo("1:a 2:b");
-  }
+    @Test
+    @DisabledForCrosscheck(
+        ("callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
+                + "bind mutation separately to each engine")
+    )
+    @DisplayName("replaceAll(Function) detects matcher mutation from replacer")
+    fun replaceAllFunctionDetectsMatcherMutation() {
+        val p = Pattern.compile("a")
+        val m = p.matcher("aa")
 
-  @Test
-  @DisplayName("replaceAll(Function) throws on null replacer")
-  void replaceAllFunctionNullThrows() {
-    Pattern p = Pattern.compile("x");
-    Matcher m = p.matcher("x");
-    assertThatThrownBy(() -> m.replaceAll((Function<MatchResult, String>) null))
-        .isInstanceOf(NullPointerException.class);
-  }
-
-  @Test
-  @DisplayName("replaceFirst(Function) throws on null replacer")
-  void replaceFirstFunctionNullThrows() {
-    Pattern p = Pattern.compile("x");
-    Matcher m = p.matcher("x");
-    assertThatThrownBy(() -> m.replaceFirst((Function<MatchResult, String>) null))
-        .isInstanceOf(NullPointerException.class);
-  }
-
-  @Test
-  @DisabledForCrosscheck(
-      "callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
-          + "bind mutation separately to each engine")
-  @DisplayName("replaceAll(Function) detects matcher mutation from replacer")
-  void replaceAllFunctionDetectsMatcherMutation() {
-    Pattern p = Pattern.compile("a");
-    Matcher m = p.matcher("aa");
-
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 m.replaceAll(
-                    result -> {
-                      m.find();
-                      return "x";
-                    }))
-        .isInstanceOf(ConcurrentModificationException.class);
-  }
+                    Function { result: MatchResult? ->
+                        m.find()
+                        "x"
+                    })
+            })
+            .isInstanceOf(ConcurrentModificationException::class.java)
+    }
 
-  @Test
-  @DisabledForCrosscheck(
-      "callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
-          + "bind mutation separately to each engine")
-  @DisplayName("replaceFirst(Function) detects matcher mutation from replacer")
-  void replaceFirstFunctionDetectsMatcherMutation() {
-    Pattern p = Pattern.compile("a");
-    Matcher m = p.matcher("aa");
+    @Test
+    @DisabledForCrosscheck(
+        ("callback mutation is covered by MatcherStateMachineTraceTest; generated wrapper cannot "
+                + "bind mutation separately to each engine")
+    )
+    @DisplayName("replaceFirst(Function) detects matcher mutation from replacer")
+    fun replaceFirstFunctionDetectsMatcherMutation() {
+        val p = Pattern.compile("a")
+        val m = p.matcher("aa")
 
-    assertThatThrownBy(
-            () ->
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 m.replaceFirst(
-                    result -> {
-                      m.find();
-                      return "x";
-                    }))
-        .isInstanceOf(ConcurrentModificationException.class);
-  }
+                    Function { result: MatchResult? ->
+                        m.find()
+                        "x"
+                    })
+            })
+            .isInstanceOf(ConcurrentModificationException::class.java)
+    }
 }

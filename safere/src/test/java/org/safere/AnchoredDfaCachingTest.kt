@@ -2,110 +2,113 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
+import java.util.function.IntConsumer
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.function.IntConsumer;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-
-/** Work-bound tests for DFA transition caching in anchored patterns. */
+/** Work-bound tests for DFA transition caching in anchored patterns.  */
 @DisabledForCrosscheck("WorkCounter and the UTF-8 input API are SafeRE-specific")
 @Tag("work-counter")
-class AnchoredDfaCachingTest {
-  private static final int FLAGS =
-      ParseFlags.PERL_X | ParseFlags.PERL_CLASSES | ParseFlags.PERL_B | ParseFlags.UNICODE_GROUPS;
-  private static final String FRUIT_MARKUP_PATTERN =
-      "^\\s*<(\\QApple\\E|\\QBanana\\E|\\QCherry\\E)>\\s*$";
-  private static final String MULTILINE_LINE_PATTERN = "(?m)(?:^|,)(?:\"(target)\"|(target))";
+internal class AnchoredDfaCachingTest {
+    @Test
+    fun stringAnchorsKeepOrdinaryDfaTransitionsCached() {
+        val pattern = Pattern.compile(FRUIT_MARKUP_PATTERN)
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                val input: String = nonMatchingInput(size)
+                Assertions.assertThat(pattern.matcher(input).replaceAll("$1")).isEqualTo(input)
+            })
+    }
 
-  @Test
-  void stringAnchorsKeepOrdinaryDfaTransitionsCached() {
-    Pattern pattern = Pattern.compile(FRUIT_MARKUP_PATTERN);
-    assertCachedTransitionWork(
-        size -> {
-          String input = nonMatchingInput(size);
-          assertThat(pattern.matcher(input).replaceAll("$1")).isEqualTo(input);
-        });
-  }
+    @Test
+    fun utf8AnchorsKeepOrdinaryDfaTransitionsCached() {
+        val prog = Compiler.compile(Parser.parse(FRUIT_MARKUP_PATTERN, FLAGS))
+        val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                val input = nonMatchingInput(size).toByteArray(StandardCharsets.UTF_8)
+                val result = dfa.doSearch(Utf8InputScanner(input), true, false)
+                Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+                Assertions.assertThat(result!!.matched).isFalse()
+            })
+    }
 
-  @Test
-  void utf8AnchorsKeepOrdinaryDfaTransitionsCached() {
-    Prog prog = Compiler.compile(Parser.parse(FRUIT_MARKUP_PATTERN, FLAGS));
-    Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-    assertCachedTransitionWork(
-        size -> {
-          byte[] input = nonMatchingInput(size).getBytes(UTF_8);
-          Dfa.SearchResult result = dfa.doSearch(new Utf8InputScanner(input), true, false);
-          assertThat(result).isNotNull();
-          assertThat(result.matched()).isFalse();
-        });
-  }
+    @Test
+    fun multilineBeginningAnchorKeepsStringTransitionsCached() {
+        val pattern = Pattern.compile(MULTILINE_LINE_PATTERN)
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                Assertions.assertThat(pattern.matcher(multilineNonMatchingInput(size)).find()).isFalse()
+            })
+    }
 
-  @Test
-  void multilineBeginningAnchorKeepsStringTransitionsCached() {
-    Pattern pattern = Pattern.compile(MULTILINE_LINE_PATTERN);
-    assertCachedTransitionWork(
-        size -> assertThat(pattern.matcher(multilineNonMatchingInput(size)).find()).isFalse());
-  }
+    @Test
+    fun multilineBeginningAnchorKeepsUtf8TransitionsCached() {
+        val prog = Compiler.compile(Parser.parse(MULTILINE_LINE_PATTERN, FLAGS))
+        val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                val input = multilineNonMatchingInput(size).toByteArray(StandardCharsets.UTF_8)
+                val result = dfa.doSearch(Utf8InputScanner(input), false, false)
+                Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+                Assertions.assertThat(result!!.matched).isFalse()
+            })
+    }
 
-  @Test
-  void multilineBeginningAnchorKeepsUtf8TransitionsCached() {
-    Prog prog = Compiler.compile(Parser.parse(MULTILINE_LINE_PATTERN, FLAGS));
-    Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-    assertCachedTransitionWork(
-        size -> {
-          byte[] input = multilineNonMatchingInput(size).getBytes(UTF_8);
-          Dfa.SearchResult result = dfa.doSearch(new Utf8InputScanner(input), false, false);
-          assertThat(result).isNotNull();
-          assertThat(result.matched()).isFalse();
-        });
-  }
+    @Test
+    fun multilineEndingAnchorKeepsStringLineFeedTransitionsCached() {
+        val pattern = Pattern.compile("(?m)(?:x+$)y")
+        // The leading "y" cannot complete a match, but it keeps the required-class reject prefilter
+        // for [y] from deciding the call before the DFA runs.
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                Assertions.assertThat(pattern.matcher("y" + "xxx\n".repeat(size)).find()).isFalse()
+            })
+    }
 
-  @Test
-  void multilineEndingAnchorKeepsStringLineFeedTransitionsCached() {
-    Pattern pattern = Pattern.compile("(?m)(?:x+$)y");
-    // The leading "y" cannot complete a match, but it keeps the required-class reject prefilter
-    // for [y] from deciding the call before the DFA runs.
-    assertCachedTransitionWork(
-        size -> assertThat(pattern.matcher("y" + "xxx\n".repeat(size)).find()).isFalse());
-  }
+    @Test
+    fun multilineEndingAnchorKeepsUtf8LineFeedTransitionsCached() {
+        val prog = Compiler.compile(Parser.parse("(?m)(?:x+$)y", FLAGS))
+        val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+        assertCachedTransitionWork(
+            IntConsumer { size: Int ->
+                val input = "xxx\n".repeat(size).toByteArray(StandardCharsets.UTF_8)
+                val result = dfa.doSearch(Utf8InputScanner(input), false, false)
+                Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+                Assertions.assertThat(result!!.matched).isFalse()
+            })
+    }
 
-  @Test
-  void multilineEndingAnchorKeepsUtf8LineFeedTransitionsCached() {
-    Prog prog = Compiler.compile(Parser.parse("(?m)(?:x+$)y", FLAGS));
-    Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-    assertCachedTransitionWork(
-        size -> {
-          byte[] input = "xxx\n".repeat(size).getBytes(UTF_8);
-          Dfa.SearchResult result = dfa.doSearch(new Utf8InputScanner(input), false, false);
-          assertThat(result).isNotNull();
-          assertThat(result.matched()).isFalse();
-        });
-  }
+    companion object {
+        private val FLAGS =
+            ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
+        private const val FRUIT_MARKUP_PATTERN = "^\\s*<(\\QApple\\E|\\QBanana\\E|\\QCherry\\E)>\\s*$"
+        private const val MULTILINE_LINE_PATTERN = "(?m)(?:^|,)(?:\"(target)\"|(target))"
 
-  private static void assertCachedTransitionWork(IntConsumer operation) {
-    operation.accept(1_000);
-    operation.accept(10_000);
+        private fun assertCachedTransitionWork(operation: IntConsumer) {
+            operation.accept(1000)
+            operation.accept(10000)
 
-    long smallerWork = WorkCounter.countForTesting(() -> operation.accept(1_000));
-    long largerWork = WorkCounter.countForTesting(() -> operation.accept(10_000));
+            val smallerWork = WorkCounter.countForTesting(Runnable { operation.accept(1000) })
+            val largerWork = WorkCounter.countForTesting(Runnable { operation.accept(10000) })
 
-    assertThat(largerWork)
-        .as("ordinary anchored transitions should use the DFA cache independent of input length")
-        .isLessThanOrEqualTo(smallerWork * 2 + 10);
-  }
+            Assertions.assertThat(largerWork)
+                .`as`("ordinary anchored transitions should use the DFA cache independent of input length")
+                .isLessThanOrEqualTo(smallerWork * 2 + 10)
+        }
 
-  private static String nonMatchingInput(int size) {
-    String tag = "<Orange>";
-    int leadingSpaces = (size - tag.length()) / 2;
-    return " ".repeat(leadingSpaces) + tag + " ".repeat(size - tag.length() - leadingSpaces);
-  }
+        private fun nonMatchingInput(size: Int): String {
+            val tag = "<Orange>"
+            val leadingSpaces = (size - tag.length) / 2
+            return " ".repeat(leadingSpaces) + tag + " ".repeat(size - tag.length - leadingSpaces)
+        }
 
-  private static String multilineNonMatchingInput(int size) {
-    return "value,other\n".repeat((size + 11) / 12).substring(0, size);
-  }
+        private fun multilineNonMatchingInput(size: Int): String {
+            return "value,other\n".repeat((size + 11) / 12).substring(0, size)
+        }
+    }
 }

@@ -2,196 +2,213 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
-
-import java.util.function.Consumer;
-import java.util.regex.PatternSyntaxException;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import java.util.function.Consumer
+import java.util.function.Function
+import java.util.regex.MatchResult
+import java.util.regex.PatternSyntaxException
+import java.util.stream.Stream
 
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 @DisabledForCrosscheck("intentional-divergence diagnostics are SafeRE-specific")
-class IntentionalDivergenceDiagnosticsTest {
-  @AfterEach
-  void disableDiagnostics() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-  }
-
-  @Test
-  void exhaustedFindNotificationSeesFinalStateAndPropagatesFailure() {
-    Matcher matcher = Pattern.compile("").matcher("");
-    assertThat(matcher.find()).isTrue();
-    RuntimeException failure = new IllegalStateException("listener failed");
-    Pattern.setDiagnostics(
-        listener(
-            divergence -> {
-              assertThat(divergence).isEqualTo(IntentionalDivergence.EXHAUSTED_EMPTY_MATCH);
-              assertThat(matcher.hasMatch()).isFalse();
-              assertThatThrownBy(matcher::group).isInstanceOf(IllegalStateException.class);
-              throw failure;
-            }));
-
-    assertThatThrownBy(matcher::find).isSameAs(failure);
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    assertThat(matcher.find()).isFalse();
-  }
-
-  @ParameterizedTest
-  @MethodSource("replacementCases")
-  void replacementNotificationSeesFinalStateAcrossEngineAndApiPaths(
-      String regex, String input, EnginePathOptions options, boolean functional, boolean first) {
-    Pattern pattern = Pattern.compile(regex, 0, options);
-    Matcher expected = pattern.matcher(input);
-    replace(expected, functional, first);
-    Matcher actual = pattern.matcher(input);
-    RuntimeException failure = new IllegalStateException("listener failed");
-    Pattern.setDiagnostics(
-        listener(
-            divergence -> {
-              assertThat(divergence).isEqualTo(IntentionalDivergence.EXHAUSTED_EMPTY_MATCH);
-              assertSameState(actual, expected);
-              throw failure;
-            }));
-
-    assertThatThrownBy(() -> replace(actual, functional, first)).isSameAs(failure);
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    assertSameState(actual, expected);
-    assertThat(actual.find()).isEqualTo(expected.find());
-  }
-
-  private static Stream<Arguments> replacementCases() {
-    EnginePathOptions defaults = EnginePathOptions.builder().build();
-    EnginePathOptions dfa =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .shiftDfa(false)
-            .onePass(false)
-            .build();
-    return Stream.of(
-        Arguments.of("^$", "", defaults, false, false),
-        Arguments.of("^$", "", defaults, false, true),
-        Arguments.of("[ab]*", "ab", defaults, false, false),
-        Arguments.of("[ab]*", "ab", dfa, false, false),
-        Arguments.of("[ab]*", "ab", defaults, true, false));
-  }
-
-  @Test
-  void usePatternNotificationSeesInstalledPatternAndPreservedGroupZero() {
-    Matcher matcher = Pattern.compile("a+").matcher("ab");
-    assertThat(matcher.find()).isTrue();
-    Pattern replacement = Pattern.compile("(b)");
-    RuntimeException failure = new IllegalStateException("listener failed");
-    Pattern.setDiagnostics(
-        listener(
-            divergence -> {
-              assertThat(divergence).isEqualTo(IntentionalDivergence.USE_PATTERN_GROUP_ZERO);
-              assertThat(matcher.pattern()).isSameAs(replacement);
-              assertThat(matcher.groupCount()).isEqualTo(1);
-              assertThat(matcher.group()).isEqualTo("a");
-              assertThat(matcher.group(1)).isNull();
-              throw failure;
-            }));
-
-    assertThatThrownBy(() -> matcher.usePattern(replacement)).isSameAs(failure);
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.group(1)).isEqualTo("b");
-  }
-
-  @ParameterizedTest
-  @MethodSource("syntaxFailures")
-  void failedParseKeepsSyntaxErrorAndSuppressesNotificationFailure(
-      String regex, Throwable failure) {
-    PatternSyntaxException expected =
-        catchThrowableOfType(PatternSyntaxException.class, () -> Pattern.compile(regex));
-    assertThat(expected).isNotNull();
-    Pattern.setDiagnostics(
-        listener(
-            divergence -> {
-              if (failure instanceof RuntimeException runtime) {
-                throw runtime;
-              }
-              throw (Error) failure;
-            }));
-
-    assertThatThrownBy(() -> Pattern.compile(regex))
-        .isInstanceOfSatisfying(
-            PatternSyntaxException.class,
-            actual -> {
-              assertThat(actual.getPattern()).isEqualTo(expected.getPattern());
-              assertThat(actual.getIndex()).isEqualTo(expected.getIndex());
-              assertThat(actual.getDescription()).isEqualTo(expected.getDescription());
-              assertThat(actual.getSuppressed()).containsExactly(failure);
-            });
-  }
-
-  private static Stream<Arguments> syntaxFailures() {
-    return Stream.of("[a&&&b]", "(?x)#\\Q\n[", "(?x)#\\Q\n[a&&&b]")
-        .flatMap(
-            regex ->
-                Stream.of(
-                    Arguments.of(regex, new IllegalStateException("listener failed")),
-                    Arguments.of(regex, new AssertionError("listener failed"))));
-  }
-
-  @Test
-  void successfulParsePropagatesNotificationFailure() {
-    RuntimeException failure = new IllegalStateException("listener failed");
-    Pattern.setDiagnostics(
-        listener(
-            divergence -> {
-              assertThat(divergence).isEqualTo(IntentionalDivergence.COMMENT_QUOTING);
-              throw failure;
-            }));
-
-    assertThatThrownBy(() -> Pattern.compile("(?x)#\\Q\n.")).isSameAs(failure);
-  }
-
-  private static SafeReMatchDiagnostics listener(Consumer<IntentionalDivergence> callback) {
-    return new SafeReMatchDiagnostics() {
-      @Override
-      void onIntentionalDivergence(IntentionalDivergence divergence) {
-        callback.accept(divergence);
-      }
-    };
-  }
-
-  private static void replace(Matcher matcher, boolean functional, boolean first) {
-    if (functional) {
-      matcher.replaceAll(match -> "-");
-    } else if (first) {
-      matcher.replaceFirst("-");
-    } else {
-      matcher.replaceAll("-");
+internal class IntentionalDivergenceDiagnosticsTest {
+    @AfterEach
+    fun disableDiagnostics() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
     }
-  }
 
-  private static void assertSameState(Matcher actual, Matcher expected) {
-    assertThat(actual.hasMatch()).isEqualTo(expected.hasMatch());
-    if (expected.hasMatch()) {
-      for (int group = 0; group <= expected.groupCount(); group++) {
-        assertThat(actual.group(group)).isEqualTo(expected.group(group));
-        assertThat(actual.start(group)).isEqualTo(expected.start(group));
-        assertThat(actual.end(group)).isEqualTo(expected.end(group));
-      }
-    } else {
-      assertThatThrownBy(actual::group).isInstanceOf(IllegalStateException.class);
+    @Test
+    fun exhaustedFindNotificationSeesFinalStateAndPropagatesFailure() {
+        val matcher = Pattern.compile("").matcher("")
+        Assertions.assertThat(matcher.find()).isTrue()
+        val failure: RuntimeException = IllegalStateException("listener failed")
+        Pattern.setDiagnostics(
+            listener(
+                Consumer { divergence: IntentionalDivergence? ->
+                    Assertions.assertThat<IntentionalDivergence?>(divergence)
+                        .isEqualTo(IntentionalDivergence.EXHAUSTED_EMPTY_MATCH)
+                    Assertions.assertThat(matcher.hasMatch()).isFalse()
+                    Assertions.assertThatThrownBy(ThrowingCallable { matcher.group() })
+                        .isInstanceOf(IllegalStateException::class.java)
+                    throw failure
+                })
+        )
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.find() }).isSameAs(failure)
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        Assertions.assertThat(matcher.find()).isFalse()
     }
-    assertThat(actual.appendTail(new StringBuilder()).toString())
-        .isEqualTo(expected.appendTail(new StringBuilder()).toString());
-  }
+
+    @ParameterizedTest
+    @MethodSource("replacementCases")
+    fun replacementNotificationSeesFinalStateAcrossEngineAndApiPaths(
+        regex: String?, input: String?, options: EnginePathOptions?, functional: Boolean, first: Boolean
+    ) {
+        val pattern = Pattern.compile(regex, 0, options)
+        val expected = pattern.matcher(input)
+        replace(expected, functional, first)
+        val actual = pattern.matcher(input)
+        val failure: RuntimeException = IllegalStateException("listener failed")
+        Pattern.setDiagnostics(
+            listener(
+                Consumer { divergence: IntentionalDivergence? ->
+                    Assertions.assertThat<IntentionalDivergence?>(divergence)
+                        .isEqualTo(IntentionalDivergence.EXHAUSTED_EMPTY_MATCH)
+                    assertSameState(actual, expected)
+                    throw failure
+                })
+        )
+
+        Assertions.assertThatThrownBy(ThrowingCallable { replace(actual, functional, first) }).isSameAs(failure)
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        assertSameState(actual, expected)
+        Assertions.assertThat(actual.find()).isEqualTo(expected.find())
+    }
+
+    @Test
+    fun usePatternNotificationSeesInstalledPatternAndPreservedGroupZero() {
+        val matcher = Pattern.compile("a+").matcher("ab")
+        Assertions.assertThat(matcher.find()).isTrue()
+        val replacement = Pattern.compile("(b)")
+        val failure: RuntimeException = IllegalStateException("listener failed")
+        Pattern.setDiagnostics(
+            listener(
+                Consumer { divergence: IntentionalDivergence? ->
+                    Assertions.assertThat<IntentionalDivergence?>(divergence)
+                        .isEqualTo(IntentionalDivergence.USE_PATTERN_GROUP_ZERO)
+                    Assertions.assertThat<Pattern?>(matcher.pattern()).isSameAs(replacement)
+                    Assertions.assertThat(matcher.groupCount()).isEqualTo(1)
+                    Assertions.assertThat(matcher.group()).isEqualTo("a")
+                    Assertions.assertThat(matcher.group(1)).isNull()
+                    throw failure
+                })
+        )
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.usePattern(replacement) }).isSameAs(failure)
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.group(1)).isEqualTo("b")
+    }
+
+    @ParameterizedTest
+    @MethodSource("syntaxFailures")
+    fun failedParseKeepsSyntaxErrorAndSuppressesNotificationFailure(
+        regex: String?, failure: Throwable
+    ) {
+        val expected =
+            Assertions.catchThrowableOfType<PatternSyntaxException?>(
+                PatternSyntaxException::class.java,
+                ThrowingCallable { Pattern.compile(regex) })
+        Assertions.assertThat<PatternSyntaxException?>(expected).isNotNull()
+        Pattern.setDiagnostics(
+            listener(
+                Consumer { divergence: IntentionalDivergence? ->
+                    if (failure is RuntimeException) {
+                        throw failure
+                    }
+                    throw failure as Error?
+                })
+        )
+
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            .isInstanceOfSatisfying<PatternSyntaxException?>(
+                PatternSyntaxException::class.java,
+                Consumer { actual: PatternSyntaxException? ->
+                    Assertions.assertThat(actual!!.getPattern()).isEqualTo(expected!!.getPattern())
+                    Assertions.assertThat(actual.getIndex()).isEqualTo(expected.getIndex())
+                    Assertions.assertThat(actual.getDescription()).isEqualTo(expected.getDescription())
+                    Assertions.assertThat<Throwable?>(actual.getSuppressed()).containsExactly(failure)
+                })
+    }
+
+    @Test
+    fun successfulParsePropagatesNotificationFailure() {
+        val failure: RuntimeException = IllegalStateException("listener failed")
+        Pattern.setDiagnostics(
+            listener(
+                Consumer { divergence: IntentionalDivergence? ->
+                    Assertions.assertThat<IntentionalDivergence?>(divergence)
+                        .isEqualTo(IntentionalDivergence.COMMENT_QUOTING)
+                    throw failure
+                })
+        )
+
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("(?x)#\\Q\n.") }).isSameAs(failure)
+    }
+
+    companion object {
+        private fun replacementCases(): Stream<Arguments?> {
+            val defaults = EnginePathOptions.builder().build()
+            val dfa =
+                EnginePathOptions.builder()
+                    .literalFastPaths(false)
+                    .charClassMatchFastPaths(false)
+                    .shiftDfa(false)
+                    .onePass(false)
+                    .build()
+            return Stream.of<Arguments?>(
+                Arguments.of("^$", "", defaults, false, false),
+                Arguments.of("^$", "", defaults, false, true),
+                Arguments.of("[ab]*", "ab", defaults, false, false),
+                Arguments.of("[ab]*", "ab", dfa, false, false),
+                Arguments.of("[ab]*", "ab", defaults, true, false)
+            )
+        }
+
+        private fun syntaxFailures(): Stream<Arguments?>? {
+            return Stream.of<String?>("[a&&&b]", "(?x)#\\Q\n[", "(?x)#\\Q\n[a&&&b]")
+                .flatMap<Arguments?> { regex: String? ->
+                    Stream.of<Arguments?>(
+                        Arguments.of(regex, IllegalStateException("listener failed")),
+                        Arguments.of(regex, AssertionError("listener failed"))
+                    )
+                }
+        }
+
+        private fun listener(callback: Consumer<IntentionalDivergence?>): SafeReMatchDiagnostics {
+            return object : SafeReMatchDiagnostics() {
+                override fun onIntentionalDivergence(divergence: IntentionalDivergence?) {
+                    callback.accept(divergence)
+                }
+            }
+        }
+
+        private fun replace(matcher: Matcher, functional: Boolean, first: Boolean) {
+            if (functional) {
+                matcher.replaceAll(Function { match: MatchResult? -> "-" })
+            } else if (first) {
+                matcher.replaceFirst("-")
+            } else {
+                matcher.replaceAll("-")
+            }
+        }
+
+        private fun assertSameState(actual: Matcher, expected: Matcher) {
+            Assertions.assertThat(actual.hasMatch()).isEqualTo(expected.hasMatch())
+            if (expected.hasMatch()) {
+                for (group in 0..expected.groupCount()) {
+                    Assertions.assertThat(actual.group(group)).isEqualTo(expected.group(group))
+                    Assertions.assertThat(actual.start(group)).isEqualTo(expected.start(group))
+                    Assertions.assertThat(actual.end(group)).isEqualTo(expected.end(group))
+                }
+            } else {
+                Assertions.assertThatThrownBy(ThrowingCallable { actual.group() })
+                    .isInstanceOf(IllegalStateException::class.java)
+            }
+            Assertions.assertThat(actual.appendTail(StringBuilder()).toString())
+                .isEqualTo(expected.appendTail(StringBuilder()).toString())
+        }
+    }
 }

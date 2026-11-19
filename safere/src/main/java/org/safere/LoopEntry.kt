@@ -2,8 +2,8 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-/** A fresh loop entry/check pair, optionally followed by one straight-line capture write. */
-record LoopEntry(int out, int captureRegister) {}
+/** A fresh loop entry/check pair, optionally followed by one straight-line capture write.  */
+@JvmRecord
+internal data class LoopEntry(val out: Int, val captureRegister: Int)

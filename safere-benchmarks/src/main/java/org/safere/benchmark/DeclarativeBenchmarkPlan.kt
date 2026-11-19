@@ -2,2467 +2,2559 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
-
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
+import org.safere.benchmark.DeclarativeBenchmarkPlan.Companion.requireKnownPlaceholders
+import java.util.*
+import java.util.List
+import java.util.Map
+import java.util.Set
+import java.util.function.Consumer
+import java.util.function.IntFunction
+import java.util.regex.Matcher
+import java.util.regex.Pattern
 
 /**
  * Strict, versioned model for the normalized declarative benchmark plan.
- *
- * <p>This model deliberately contains no benchmark-family names. Workload declarations describe
- * required behavior, while engine declarations describe capabilities. {@link #expand} computes
+ * 
+ * 
+ * This model deliberately contains no benchmark-family names. Workload declarations describe
+ * required behavior, while engine declarations describe capabilities. [.expand] computes
  * their compatibility join.
  */
-final class DeclarativeBenchmarkPlan {
+internal class DeclarativeBenchmarkPlan private constructor(
+    inputs: MutableMap<String?, InputDeclaration?>?,
+    workloads: MutableList<WorkloadDeclaration>
+) {
+    private val inputs: MutableMap<String?, InputDeclaration>
+    private val workloads: MutableList<WorkloadDeclaration>
 
-  static final int SCHEMA_VERSION = 2;
-  private static final Pattern PLACEHOLDER = Pattern.compile("(?<!\\$)\\{([A-Za-z][A-Za-z0-9_]*)}");
-
-  private final Map<String, InputDeclaration> inputs;
-  private final List<WorkloadDeclaration> workloads;
-
-  private DeclarativeBenchmarkPlan(
-      Map<String, InputDeclaration> inputs, List<WorkloadDeclaration> workloads) {
-    this.inputs = Collections.unmodifiableMap(new LinkedHashMap<>(inputs));
-    this.workloads = List.copyOf(workloads);
-  }
-
-  static DeclarativeBenchmarkPlan parse(JsonObject json) {
-    JsonReader root = new JsonReader("plan", json);
-    root.requireOnly("schemaVersion", "inputs", "workloads");
-    int schemaVersion = root.requiredInt("schemaVersion");
-    if (schemaVersion != SCHEMA_VERSION) {
-      throw new IllegalArgumentException(
-          "Unsupported benchmark plan schema version: " + schemaVersion);
+    init {
+        this.inputs =
+            Collections.unmodifiableMap<String?, InputDeclaration?>(LinkedHashMap<String?, InputDeclaration?>(inputs))
+        this.workloads = List.copyOf<WorkloadDeclaration?>(workloads)
     }
 
-    Map<String, InputDeclaration> inputs = parseInputDeclarations(root.requiredArray("inputs"));
-
-    List<WorkloadDeclaration> workloads = new ArrayList<>();
-    Set<String> workloadTemplates = new LinkedHashSet<>();
-    for (JsonElement element : root.requiredArray("workloads")) {
-      WorkloadDeclaration workload = parseWorkload(element);
-      if (!workloadTemplates.add(workload.idTemplate())) {
-        throw new IllegalArgumentException(
-            "Duplicate benchmark workload ID template: " + workload.idTemplate());
-      }
-      workloads.add(workload);
-    }
-    if (workloads.isEmpty()) {
-      throw new IllegalArgumentException("Benchmark plan requires at least one workload");
+    fun inputs(): MutableMap<String?, InputDeclaration> {
+        return inputs
     }
 
-    DeclarativeBenchmarkPlan plan = new DeclarativeBenchmarkPlan(inputs, workloads);
-    plan.validateReferencesAndIdentities();
-    return plan;
-  }
+    fun workloads(): MutableList<WorkloadDeclaration> {
+        return workloads
+    }
 
-  Map<String, InputDeclaration> inputs() {
-    return inputs;
-  }
+    fun expandedWorkloads(): MutableList<ExpandedWorkload> {
+        return expandWorkloads()
+    }
 
-  static Map<String, InputDeclaration> parseInputDeclarations(JsonArray declarations) {
-    Map<String, InputDeclaration> inputs = new LinkedHashMap<>();
-    for (JsonElement element : declarations) {
-      for (InputDeclaration input : parseInputs(element)) {
-        if (inputs.put(input.id(), input) != null) {
-          throw new IllegalArgumentException("Duplicate benchmark input ID: " + input.id());
+    fun expand(engines: MutableList<EngineDeclaration>?, implementedOperations: MutableSet<Operation?>?): ExpandedPlan {
+        Objects.requireNonNull<MutableList<EngineDeclaration?>?>(engines)
+        Objects.requireNonNull<MutableSet<Operation?>?>(implementedOperations)
+        require(!engines!!.isEmpty()) { "Benchmark plan expansion requires at least one engine" }
+
+        val engineIds: MutableSet<String?> = LinkedHashSet<String?>()
+        for (engine in engines) {
+            require(engineIds.add(engine.id)) { "Duplicate benchmark engine ID: " + engine.id }
         }
-      }
-    }
-    return Collections.unmodifiableMap(inputs);
-  }
 
-  List<WorkloadDeclaration> workloads() {
-    return workloads;
-  }
-
-  List<ExpandedWorkload> expandedWorkloads() {
-    return expandWorkloads();
-  }
-
-  ExpandedPlan expand(List<EngineDeclaration> engines, Set<Operation> implementedOperations) {
-    Objects.requireNonNull(engines);
-    Objects.requireNonNull(implementedOperations);
-    if (engines.isEmpty()) {
-      throw new IllegalArgumentException("Benchmark plan expansion requires at least one engine");
-    }
-
-    Set<String> engineIds = new LinkedHashSet<>();
-    for (EngineDeclaration engine : engines) {
-      if (!engineIds.add(engine.id())) {
-        throw new IllegalArgumentException("Duplicate benchmark engine ID: " + engine.id());
-      }
-    }
-
-    List<ExpandedWorkload> expandedWorkloads = expandWorkloads();
-    validateTrialExclusions(expandedWorkloads, engineIds);
-    List<Trial> trials = new ArrayList<>();
-    List<Exclusion> exclusions = new ArrayList<>();
-    for (ExpandedWorkload workload : expandedWorkloads) {
-      if (workload.disabledReason() != null) {
-        for (EngineDeclaration engine : engines) {
-          exclusions.add(
-              new Exclusion(
-                  workload.id(),
-                  engine.id(),
-                  ExclusionKind.WORKLOAD_DISABLED,
-                  workload.disabledReason()));
+        val expandedWorkloads = expandWorkloads()
+        validateTrialExclusions(expandedWorkloads, engineIds)
+        val trials: MutableList<Trial> = ArrayList<Trial>()
+        val exclusions: MutableList<Exclusion> = ArrayList<Exclusion>()
+        for (workload in expandedWorkloads) {
+            if (workload.disabledReason != null) {
+                for (engine in engines) {
+                    exclusions.add(
+                        Exclusion(
+                            workload.id,
+                            engine.id,
+                            ExclusionKind.WORKLOAD_DISABLED,
+                            workload.disabledReason
+                        )
+                    )
+                }
+                continue
+            }
+            for (engine in engines) {
+                val exclusion: Exclusion? = Companion.exclusion(workload, engine, implementedOperations!!)
+                if (exclusion == null) {
+                    trials.add(Trial(workload, engine))
+                } else {
+                    exclusions.add(exclusion)
+                }
+            }
         }
-        continue;
-      }
-      for (EngineDeclaration engine : engines) {
-        Exclusion exclusion = exclusion(workload, engine, implementedOperations);
-        if (exclusion == null) {
-          trials.add(new Trial(workload, engine));
-        } else {
-          exclusions.add(exclusion);
-        }
-      }
+
+        val result =
+            ExpandedPlan(expandedWorkloads, List.copyOf<Trial?>(trials), List.copyOf<Exclusion?>(exclusions))
+        result.validateComplete(engines.size)
+        return result
     }
 
-    ExpandedPlan result =
-        new ExpandedPlan(expandedWorkloads, List.copyOf(trials), List.copyOf(exclusions));
-    result.validateComplete(engines.size());
-    return result;
-  }
+    private fun expandWorkloads(): MutableList<ExpandedWorkload> {
+        val result: MutableList<ExpandedWorkload> = ArrayList<ExpandedWorkload>()
+        val ids: MutableSet<String?> = LinkedHashSet<String?>()
+        for (workload in workloads) {
+            for (parameters in Companion.parameterBindings(workload.axes!!)) {
+                val id = substitute(workload.idTemplate!!, parameters, "workload ID")
+                require(!(id.isBlank() || id.indexOf('@') >= 0)) { "Invalid expanded benchmark workload ID: " + id }
+                require(ids.add(id)) { "Duplicate expanded benchmark workload ID: " + id }
+                val inputIds =
+                    workload.inputTemplates!!.stream()
+                        .map<String?> { template: String? -> substitute(template!!, parameters, id + " input") }
+                        .toList()
+                for (inputId in inputIds) {
+                    require(inputs.containsKey(inputId)) { id + " references unknown expanded benchmark input: " + inputId }
+                }
+                val patterns =
+                    workload.patternTemplates!!.stream()
+                        .map<String?> { template: String? -> Companion.substitutePattern(template!!, parameters) }
+                        .toList()
+                val arguments: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
+                for (argument in workload.arguments!!.entries) {
+                    arguments.put(
+                        argument.key, argument.value!!.substitute(parameters, id, argument.key)
+                    )
+                }
+                workload.operation!!.validateArguments(id, arguments)
+                val expected =
+                    if (workload.expected == null) null else workload.expected.substitute(parameters, id)
+                result.add(
+                    ExpandedWorkload(
+                        id,
+                        workload.operation,
+                        patterns,
+                        inputIds,
+                        parameters,
+                        arguments,
+                        workload.flags(),
+                        workload.requirements(),
+                        workload.inputRepresentations(),
+                        workload.inputRepresentationReason,
+                        workload.resultConsumption,
+                        expected,
+                        workload.lifecycle,
+                        workload.measurement,
+                        workload.disabledReason,
+                        workload.trialExclusions!!.stream()
+                            .filter { exclusion: TrialExclusion? -> exclusion!!.matches(parameters) }
+                            .toList()))
+            }
+        }
+        return List.copyOf<ExpandedWorkload?>(result)
+    }
 
-  private static Exclusion exclusion(
-      ExpandedWorkload workload, EngineDeclaration engine, Set<Operation> implementedOperations) {
-    TrialExclusion trialExclusion = workload.trialExclusion(engine.id());
-    if (trialExclusion != null) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
-          trialExclusion.reason());
+    fun validateTrialExclusions(workloads: MutableList<ExpandedWorkload>?, engineIds: MutableSet<String?>?) {
+        Objects.requireNonNull<MutableList<ExpandedWorkload?>?>(workloads)
+        Objects.requireNonNull<MutableSet<String?>?>(engineIds)
+        for (workload in this.workloads) {
+            for (exclusion in workload.trialExclusions!!) {
+                for (engineId in exclusion.engineIds!!) {
+                    require(engineIds!!.contains(engineId)) {
+                        (workload.idTemplate
+                                + " trial exclusion references unknown engine ID: "
+                                + engineId)
+                    }
+                }
+            }
+        }
+        for (workload in workloads!!) {
+            for (engineId in engineIds!!) {
+                workload.trialExclusion(engineId)
+            }
+        }
     }
-    if (!engine.adapterAvailable()) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.MISSING_ENGINE_ADAPTER,
-          "engine adapter is not available");
-    }
-    if (!implementedOperations.contains(workload.operation())) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.MISSING_OPERATION_IMPLEMENTATION,
-          "operation " + workload.operation().jsonName() + " is not implemented");
-    }
-    if (!workload.inputRepresentations().contains(engine.inputRepresentation())) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.UNSUPPORTED_INPUT_REPRESENTATION,
-          "workload does not accept " + engine.inputRepresentation().jsonName());
-    }
-    EnumSet<Flag> unsupportedFlags = workload.flags().clone();
-    unsupportedFlags.removeAll(engine.supportedFlags());
-    if (!unsupportedFlags.isEmpty()) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.UNSUPPORTED_FLAG,
-          "engine lacks flags " + enumNames(unsupportedFlags));
-    }
-    EnumSet<Feature> missing = workload.requirements().clone();
-    missing.removeAll(engine.features());
-    if (!missing.isEmpty()) {
-      return new Exclusion(
-          workload.id(),
-          engine.id(),
-          ExclusionKind.UNSUPPORTED_FEATURE,
-          "engine lacks " + enumNames(missing));
-    }
-    return null;
-  }
 
-  private List<ExpandedWorkload> expandWorkloads() {
-    List<ExpandedWorkload> result = new ArrayList<>();
-    Set<String> ids = new LinkedHashSet<>();
-    for (WorkloadDeclaration workload : workloads) {
-      for (Map<String, ParameterValue> parameters : parameterBindings(workload.axes())) {
-        String id = substitute(workload.idTemplate(), parameters, "workload ID");
-        if (id.isBlank() || id.indexOf('@') >= 0) {
-          throw new IllegalArgumentException("Invalid expanded benchmark workload ID: " + id);
+    private fun validateReferencesAndIdentities() {
+        for (workload in workloads) {
+            val axisNames = workload.axes!!.keys
+            Companion.requirePlaceholderCoverage(workload.idTemplate!!, axisNames, workload.idTemplate)
+            for (inputTemplate in workload.inputTemplates!!) {
+                requireKnownPlaceholders(inputTemplate, axisNames, workload.idTemplate + " input")
+            }
         }
-        if (!ids.add(id)) {
-          throw new IllegalArgumentException("Duplicate expanded benchmark workload ID: " + id);
+        val referencedInputs: MutableSet<String?> = LinkedHashSet<String?>()
+        for (workload in expandWorkloads()) {
+            referencedInputs.addAll(workload.inputIds!!)
         }
-        List<String> inputIds =
-            workload.inputTemplates().stream()
-                .map(template -> substitute(template, parameters, id + " input"))
-                .toList();
-        for (String inputId : inputIds) {
-          if (!inputs.containsKey(inputId)) {
-            throw new IllegalArgumentException(
-                id + " references unknown expanded benchmark input: " + inputId);
-          }
+        for (input in inputs.values) {
+            require(!(!input.shared && !referencedInputs.contains(input.id))) { "Benchmark input is not referenced by a workload and is not shared: " + input.id }
         }
-        List<String> patterns =
-            workload.patternTemplates().stream()
-                .map(template -> substitutePattern(template, parameters))
-                .toList();
-        Map<String, RecipeValue> arguments = new LinkedHashMap<>();
-        for (Map.Entry<String, RecipeValue> argument : workload.arguments().entrySet()) {
-          arguments.put(
-              argument.getKey(), argument.getValue().substitute(parameters, id, argument.getKey()));
+    }
+
+    internal class InputDeclaration(
+        val id: String?,
+        val recipe: InputRecipe?,
+        val shared: Boolean,
+        parameters: MutableMap<String?, ParameterValue>?
+    ) {
+        val parameters: MutableMap<String?, ParameterValue>?
+
+        init {
+            var parameters = parameters
+            Objects.requireNonNull<String?>(id)
+            Objects.requireNonNull<InputRecipe?>(recipe)
+            parameters =
+                Collections.unmodifiableMap<String?, ParameterValue?>(LinkedHashMap<String?, ParameterValue?>(parameters))
+            this.parameters = parameters
         }
-        workload.operation().validateArguments(id, arguments);
-        ExpectedResult expected =
-            workload.expected() == null ? null : workload.expected().substitute(parameters, id);
-        result.add(
-            new ExpandedWorkload(
+    }
+
+    internal class InputRecipe(val kind: RecipeKind?, arguments: MutableMap<String?, RecipeValue?>?) {
+        fun validatePlaceholders(inputId: String?, axes: MutableSet<String>) {
+            for (argument in arguments!!.entries) {
+                val unknown: MutableSet<String?> = LinkedHashSet<String?>(argument.value!!.placeholders())
+                unknown.removeAll(axes)
+                require(unknown.isEmpty()) {
+                    (inputId
+                            + " recipe argument "
+                            + argument.key
+                            + " references unknown axes: "
+                            + unknown)
+                }
+            }
+        }
+
+        fun substitute(parameters: MutableMap<String?, ParameterValue>?, inputId: String?): InputRecipe {
+            val resolved: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
+            for (argument in arguments!!.entries) {
+                resolved.put(
+                    argument.key,
+                    argument.value!!.substitute(parameters, inputId, argument.key)
+                )
+            }
+            return InputRecipe(kind, resolved)
+        }
+
+        val arguments: MutableMap<String?, RecipeValue?>?
+
+        init {
+            var arguments = arguments
+            Objects.requireNonNull<RecipeKind?>(kind)
+            arguments =
+                Collections.unmodifiableMap<String?, RecipeValue?>(LinkedHashMap<String?, RecipeValue?>(arguments))
+            if (arguments.values.stream()
+                    .noneMatch { obj: RecipeValue? -> RecipeAxisReference::class.java.isInstance(obj) }
+            ) {
+                kind!!.validate(arguments)
+            }
+            this.arguments = arguments
+        }
+    }
+
+    internal class WorkloadDeclaration(
+        val idTemplate: String?,
+        val operation: Operation?,
+        patternTemplates: MutableList<String>?,
+        inputTemplates: MutableList<String>?,
+        axes: MutableMap<String?, MutableList<ParameterValue?>>?,
+        arguments: MutableMap<String?, RecipeValue?>?,
+        flags: EnumSet<Flag?>?,
+        requirements: EnumSet<Feature?>?,
+        inputRepresentations: EnumSet<InputRepresentation?>?,
+        val inputRepresentationReason: String?,
+        val resultConsumption: ResultConsumption?,
+        val expected: ExpectedResult?,
+        val lifecycle: MatcherLifecycle?,
+        val measurement: Measurement?,
+        val disabledReason: String?,
+        trialExclusions: MutableList<TrialExclusion>?
+    ) {
+        public override fun flags(): EnumSet<Flag?> {
+            return flags!!.clone()
+        }
+
+        public override fun requirements(): EnumSet<Feature?> {
+            return requirements!!.clone()
+        }
+
+        public override fun inputRepresentations(): EnumSet<InputRepresentation?> {
+            return inputRepresentations!!.clone()
+        }
+
+        val patternTemplates: MutableList<String>?
+        val inputTemplates: MutableList<String>?
+        val axes: MutableMap<String?, MutableList<ParameterValue?>>?
+        val arguments: MutableMap<String?, RecipeValue?>?
+        val flags: EnumSet<Flag?>?
+        val requirements: EnumSet<Feature?>?
+        val inputRepresentations: EnumSet<InputRepresentation?>?
+        val trialExclusions: MutableList<TrialExclusion>?
+
+        init {
+            var patternTemplates = patternTemplates
+            var inputTemplates = inputTemplates
+            var axes = axes
+            var arguments = arguments
+            var flags = flags
+            var requirements = requirements
+            var inputRepresentations = inputRepresentations
+            var trialExclusions = trialExclusions
+            patternTemplates = List.copyOf<String?>(patternTemplates)
+            inputTemplates = List.copyOf<String?>(inputTemplates)
+            axes = Collections.unmodifiableMap<String?, MutableList<ParameterValue?>?>(
+                LinkedHashMap<String?, MutableList<ParameterValue?>?>(axes)
+            )
+            arguments =
+                Collections.unmodifiableMap<String?, RecipeValue?>(LinkedHashMap<String?, RecipeValue?>(arguments))
+            flags = flags!!.clone()
+            requirements = requirements!!.clone()
+            inputRepresentations = inputRepresentations!!.clone()
+            trialExclusions = List.copyOf<TrialExclusion?>(trialExclusions)
+            this.patternTemplates = patternTemplates
+            this.inputTemplates = inputTemplates
+            this.axes = axes
+            this.arguments = arguments
+            this.flags = flags
+            this.requirements = requirements
+            this.inputRepresentations = inputRepresentations
+            this.trialExclusions = trialExclusions
+        }
+    }
+
+    internal class ExpandedWorkload(
+        val id: String?,
+        val operation: Operation?,
+        patterns: MutableList<String>?,
+        inputIds: MutableList<String>?,
+        parameters: MutableMap<String?, ParameterValue>?,
+        arguments: MutableMap<String?, RecipeValue?>?,
+        flags: EnumSet<Flag?>?,
+        requirements: EnumSet<Feature?>?,
+        inputRepresentations: EnumSet<InputRepresentation?>?,
+        val inputRepresentationReason: String?,
+        val resultConsumption: ResultConsumption?,
+        val expected: ExpectedResult?,
+        val lifecycle: MatcherLifecycle?,
+        val measurement: Measurement?,
+        val disabledReason: String?,
+        trialExclusions: MutableList<TrialExclusion>?
+    ) {
+        public override fun flags(): EnumSet<Flag?> {
+            return flags!!.clone()
+        }
+
+        public override fun requirements(): EnumSet<Feature?> {
+            return requirements!!.clone()
+        }
+
+        public override fun inputRepresentations(): EnumSet<InputRepresentation?> {
+            return inputRepresentations!!.clone()
+        }
+
+        fun trialExclusion(engineId: String?): TrialExclusion? {
+            var result: TrialExclusion? = null
+            for (exclusion in trialExclusions!!) {
+                if (!exclusion.engineIds!!.contains(engineId!!)) {
+                    continue
+                }
+                require(result == null) { id + " has overlapping trial exclusions for engine " + engineId }
+                result = exclusion
+            }
+            return result
+        }
+
+        val patterns: MutableList<String>?
+        val inputIds: MutableList<String>?
+        val parameters: MutableMap<String?, ParameterValue>?
+        val arguments: MutableMap<String?, RecipeValue?>?
+        val flags: EnumSet<Flag?>?
+        val requirements: EnumSet<Feature?>?
+        val inputRepresentations: EnumSet<InputRepresentation?>?
+        val trialExclusions: MutableList<TrialExclusion>?
+
+        init {
+            var patterns = patterns
+            var inputIds = inputIds
+            var parameters = parameters
+            var arguments = arguments
+            var flags = flags
+            var requirements = requirements
+            var inputRepresentations = inputRepresentations
+            var trialExclusions = trialExclusions
+            patterns = List.copyOf<String?>(patterns)
+            inputIds = List.copyOf<String?>(inputIds)
+            parameters =
+                Collections.unmodifiableMap<String?, ParameterValue?>(LinkedHashMap<String?, ParameterValue?>(parameters))
+            arguments =
+                Collections.unmodifiableMap<String?, RecipeValue?>(LinkedHashMap<String?, RecipeValue?>(arguments))
+            flags = flags!!.clone()
+            requirements = requirements!!.clone()
+            inputRepresentations = inputRepresentations!!.clone()
+            trialExclusions = List.copyOf<TrialExclusion?>(trialExclusions)
+            this.patterns = patterns
+            this.inputIds = inputIds
+            this.parameters = parameters
+            this.arguments = arguments
+            this.flags = flags
+            this.requirements = requirements
+            this.inputRepresentations = inputRepresentations
+            this.trialExclusions = trialExclusions
+        }
+    }
+
+    internal class TrialExclusion(
+        engineIds: MutableList<String>?,
+        `when`: MutableMap<String?, MutableSet<ParameterValue?>?>?,
+        val reason: String?
+    ) {
+        fun matches(parameters: MutableMap<String?, ParameterValue>): Boolean {
+            return `when`!!.entries.stream()
+                .allMatch { selector: MutableMap.MutableEntry<String?, MutableSet<ParameterValue?>?>? ->
+                    selector!!.value!!.contains(
+                        parameters.get(selector.key)
+                    )
+                }
+        }
+
+        val engineIds: MutableList<String>?
+        val `when`: MutableMap<String?, MutableSet<ParameterValue?>?>?
+
+        init {
+            var engineIds = engineIds
+            var `when` = `when`
+            engineIds = List.copyOf<String?>(engineIds)
+            val copied: MutableMap<String?, MutableSet<ParameterValue?>?> =
+                LinkedHashMap<String?, MutableSet<ParameterValue?>?>()
+            `when`!!.forEach { (axis: String?, values: MutableSet<ParameterValue?>?) ->
+                copied.put(
+                    axis,
+                    Collections.unmodifiableSet<ParameterValue?>(LinkedHashSet<ParameterValue?>(values))
+                )
+            }
+            `when` = Collections.unmodifiableMap<String?, MutableSet<ParameterValue?>?>(copied)
+            this.engineIds = engineIds
+            this.`when` = `when`
+        }
+    }
+
+    internal class ExpectedResult(val type: ResultType?, value: JsonElement?, val axisReference: String?) {
+        public override fun value(): JsonElement? {
+            return if (value == null) null else value.deepCopy()
+        }
+
+        fun substitute(parameters: MutableMap<String?, ParameterValue>, workloadId: String?): ExpectedResult {
+            if (axisReference == null) {
+                return this
+            }
+            val parameter: ParameterValue = parameters.get(axisReference)!!
+            requireNotNull(parameter) { workloadId + " expected result references unknown axis: " + axisReference }
+            val resolved: JsonElement =
+                when (parameter.type) {
+                    ParameterType.STRING -> JsonPrimitive(parameter.value as String?)
+                    ParameterType.INTEGER -> JsonPrimitive(parameter.value as Int?)
+                    ParameterType.BOOLEAN -> JsonPrimitive(parameter.value as Boolean?)
+                }
+            type!!.validate(resolved)
+            return ExpectedResult(type, resolved, null)
+        }
+
+        val value: JsonElement?
+
+        init {
+            var value = value
+            Objects.requireNonNull<ResultType?>(type)
+            require((value == null) != (axisReference == null)) { "Expected result requires exactly one value or axis reference" }
+            if (value != null) {
+                value = value.deepCopy()
+            }
+            this.value = value
+        }
+    }
+
+    internal class MatcherLifecycle(val matcher: MatcherReuse?, steps: MutableList<LifecycleStep>?) {
+        fun requiredFeatures(): EnumSet<Feature?> {
+            val result = EnumSet.noneOf<Feature?>(Feature::class.java)
+            if (matcher != MatcherReuse.NONE) {
+                result.add(Feature.MATCHER_STATE)
+            }
+            for (step in steps!!) {
+                when (step.kind) {
+                    LifecycleStepKind.RESET -> result.add(Feature.MATCHER_STATE)
+                    LifecycleStepKind.REGION -> result.add(Feature.REGIONS)
+                    LifecycleStepKind.TRANSPARENT_BOUNDS, LifecycleStepKind.ANCHORING_BOUNDS -> result.add(Feature.BOUNDS)
+                }
+            }
+            return result
+        }
+
+        val steps: MutableList<LifecycleStep>?
+
+        init {
+            var steps = steps
+            steps = List.copyOf<LifecycleStep?>(steps)
+            this.steps = steps
+        }
+
+        companion object {
+            val NONE: MatcherLifecycle =
+                DeclarativeBenchmarkPlan.MatcherLifecycle(MatcherReuse.NONE, mutableListOf<LifecycleStep?>())
+        }
+    }
+
+    @JvmRecord
+    internal data class LifecycleStep(
+        val kind: LifecycleStepKind?,
+        val start: Int?,
+        val end: Int?,
+        val enabled: Boolean?
+    )
+
+    internal class Measurement(
+        val mode: MeasurementMode?,
+        val timingUnit: TimingUnit?,
+        constraints: EnumSet<ExecutionConstraint?>?
+    ) {
+        public override fun constraints(): EnumSet<ExecutionConstraint?> {
+            return constraints!!.clone()
+        }
+
+        val constraints: EnumSet<ExecutionConstraint?>?
+
+        init {
+            var constraints = constraints
+            constraints = constraints!!.clone()
+            this.constraints = constraints
+        }
+    }
+
+    internal class EngineDeclaration(
+        val id: String?,
+        val inputRepresentation: InputRepresentation?,
+        features: EnumSet<Feature?>?,
+        supportedFlags: EnumSet<Flag?>?,
+        val adapterAvailable: Boolean
+    ) {
+        public override fun features(): EnumSet<Feature?> {
+            return features!!.clone()
+        }
+
+        public override fun supportedFlags(): EnumSet<Flag?> {
+            return supportedFlags!!.clone()
+        }
+
+        val features: EnumSet<Feature?>?
+        val supportedFlags: EnumSet<Flag?>?
+
+        init {
+            var features = features
+            var supportedFlags = supportedFlags
+            Companion.requireSimpleId(id!!, "benchmark engine")
+            Objects.requireNonNull<InputRepresentation?>(
+                inputRepresentation
+            )
+            features = features!!.clone()
+            supportedFlags = supportedFlags!!.clone()
+            this.features = features
+            this.supportedFlags = supportedFlags
+        }
+    }
+
+    @JvmRecord
+    internal data class Trial(val workload: ExpandedWorkload?, val engine: EngineDeclaration?) {
+        fun id(): String {
+            return workload!!.id + "@" + engine!!.id
+        }
+    }
+
+    @JvmRecord
+    internal data class Exclusion(
+        val workloadId: String?,
+        val engineId: String?,
+        val kind: ExclusionKind?,
+        val reason: String?
+    )
+
+    internal class ExpandedPlan(
+        workloads: MutableList<ExpandedWorkload>?,
+        trials: MutableList<Trial>?,
+        exclusions: MutableList<Exclusion>?
+    ) {
+        private fun validateComplete(engineCount: Int) {
+            val scheduled: MutableMap<String?, Int?> = LinkedHashMap<String?, Int?>()
+            for (trial in trials!!) {
+                scheduled.merge(trial.workload!!.id, 1) { a: Int?, b: Int? -> Integer.sum(a!!, b!!) }
+            }
+            val excluded: MutableMap<String?, Int?> = LinkedHashMap<String?, Int?>()
+            for (exclusion in exclusions!!) {
+                excluded.merge(exclusion.workloadId, 1) { a: Int?, b: Int? -> Integer.sum(a!!, b!!) }
+            }
+            for (workload in workloads!!) {
+                val accounted =
+                    scheduled.getOrDefault(workload.id, 0)!! + excluded.getOrDefault(workload.id, 0)!!
+                check(accounted == engineCount) {
+                    (workload.id
+                            + " has "
+                            + accounted
+                            + " accounted engine pairs, expected "
+                            + engineCount)
+                }
+                if (scheduled.getOrDefault(workload.id, 0) == 0 && workload.disabledReason == null) {
+                    val reasons: MutableList<ExclusionKind?> =
+                        exclusions.stream()
+                            .filter { exclusion: Exclusion? -> exclusion!!.workloadId == workload.id }
+                            .map<ExclusionKind?>(Exclusion::kind)
+                            .distinct()
+                            .toList()
+                    throw IllegalArgumentException(
+                        (workload.id
+                                + " produces no supported trials and has no disabledReason; exclusions: "
+                                + reasons)
+                    )
+                }
+            }
+        }
+
+        val workloads: MutableList<ExpandedWorkload>?
+        val trials: MutableList<Trial>?
+        val exclusions: MutableList<Exclusion>?
+
+        init {
+            var workloads = workloads
+            var trials = trials
+            var exclusions = exclusions
+            workloads = List.copyOf<ExpandedWorkload?>(workloads)
+            trials = List.copyOf<Trial?>(trials)
+            exclusions = List.copyOf<Exclusion?>(exclusions)
+            this.workloads = workloads
+            this.trials = trials
+            this.exclusions = exclusions
+        }
+    }
+
+    internal interface RecipeValue {
+        fun placeholders(): MutableSet<String?>?
+
+        fun substitute(
+            parameters: MutableMap<String?, ParameterValue>?, inputId: String?, argumentName: String?
+        ): RecipeValue?
+
+        companion object {
+            fun parse(
+                value: JsonElement, type: RecipeValueType, context: String?, field: String?
+            ): RecipeValue {
+                try {
+                    if (type != RecipeValueType.STRING && value.isJsonPrimitive()
+                        && value.getAsJsonPrimitive().isString()
+                    ) {
+                        val reference = value.getAsString()
+                        val matcher: Matcher = PLACEHOLDER.matcher(reference)
+                        if (matcher.matches()) {
+                            return RecipeAxisReference(matcher.group(1), type)
+                        }
+                    }
+                    return when (type) {
+                        RecipeValueType.STRING -> {
+                            require(isString(value))
+                            RecipeString(value.getAsString())
+                        }
+
+                        RecipeValueType.INTEGER -> {
+                            require(isIntegerPrimitive(value))
+                            RecipeInteger(value.getAsBigDecimal().intValueExact())
+                        }
+
+                        RecipeValueType.STRING_LIST -> {
+                            val values: MutableList<String> = ArrayList<String>()
+                            value
+                                .getAsJsonArray()
+                                .forEach(
+                                    Consumer { item: JsonElement? ->
+                                        require(DeclarativeBenchmarkPlan.Companion.isString(item!!))
+                                        values.add(item.getAsString())
+                                    })
+                            RecipeStringList(values)
+                        }
+
+                        RecipeValueType.INTEGER_LIST -> {
+                            val values: MutableList<Int> = ArrayList<Int>()
+                            value
+                                .getAsJsonArray()
+                                .forEach(
+                                    Consumer { item: JsonElement? ->
+                                        require(DeclarativeBenchmarkPlan.Companion.isIntegerPrimitive(item!!))
+                                        values.add(item.getAsBigDecimal().intValueExact())
+                                    })
+                            RecipeIntegerList(values)
+                        }
+                    }
+                } catch (exception: RuntimeException) {
+                    throw IllegalArgumentException(
+                        context + " field " + field + " must be " + type.jsonName(), exception
+                    )
+                }
+            }
+        }
+    }
+
+    @JvmRecord
+    internal data class RecipeString(val value: String) : RecipeValue {
+        override fun placeholders(): MutableSet<String> {
+            return placeholders(value)
+        }
+
+        override fun substitute(
+            parameters: MutableMap<String?, ParameterValue>, inputId: String?, argumentName: String?
+        ): RecipeValue {
+            return RecipeString(
+                substituteValue(
+                    value, parameters, inputId + " recipe " + argumentName
+                )
+            )
+        }
+    }
+
+    @JvmRecord
+    internal data class RecipeInteger(val value: Int) : RecipeValue {
+        override fun placeholders(): MutableSet<String?> {
+            return mutableSetOf<String?>()
+        }
+
+        override fun substitute(
+            parameters: MutableMap<String?, ParameterValue?>?, inputId: String?, argumentName: String?
+        ): RecipeValue {
+            return this
+        }
+    }
+
+    internal class RecipeStringList(values: MutableList<String>?) : RecipeValue {
+        override fun placeholders(): MutableSet<String?> {
+            val result: MutableSet<String?> = LinkedHashSet<String?>()
+            values!!.forEach(Consumer { value: String? -> result.addAll(Companion.placeholders(value!!)) })
+            return result
+        }
+
+        override fun substitute(
+            parameters: MutableMap<String?, ParameterValue>, inputId: String?, argumentName: String?
+        ): RecipeValue {
+            return RecipeStringList(
+                values!!.stream()
+                    .map<String?> { value: String? ->
+                        Companion.substituteValue(
+                            value!!, parameters, inputId + " recipe " + argumentName
+                        )
+                    }
+                    .toList())
+        }
+
+        val values: MutableList<String>?
+
+        init {
+            var values = values
+            values = List.copyOf<String?>(values)
+            this.values = values
+        }
+    }
+
+    internal class RecipeIntegerList(values: MutableList<Int>) : RecipeValue {
+        override fun placeholders(): MutableSet<String?> {
+            return mutableSetOf<String?>()
+        }
+
+        override fun substitute(
+            parameters: MutableMap<String?, ParameterValue?>?, inputId: String?, argumentName: String?
+        ): RecipeValue {
+            return this
+        }
+
+        val values: MutableList<Int>
+
+        init {
+            var values = values
+            values = List.copyOf<Int?>(values)
+            this.values = values
+        }
+    }
+
+    @JvmRecord
+    internal data class RecipeAxisReference(val axis: String?, val type: RecipeValueType?) : RecipeValue {
+        override fun placeholders(): MutableSet<String?> {
+            return Set.of<String?>(axis)
+        }
+
+        override fun substitute(
+            parameters: MutableMap<String?, ParameterValue>, inputId: String?, argumentName: String?
+        ): RecipeValue {
+            val value: ParameterValue = parameters.get(axis)!!
+            requireNotNull(value) { inputId + " recipe " + argumentName + " references unknown axis: " + axis }
+            return when (type) {
+                RecipeValueType.INTEGER -> {
+                    require(value.type == ParameterType.INTEGER) { inputId + " recipe " + argumentName + " requires integer axis " + axis }
+                    RecipeInteger((value.value as Int?)!!)
+                }
+
+                RecipeValueType.STRING -> RecipeString(value.valueText()!!)
+                RecipeValueType.STRING_LIST, RecipeValueType.INTEGER_LIST -> throw IllegalArgumentException(
+                    inputId + " recipe " + argumentName + " cannot reference a scalar axis"
+                )
+            }
+        }
+    }
+
+    @JvmRecord
+    internal data class ParameterValue(val type: ParameterType?, val value: Any?, val stableText: String) {
+        fun valueText(): String? {
+            return value.toString()
+        }
+
+        companion object {
+            fun parse(element: JsonElement, axis: String?): ParameterValue {
+                return parse(element, axis, true)
+            }
+
+            private fun parse(
+                element: JsonElement, axis: String?, validateStableValue: Boolean
+            ): ParameterValue {
+                if (element.isJsonObject()) {
+                    val labeled: JsonReader = JsonReader.Companion.`object`("benchmark axis value", element)
+                    labeled.requireOnly("id", "value")
+                    val id = labeled.requiredString("id")
+                    validateStableText(id)
+                    val value = parse(element.getAsJsonObject().get("value"), axis, false)
+                    return ParameterValue(value.type, value.value, id)
+                }
+                require(element.isJsonPrimitive()) { "Benchmark axis values must be scalars or labeled {id,value} objects: " + axis }
+                val primitive = element.getAsJsonPrimitive()
+                if (primitive.isBoolean()) {
+                    val value = primitive.getAsBoolean()
+                    return ParameterValue(ParameterType.BOOLEAN, value, value.toString())
+                }
+                if (primitive.isNumber()) {
+                    try {
+                        val value = primitive.getAsBigDecimal().intValueExact()
+                        return ParameterValue(ParameterType.INTEGER, value, value.toString())
+                    } catch (exception: ArithmeticException) {
+                        throw IllegalArgumentException(
+                            "Benchmark axis numeric values must be integers: " + axis, exception
+                        )
+                    } catch (exception: NumberFormatException) {
+                        throw IllegalArgumentException(
+                            "Benchmark axis numeric values must be integers: " + axis, exception
+                        )
+                    }
+                }
+                val value = primitive.getAsString()
+                if (validateStableValue) {
+                    validateStableText(value)
+                }
+                return ParameterValue(ParameterType.STRING, value, value)
+            }
+
+            private fun validateStableText(value: String) {
+                require(!(value.isBlank() || value.contains("@") || value.contains("{") || value.contains("}"))) { "Invalid stable benchmark axis value: " + value }
+            }
+        }
+    }
+
+    internal enum class ParameterType {
+        STRING,
+        INTEGER,
+        BOOLEAN
+    }
+
+    internal enum class RecipeKind(private val jsonName: String?, vararg fields: RecipeField?) : JsonNamed {
+        LITERAL("literal", field("text", RecipeValueType.STRING)),
+        FILE("file", field("path", RecipeValueType.STRING), field("sha256", RecipeValueType.STRING)),
+        REPEAT(
+            "repeat", field("value", RecipeValueType.STRING), field("count", RecipeValueType.INTEGER)
+        ),
+        REPEAT_TO_LENGTH(
+            "repeatToLength",
+            field("unit", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        REPEAT_AT_LEAST_LENGTH(
+            "repeatAtLeastLength",
+            field("unit", RecipeValueType.STRING),
+            field("minimumLength", RecipeValueType.INTEGER)
+        ),
+        DELIMITED_REPEAT_TO_LENGTH(
+            "delimitedRepeatToLength",
+            field("value", RecipeValueType.STRING),
+            field("delimiterAlphabet", RecipeValueType.STRING),
+            field("seed", RecipeValueType.INTEGER),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        APPEND_INPUT(
+            "appendInput",
+            field("input", RecipeValueType.STRING),
+            field("suffix", RecipeValueType.STRING)
+        ),
+        RANDOM_CHARS(
+            "randomChars",
+            field("alphabet", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER),
+            field("seed", RecipeValueType.INTEGER)
+        ),
+        RANDOM_CODE_POINTS(
+            "randomCodePoints",
+            field("codePoints", RecipeValueType.INTEGER_LIST),
+            field("minimumCodeUnits", RecipeValueType.INTEGER),
+            field("seed", RecipeValueType.INTEGER)
+        ),
+        SURROUND_TO_LENGTH(
+            "surroundToLength",
+            field("prefix", RecipeValueType.STRING),
+            field("unit", RecipeValueType.STRING),
+            field("suffix", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        SUFFIX_TO_LENGTH(
+            "suffixToLength",
+            field("prefixUnit", RecipeValueType.STRING),
+            field("suffix", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        PREFIXED_REPEAT_TO_LENGTH(
+            "prefixedRepeatToLength",
+            field("prefix", RecipeValueType.STRING),
+            field("value", RecipeValueType.STRING),
+            field("delimiterAlphabet", RecipeValueType.STRING),
+            field("seed", RecipeValueType.INTEGER),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        SPARSE_MATCH_TO_LENGTH(
+            "sparseMatchToLength",
+            field("match", RecipeValueType.STRING),
+            field("nonMatch", RecipeValueType.STRING),
+            field("nonMatchRepeats", RecipeValueType.INTEGER),
+            field("delimiterAlphabet", RecipeValueType.STRING),
+            field("seed", RecipeValueType.INTEGER),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        CENTER_IN_SPACES(
+            "centerInSpaces",
+            field("body", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        SCALED_CENTER_IN_SPACES(
+            "scaledCenterInSpaces",
+            field("bodyPrefix", RecipeValueType.STRING),
+            field("bodySuffix", RecipeValueType.STRING),
+            field("bodyFill", RecipeValueType.STRING),
+            field("bodyScalePercent", RecipeValueType.INTEGER),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        LAZY_ALTERNATION_TO_LENGTH(
+            "lazyAlternationToLength",
+            field("prefixUnit", RecipeValueType.STRING),
+            field("match", RecipeValueType.STRING),
+            field("suffixUnit", RecipeValueType.STRING),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        PERIODIC_ALTERNATION_TO_LENGTH(
+            "periodicAlternationToLength",
+            field("hitUnit", RecipeValueType.STRING),
+            field("missUnit", RecipeValueType.STRING),
+            field("hitInterval", RecipeValueType.INTEGER),
+            field("length", RecipeValueType.INTEGER)
+        ),
+        OPTIONAL_REQUIRED_REPEAT_PATTERN(
+            "optionalRequiredRepeatPattern",
+            field("literal", RecipeValueType.STRING),
+            field("count", RecipeValueType.INTEGER)
+        );
+
+        private val fields: MutableList<RecipeField>
+
+        init {
+            this.fields = List.of<RecipeField?>(*fields)
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun fields(): MutableList<RecipeField> {
+            return fields
+        }
+
+        fun allowedFields(): Array<String?>? {
+            val names: MutableList<String?> = ArrayList<String?>()
+            names.add("kind")
+            fields.forEach(Consumer { field: RecipeField? -> names.add(field!!.name) })
+            return names.toArray<String?>(IntFunction { _Dummy_.__Array__() })
+        }
+
+        fun validate(arguments: MutableMap<String?, RecipeValue?>) {
+            when (this) {
+                RecipeKind.LITERAL -> {}
+                RecipeKind.FILE -> {
+                    requireNonEmpty(arguments, "path")
+                    require(
+                        string(
+                            arguments,
+                            "sha256"
+                        ).matches("[0-9a-f]{64}".toRegex())
+                    ) { "file recipe requires a lowercase SHA-256 digest" }
+                }
+
+                RecipeKind.REPEAT -> requireNonNegative(arguments, "count")
+                RecipeKind.REPEAT_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireUnitWhenOutputIsRequired(arguments, "unit", "length", 0)
+                }
+
+                RecipeKind.REPEAT_AT_LEAST_LENGTH -> {
+                    requireNonNegative(arguments, "minimumLength")
+                    requireUnitWhenOutputIsRequired(arguments, "unit", "minimumLength", 0)
+                }
+
+                RecipeKind.DELIMITED_REPEAT_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "value")
+                    requireNonEmpty(arguments, "delimiterAlphabet")
+                }
+
+                RecipeKind.APPEND_INPUT -> requireNonEmpty(arguments, "input")
+                RecipeKind.RANDOM_CHARS -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "alphabet")
+                }
+
+                RecipeKind.RANDOM_CODE_POINTS -> {
+                    requireNonNegative(arguments, "minimumCodeUnits")
+                    val codePoints = integers(arguments, "codePoints")
+                    require(
+                        !(codePoints.isEmpty()
+                                || codePoints.stream()
+                            .anyMatch { codePoint: Int? ->
+                                !Character.isValidCodePoint(codePoint!!)
+                                        || (codePoint >= Character.MIN_SURROGATE.code
+                                        && codePoint <= Character.MAX_SURROGATE.code)
+                            })
+                    ) { "randomCodePoints recipe requires valid Unicode scalar codePoints" }
+                }
+
+                RecipeKind.SURROUND_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    val fixedLength =
+                        string(arguments, "prefix").length + string(arguments, "suffix").length
+                    requireUnitWhenOutputIsRequired(arguments, "unit", "length", fixedLength)
+                }
+
+                RecipeKind.SUFFIX_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireUnitWhenOutputIsRequired(
+                        arguments, "prefixUnit", "length", string(arguments, "suffix").length
+                    )
+                }
+
+                RecipeKind.PREFIXED_REPEAT_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "value")
+                    requireNonEmpty(arguments, "delimiterAlphabet")
+                }
+
+                RecipeKind.SPARSE_MATCH_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "match")
+                    requireNonEmpty(arguments, "nonMatch")
+                    requirePositive(arguments, "nonMatchRepeats")
+                    requireNonEmpty(arguments, "delimiterAlphabet")
+                }
+
+                RecipeKind.CENTER_IN_SPACES -> requireNonNegative(arguments, "length")
+                RecipeKind.SCALED_CENTER_IN_SPACES -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "bodyFill")
+                    val percent = integer(arguments, "bodyScalePercent")
+                    require(!(percent < 0 || percent > 100)) { "scaledCenterInSpaces recipe bodyScalePercent must be between 0 and 100" }
+                }
+
+                RecipeKind.LAZY_ALTERNATION_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "prefixUnit")
+                    requireNonEmpty(arguments, "match")
+                    requireNonEmpty(arguments, "suffixUnit")
+                }
+
+                RecipeKind.PERIODIC_ALTERNATION_TO_LENGTH -> {
+                    requireNonNegative(arguments, "length")
+                    requireNonEmpty(arguments, "hitUnit")
+                    requireNonEmpty(arguments, "missUnit")
+                    requirePositive(arguments, "hitInterval")
+                }
+
+                RecipeKind.OPTIONAL_REQUIRED_REPEAT_PATTERN -> {
+                    requireNonEmpty(arguments, "literal")
+                    requireNonNegative(arguments, "count")
+                }
+            }
+        }
+
+        companion object {
+            private fun requireUnitWhenOutputIsRequired(
+                arguments: MutableMap<String?, RecipeValue?>, unitField: String?, lengthField: String?, fixedLength: Int
+            ) {
+                if (integer(arguments, lengthField) > fixedLength) {
+                    requireNonEmpty(arguments, unitField)
+                }
+            }
+
+            private fun requireNonEmpty(arguments: MutableMap<String?, RecipeValue?>, field: String?) {
+                require(!string(arguments, field).isEmpty()) { "Recipe field " + field + " must not be empty" }
+            }
+
+            private fun requireNonNegative(arguments: MutableMap<String?, RecipeValue?>, field: String?) {
+                require(integer(arguments, field) >= 0) { "Recipe field " + field + " must not be negative" }
+            }
+
+            private fun requirePositive(arguments: MutableMap<String?, RecipeValue?>, field: String?) {
+                require(integer(arguments, field) > 0) { "Recipe field " + field + " must be positive" }
+            }
+
+            private fun string(arguments: MutableMap<String?, RecipeValue?>, field: String?): String {
+                return (arguments.get(field) as RecipeString).value
+            }
+
+            private fun integer(arguments: MutableMap<String?, RecipeValue?>, field: String?): Int {
+                return (arguments.get(field) as RecipeInteger).value
+            }
+
+            private fun integers(arguments: MutableMap<String?, RecipeValue?>, field: String?): MutableList<Int> {
+                return (arguments.get(field) as RecipeIntegerList).values
+            }
+
+            fun fromJson(name: String?): RecipeKind {
+                return Companion.enumFromJson<RecipeKind>(
+                    RecipeKind.entries.toTypedArray(),
+                    name,
+                    "input recipe kind"
+                )!!
+            }
+        }
+    }
+
+    @JvmRecord
+    internal data class RecipeField(val name: String?, val type: RecipeValueType?, val required: Boolean)
+
+    internal enum class RecipeValueType(jsonName: String) : JsonNamed {
+        STRING("a string"),
+        INTEGER("an integer"),
+        STRING_LIST("an array of strings"),
+        INTEGER_LIST("an array of integers");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+    }
+
+    internal enum class Operation(
+        private val jsonName: String?,
+        private val lifecycleRequired: Boolean,
+        private val inputRequired: Boolean,
+        vararg requiredFeatures: Feature?
+    ) : JsonNamed {
+        MATCHES("matches", false, true, Feature.MATCHES),
+        FIND("find", false, true, Feature.FIND),
+        LOOKING_AT("lookingAt", true, true, Feature.LOOKING_AT),
+        FIND_ALL_COUNT("findAllCount", false, true, Feature.FIND),
+        FIND_ALL_LENGTH_SUM("findAllLengthSum", false, true, Feature.FIND, Feature.CAPTURE_TEXT),
+        FIND_ALL_GROUP_LENGTH_SUM(
+            "findAllGroupLengthSum", false, true, Feature.FIND, Feature.CAPTURE_TEXT
+        ),
+        MATCHES_CORPUS("matchesCorpus", false, true, Feature.MATCHES),
+        MATCHES_GROUP_LENGTH_SUM(
+            "matchesGroupLengthSum", false, true, Feature.MATCHES, Feature.CAPTURE_TEXT
+        ),
+        FIND_SAMPLED_GROUP(
+            "findSampledGroup",
+            true,
+            true,
+            Feature.FIND,
+            Feature.CAPTURE_PARTICIPATION,
+            Feature.MATCHER_STATE
+        ),
+        FIND_GROUP_PRESENT(
+            "findGroupPresent", false, true, Feature.FIND, Feature.CAPTURE_PARTICIPATION
+        ),
+        FIND_GROUP("findGroup", false, true, Feature.FIND, Feature.CAPTURE_TEXT),
+        CAPTURE_GROUPS("captureGroups", false, true, Feature.MATCHES, Feature.CAPTURE_TEXT),
+        REPLACE_FIRST("replaceFirst", false, true, Feature.REPLACE),
+        REPLACE_ALL("replaceAll", false, true, Feature.REPLACE),
+        REPLACE_ALL_LENGTH_SUM("replaceAllLengthSum", false, true, Feature.REPLACE),
+        APPEND_REPLACEMENT("appendReplacement", false, true, Feature.REPLACE),
+        MANUAL_REPLACE_ALL(
+            "manualReplaceAll", false, true, Feature.REPLACE, Feature.APPEND_REPLACEMENT
+        ),
+        SPLIT("split", false, true, Feature.SPLIT),
+        SPLIT_LENGTH_SUM("splitLengthSum", false, true, Feature.SPLIT),
+        COMPILE("compile", false, false),
+        COMPILE_AND_FIND("compileAndFind", false, true, Feature.FIND),
+        COMPILE_AND_MATCHES("compileAndMatches", false, true, Feature.MATCHES),
+        FIND_ROTATING_UTF16("findRotatingUtf16", false, false, Feature.FIND),
+        COMPILE_AND_FIND_ROTATING_UTF16("compileAndFindRotatingUtf16", false, false, Feature.FIND),
+        MATCHER_CONSTRUCTION("matcherConstruction", false, true, Feature.UTF8_INPUT),
+        MATCHER_RESET_FIND("matcherResetFind", true, true, Feature.FIND, Feature.MATCHER_STATE),
+        MATCHER_REGION_FIND(
+            "matcherRegionFind", true, true, Feature.FIND, Feature.MATCHER_STATE, Feature.REGIONS
+        ),
+        MATCHER_REGION_MATCHES(
+            "matcherRegionMatches",
+            true,
+            true,
+            Feature.MATCHES,
+            Feature.MATCHER_STATE,
+            Feature.REGIONS
+        ),
+        MATCHER_REGION_TOKENIZE(
+            "matcherRegionTokenize",
+            true,
+            true,
+            Feature.LOOKING_AT,
+            Feature.MATCHER_STATE,
+            Feature.REGIONS
+        ),
+        FIND_IN_WINDOW("findInWindow", true, true, Feature.FIND, Feature.MATCHER_STATE),
+        PATTERN_SET_COMPILE("patternSetCompile", false, false, Feature.PATTERN_SET),
+        PATTERN_SET_FIND("patternSetFind", false, true, Feature.PATTERN_SET),
+        PATTERN_SET_MATCHES("patternSetMatches", false, true, Feature.PATTERN_SET),
+        UTF8_CAPTURE_BOUNDS("utf8CaptureBounds", false, true, Feature.FIND, Feature.UTF8_INPUT),
+        UTF8_DECODE_FIND("utf8DecodeFind", false, true, Feature.FIND, Feature.UTF8_INPUT),
+        UTF8_REPLACEMENT("utf8Replacement", false, true, Feature.UTF8_INPUT, Feature.UTF8_REPLACEMENT),
+        ANALYZE_PATTERN("analyzePattern", false, false, Feature.DIAGNOSTICS),
+        CACHED_ANALYSIS("cachedAnalysis", false, false, Feature.DIAGNOSTICS),
+        COMPILE_AND_ANALYZE("compileAndAnalyze", false, false, Feature.DIAGNOSTICS),
+        DFA_CACHE_GROWTH("dfaCacheGrowth", false, true, Feature.DFA_CACHE),
+        DIAGNOSTICS_FIND("diagnosticsFind", false, true, Feature.FIND, Feature.DIAGNOSTICS);
+
+        private val requiredFeatures: EnumSet<Feature?>
+
+        init {
+            this.requiredFeatures = EnumSet.noneOf<Feature?>(Feature::class.java)
+            Collections.addAll<Feature?>(this.requiredFeatures, *requiredFeatures)
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun validate(
+            id: String?,
+            patterns: MutableList<String>,
+            inputs: MutableList<String>,
+            consumption: ResultConsumption,
+            lifecycle: MatcherLifecycle,
+            measurement: Measurement
+        ) {
+            require(!(inputRequired && inputs.isEmpty())) { id + " operation " + jsonName + " requires inputs" }
+            require(!(!inputRequired && !inputs.isEmpty() && (this == Operation.COMPILE || this == Operation.PATTERN_SET_COMPILE || this == Operation.ANALYZE_PATTERN || this == Operation.CACHED_ANALYSIS || this == Operation.COMPILE_AND_ANALYZE))) { id + " operation " + jsonName + " must not declare inputs" }
+            require(!(lifecycleRequired && lifecycle.matcher == MatcherReuse.NONE)) { id + " operation " + jsonName + " requires lifecycle" }
+            require(!(!lifecycleRequired && lifecycle.matcher != MatcherReuse.NONE && this != Operation.FIND && this != Operation.FIND_ALL_COUNT && this != Operation.DIAGNOSTICS_FIND)) { id + " operation " + jsonName + " is incompatible with matcher lifecycle" }
+            require(
+                !((this == Operation.PATTERN_SET_COMPILE || this == Operation.PATTERN_SET_FIND || this == Operation.PATTERN_SET_MATCHES)
+                        && patterns.size < 2)
+            ) { id + " pattern-set operation requires multiple patterns" }
+            require(supports(consumption)) {
+                (id
+                        + " operation "
+                        + jsonName
+                        + " cannot use result consumption "
+                        + consumption.jsonName())
+            }
+            val compileOperation = this == Operation.COMPILE || this == Operation.PATTERN_SET_COMPILE
+            require(
+                !(compileOperation
+                        && measurement.mode != MeasurementMode.COMPILE_ONLY && measurement.mode != MeasurementMode.SINGLE_SHOT_COLD_START && measurement.mode != MeasurementMode.RETAINED_MEMORY && measurement.mode != MeasurementMode.SUBPROCESS_MEMORY)
+            ) { id + " compile operation requires compileOnly, singleShotColdStart, or memory mode" }
+            require(!(!compileOperation && measurement.mode == MeasurementMode.COMPILE_ONLY)) { id + " operation " + jsonName + " is incompatible with compileOnly mode" }
+        }
+
+        fun requiredFeatures(): EnumSet<Feature?> {
+            return requiredFeatures.clone()
+        }
+
+        private fun supports(consumption: ResultConsumption?): Boolean {
+            return when (this) {
+                Operation.MATCHES, Operation.FIND, Operation.LOOKING_AT, Operation.FIND_GROUP_PRESENT, Operation.FIND_SAMPLED_GROUP, Operation.COMPILE_AND_FIND, Operation.COMPILE_AND_MATCHES, Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16, Operation.MATCHER_REGION_FIND, Operation.MATCHER_REGION_MATCHES, Operation.FIND_IN_WINDOW, Operation.UTF8_DECODE_FIND -> consumption == ResultConsumption.BOOLEAN
+                Operation.DIAGNOSTICS_FIND -> consumption == ResultConsumption.BOOLEAN
+                        || consumption == ResultConsumption.BLACKHOLE_OBJECT
+
+                Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> consumption == ResultConsumption.BOOLEAN
+                        || consumption == ResultConsumption.BLACKHOLE_OBJECT
+
+                Operation.FIND_ALL_COUNT, Operation.FIND_ALL_LENGTH_SUM, Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_CORPUS, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.MATCHER_RESET_FIND, Operation.MATCHER_REGION_TOKENIZE, Operation.REPLACE_ALL_LENGTH_SUM, Operation.SPLIT_LENGTH_SUM, Operation.UTF8_CAPTURE_BOUNDS, Operation.UTF8_REPLACEMENT -> consumption == ResultConsumption.INTEGER
+                Operation.FIND_GROUP, Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL -> consumption == ResultConsumption.STRING
+                Operation.CAPTURE_GROUPS -> consumption == ResultConsumption.STRING || consumption == ResultConsumption.STRING_LIST
+                Operation.SPLIT -> consumption == ResultConsumption.STRING_LIST
+                        || consumption == ResultConsumption.BLACKHOLE_OBJECT
+
+                Operation.COMPILE, Operation.PATTERN_SET_COMPILE -> consumption == ResultConsumption.COMPILED_OBJECT
+                Operation.MATCHER_CONSTRUCTION, Operation.ANALYZE_PATTERN, Operation.CACHED_ANALYSIS, Operation.COMPILE_AND_ANALYZE -> consumption == ResultConsumption.BLACKHOLE_OBJECT
+                Operation.DFA_CACHE_GROWTH -> consumption == ResultConsumption.INTEGER
+            }
+        }
+
+        fun argumentTypes(): MutableMap<String?, RecipeValueType?> {
+            return when (this) {
+                Operation.MATCHER_REGION_TOKENIZE -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
+                Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.CAPTURE_GROUPS -> Map.of<String?, RecipeValueType?>(
+                    "groups",
+                    RecipeValueType.INTEGER_LIST
+                )
+
+                Operation.UTF8_CAPTURE_BOUNDS -> Map.of<String?, RecipeValueType?>(
+                    "groups", RecipeValueType.INTEGER_LIST,
+                    "bounds", RecipeValueType.STRING,
+                    "expectedBounds", RecipeValueType.INTEGER_LIST
+                )
+
+                Operation.FIND_SAMPLED_GROUP -> Map.of<String?, RecipeValueType?>(
+                    "group",
+                    RecipeValueType.INTEGER,
+                    "count",
+                    RecipeValueType.INTEGER,
+                    "mode",
+                    RecipeValueType.STRING
+                )
+
+                Operation.FIND_GROUP_PRESENT, Operation.FIND_GROUP -> Map.of<String?, RecipeValueType?>(
+                    "group",
+                    RecipeValueType.INTEGER
+                )
+
+                Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.REPLACE_ALL_LENGTH_SUM, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL, Operation.UTF8_REPLACEMENT -> Map.of<String?, RecipeValueType?>(
+                    "replacement",
+                    RecipeValueType.STRING
+                )
+
+                Operation.SPLIT, Operation.SPLIT_LENGTH_SUM -> Map.of<String?, RecipeValueType?>(
+                    "limit",
+                    RecipeValueType.INTEGER
+                )
+
+                Operation.COMPILE -> Map.of<String?, RecipeValueType?>("flagSet", RecipeValueType.STRING)
+                Operation.MATCHER_CONSTRUCTION -> Map.of<String?, RecipeValueType?>("mode", RecipeValueType.STRING)
+                Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> Map.of<String?, RecipeValueType?>(
+                    "seed", RecipeValueType.INTEGER,
+                    "count", RecipeValueType.INTEGER
+                )
+
+                Operation.DIAGNOSTICS_FIND -> Map.of<String?, RecipeValueType?>(
+                    "action", RecipeValueType.STRING,
+                    "listener", RecipeValueType.STRING,
+                    "replacement", RecipeValueType.STRING
+                )
+
+                Operation.PATTERN_SET_COMPILE, Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> Map.of<String?, RecipeValueType?>(
+                    "anchor", RecipeValueType.STRING,
+                    "patternCount", RecipeValueType.INTEGER
+                )
+
+                else -> Map.of<String?, RecipeValueType?>()
+            }
+        }
+
+        fun requiredArguments(): MutableSet<String?> {
+            return when (this) {
+                Operation.FIND_ALL_GROUP_LENGTH_SUM, Operation.MATCHES_GROUP_LENGTH_SUM, Operation.CAPTURE_GROUPS -> mutableSetOf<String?>(
+                    "groups"
+                )
+
+                Operation.UTF8_CAPTURE_BOUNDS -> mutableSetOf<String?>("groups", "expectedBounds")
+                Operation.FIND_SAMPLED_GROUP -> mutableSetOf<String?>("group", "count", "mode")
+                Operation.FIND_GROUP_PRESENT, Operation.FIND_GROUP -> mutableSetOf<String?>("group")
+                Operation.REPLACE_FIRST, Operation.REPLACE_ALL, Operation.REPLACE_ALL_LENGTH_SUM, Operation.APPEND_REPLACEMENT, Operation.MANUAL_REPLACE_ALL, Operation.UTF8_REPLACEMENT -> mutableSetOf<String?>(
+                    "replacement"
+                )
+
+                Operation.PATTERN_SET_COMPILE, Operation.PATTERN_SET_FIND, Operation.PATTERN_SET_MATCHES -> mutableSetOf<String?>(
+                    "anchor"
+                )
+
+                Operation.FIND_ROTATING_UTF16, Operation.COMPILE_AND_FIND_ROTATING_UTF16 -> mutableSetOf<String?>(
+                    "seed",
+                    "count"
+                )
+
+                else -> mutableSetOf<String?>()
+            }
+        }
+
+        fun validateArguments(id: String?, arguments: MutableMap<String?, RecipeValue?>) {
+            if (this == Operation.FIND_SAMPLED_GROUP) {
+                val mode: String = (arguments.get("mode") as RecipeString).value
+                require(!(mode != "boolean" && mode != "capture")) { id + " mode must be boolean or capture" }
+            }
+            val group = arguments.get("group")
+            require(!(group != null && (group as RecipeInteger).value < 0)) { id + " group argument must not be negative" }
+            val groups = arguments.get("groups")
+            if (groups != null) {
+                val values: MutableList<Int> = (groups as RecipeIntegerList).values
+                require(
+                    !(values.isEmpty() || values.stream()
+                        .anyMatch { value: Int? -> value!! < 0 })
+                ) { id + " groups argument must contain nonnegative group numbers" }
+            }
+            val anchor = arguments.get("anchor")
+            if (anchor != null) {
+                val value: String = (anchor as RecipeString).value
+                require(!(value != "unanchored" && value != "anchored")) { id + " anchor argument must be unanchored or anchored" }
+            }
+            val patternCount = arguments.get("patternCount")
+            require(!(patternCount != null && (patternCount as RecipeInteger).value <= 0)) { id + " patternCount argument must be positive" }
+            val count = arguments.get("count")
+            require(!(count != null && (count as RecipeInteger).value <= 0)) { id + " count argument must be positive" }
+            val bounds = arguments.get("bounds")
+            if (bounds != null) {
+                val value: String = (bounds as RecipeString).value
+                require(!(value != "start" && value != "startEnd")) { id + " bounds argument must be start or startEnd" }
+            }
+        }
+
+        companion object {
+            fun fromJson(name: String?): Operation {
+                return Companion.enumFromJson<Operation>(
+                    org.safere.benchmark.DeclarativeBenchmarkPlan.Operation.entries.toTypedArray(),
+                    name,
+                    "benchmark operation"
+                )!!
+            }
+        }
+    }
+
+    internal enum class Flag(jsonName: String) : JsonNamed {
+        CASE_INSENSITIVE("caseInsensitive"),
+        MULTILINE("multiline"),
+        DOTALL("dotAll"),
+        UNICODE_CASE("unicodeCase"),
+        COMMENTS("comments"),
+        LITERAL("literal"),
+        UNICODE_CHARACTER_CLASS("unicodeCharacterClass");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): Flag {
+                return Companion.enumFromJson<Flag>(
+                    org.safere.benchmark.DeclarativeBenchmarkPlan.Flag.entries.toTypedArray(),
+                    name,
+                    "regex flag"
+                )!!
+            }
+        }
+    }
+
+    internal enum class Feature(jsonName: String) : JsonNamed {
+        FIND("find"),
+        MATCHES("matches"),
+        LOOKING_AT("lookingAt"),
+        CAPTURE_PARTICIPATION("captureParticipation"),
+        CAPTURE_TEXT("captureText"),
+        NAMED_GROUPS("namedGroups"),
+        REPLACE("replace"),
+        NUMBERED_REPLACEMENT("numberedReplacement"),
+        NAMED_REPLACEMENT("namedReplacement"),
+        APPEND_REPLACEMENT("appendReplacement"),
+        FUNCTIONAL_REPLACEMENT("functionalReplacement"),
+        SPLIT("split"),
+        MATCHER_STATE("matcherState"),
+        REGIONS("regions"),
+        BOUNDS("bounds"),
+        PATTERN_SET("patternSet"),
+        UTF8_INPUT("utf8Input"),
+        UTF8_REPLACEMENT("utf8Replacement"),
+        DIAGNOSTICS("diagnostics"),
+        DFA_CACHE("dfaCache"),
+        FLAGGED_COMPILE("flaggedCompile"),
+        JAVA_CHARACTER_CLASS("javaCharacterClass"),
+        LINEAR_TIME("linearTime"),
+        RETAINED_HEAP("retainedHeap");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): Feature {
+                return Companion.enumFromJson<Feature>(
+                    org.safere.benchmark.DeclarativeBenchmarkPlan.Feature.entries.toTypedArray(),
+                    name,
+                    "engine-neutral feature requirement"
+                )!!
+            }
+        }
+    }
+
+    internal enum class InputRepresentation(jsonName: String) : JsonNamed {
+        JAVA_STRING("javaString"),
+        PREEXISTING_UTF8("preexistingUtf8"),
+        JAVA_STRING_WITH_TIMED_UTF8_CONVERSION("javaStringWithTimedUtf8Conversion");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): InputRepresentation {
+                return Companion.enumFromJson<InputRepresentation>(
+                    org.safere.benchmark.DeclarativeBenchmarkPlan.InputRepresentation.entries.toTypedArray(),
+                    name,
+                    "input representation"
+                )!!
+            }
+        }
+    }
+
+    internal enum class ResultConsumption(jsonName: String, expectedType: ResultType) : JsonNamed {
+        BOOLEAN("boolean", ResultType.BOOLEAN),
+        INTEGER("integer", ResultType.INTEGER),
+        STRING("string", ResultType.STRING),
+        STRING_LIST("stringList", ResultType.STRING_LIST),
+        COMPILED_OBJECT("compiledObject", null),
+        BLACKHOLE_OBJECT("blackholeObject", null);
+
+        private val jsonName: String?
+        private val expectedType: ResultType
+
+        init {
+            this.jsonName = jsonName
+            this.expectedType = expectedType
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun validateExpected(id: String?, expected: ExpectedResult?) {
+            if (expected == null) {
+                return
+            }
+            requireNotNull(expectedType) { id + " result consumption " + jsonName + " cannot declare expected" }
+            require(expected.type == expectedType) {
+                (id
+                        + " result consumption "
+                        + jsonName
+                        + " requires expected type "
+                        + expectedType.jsonName())
+            }
+        }
+
+        companion object {
+            fun fromJson(name: String?): ResultConsumption {
+                return Companion.enumFromJson<ResultConsumption>(
+                    ResultConsumption.entries.toTypedArray(),
+                    name,
+                    "result consumption"
+                )!!
+            }
+        }
+    }
+
+    internal enum class ResultType(jsonName: String) : JsonNamed {
+        BOOLEAN("boolean"),
+        INTEGER("integer"),
+        STRING("string"),
+        STRING_LIST("stringList");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun validate(value: JsonElement) {
+            val valid =
+                when (this) {
+                    ResultType.BOOLEAN -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
+                    ResultType.INTEGER -> (value.isJsonPrimitive()
+                            && value.getAsJsonPrimitive().isNumber()
+                            && isInteger(value))
+
+                    ResultType.STRING -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+                    ResultType.STRING_LIST -> value.isJsonArray()
+                            && value.getAsJsonArray().asList().stream()
+                        .allMatch { item: JsonElement? ->
+                            item!!.isJsonPrimitive() && item.getAsJsonPrimitive().isString()
+                        }
+                }
+            require(valid) { "Malformed " + jsonName + " expected result: " + value }
+        }
+
+        companion object {
+            private fun isInteger(value: JsonElement): Boolean {
+                try {
+                    value.getAsBigDecimal().toBigIntegerExact()
+                    return true
+                } catch (exception: ArithmeticException) {
+                    return false
+                } catch (exception: NumberFormatException) {
+                    return false
+                }
+            }
+
+            fun fromJson(name: String?): ResultType {
+                return Companion.enumFromJson<ResultType>(
+                    ResultType.entries.toTypedArray(),
+                    name,
+                    "expected result type"
+                )!!
+            }
+        }
+    }
+
+    internal enum class MatcherReuse(jsonName: String) : JsonNamed {
+        NONE("none"),
+        NEW_PER_INVOCATION("newPerInvocation"),
+        RETAINED("retained");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): MatcherReuse {
+                return Companion.enumFromJson<MatcherReuse>(
+                    MatcherReuse.entries.toTypedArray(),
+                    name,
+                    "matcher reuse policy"
+                )!!
+            }
+        }
+    }
+
+    internal enum class LifecycleStepKind(jsonName: String) : JsonNamed {
+        RESET("reset"),
+        REGION("region"),
+        TRANSPARENT_BOUNDS("transparentBounds"),
+        ANCHORING_BOUNDS("anchoringBounds");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun validate(start: Int?, end: Int?, enabled: Boolean?) {
+            when (this) {
+                LifecycleStepKind.RESET -> requireAbsent(start, end, enabled)
+                LifecycleStepKind.REGION -> {
+                    require(!(start == null || end == null || start < 0 || end < start || enabled != null)) { "region lifecycle step requires valid start/end and no enabled field" }
+                }
+
+                LifecycleStepKind.TRANSPARENT_BOUNDS, LifecycleStepKind.ANCHORING_BOUNDS -> {
+                    require(!(enabled == null || start != null || end != null)) { jsonName + " lifecycle step requires enabled and no start/end" }
+                }
+            }
+        }
+
+        companion object {
+            private fun requireAbsent(start: Int?, end: Int?, enabled: Boolean?) {
+                require(!(start != null || end != null || enabled != null)) { "reset lifecycle step takes no parameters" }
+            }
+
+            fun fromJson(name: String?): LifecycleStepKind {
+                return Companion.enumFromJson<LifecycleStepKind>(
+                    LifecycleStepKind.entries.toTypedArray(),
+                    name,
+                    "matcher lifecycle step"
+                )!!
+            }
+        }
+    }
+
+    internal enum class MeasurementMode(jsonName: String) : JsonNamed {
+        AVERAGE_TIME("averageTime"),
+        COMPILE_ONLY("compileOnly"),
+        SINGLE_SHOT_COLD_START("singleShotColdStart"),
+        RETAINED_MEMORY("retainedMemory"),
+        SUBPROCESS_MEMORY("subprocessMemory");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        fun validate(unit: TimingUnit, constraints: EnumSet<ExecutionConstraint?>) {
+            when (this) {
+                MeasurementMode.AVERAGE_TIME, MeasurementMode.COMPILE_ONLY -> {
+                    require(unit.isTime) { jsonName + " requires a time unit" }
+                }
+
+                MeasurementMode.SINGLE_SHOT_COLD_START -> {
+                    require(
+                        !(!unit.isTime
+                                || !constraints.contains(ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION))
+                    ) { jsonName + " requires a time unit and freshProcessPerInvocation" }
+                }
+
+                MeasurementMode.RETAINED_MEMORY, MeasurementMode.SUBPROCESS_MEMORY -> {
+                    require(unit == TimingUnit.BYTES) { jsonName + " requires bytes timingUnit" }
+                }
+            }
+            require(
+                !(constraints.contains(ExecutionConstraint.NO_FORK)
+                        && constraints.contains(ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION))
+            ) { "Measurement constraints noFork and freshProcessPerInvocation are incompatible" }
+        }
+
+        companion object {
+            fun fromJson(name: String?): MeasurementMode {
+                return Companion.enumFromJson<MeasurementMode>(
+                    MeasurementMode.entries.toTypedArray(),
+                    name,
+                    "measurement mode"
+                )!!
+            }
+        }
+    }
+
+    internal enum class TimingUnit(jsonName: String, time: Boolean) : JsonNamed {
+        NANOSECONDS("nanoseconds", true),
+        MICROSECONDS("microseconds", true),
+        MILLISECONDS("milliseconds", true),
+        BYTES("bytes", false);
+
+        private val jsonName: String?
+        val isTime: Boolean
+
+        init {
+            this.jsonName = jsonName
+            this.isTime = time
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): TimingUnit {
+                return Companion.enumFromJson<TimingUnit>(
+                    TimingUnit.entries.toTypedArray(),
+                    name,
+                    "measurement timing unit"
+                )!!
+            }
+        }
+    }
+
+    internal enum class ExecutionConstraint(jsonName: String) : JsonNamed {
+        NO_FORK("noFork"),
+        FRESH_PROCESS_PER_INVOCATION("freshProcessPerInvocation"),
+        RETAIN_STATE("retainState"),
+        PREMATERIALIZED_INPUT("prematerializedInput"),
+        ALLOCATION_PROFILE("allocationProfile");
+
+        private val jsonName: String?
+
+        init {
+            this.jsonName = jsonName
+        }
+
+        override fun jsonName(): String? {
+            return jsonName
+        }
+
+        companion object {
+            fun fromJson(name: String?): ExecutionConstraint {
+                return Companion.enumFromJson<ExecutionConstraint>(
+                    ExecutionConstraint.entries.toTypedArray(),
+                    name,
+                    "execution constraint"
+                )!!
+            }
+        }
+    }
+
+    internal enum class ExclusionKind {
+        EXPLICIT_TRIAL_EXCLUSION,
+        WORKLOAD_DISABLED,
+        UNSUPPORTED_FEATURE,
+        UNSUPPORTED_FLAG,
+        UNSUPPORTED_INPUT_REPRESENTATION,
+        MISSING_OPERATION_IMPLEMENTATION,
+        MISSING_ENGINE_ADAPTER
+    }
+
+    private interface JsonNamed {
+        fun jsonName(): String?
+    }
+
+    private interface EnumParser<E> {
+        fun parse(value: String?): E?
+    }
+
+    private class JsonReader(private val context: String?, private val `object`: JsonObject) {
+        fun requireOnly(vararg allowedNames: String?) {
+            val allowed = Set.of<String?>(*allowedNames)
+            for (name in `object`.keySet()) {
+                require(allowed.contains(name)) { context + " has unknown field: " + name }
+            }
+        }
+
+        fun has(name: String?): Boolean {
+            return `object`.has(name) && !`object`.get(name).isJsonNull()
+        }
+
+        fun required(name: String?): JsonElement {
+            val value = `object`.get(name)
+            require(!(value == null || value.isJsonNull())) { context + " requires " + name }
+            return value
+        }
+
+        fun requiredString(name: String?): String {
+            val value = required(name)
+            require(isString(value)) { context + " field " + name + " must be a string" }
+            return value.getAsString()
+        }
+
+        fun optionalString(name: String?): String? {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return null
+            }
+            require(isString(value)) { context + " field " + name + " must be a string" }
+            return value.getAsString()
+        }
+
+        fun requiredInt(name: String?): Int {
+            val value = required(name)
+            require(isIntegerPrimitive(value)) { context + " field " + name + " must be an integer" }
+            return value.getAsBigDecimal().intValueExact()
+        }
+
+        fun optionalInt(name: String?): Int? {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return null
+            }
+            require(isIntegerPrimitive(value)) { context + " field " + name + " must be an integer" }
+            return value.getAsBigDecimal().intValueExact()
+        }
+
+        fun optionalBoolean(name: String?, defaultValue: Boolean): Boolean {
+            val value = optionalBoolean(name)
+            return if (value == null) defaultValue else value
+        }
+
+        fun optionalBoolean(name: String?): Boolean? {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return null
+            }
+            require(
+                !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean())
+            ) { context + " field " + name + " must be a boolean" }
+            return value.getAsBoolean()
+        }
+
+        fun requiredArray(name: String?): JsonArray {
+            try {
+                return required(name).getAsJsonArray()
+            } catch (exception: RuntimeException) {
+                throw IllegalArgumentException(
+                    context + " field " + name + " must be an array", exception
+                )
+            }
+        }
+
+        fun optionalArray(name: String?): JsonArray? {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return JsonArray()
+            }
+            try {
+                return value.getAsJsonArray()
+            } catch (exception: RuntimeException) {
+                throw IllegalArgumentException(
+                    context + " field " + name + " must be an array", exception
+                )
+            }
+        }
+
+        fun requiredObject(name: String?): JsonObject? {
+            try {
+                return required(name).getAsJsonObject()
+            } catch (exception: RuntimeException) {
+                throw IllegalArgumentException(
+                    context + " field " + name + " must be an object", exception
+                )
+            }
+        }
+
+        fun optionalObject(name: String?): JsonObject? {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return null
+            }
+            try {
+                return value.getAsJsonObject()
+            } catch (exception: RuntimeException) {
+                throw IllegalArgumentException(
+                    context + " field " + name + " must be an object", exception
+                )
+            }
+        }
+
+        fun requiredStringList(name: String?): MutableList<String> {
+            required(name)
+            return stringList(name)
+        }
+
+        fun optionalStringList(name: String?): MutableList<String> {
+            val value = `object`.get(name)
+            if (value == null || value.isJsonNull()) {
+                return mutableListOf<String?>()
+            }
+            return stringList(name)
+        }
+
+        fun stringList(name: String?): MutableList<String> {
+            val value = `object`.get(name)
+            try {
+                val result: MutableList<String> = ArrayList<String>()
+                value
+                    .getAsJsonArray()
+                    .forEach(
+                        Consumer { item: JsonElement? ->
+                            require(DeclarativeBenchmarkPlan.Companion.isString(item!!))
+                            result.add(item.getAsString())
+                        })
+                return List.copyOf<String?>(result)
+            } catch (exception: RuntimeException) {
+                throw IllegalArgumentException(
+                    context + " field " + name + " must be an array of strings", exception
+                )
+            }
+        }
+
+        companion object {
+            fun `object`(context: String?, element: JsonElement): JsonReader {
+                require(!(element == null || !element.isJsonObject())) { context + " must be an object" }
+                return JsonReader(context, element.getAsJsonObject())
+            }
+        }
+    }
+
+    companion object {
+        const val SCHEMA_VERSION: Int = 2
+        private val PLACEHOLDER: Pattern = Pattern.compile("(?<!\\$)\\{([A-Za-z][A-Za-z0-9_]*)}")
+
+        fun parse(json: JsonObject): DeclarativeBenchmarkPlan {
+            val root = JsonReader("plan", json)
+            root.requireOnly("schemaVersion", "inputs", "workloads")
+            val schemaVersion = root.requiredInt("schemaVersion")
+            require(schemaVersion == SCHEMA_VERSION) { "Unsupported benchmark plan schema version: " + schemaVersion }
+
+            val inputs: MutableMap<String?, InputDeclaration?> = parseInputDeclarations(root.requiredArray("inputs"))
+
+            val workloads: MutableList<WorkloadDeclaration> = ArrayList<WorkloadDeclaration>()
+            val workloadTemplates: MutableSet<String?> = LinkedHashSet<String?>()
+            for (element in root.requiredArray("workloads")) {
+                val workload: WorkloadDeclaration = parseWorkload(element)
+                require(workloadTemplates.add(workload.idTemplate)) { "Duplicate benchmark workload ID template: " + workload.idTemplate }
+                workloads.add(workload)
+            }
+            require(!workloads.isEmpty()) { "Benchmark plan requires at least one workload" }
+
+            val plan = DeclarativeBenchmarkPlan(inputs, workloads)
+            plan.validateReferencesAndIdentities()
+            return plan
+        }
+
+        fun parseInputDeclarations(declarations: JsonArray): MutableMap<String?, InputDeclaration?> {
+            val inputs: MutableMap<String?, InputDeclaration?> = LinkedHashMap<String?, InputDeclaration?>()
+            for (element in declarations) {
+                for (input in parseInputs(element)) {
+                    require(inputs.put(input.id, input) == null) { "Duplicate benchmark input ID: " + input.id }
+                }
+            }
+            return Collections.unmodifiableMap<String?, InputDeclaration?>(inputs)
+        }
+
+        private fun exclusion(
+            workload: ExpandedWorkload, engine: EngineDeclaration, implementedOperations: MutableSet<Operation?>
+        ): Exclusion? {
+            val trialExclusion = workload.trialExclusion(engine.id)
+            if (trialExclusion != null) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.EXPLICIT_TRIAL_EXCLUSION,
+                    trialExclusion.reason
+                )
+            }
+            if (!engine.adapterAvailable) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.MISSING_ENGINE_ADAPTER,
+                    "engine adapter is not available"
+                )
+            }
+            if (!implementedOperations.contains(workload.operation)) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.MISSING_OPERATION_IMPLEMENTATION,
+                    "operation " + workload.operation!!.jsonName() + " is not implemented"
+                )
+            }
+            if (!workload.inputRepresentations().contains(engine.inputRepresentation)) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.UNSUPPORTED_INPUT_REPRESENTATION,
+                    "workload does not accept " + engine.inputRepresentation!!.jsonName()
+                )
+            }
+            val unsupportedFlags = workload.flags().clone()
+            unsupportedFlags.removeAll(engine.supportedFlags())
+            if (!unsupportedFlags.isEmpty()) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.UNSUPPORTED_FLAG,
+                    "engine lacks flags " + enumNames(unsupportedFlags)
+                )
+            }
+            val missing = workload.requirements().clone()
+            missing.removeAll(engine.features())
+            if (!missing.isEmpty()) {
+                return Exclusion(
+                    workload.id,
+                    engine.id,
+                    ExclusionKind.UNSUPPORTED_FEATURE,
+                    "engine lacks " + enumNames(missing)
+                )
+            }
+            return null
+        }
+
+        private fun parseInputs(element: JsonElement): MutableList<InputDeclaration> {
+            val input: JsonReader = JsonReader.Companion.`object`("input", element)
+            input.requireOnly("id", "axes", "recipe", "shared")
+            val idTemplate = input.requiredString("id")
+            val axes: MutableMap<String?, MutableList<ParameterValue?>> = parseAxes(input.optionalObject("axes"))
+            Companion.requirePlaceholderCoverage(idTemplate, axes.keys, idTemplate)
+            val recipe: InputRecipe = Companion.parseRecipe(input.requiredObject("recipe")!!, idTemplate)
+            recipe.validatePlaceholders(idTemplate, axes.keys)
+
+            val declarations: MutableList<InputDeclaration> = ArrayList<InputDeclaration>()
+            for (parameters in parameterBindings(axes)) {
+                val id = substitute(idTemplate, parameters, "input ID")
+                requireSimpleId(id, "benchmark input")
+                declarations.add(
+                    DeclarativeBenchmarkPlan.InputDeclaration(
+                        id,
+                        recipe.substitute(parameters, id),
+                        input.optionalBoolean("shared", false),
+                        parameters
+                    )
+                )
+            }
+            return List.copyOf<InputDeclaration?>(declarations)
+        }
+
+        private fun parseRecipe(`object`: JsonObject, inputId: String?): InputRecipe {
+            val recipe = JsonReader(inputId + " recipe", `object`)
+            val kindName = recipe.requiredString("kind")
+            val kind = RecipeKind.Companion.fromJson(kindName)
+            recipe.requireOnly(*kind.allowedFields()!!)
+            val arguments: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
+            for (field in kind.fields()) {
+                val value = `object`.get(field.name)
+                if (value == null) {
+                    require(!field.required) { inputId + " " + kindName + " recipe requires " + field.name }
+                    continue
+                }
+                arguments.put(
+                    field.name, RecipeValue.Companion.parse(value, field.type!!, inputId + " recipe", field.name)
+                )
+            }
+            return InputRecipe(kind, arguments)
+        }
+
+        private fun parseWorkload(element: JsonElement): WorkloadDeclaration {
+            val workload: JsonReader = JsonReader.Companion.`object`("workload", element)
+            workload.requireOnly(
+                "id",
+                "operation",
+                "patterns",
+                "inputs",
+                "axes",
+                "arguments",
+                "flags",
+                "requirements",
+                "inputRepresentations",
+                "inputRepresentationReason",
+                "resultConsumption",
+                "expected",
+                "lifecycle",
+                "measurement",
+                "disabledReason",
+                "trialExclusions"
+            )
+            val id = workload.requiredString("id")
+            val operation: Operation = Operation.Companion.fromJson(workload.requiredString("operation"))
+            val patterns = workload.requiredStringList("patterns")
+            val inputs = workload.optionalStringList("inputs")
+            val axes: MutableMap<String?, MutableList<ParameterValue?>> = parseAxes(workload.optionalObject("axes"))
+            val arguments: MutableMap<String?, RecipeValue?> =
+                Companion.parseOperationArguments(workload.optionalObject("arguments"), operation, id, axes.keys)
+            val flags: EnumSet<Flag?> = Companion.enumSet<Flag?>(
+                workload.optionalStringList("flags"),
+                EnumParser { name: String? -> Flag.Companion.fromJson(name) },
+                Flag::class.java
+            )
+            val requirements: EnumSet<Feature?> =
+                Companion.enumSet<Feature?>(
+                    workload.optionalStringList("requirements"),
+                    EnumParser { name: String? -> Feature.Companion.fromJson(name) },
+                    Feature::class.java
+                )
+            val representationsDeclared = workload.has("inputRepresentations")
+            val representations: EnumSet<InputRepresentation?>?
+            if (representationsDeclared) {
+                representations =
+                    Companion.enumSet<InputRepresentation?>(
+                        workload.requiredStringList("inputRepresentations"),
+                        EnumParser { name: String? -> InputRepresentation.Companion.fromJson(name) },
+                        InputRepresentation::class.java
+                    )
+            } else {
+                representations = EnumSet.allOf<InputRepresentation?>(InputRepresentation::class.java)
+            }
+            val inputRepresentationReason = workload.optionalString("inputRepresentationReason")
+            val consumption =
+                ResultConsumption.Companion.fromJson(workload.requiredString("resultConsumption"))
+            val expected: ExpectedResult? = parseExpected(workload.optionalObject("expected"), axes.keys)
+            val lifecycle: MatcherLifecycle = parseLifecycle(workload.optionalObject("lifecycle"))
+            val measurement: Measurement = Companion.parseMeasurement(workload.requiredObject("measurement")!!)
+            val disabledReason = workload.optionalString("disabledReason")
+            val trialExclusions: MutableList<TrialExclusion> =
+                Companion.parseTrialExclusions(workload.optionalArray("trialExclusions")!!, id, axes)
+
+            require(!patterns.isEmpty()) { id + " requires at least one pattern" }
+            require(!representations.isEmpty()) { id + " requires at least one input representation" }
+            require(
+                !(representationsDeclared
+                        && representations == EnumSet.allOf<InputRepresentation?>(InputRepresentation::class.java))
+            ) { id + " accepts every input representation; omit inputRepresentations instead" }
+            require(
+                !(representationsDeclared
+                        && (inputRepresentationReason == null || inputRepresentationReason.isBlank()))
+            ) { id + " requires a nonblank inputRepresentationReason when inputRepresentations is set" }
+            require(!(!representationsDeclared && inputRepresentationReason != null)) { id + " must not declare inputRepresentationReason without inputRepresentations" }
+            require(!(disabledReason != null && disabledReason.isBlank())) { id + " disabledReason must not be blank" }
+            require(!(disabledReason != null && !trialExclusions.isEmpty())) { id + " must not declare both disabledReason and trialExclusions" }
+            requirements.addAll(operation.requiredFeatures())
+            requirements.addAll(lifecycle.requiredFeatures())
+            operation.validate(id, patterns, inputs, consumption, lifecycle, measurement)
+            consumption.validateExpected(id, expected)
+            return WorkloadDeclaration(
                 id,
-                workload.operation(),
+                operation,
                 patterns,
-                inputIds,
-                parameters,
+                inputs,
+                axes,
                 arguments,
-                workload.flags(),
-                workload.requirements(),
-                workload.inputRepresentations(),
-                workload.inputRepresentationReason(),
-                workload.resultConsumption(),
+                flags,
+                requirements,
+                representations,
+                inputRepresentationReason,
+                consumption,
                 expected,
-                workload.lifecycle(),
-                workload.measurement(),
-                workload.disabledReason(),
-                workload.trialExclusions().stream()
-                    .filter(exclusion -> exclusion.matches(parameters))
-                    .toList()));
-      }
-    }
-    return List.copyOf(result);
-  }
-
-  void validateTrialExclusions(List<ExpandedWorkload> workloads, Set<String> engineIds) {
-    Objects.requireNonNull(workloads);
-    Objects.requireNonNull(engineIds);
-    for (WorkloadDeclaration workload : this.workloads) {
-      for (TrialExclusion exclusion : workload.trialExclusions()) {
-        for (String engineId : exclusion.engineIds()) {
-          if (!engineIds.contains(engineId)) {
-            throw new IllegalArgumentException(
-                workload.idTemplate()
-                    + " trial exclusion references unknown engine ID: "
-                    + engineId);
-          }
+                lifecycle,
+                measurement,
+                disabledReason,
+                trialExclusions
+            )
         }
-      }
-    }
-    for (ExpandedWorkload workload : workloads) {
-      for (String engineId : engineIds) {
-        workload.trialExclusion(engineId);
-      }
-    }
-  }
 
-  private void validateReferencesAndIdentities() {
-    for (WorkloadDeclaration workload : workloads) {
-      Set<String> axisNames = workload.axes().keySet();
-      requirePlaceholderCoverage(workload.idTemplate(), axisNames, workload.idTemplate());
-      for (String inputTemplate : workload.inputTemplates()) {
-        requireKnownPlaceholders(inputTemplate, axisNames, workload.idTemplate() + " input");
-      }
-    }
-    Set<String> referencedInputs = new LinkedHashSet<>();
-    for (ExpandedWorkload workload : expandWorkloads()) {
-      referencedInputs.addAll(workload.inputIds());
-    }
-    for (InputDeclaration input : inputs.values()) {
-      if (!input.shared() && !referencedInputs.contains(input.id())) {
-        throw new IllegalArgumentException(
-            "Benchmark input is not referenced by a workload and is not shared: " + input.id());
-      }
-    }
-  }
+        private fun parseTrialExclusions(
+            declarations: JsonArray, workloadId: String?, axes: MutableMap<String?, MutableList<ParameterValue?>>
+        ): MutableList<TrialExclusion> {
+            val result: MutableList<TrialExclusion> = ArrayList<TrialExclusion>()
+            for (element in declarations) {
+                val exclusion: JsonReader = JsonReader.Companion.`object`(workloadId + " trial exclusion", element)
+                exclusion.requireOnly("engineIds", "when", "reason")
+                val engineIds = exclusion.requiredStringList("engineIds")
+                require(!engineIds.isEmpty()) { workloadId + " trial exclusion requires at least one engine ID" }
+                val distinctEngineIds: MutableSet<String> = LinkedHashSet<String>()
+                for (engineId in engineIds) {
+                    requireSimpleId(engineId, "benchmark engine")
+                    require(distinctEngineIds.add(engineId)) { workloadId + " trial exclusion has duplicate engine ID: " + engineId }
+                }
 
-  private static List<InputDeclaration> parseInputs(JsonElement element) {
-    JsonReader input = JsonReader.object("input", element);
-    input.requireOnly("id", "axes", "recipe", "shared");
-    String idTemplate = input.requiredString("id");
-    Map<String, List<ParameterValue>> axes = parseAxes(input.optionalObject("axes"));
-    requirePlaceholderCoverage(idTemplate, axes.keySet(), idTemplate);
-    InputRecipe recipe = parseRecipe(input.requiredObject("recipe"), idTemplate);
-    recipe.validatePlaceholders(idTemplate, axes.keySet());
-
-    List<InputDeclaration> declarations = new ArrayList<>();
-    for (Map<String, ParameterValue> parameters : parameterBindings(axes)) {
-      String id = substitute(idTemplate, parameters, "input ID");
-      requireSimpleId(id, "benchmark input");
-      declarations.add(
-          new InputDeclaration(
-              id,
-              recipe.substitute(parameters, id),
-              input.optionalBoolean("shared", false),
-              parameters));
-    }
-    return List.copyOf(declarations);
-  }
-
-  private static InputRecipe parseRecipe(JsonObject object, String inputId) {
-    JsonReader recipe = new JsonReader(inputId + " recipe", object);
-    String kindName = recipe.requiredString("kind");
-    RecipeKind kind = RecipeKind.fromJson(kindName);
-    recipe.requireOnly(kind.allowedFields());
-    Map<String, RecipeValue> arguments = new LinkedHashMap<>();
-    for (RecipeField field : kind.fields()) {
-      JsonElement value = object.get(field.name());
-      if (value == null) {
-        if (field.required()) {
-          throw new IllegalArgumentException(
-              inputId + " " + kindName + " recipe requires " + field.name());
-        }
-        continue;
-      }
-      arguments.put(
-          field.name(), RecipeValue.parse(value, field.type(), inputId + " recipe", field.name()));
-    }
-    return new InputRecipe(kind, arguments);
-  }
-
-  private static WorkloadDeclaration parseWorkload(JsonElement element) {
-    JsonReader workload = JsonReader.object("workload", element);
-    workload.requireOnly(
-        "id",
-        "operation",
-        "patterns",
-        "inputs",
-        "axes",
-        "arguments",
-        "flags",
-        "requirements",
-        "inputRepresentations",
-        "inputRepresentationReason",
-        "resultConsumption",
-        "expected",
-        "lifecycle",
-        "measurement",
-        "disabledReason",
-        "trialExclusions");
-    String id = workload.requiredString("id");
-    Operation operation = Operation.fromJson(workload.requiredString("operation"));
-    List<String> patterns = workload.requiredStringList("patterns");
-    List<String> inputs = workload.optionalStringList("inputs");
-    Map<String, List<ParameterValue>> axes = parseAxes(workload.optionalObject("axes"));
-    Map<String, RecipeValue> arguments =
-        parseOperationArguments(workload.optionalObject("arguments"), operation, id, axes.keySet());
-    EnumSet<Flag> flags = enumSet(workload.optionalStringList("flags"), Flag::fromJson, Flag.class);
-    EnumSet<Feature> requirements =
-        enumSet(workload.optionalStringList("requirements"), Feature::fromJson, Feature.class);
-    boolean representationsDeclared = workload.has("inputRepresentations");
-    EnumSet<InputRepresentation> representations;
-    if (representationsDeclared) {
-      representations =
-          enumSet(
-              workload.requiredStringList("inputRepresentations"),
-              InputRepresentation::fromJson,
-              InputRepresentation.class);
-    } else {
-      representations = EnumSet.allOf(InputRepresentation.class);
-    }
-    String inputRepresentationReason = workload.optionalString("inputRepresentationReason");
-    ResultConsumption consumption =
-        ResultConsumption.fromJson(workload.requiredString("resultConsumption"));
-    ExpectedResult expected = parseExpected(workload.optionalObject("expected"), axes.keySet());
-    MatcherLifecycle lifecycle = parseLifecycle(workload.optionalObject("lifecycle"));
-    Measurement measurement = parseMeasurement(workload.requiredObject("measurement"));
-    String disabledReason = workload.optionalString("disabledReason");
-    List<TrialExclusion> trialExclusions =
-        parseTrialExclusions(workload.optionalArray("trialExclusions"), id, axes);
-
-    if (patterns.isEmpty()) {
-      throw new IllegalArgumentException(id + " requires at least one pattern");
-    }
-    if (representations.isEmpty()) {
-      throw new IllegalArgumentException(id + " requires at least one input representation");
-    }
-    if (representationsDeclared
-        && representations.equals(EnumSet.allOf(InputRepresentation.class))) {
-      throw new IllegalArgumentException(
-          id + " accepts every input representation; omit inputRepresentations instead");
-    }
-    if (representationsDeclared
-        && (inputRepresentationReason == null || inputRepresentationReason.isBlank())) {
-      throw new IllegalArgumentException(
-          id + " requires a nonblank inputRepresentationReason when inputRepresentations is set");
-    }
-    if (!representationsDeclared && inputRepresentationReason != null) {
-      throw new IllegalArgumentException(
-          id + " must not declare inputRepresentationReason without inputRepresentations");
-    }
-    if (disabledReason != null && disabledReason.isBlank()) {
-      throw new IllegalArgumentException(id + " disabledReason must not be blank");
-    }
-    if (disabledReason != null && !trialExclusions.isEmpty()) {
-      throw new IllegalArgumentException(
-          id + " must not declare both disabledReason and trialExclusions");
-    }
-    requirements.addAll(operation.requiredFeatures());
-    requirements.addAll(lifecycle.requiredFeatures());
-    operation.validate(id, patterns, inputs, consumption, lifecycle, measurement);
-    consumption.validateExpected(id, expected);
-    return new WorkloadDeclaration(
-        id,
-        operation,
-        patterns,
-        inputs,
-        axes,
-        arguments,
-        flags,
-        requirements,
-        representations,
-        inputRepresentationReason,
-        consumption,
-        expected,
-        lifecycle,
-        measurement,
-        disabledReason,
-        trialExclusions);
-  }
-
-  private static List<TrialExclusion> parseTrialExclusions(
-      JsonArray declarations, String workloadId, Map<String, List<ParameterValue>> axes) {
-    List<TrialExclusion> result = new ArrayList<>();
-    for (JsonElement element : declarations) {
-      JsonReader exclusion = JsonReader.object(workloadId + " trial exclusion", element);
-      exclusion.requireOnly("engineIds", "when", "reason");
-      List<String> engineIds = exclusion.requiredStringList("engineIds");
-      if (engineIds.isEmpty()) {
-        throw new IllegalArgumentException(
-            workloadId + " trial exclusion requires at least one engine ID");
-      }
-      Set<String> distinctEngineIds = new LinkedHashSet<>();
-      for (String engineId : engineIds) {
-        requireSimpleId(engineId, "benchmark engine");
-        if (!distinctEngineIds.add(engineId)) {
-          throw new IllegalArgumentException(
-              workloadId + " trial exclusion has duplicate engine ID: " + engineId);
-        }
-      }
-
-      Map<String, Set<ParameterValue>> selectors = new LinkedHashMap<>();
-      JsonObject when = exclusion.optionalObject("when");
-      if (when != null) {
-        for (Map.Entry<String, JsonElement> selector : when.entrySet()) {
-          String axis = selector.getKey();
-          List<ParameterValue> declaredValues = axes.get(axis);
-          if (declaredValues == null) {
-            throw new IllegalArgumentException(
-                workloadId + " trial exclusion references unknown axis: " + axis);
-          }
-          JsonArray values;
-          try {
-            values = selector.getValue().getAsJsonArray();
-          } catch (RuntimeException exception) {
-            throw new IllegalArgumentException(
-                workloadId + " trial exclusion selector must be an array: " + axis, exception);
-          }
-          if (values.isEmpty()) {
-            throw new IllegalArgumentException(
-                workloadId + " trial exclusion selector must not be empty: " + axis);
-          }
-          Set<ParameterValue> parsedValues = new LinkedHashSet<>();
-          for (JsonElement value : values) {
-            ParameterValue parsed = ParameterValue.parse(value, axis);
-            if (!parsedValues.add(parsed)) {
-              throw new IllegalArgumentException(
-                  workloadId
-                      + " trial exclusion has duplicate axis value: "
-                      + axis
-                      + "="
-                      + parsed.stableText());
+                val selectors: MutableMap<String?, MutableSet<ParameterValue?>?> =
+                    LinkedHashMap<String?, MutableSet<ParameterValue?>?>()
+                val `when` = exclusion.optionalObject("when")
+                if (`when` != null) {
+                    for (selector in `when`.entrySet()) {
+                        val axis = selector.key
+                        val declaredValues: MutableList<ParameterValue?> = axes.get(axis)!!
+                        requireNotNull(declaredValues) { workloadId + " trial exclusion references unknown axis: " + axis }
+                        val values: JsonArray
+                        try {
+                            values = selector.value.getAsJsonArray()
+                        } catch (exception: RuntimeException) {
+                            throw IllegalArgumentException(
+                                workloadId + " trial exclusion selector must be an array: " + axis, exception
+                            )
+                        }
+                        require(!values.isEmpty()) { workloadId + " trial exclusion selector must not be empty: " + axis }
+                        val parsedValues: MutableSet<ParameterValue?> = LinkedHashSet<ParameterValue?>()
+                        for (value in values) {
+                            val parsed = ParameterValue.Companion.parse(value, axis)
+                            require(parsedValues.add(parsed)) {
+                                (workloadId
+                                        + " trial exclusion has duplicate axis value: "
+                                        + axis
+                                        + "="
+                                        + parsed.stableText)
+                            }
+                            require(declaredValues.contains(parsed)) {
+                                (workloadId
+                                        + " trial exclusion selects undeclared axis value: "
+                                        + axis
+                                        + "="
+                                        + parsed.stableText)
+                            }
+                        }
+                        selectors.put(axis, Collections.unmodifiableSet<ParameterValue?>(parsedValues))
+                    }
+                }
+                val reason = exclusion.requiredString("reason")
+                require(!reason.isBlank()) { workloadId + " trial exclusion reason must not be blank" }
+                result.add(
+                    TrialExclusion(
+                        List.copyOf<String?>(distinctEngineIds),
+                        Collections.unmodifiableMap<String?, MutableSet<ParameterValue?>?>(selectors),
+                        reason
+                    )
+                )
             }
-            if (!declaredValues.contains(parsed)) {
-              throw new IllegalArgumentException(
-                  workloadId
-                      + " trial exclusion selects undeclared axis value: "
-                      + axis
-                      + "="
-                      + parsed.stableText());
+            return List.copyOf<TrialExclusion?>(result)
+        }
+
+        private fun parseAxes(`object`: JsonObject?): MutableMap<String?, MutableList<ParameterValue?>> {
+            if (`object` == null) {
+                return Map.of<String?, MutableList<ParameterValue?>?>()
             }
-          }
-          selectors.put(axis, Collections.unmodifiableSet(parsedValues));
-        }
-      }
-      String reason = exclusion.requiredString("reason");
-      if (reason.isBlank()) {
-        throw new IllegalArgumentException(
-            workloadId + " trial exclusion reason must not be blank");
-      }
-      result.add(
-          new TrialExclusion(
-              List.copyOf(distinctEngineIds), Collections.unmodifiableMap(selectors), reason));
-    }
-    return List.copyOf(result);
-  }
-
-  private static Map<String, List<ParameterValue>> parseAxes(JsonObject object) {
-    if (object == null) {
-      return Map.of();
-    }
-    Map<String, List<ParameterValue>> axes = new LinkedHashMap<>();
-    for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-      requireSimpleId(entry.getKey(), "benchmark axis");
-      JsonArray values;
-      try {
-        values = entry.getValue().getAsJsonArray();
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            "Benchmark axis must be an array: " + entry.getKey(), exception);
-      }
-      if (values.isEmpty()) {
-        throw new IllegalArgumentException("Benchmark axis must not be empty: " + entry.getKey());
-      }
-      List<ParameterValue> parsed = new ArrayList<>();
-      Set<String> stableValues = new LinkedHashSet<>();
-      for (JsonElement value : values) {
-        ParameterValue parameter = ParameterValue.parse(value, entry.getKey());
-        if (!stableValues.add(parameter.stableText())) {
-          throw new IllegalArgumentException(
-              "Duplicate benchmark axis value: " + entry.getKey() + "=" + parameter.stableText());
-        }
-        parsed.add(parameter);
-      }
-      axes.put(entry.getKey(), List.copyOf(parsed));
-    }
-    return Collections.unmodifiableMap(axes);
-  }
-
-  private static Map<String, RecipeValue> parseOperationArguments(
-      JsonObject object, Operation operation, String workloadId, Set<String> axes) {
-    Map<String, RecipeValueType> fieldTypes = operation.argumentTypes();
-    Set<String> required = operation.requiredArguments();
-    if (object == null) {
-      if (!required.isEmpty()) {
-        throw new IllegalArgumentException(
-            workloadId + " operation " + operation.jsonName() + " requires arguments " + required);
-      }
-      return Map.of();
-    }
-    for (String field : object.keySet()) {
-      if (!fieldTypes.containsKey(field)) {
-        throw new IllegalArgumentException(
-            workloadId + " operation " + operation.jsonName() + " has unknown argument: " + field);
-      }
-    }
-    Map<String, RecipeValue> arguments = new LinkedHashMap<>();
-    for (Map.Entry<String, RecipeValueType> field : fieldTypes.entrySet()) {
-      JsonElement value = object.get(field.getKey());
-      if (value == null || value.isJsonNull()) {
-        if (required.contains(field.getKey())) {
-          throw new IllegalArgumentException(
-              workloadId
-                  + " operation "
-                  + operation.jsonName()
-                  + " requires argument "
-                  + field.getKey());
-        }
-        continue;
-      }
-      RecipeValue argument =
-          RecipeValue.parse(value, field.getValue(), workloadId + " arguments", field.getKey());
-      Set<String> unknownAxes = new LinkedHashSet<>(argument.placeholders());
-      unknownAxes.removeAll(axes);
-      if (!unknownAxes.isEmpty()) {
-        throw new IllegalArgumentException(
-            workloadId
-                + " argument "
-                + field.getKey()
-                + " references unknown axes: "
-                + unknownAxes);
-      }
-      arguments.put(field.getKey(), argument);
-    }
-    return Collections.unmodifiableMap(arguments);
-  }
-
-  private static ExpectedResult parseExpected(JsonObject object, Set<String> axes) {
-    if (object == null) {
-      return null;
-    }
-    JsonReader expected = new JsonReader("expected result", object);
-    expected.requireOnly("type", "value", "axis");
-    ResultType type = ResultType.fromJson(expected.requiredString("type"));
-    JsonElement value = object.get("value");
-    String axis = expected.optionalString("axis");
-    if ((value == null || value.isJsonNull()) == (axis == null)) {
-      throw new IllegalArgumentException("Expected result requires exactly one value or axis");
-    }
-    if (axis != null) {
-      if (!axes.contains(axis)) {
-        throw new IllegalArgumentException("Expected result references unknown axis: " + axis);
-      }
-      return new ExpectedResult(type, null, axis);
-    }
-    type.validate(value);
-    return new ExpectedResult(type, value.deepCopy(), null);
-  }
-
-  private static MatcherLifecycle parseLifecycle(JsonObject object) {
-    if (object == null) {
-      return MatcherLifecycle.NONE;
-    }
-    JsonReader lifecycle = new JsonReader("matcher lifecycle", object);
-    lifecycle.requireOnly("matcher", "steps");
-    MatcherReuse matcherReuse = MatcherReuse.fromJson(lifecycle.requiredString("matcher"));
-    List<LifecycleStep> steps = new ArrayList<>();
-    for (JsonElement element : lifecycle.optionalArray("steps")) {
-      JsonReader step = JsonReader.object("matcher lifecycle step", element);
-      step.requireOnly("kind", "start", "end", "enabled");
-      LifecycleStepKind kind = LifecycleStepKind.fromJson(step.requiredString("kind"));
-      Integer start = step.optionalInt("start");
-      Integer end = step.optionalInt("end");
-      Boolean enabled = step.optionalBoolean("enabled");
-      kind.validate(start, end, enabled);
-      steps.add(new LifecycleStep(kind, start, end, enabled));
-    }
-    if (matcherReuse == MatcherReuse.NONE && !steps.isEmpty()) {
-      throw new IllegalArgumentException("Matcher lifecycle NONE cannot declare steps");
-    }
-    return new MatcherLifecycle(matcherReuse, steps);
-  }
-
-  private static Measurement parseMeasurement(JsonObject object) {
-    JsonReader measurement = new JsonReader("measurement", object);
-    measurement.requireOnly("mode", "timingUnit", "constraints");
-    MeasurementMode mode = MeasurementMode.fromJson(measurement.requiredString("mode"));
-    TimingUnit timingUnit = TimingUnit.fromJson(measurement.requiredString("timingUnit"));
-    EnumSet<ExecutionConstraint> constraints =
-        enumSet(
-            measurement.optionalStringList("constraints"),
-            ExecutionConstraint::fromJson,
-            ExecutionConstraint.class);
-    mode.validate(timingUnit, constraints);
-    return new Measurement(mode, timingUnit, constraints);
-  }
-
-  private static <E extends Enum<E>> EnumSet<E> enumSet(
-      List<String> names, EnumParser<E> parser, Class<E> type) {
-    EnumSet<E> result = EnumSet.noneOf(type);
-    for (String name : names) {
-      E value = parser.parse(name);
-      if (!result.add(value)) {
-        throw new IllegalArgumentException("Duplicate declaration value: " + name);
-      }
-    }
-    return result;
-  }
-
-  private static List<Map<String, ParameterValue>> parameterBindings(
-      Map<String, List<ParameterValue>> axes) {
-    List<Map<String, ParameterValue>> bindings = new ArrayList<>();
-    bindings.add(new LinkedHashMap<>());
-    for (Map.Entry<String, List<ParameterValue>> axis : axes.entrySet()) {
-      List<Map<String, ParameterValue>> next = new ArrayList<>();
-      for (Map<String, ParameterValue> binding : bindings) {
-        for (ParameterValue value : axis.getValue()) {
-          Map<String, ParameterValue> expanded = new LinkedHashMap<>(binding);
-          expanded.put(axis.getKey(), value);
-          next.add(expanded);
-        }
-      }
-      bindings = next;
-    }
-    return bindings.stream()
-        .map(binding -> Collections.unmodifiableMap(new LinkedHashMap<>(binding)))
-        .toList();
-  }
-
-  private static String substitute(
-      String template, Map<String, ParameterValue> parameters, String context) {
-    return substitute(template, parameters, context, true);
-  }
-
-  private static String substituteValue(
-      String template, Map<String, ParameterValue> parameters, String context) {
-    return substitute(template, parameters, context, false);
-  }
-
-  private static String substitute(
-      String template,
-      Map<String, ParameterValue> parameters,
-      String context,
-      boolean useStableText) {
-    Matcher matcher = PLACEHOLDER.matcher(template);
-    StringBuilder result = new StringBuilder();
-    while (matcher.find()) {
-      ParameterValue value = parameters.get(matcher.group(1));
-      if (value == null) {
-        throw new IllegalArgumentException(
-            context + " references unknown axis: " + matcher.group(1));
-      }
-      String replacement = useStableText ? value.stableText() : value.valueText();
-      matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-    }
-    matcher.appendTail(result);
-    return result.toString();
-  }
-
-  private static String substitutePattern(String template, Map<String, ParameterValue> parameters) {
-    Matcher matcher = PLACEHOLDER.matcher(template);
-    StringBuilder result = new StringBuilder();
-    while (matcher.find()) {
-      ParameterValue value = parameters.get(matcher.group(1));
-      if (value == null) {
-        matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group()));
-      } else {
-        matcher.appendReplacement(result, Matcher.quoteReplacement(value.valueText()));
-      }
-    }
-    matcher.appendTail(result);
-    return result.toString();
-  }
-
-  private static void requirePlaceholderCoverage(
-      String template, Set<String> axes, String context) {
-    Set<String> placeholders = placeholders(template);
-    requireKnownPlaceholders(placeholders, axes, context);
-    if (!placeholders.containsAll(axes)) {
-      Set<String> missing = new LinkedHashSet<>(axes);
-      missing.removeAll(placeholders);
-      throw new IllegalArgumentException(
-          context + " ID omits expansion axes and would not be stable: " + missing);
-    }
-  }
-
-  private static void requireKnownPlaceholders(String template, Set<String> axes, String context) {
-    requireKnownPlaceholders(placeholders(template), axes, context);
-  }
-
-  private static void requireKnownPlaceholders(
-      Set<String> placeholders, Set<String> axes, String context) {
-    Set<String> unknown = new LinkedHashSet<>(placeholders);
-    unknown.removeAll(axes);
-    if (!unknown.isEmpty()) {
-      throw new IllegalArgumentException(context + " references unknown axes: " + unknown);
-    }
-  }
-
-  private static Set<String> placeholders(String template) {
-    Set<String> placeholders = new LinkedHashSet<>();
-    Matcher matcher = PLACEHOLDER.matcher(template);
-    while (matcher.find()) {
-      placeholders.add(matcher.group(1));
-    }
-    return placeholders;
-  }
-
-  private static void requireSimpleId(String id, String kind) {
-    if (id == null || id.isBlank() || !id.matches("[A-Za-z][A-Za-z0-9_.-]*")) {
-      throw new IllegalArgumentException("Invalid " + kind + " ID: " + id);
-    }
-  }
-
-  private static String enumNames(Set<? extends JsonNamed> values) {
-    return values.stream().map(JsonNamed::jsonName).sorted().toList().toString();
-  }
-
-  record InputDeclaration(
-      String id, InputRecipe recipe, boolean shared, Map<String, ParameterValue> parameters) {
-    InputDeclaration {
-      Objects.requireNonNull(id);
-      Objects.requireNonNull(recipe);
-      parameters = Collections.unmodifiableMap(new LinkedHashMap<>(parameters));
-    }
-  }
-
-  record InputRecipe(RecipeKind kind, Map<String, RecipeValue> arguments) {
-    InputRecipe {
-      Objects.requireNonNull(kind);
-      arguments = Collections.unmodifiableMap(new LinkedHashMap<>(arguments));
-      if (arguments.values().stream().noneMatch(RecipeAxisReference.class::isInstance)) {
-        kind.validate(arguments);
-      }
-    }
-
-    void validatePlaceholders(String inputId, Set<String> axes) {
-      for (Map.Entry<String, RecipeValue> argument : arguments.entrySet()) {
-        Set<String> unknown = new LinkedHashSet<>(argument.getValue().placeholders());
-        unknown.removeAll(axes);
-        if (!unknown.isEmpty()) {
-          throw new IllegalArgumentException(
-              inputId
-                  + " recipe argument "
-                  + argument.getKey()
-                  + " references unknown axes: "
-                  + unknown);
-        }
-      }
-    }
-
-    InputRecipe substitute(Map<String, ParameterValue> parameters, String inputId) {
-      Map<String, RecipeValue> resolved = new LinkedHashMap<>();
-      for (Map.Entry<String, RecipeValue> argument : arguments.entrySet()) {
-        resolved.put(
-            argument.getKey(),
-            argument.getValue().substitute(parameters, inputId, argument.getKey()));
-      }
-      return new InputRecipe(kind, resolved);
-    }
-  }
-
-  record WorkloadDeclaration(
-      String idTemplate,
-      Operation operation,
-      List<String> patternTemplates,
-      List<String> inputTemplates,
-      Map<String, List<ParameterValue>> axes,
-      Map<String, RecipeValue> arguments,
-      EnumSet<Flag> flags,
-      EnumSet<Feature> requirements,
-      EnumSet<InputRepresentation> inputRepresentations,
-      String inputRepresentationReason,
-      ResultConsumption resultConsumption,
-      ExpectedResult expected,
-      MatcherLifecycle lifecycle,
-      Measurement measurement,
-      String disabledReason,
-      List<TrialExclusion> trialExclusions) {
-    WorkloadDeclaration {
-      patternTemplates = List.copyOf(patternTemplates);
-      inputTemplates = List.copyOf(inputTemplates);
-      axes = Collections.unmodifiableMap(new LinkedHashMap<>(axes));
-      arguments = Collections.unmodifiableMap(new LinkedHashMap<>(arguments));
-      flags = flags.clone();
-      requirements = requirements.clone();
-      inputRepresentations = inputRepresentations.clone();
-      trialExclusions = List.copyOf(trialExclusions);
-    }
-
-    @Override
-    public EnumSet<Flag> flags() {
-      return flags.clone();
-    }
-
-    @Override
-    public EnumSet<Feature> requirements() {
-      return requirements.clone();
-    }
-
-    @Override
-    public EnumSet<InputRepresentation> inputRepresentations() {
-      return inputRepresentations.clone();
-    }
-  }
-
-  record ExpandedWorkload(
-      String id,
-      Operation operation,
-      List<String> patterns,
-      List<String> inputIds,
-      Map<String, ParameterValue> parameters,
-      Map<String, RecipeValue> arguments,
-      EnumSet<Flag> flags,
-      EnumSet<Feature> requirements,
-      EnumSet<InputRepresentation> inputRepresentations,
-      String inputRepresentationReason,
-      ResultConsumption resultConsumption,
-      ExpectedResult expected,
-      MatcherLifecycle lifecycle,
-      Measurement measurement,
-      String disabledReason,
-      List<TrialExclusion> trialExclusions) {
-    ExpandedWorkload {
-      patterns = List.copyOf(patterns);
-      inputIds = List.copyOf(inputIds);
-      parameters = Collections.unmodifiableMap(new LinkedHashMap<>(parameters));
-      arguments = Collections.unmodifiableMap(new LinkedHashMap<>(arguments));
-      flags = flags.clone();
-      requirements = requirements.clone();
-      inputRepresentations = inputRepresentations.clone();
-      trialExclusions = List.copyOf(trialExclusions);
-    }
-
-    @Override
-    public EnumSet<Flag> flags() {
-      return flags.clone();
-    }
-
-    @Override
-    public EnumSet<Feature> requirements() {
-      return requirements.clone();
-    }
-
-    @Override
-    public EnumSet<InputRepresentation> inputRepresentations() {
-      return inputRepresentations.clone();
-    }
-
-    TrialExclusion trialExclusion(String engineId) {
-      TrialExclusion result = null;
-      for (TrialExclusion exclusion : trialExclusions) {
-        if (!exclusion.engineIds().contains(engineId)) {
-          continue;
-        }
-        if (result != null) {
-          throw new IllegalArgumentException(
-              id + " has overlapping trial exclusions for engine " + engineId);
-        }
-        result = exclusion;
-      }
-      return result;
-    }
-  }
-
-  record TrialExclusion(
-      List<String> engineIds, Map<String, Set<ParameterValue>> when, String reason) {
-    TrialExclusion {
-      engineIds = List.copyOf(engineIds);
-      Map<String, Set<ParameterValue>> copied = new LinkedHashMap<>();
-      when.forEach(
-          (axis, values) ->
-              copied.put(axis, Collections.unmodifiableSet(new LinkedHashSet<>(values))));
-      when = Collections.unmodifiableMap(copied);
-    }
-
-    boolean matches(Map<String, ParameterValue> parameters) {
-      return when.entrySet().stream()
-          .allMatch(selector -> selector.getValue().contains(parameters.get(selector.getKey())));
-    }
-  }
-
-  record ExpectedResult(ResultType type, JsonElement value, String axisReference) {
-    ExpectedResult {
-      Objects.requireNonNull(type);
-      if ((value == null) == (axisReference == null)) {
-        throw new IllegalArgumentException(
-            "Expected result requires exactly one value or axis reference");
-      }
-      if (value != null) {
-        value = value.deepCopy();
-      }
-    }
-
-    @Override
-    public JsonElement value() {
-      return value == null ? null : value.deepCopy();
-    }
-
-    ExpectedResult substitute(Map<String, ParameterValue> parameters, String workloadId) {
-      if (axisReference == null) {
-        return this;
-      }
-      ParameterValue parameter = parameters.get(axisReference);
-      if (parameter == null) {
-        throw new IllegalArgumentException(
-            workloadId + " expected result references unknown axis: " + axisReference);
-      }
-      JsonElement resolved =
-          switch (parameter.type()) {
-            case STRING -> new JsonPrimitive((String) parameter.value());
-            case INTEGER -> new JsonPrimitive((Integer) parameter.value());
-            case BOOLEAN -> new JsonPrimitive((Boolean) parameter.value());
-          };
-      type.validate(resolved);
-      return new ExpectedResult(type, resolved, null);
-    }
-  }
-
-  record MatcherLifecycle(MatcherReuse matcher, List<LifecycleStep> steps) {
-    static final MatcherLifecycle NONE = new MatcherLifecycle(MatcherReuse.NONE, List.of());
-
-    MatcherLifecycle {
-      steps = List.copyOf(steps);
-    }
-
-    EnumSet<Feature> requiredFeatures() {
-      EnumSet<Feature> result = EnumSet.noneOf(Feature.class);
-      if (matcher != MatcherReuse.NONE) {
-        result.add(Feature.MATCHER_STATE);
-      }
-      for (LifecycleStep step : steps) {
-        switch (step.kind()) {
-          case RESET -> result.add(Feature.MATCHER_STATE);
-          case REGION -> result.add(Feature.REGIONS);
-          case TRANSPARENT_BOUNDS, ANCHORING_BOUNDS -> result.add(Feature.BOUNDS);
-        }
-      }
-      return result;
-    }
-  }
-
-  record LifecycleStep(LifecycleStepKind kind, Integer start, Integer end, Boolean enabled) {}
-
-  record Measurement(
-      MeasurementMode mode, TimingUnit timingUnit, EnumSet<ExecutionConstraint> constraints) {
-    Measurement {
-      constraints = constraints.clone();
-    }
-
-    @Override
-    public EnumSet<ExecutionConstraint> constraints() {
-      return constraints.clone();
-    }
-  }
-
-  record EngineDeclaration(
-      String id,
-      InputRepresentation inputRepresentation,
-      EnumSet<Feature> features,
-      EnumSet<Flag> supportedFlags,
-      boolean adapterAvailable) {
-    EngineDeclaration {
-      requireSimpleId(id, "benchmark engine");
-      Objects.requireNonNull(inputRepresentation);
-      features = features.clone();
-      supportedFlags = supportedFlags.clone();
-    }
-
-    @Override
-    public EnumSet<Feature> features() {
-      return features.clone();
-    }
-
-    @Override
-    public EnumSet<Flag> supportedFlags() {
-      return supportedFlags.clone();
-    }
-  }
-
-  record Trial(ExpandedWorkload workload, EngineDeclaration engine) {
-    String id() {
-      return workload.id() + "@" + engine.id();
-    }
-  }
-
-  record Exclusion(String workloadId, String engineId, ExclusionKind kind, String reason) {}
-
-  record ExpandedPlan(
-      List<ExpandedWorkload> workloads, List<Trial> trials, List<Exclusion> exclusions) {
-    ExpandedPlan {
-      workloads = List.copyOf(workloads);
-      trials = List.copyOf(trials);
-      exclusions = List.copyOf(exclusions);
-    }
-
-    private void validateComplete(int engineCount) {
-      Map<String, Integer> scheduled = new LinkedHashMap<>();
-      for (Trial trial : trials) {
-        scheduled.merge(trial.workload().id(), 1, Integer::sum);
-      }
-      Map<String, Integer> excluded = new LinkedHashMap<>();
-      for (Exclusion exclusion : exclusions) {
-        excluded.merge(exclusion.workloadId(), 1, Integer::sum);
-      }
-      for (ExpandedWorkload workload : workloads) {
-        int accounted =
-            scheduled.getOrDefault(workload.id(), 0) + excluded.getOrDefault(workload.id(), 0);
-        if (accounted != engineCount) {
-          throw new IllegalStateException(
-              workload.id()
-                  + " has "
-                  + accounted
-                  + " accounted engine pairs, expected "
-                  + engineCount);
-        }
-        if (scheduled.getOrDefault(workload.id(), 0) == 0 && workload.disabledReason() == null) {
-          List<ExclusionKind> reasons =
-              exclusions.stream()
-                  .filter(exclusion -> exclusion.workloadId().equals(workload.id()))
-                  .map(Exclusion::kind)
-                  .distinct()
-                  .toList();
-          throw new IllegalArgumentException(
-              workload.id()
-                  + " produces no supported trials and has no disabledReason; exclusions: "
-                  + reasons);
-        }
-      }
-    }
-  }
-
-  sealed interface RecipeValue
-      permits RecipeString,
-          RecipeInteger,
-          RecipeStringList,
-          RecipeIntegerList,
-          RecipeAxisReference {
-    static RecipeValue parse(
-        JsonElement value, RecipeValueType type, String context, String field) {
-      try {
-        if (type != RecipeValueType.STRING
-            && value.isJsonPrimitive()
-            && value.getAsJsonPrimitive().isString()) {
-          String reference = value.getAsString();
-          Matcher matcher = PLACEHOLDER.matcher(reference);
-          if (matcher.matches()) {
-            return new RecipeAxisReference(matcher.group(1), type);
-          }
-        }
-        return switch (type) {
-          case STRING -> {
-            if (!isString(value)) {
-              throw new IllegalArgumentException();
+            val axes: MutableMap<String?, MutableList<ParameterValue?>?> =
+                LinkedHashMap<String?, MutableList<ParameterValue?>?>()
+            for (entry in `object`.entrySet()) {
+                requireSimpleId(entry.key, "benchmark axis")
+                val values: JsonArray
+                try {
+                    values = entry.value.getAsJsonArray()
+                } catch (exception: RuntimeException) {
+                    throw IllegalArgumentException(
+                        "Benchmark axis must be an array: " + entry.key, exception
+                    )
+                }
+                require(!values.isEmpty()) { "Benchmark axis must not be empty: " + entry.key }
+                val parsed: MutableList<ParameterValue> = ArrayList<ParameterValue>()
+                val stableValues: MutableSet<String?> = LinkedHashSet<String?>()
+                for (value in values) {
+                    val parameter = ParameterValue.Companion.parse(value, entry.key)
+                    require(stableValues.add(parameter.stableText)) { "Duplicate benchmark axis value: " + entry.key + "=" + parameter.stableText }
+                    parsed.add(parameter)
+                }
+                axes.put(entry.key, List.copyOf<ParameterValue?>(parsed))
             }
-            yield new RecipeString(value.getAsString());
-          }
-          case INTEGER -> {
-            if (!isIntegerPrimitive(value)) {
-              throw new IllegalArgumentException();
+            return Collections.unmodifiableMap<String?, MutableList<ParameterValue?>?>(axes)
+        }
+
+        private fun parseOperationArguments(
+            `object`: JsonObject?, operation: Operation, workloadId: String?, axes: MutableSet<String>
+        ): MutableMap<String?, RecipeValue?> {
+            val fieldTypes = operation.argumentTypes()
+            val required = operation.requiredArguments()
+            if (`object` == null) {
+                require(required.isEmpty()) { workloadId + " operation " + operation.jsonName() + " requires arguments " + required }
+                return Map.of<String?, RecipeValue?>()
             }
-            yield new RecipeInteger(value.getAsBigDecimal().intValueExact());
-          }
-          case STRING_LIST -> {
-            List<String> values = new ArrayList<>();
-            value
-                .getAsJsonArray()
-                .forEach(
-                    item -> {
-                      if (!isString(item)) {
-                        throw new IllegalArgumentException();
-                      }
-                      values.add(item.getAsString());
-                    });
-            yield new RecipeStringList(values);
-          }
-          case INTEGER_LIST -> {
-            List<Integer> values = new ArrayList<>();
-            value
-                .getAsJsonArray()
-                .forEach(
-                    item -> {
-                      if (!isIntegerPrimitive(item)) {
-                        throw new IllegalArgumentException();
-                      }
-                      values.add(item.getAsBigDecimal().intValueExact());
-                    });
-            yield new RecipeIntegerList(values);
-          }
-        };
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + field + " must be " + type.jsonName(), exception);
-      }
-    }
-
-    Set<String> placeholders();
-
-    RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName);
-  }
-
-  record RecipeString(String value) implements RecipeValue {
-    @Override
-    public Set<String> placeholders() {
-      return DeclarativeBenchmarkPlan.placeholders(value);
-    }
-
-    @Override
-    public RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName) {
-      return new RecipeString(
-          DeclarativeBenchmarkPlan.substituteValue(
-              value, parameters, inputId + " recipe " + argumentName));
-    }
-  }
-
-  record RecipeInteger(int value) implements RecipeValue {
-    @Override
-    public Set<String> placeholders() {
-      return Set.of();
-    }
-
-    @Override
-    public RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName) {
-      return this;
-    }
-  }
-
-  record RecipeStringList(List<String> values) implements RecipeValue {
-    RecipeStringList {
-      values = List.copyOf(values);
-    }
-
-    @Override
-    public Set<String> placeholders() {
-      Set<String> result = new LinkedHashSet<>();
-      values.forEach(value -> result.addAll(DeclarativeBenchmarkPlan.placeholders(value)));
-      return result;
-    }
-
-    @Override
-    public RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName) {
-      return new RecipeStringList(
-          values.stream()
-              .map(
-                  value ->
-                      DeclarativeBenchmarkPlan.substituteValue(
-                          value, parameters, inputId + " recipe " + argumentName))
-              .toList());
-    }
-  }
-
-  record RecipeIntegerList(List<Integer> values) implements RecipeValue {
-    RecipeIntegerList {
-      values = List.copyOf(values);
-    }
-
-    @Override
-    public Set<String> placeholders() {
-      return Set.of();
-    }
-
-    @Override
-    public RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName) {
-      return this;
-    }
-  }
-
-  record RecipeAxisReference(String axis, RecipeValueType type) implements RecipeValue {
-    @Override
-    public Set<String> placeholders() {
-      return Set.of(axis);
-    }
-
-    @Override
-    public RecipeValue substitute(
-        Map<String, ParameterValue> parameters, String inputId, String argumentName) {
-      ParameterValue value = parameters.get(axis);
-      if (value == null) {
-        throw new IllegalArgumentException(
-            inputId + " recipe " + argumentName + " references unknown axis: " + axis);
-      }
-      return switch (type) {
-        case INTEGER -> {
-          if (value.type() != ParameterType.INTEGER) {
-            throw new IllegalArgumentException(
-                inputId + " recipe " + argumentName + " requires integer axis " + axis);
-          }
-          yield new RecipeInteger((Integer) value.value());
+            for (field in `object`.keySet()) {
+                require(fieldTypes.containsKey(field)) { workloadId + " operation " + operation.jsonName() + " has unknown argument: " + field }
+            }
+            val arguments: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
+            for (field in fieldTypes.entries) {
+                val value = `object`.get(field.key)
+                if (value == null || value.isJsonNull()) {
+                    require(!required.contains(field.key)) {
+                        (workloadId
+                                + " operation "
+                                + operation.jsonName()
+                                + " requires argument "
+                                + field.key)
+                    }
+                    continue
+                }
+                val argument =
+                    RecipeValue.Companion.parse(value, field.value!!, workloadId + " arguments", field.key)
+                val unknownAxes: MutableSet<String?> = LinkedHashSet<String?>(argument.placeholders())
+                unknownAxes.removeAll(axes)
+                require(unknownAxes.isEmpty()) {
+                    (workloadId
+                            + " argument "
+                            + field.key
+                            + " references unknown axes: "
+                            + unknownAxes)
+                }
+                arguments.put(field.key, argument)
+            }
+            return Collections.unmodifiableMap<String?, RecipeValue?>(arguments)
         }
-        case STRING -> new RecipeString(value.valueText());
-        case STRING_LIST, INTEGER_LIST ->
-            throw new IllegalArgumentException(
-                inputId + " recipe " + argumentName + " cannot reference a scalar axis");
-      };
-    }
-  }
 
-  record ParameterValue(ParameterType type, Object value, String stableText) {
-    static ParameterValue parse(JsonElement element, String axis) {
-      return parse(element, axis, true);
-    }
-
-    private static ParameterValue parse(
-        JsonElement element, String axis, boolean validateStableValue) {
-      if (element.isJsonObject()) {
-        JsonReader labeled = JsonReader.object("benchmark axis value", element);
-        labeled.requireOnly("id", "value");
-        String id = labeled.requiredString("id");
-        validateStableText(id);
-        ParameterValue value = parse(element.getAsJsonObject().get("value"), axis, false);
-        return new ParameterValue(value.type(), value.value(), id);
-      }
-      if (!element.isJsonPrimitive()) {
-        throw new IllegalArgumentException(
-            "Benchmark axis values must be scalars or labeled {id,value} objects: " + axis);
-      }
-      JsonPrimitive primitive = element.getAsJsonPrimitive();
-      if (primitive.isBoolean()) {
-        boolean value = primitive.getAsBoolean();
-        return new ParameterValue(ParameterType.BOOLEAN, value, Boolean.toString(value));
-      }
-      if (primitive.isNumber()) {
-        try {
-          int value = primitive.getAsBigDecimal().intValueExact();
-          return new ParameterValue(ParameterType.INTEGER, value, Integer.toString(value));
-        } catch (ArithmeticException | NumberFormatException exception) {
-          throw new IllegalArgumentException(
-              "Benchmark axis numeric values must be integers: " + axis, exception);
+        private fun parseExpected(`object`: JsonObject?, axes: MutableSet<String?>): ExpectedResult? {
+            if (`object` == null) {
+                return null
+            }
+            val expected = JsonReader("expected result", `object`)
+            expected.requireOnly("type", "value", "axis")
+            val type = ResultType.Companion.fromJson(expected.requiredString("type"))
+            val value = `object`.get("value")
+            val axis = expected.optionalString("axis")
+            require((value == null || value.isJsonNull()) != (axis == null)) { "Expected result requires exactly one value or axis" }
+            if (axis != null) {
+                require(axes.contains(axis)) { "Expected result references unknown axis: " + axis }
+                return ExpectedResult(type, null, axis)
+            }
+            type.validate(value!!)
+            return ExpectedResult(type, value.deepCopy(), null)
         }
-      }
-      String value = primitive.getAsString();
-      if (validateStableValue) {
-        validateStableText(value);
-      }
-      return new ParameterValue(ParameterType.STRING, value, value);
-    }
 
-    private static void validateStableText(String value) {
-      if (value.isBlank() || value.contains("@") || value.contains("{") || value.contains("}")) {
-        throw new IllegalArgumentException("Invalid stable benchmark axis value: " + value);
-      }
-    }
-
-    String valueText() {
-      return String.valueOf(value);
-    }
-  }
-
-  enum ParameterType {
-    STRING,
-    INTEGER,
-    BOOLEAN
-  }
-
-  enum RecipeKind implements JsonNamed {
-    LITERAL("literal", field("text", RecipeValueType.STRING)),
-    FILE("file", field("path", RecipeValueType.STRING), field("sha256", RecipeValueType.STRING)),
-    REPEAT(
-        "repeat", field("value", RecipeValueType.STRING), field("count", RecipeValueType.INTEGER)),
-    REPEAT_TO_LENGTH(
-        "repeatToLength",
-        field("unit", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER)),
-    REPEAT_AT_LEAST_LENGTH(
-        "repeatAtLeastLength",
-        field("unit", RecipeValueType.STRING),
-        field("minimumLength", RecipeValueType.INTEGER)),
-    DELIMITED_REPEAT_TO_LENGTH(
-        "delimitedRepeatToLength",
-        field("value", RecipeValueType.STRING),
-        field("delimiterAlphabet", RecipeValueType.STRING),
-        field("seed", RecipeValueType.INTEGER),
-        field("length", RecipeValueType.INTEGER)),
-    APPEND_INPUT(
-        "appendInput",
-        field("input", RecipeValueType.STRING),
-        field("suffix", RecipeValueType.STRING)),
-    RANDOM_CHARS(
-        "randomChars",
-        field("alphabet", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER),
-        field("seed", RecipeValueType.INTEGER)),
-    RANDOM_CODE_POINTS(
-        "randomCodePoints",
-        field("codePoints", RecipeValueType.INTEGER_LIST),
-        field("minimumCodeUnits", RecipeValueType.INTEGER),
-        field("seed", RecipeValueType.INTEGER)),
-    SURROUND_TO_LENGTH(
-        "surroundToLength",
-        field("prefix", RecipeValueType.STRING),
-        field("unit", RecipeValueType.STRING),
-        field("suffix", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER)),
-    SUFFIX_TO_LENGTH(
-        "suffixToLength",
-        field("prefixUnit", RecipeValueType.STRING),
-        field("suffix", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER)),
-    PREFIXED_REPEAT_TO_LENGTH(
-        "prefixedRepeatToLength",
-        field("prefix", RecipeValueType.STRING),
-        field("value", RecipeValueType.STRING),
-        field("delimiterAlphabet", RecipeValueType.STRING),
-        field("seed", RecipeValueType.INTEGER),
-        field("length", RecipeValueType.INTEGER)),
-    SPARSE_MATCH_TO_LENGTH(
-        "sparseMatchToLength",
-        field("match", RecipeValueType.STRING),
-        field("nonMatch", RecipeValueType.STRING),
-        field("nonMatchRepeats", RecipeValueType.INTEGER),
-        field("delimiterAlphabet", RecipeValueType.STRING),
-        field("seed", RecipeValueType.INTEGER),
-        field("length", RecipeValueType.INTEGER)),
-    CENTER_IN_SPACES(
-        "centerInSpaces",
-        field("body", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER)),
-    SCALED_CENTER_IN_SPACES(
-        "scaledCenterInSpaces",
-        field("bodyPrefix", RecipeValueType.STRING),
-        field("bodySuffix", RecipeValueType.STRING),
-        field("bodyFill", RecipeValueType.STRING),
-        field("bodyScalePercent", RecipeValueType.INTEGER),
-        field("length", RecipeValueType.INTEGER)),
-    LAZY_ALTERNATION_TO_LENGTH(
-        "lazyAlternationToLength",
-        field("prefixUnit", RecipeValueType.STRING),
-        field("match", RecipeValueType.STRING),
-        field("suffixUnit", RecipeValueType.STRING),
-        field("length", RecipeValueType.INTEGER)),
-    PERIODIC_ALTERNATION_TO_LENGTH(
-        "periodicAlternationToLength",
-        field("hitUnit", RecipeValueType.STRING),
-        field("missUnit", RecipeValueType.STRING),
-        field("hitInterval", RecipeValueType.INTEGER),
-        field("length", RecipeValueType.INTEGER)),
-    OPTIONAL_REQUIRED_REPEAT_PATTERN(
-        "optionalRequiredRepeatPattern",
-        field("literal", RecipeValueType.STRING),
-        field("count", RecipeValueType.INTEGER));
-
-    private final String jsonName;
-    private final List<RecipeField> fields;
-
-    RecipeKind(String jsonName, RecipeField... fields) {
-      this.jsonName = jsonName;
-      this.fields = List.of(fields);
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    List<RecipeField> fields() {
-      return fields;
-    }
-
-    String[] allowedFields() {
-      List<String> names = new ArrayList<>();
-      names.add("kind");
-      fields.forEach(field -> names.add(field.name()));
-      return names.toArray(String[]::new);
-    }
-
-    void validate(Map<String, RecipeValue> arguments) {
-      switch (this) {
-        case LITERAL -> {}
-        case FILE -> {
-          requireNonEmpty(arguments, "path");
-          if (!string(arguments, "sha256").matches("[0-9a-f]{64}")) {
-            throw new IllegalArgumentException("file recipe requires a lowercase SHA-256 digest");
-          }
+        private fun parseLifecycle(`object`: JsonObject?): MatcherLifecycle {
+            if (`object` == null) {
+                return MatcherLifecycle.Companion.NONE
+            }
+            val lifecycle = JsonReader("matcher lifecycle", `object`)
+            lifecycle.requireOnly("matcher", "steps")
+            val matcherReuse = MatcherReuse.Companion.fromJson(lifecycle.requiredString("matcher"))
+            val steps: MutableList<LifecycleStep> = ArrayList<LifecycleStep>()
+            for (element in lifecycle.optionalArray("steps")!!) {
+                val step: JsonReader = JsonReader.Companion.`object`("matcher lifecycle step", element)
+                step.requireOnly("kind", "start", "end", "enabled")
+                val kind = LifecycleStepKind.Companion.fromJson(step.requiredString("kind"))
+                val start = step.optionalInt("start")
+                val end = step.optionalInt("end")
+                val enabled = step.optionalBoolean("enabled")
+                kind.validate(start, end, enabled)
+                steps.add(LifecycleStep(kind, start, end, enabled))
+            }
+            require(!(matcherReuse == MatcherReuse.NONE && !steps.isEmpty())) { "Matcher lifecycle NONE cannot declare steps" }
+            return MatcherLifecycle(matcherReuse, steps)
         }
-        case REPEAT -> requireNonNegative(arguments, "count");
-        case REPEAT_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireUnitWhenOutputIsRequired(arguments, "unit", "length", 0);
+
+        private fun parseMeasurement(`object`: JsonObject): Measurement {
+            val measurement = JsonReader("measurement", `object`)
+            measurement.requireOnly("mode", "timingUnit", "constraints")
+            val mode = MeasurementMode.Companion.fromJson(measurement.requiredString("mode"))
+            val timingUnit = TimingUnit.Companion.fromJson(measurement.requiredString("timingUnit"))
+            val constraints: EnumSet<ExecutionConstraint?> =
+                Companion.enumSet<ExecutionConstraint?>(
+                    measurement.optionalStringList("constraints"),
+                    EnumParser { name: String? -> ExecutionConstraint.Companion.fromJson(name) },
+                    ExecutionConstraint::class.java
+                )
+            mode.validate(timingUnit, constraints)
+            return Measurement(mode, timingUnit, constraints)
         }
-        case REPEAT_AT_LEAST_LENGTH -> {
-          requireNonNegative(arguments, "minimumLength");
-          requireUnitWhenOutputIsRequired(arguments, "unit", "minimumLength", 0);
+
+        private fun <E : Enum<E?>?> enumSet(
+            names: MutableList<String>, parser: EnumParser<E?>, type: Class<E?>?
+        ): EnumSet<E?> {
+            val result = EnumSet.noneOf<E?>(type)
+            for (name in names) {
+                val value = parser.parse(name)
+                require(result.add(value)) { "Duplicate declaration value: " + name }
+            }
+            return result
         }
-        case DELIMITED_REPEAT_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "value");
-          requireNonEmpty(arguments, "delimiterAlphabet");
+
+        private fun parameterBindings(
+            axes: MutableMap<String?, MutableList<ParameterValue?>>
+        ): MutableList<MutableMap<String?, ParameterValue?>> {
+            var bindings: MutableList<MutableMap<String?, ParameterValue?>?> =
+                ArrayList<MutableMap<String?, ParameterValue?>?>()
+            bindings.add(LinkedHashMap<String?, ParameterValue?>())
+            for (axis in axes.entries) {
+                val next: MutableList<MutableMap<String?, ParameterValue?>?> =
+                    ArrayList<MutableMap<String?, ParameterValue?>?>()
+                for (binding in bindings) {
+                    for (value in axis.value) {
+                        val expanded: MutableMap<String?, ParameterValue?> =
+                            LinkedHashMap<String?, ParameterValue?>(binding)
+                        expanded.put(axis.key, value)
+                        next.add(expanded)
+                    }
+                }
+                bindings = next
+            }
+            return bindings.stream()
+                .map<MutableMap<String?, ParameterValue?>?> { binding: MutableMap<String?, ParameterValue?>? ->
+                    Collections.unmodifiableMap<String?, ParameterValue?>(
+                        LinkedHashMap<String?, ParameterValue?>(binding)
+                    )
+                }
+                .toList()
         }
-        case APPEND_INPUT -> requireNonEmpty(arguments, "input");
-        case RANDOM_CHARS -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "alphabet");
+
+        private fun substituteValue(
+            template: String, parameters: MutableMap<String?, ParameterValue>, context: String?
+        ): String {
+            return substitute(template, parameters, context, false)
         }
-        case RANDOM_CODE_POINTS -> {
-          requireNonNegative(arguments, "minimumCodeUnits");
-          List<Integer> codePoints = integers(arguments, "codePoints");
-          if (codePoints.isEmpty()
-              || codePoints.stream()
-                  .anyMatch(
-                      codePoint ->
-                          !Character.isValidCodePoint(codePoint)
-                              || (codePoint >= Character.MIN_SURROGATE
-                                  && codePoint <= Character.MAX_SURROGATE))) {
-            throw new IllegalArgumentException(
-                "randomCodePoints recipe requires valid Unicode scalar codePoints");
-          }
+
+        private fun substitute(
+            template: String,
+            parameters: MutableMap<String?, ParameterValue>,
+            context: String?,
+            useStableText: Boolean = true
+        ): String {
+            val matcher: Matcher = PLACEHOLDER.matcher(template)
+            val result = StringBuilder()
+            while (matcher.find()) {
+                val value: ParameterValue = parameters.get(matcher.group(1))!!
+                requireNotNull(value) { context + " references unknown axis: " + matcher.group(1) }
+                val replacement = (if (useStableText) value.stableText else value.valueText())!!
+                matcher.appendReplacement(result, Matcher.quoteReplacement(replacement))
+            }
+            matcher.appendTail(result)
+            return result.toString()
         }
-        case SURROUND_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          int fixedLength =
-              string(arguments, "prefix").length() + string(arguments, "suffix").length();
-          requireUnitWhenOutputIsRequired(arguments, "unit", "length", fixedLength);
+
+        private fun substitutePattern(template: String, parameters: MutableMap<String?, ParameterValue>): String {
+            val matcher: Matcher = PLACEHOLDER.matcher(template)
+            val result = StringBuilder()
+            while (matcher.find()) {
+                val value = parameters.get(matcher.group(1))
+                if (value == null) {
+                    matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group()))
+                } else {
+                    matcher.appendReplacement(result, Matcher.quoteReplacement(value.valueText()))
+                }
+            }
+            matcher.appendTail(result)
+            return result.toString()
         }
-        case SUFFIX_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireUnitWhenOutputIsRequired(
-              arguments, "prefixUnit", "length", string(arguments, "suffix").length());
+
+        private fun requirePlaceholderCoverage(
+            template: String, axes: MutableSet<String>, context: String?
+        ) {
+            val placeholders: MutableSet<String> = placeholders(template)
+            requireKnownPlaceholders(placeholders, axes, context)
+            if (!placeholders.containsAll(axes)) {
+                val missing: MutableSet<String?> = LinkedHashSet<String?>(axes)
+                missing.removeAll(placeholders)
+                throw IllegalArgumentException(
+                    context + " ID omits expansion axes and would not be stable: " + missing
+                )
+            }
         }
-        case PREFIXED_REPEAT_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "value");
-          requireNonEmpty(arguments, "delimiterAlphabet");
+
+        private fun requireKnownPlaceholders(template: String, axes: MutableSet<String>, context: String?) {
+            requireKnownPlaceholders(placeholders(template), axes, context)
         }
-        case SPARSE_MATCH_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "match");
-          requireNonEmpty(arguments, "nonMatch");
-          requirePositive(arguments, "nonMatchRepeats");
-          requireNonEmpty(arguments, "delimiterAlphabet");
+
+        private fun requireKnownPlaceholders(
+            placeholders: MutableSet<String>, axes: MutableSet<String>, context: String?
+        ) {
+            val unknown: MutableSet<String?> = LinkedHashSet<String?>(placeholders)
+            unknown.removeAll(axes)
+            require(unknown.isEmpty()) { context + " references unknown axes: " + unknown }
         }
-        case CENTER_IN_SPACES -> requireNonNegative(arguments, "length");
-        case SCALED_CENTER_IN_SPACES -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "bodyFill");
-          int percent = integer(arguments, "bodyScalePercent");
-          if (percent < 0 || percent > 100) {
-            throw new IllegalArgumentException(
-                "scaledCenterInSpaces recipe bodyScalePercent must be between 0 and 100");
-          }
+
+        private fun placeholders(template: String): MutableSet<String> {
+            val placeholders: MutableSet<String> = LinkedHashSet<String>()
+            val matcher: Matcher = PLACEHOLDER.matcher(template)
+            while (matcher.find()) {
+                placeholders.add(matcher.group(1))
+            }
+            return placeholders
         }
-        case LAZY_ALTERNATION_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "prefixUnit");
-          requireNonEmpty(arguments, "match");
-          requireNonEmpty(arguments, "suffixUnit");
+
+        private fun requireSimpleId(id: String, kind: String?) {
+            require(!(id == null || id.isBlank() || !id.matches("[A-Za-z][A-Za-z0-9_.-]*".toRegex()))) { "Invalid " + kind + " ID: " + id }
         }
-        case PERIODIC_ALTERNATION_TO_LENGTH -> {
-          requireNonNegative(arguments, "length");
-          requireNonEmpty(arguments, "hitUnit");
-          requireNonEmpty(arguments, "missUnit");
-          requirePositive(arguments, "hitInterval");
+
+        private fun enumNames(values: MutableSet<out JsonNamed?>): String? {
+            return values.stream().map<String?> { obj: JsonNamed? -> obj!!.jsonName() }.sorted().toList().toString()
         }
-        case OPTIONAL_REQUIRED_REPEAT_PATTERN -> {
-          requireNonEmpty(arguments, "literal");
-          requireNonNegative(arguments, "count");
+
+        private fun field(name: String?, type: RecipeValueType?): RecipeField {
+            return RecipeField(name, type, true)
         }
-      }
-    }
 
-    private static void requireUnitWhenOutputIsRequired(
-        Map<String, RecipeValue> arguments, String unitField, String lengthField, int fixedLength) {
-      if (integer(arguments, lengthField) > fixedLength) {
-        requireNonEmpty(arguments, unitField);
-      }
-    }
-
-    private static void requireNonEmpty(Map<String, RecipeValue> arguments, String field) {
-      if (string(arguments, field).isEmpty()) {
-        throw new IllegalArgumentException("Recipe field " + field + " must not be empty");
-      }
-    }
-
-    private static void requireNonNegative(Map<String, RecipeValue> arguments, String field) {
-      if (integer(arguments, field) < 0) {
-        throw new IllegalArgumentException("Recipe field " + field + " must not be negative");
-      }
-    }
-
-    private static void requirePositive(Map<String, RecipeValue> arguments, String field) {
-      if (integer(arguments, field) <= 0) {
-        throw new IllegalArgumentException("Recipe field " + field + " must be positive");
-      }
-    }
-
-    private static String string(Map<String, RecipeValue> arguments, String field) {
-      return ((RecipeString) arguments.get(field)).value();
-    }
-
-    private static int integer(Map<String, RecipeValue> arguments, String field) {
-      return ((RecipeInteger) arguments.get(field)).value();
-    }
-
-    private static List<Integer> integers(Map<String, RecipeValue> arguments, String field) {
-      return ((RecipeIntegerList) arguments.get(field)).values();
-    }
-
-    static RecipeKind fromJson(String name) {
-      return enumFromJson(values(), name, "input recipe kind");
-    }
-  }
-
-  record RecipeField(String name, RecipeValueType type, boolean required) {}
-
-  private static RecipeField field(String name, RecipeValueType type) {
-    return new RecipeField(name, type, true);
-  }
-
-  enum RecipeValueType implements JsonNamed {
-    STRING("a string"),
-    INTEGER("an integer"),
-    STRING_LIST("an array of strings"),
-    INTEGER_LIST("an array of integers");
-
-    private final String jsonName;
-
-    RecipeValueType(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-  }
-
-  enum Operation implements JsonNamed {
-    MATCHES("matches", false, true, Feature.MATCHES),
-    FIND("find", false, true, Feature.FIND),
-    LOOKING_AT("lookingAt", true, true, Feature.LOOKING_AT),
-    FIND_ALL_COUNT("findAllCount", false, true, Feature.FIND),
-    FIND_ALL_LENGTH_SUM("findAllLengthSum", false, true, Feature.FIND, Feature.CAPTURE_TEXT),
-    FIND_ALL_GROUP_LENGTH_SUM(
-        "findAllGroupLengthSum", false, true, Feature.FIND, Feature.CAPTURE_TEXT),
-    MATCHES_CORPUS("matchesCorpus", false, true, Feature.MATCHES),
-    MATCHES_GROUP_LENGTH_SUM(
-        "matchesGroupLengthSum", false, true, Feature.MATCHES, Feature.CAPTURE_TEXT),
-    FIND_SAMPLED_GROUP(
-        "findSampledGroup",
-        true,
-        true,
-        Feature.FIND,
-        Feature.CAPTURE_PARTICIPATION,
-        Feature.MATCHER_STATE),
-    FIND_GROUP_PRESENT(
-        "findGroupPresent", false, true, Feature.FIND, Feature.CAPTURE_PARTICIPATION),
-    FIND_GROUP("findGroup", false, true, Feature.FIND, Feature.CAPTURE_TEXT),
-    CAPTURE_GROUPS("captureGroups", false, true, Feature.MATCHES, Feature.CAPTURE_TEXT),
-    REPLACE_FIRST("replaceFirst", false, true, Feature.REPLACE),
-    REPLACE_ALL("replaceAll", false, true, Feature.REPLACE),
-    REPLACE_ALL_LENGTH_SUM("replaceAllLengthSum", false, true, Feature.REPLACE),
-    APPEND_REPLACEMENT("appendReplacement", false, true, Feature.REPLACE),
-    MANUAL_REPLACE_ALL(
-        "manualReplaceAll", false, true, Feature.REPLACE, Feature.APPEND_REPLACEMENT),
-    SPLIT("split", false, true, Feature.SPLIT),
-    SPLIT_LENGTH_SUM("splitLengthSum", false, true, Feature.SPLIT),
-    COMPILE("compile", false, false),
-    COMPILE_AND_FIND("compileAndFind", false, true, Feature.FIND),
-    COMPILE_AND_MATCHES("compileAndMatches", false, true, Feature.MATCHES),
-    FIND_ROTATING_UTF16("findRotatingUtf16", false, false, Feature.FIND),
-    COMPILE_AND_FIND_ROTATING_UTF16("compileAndFindRotatingUtf16", false, false, Feature.FIND),
-    MATCHER_CONSTRUCTION("matcherConstruction", false, true, Feature.UTF8_INPUT),
-    MATCHER_RESET_FIND("matcherResetFind", true, true, Feature.FIND, Feature.MATCHER_STATE),
-    MATCHER_REGION_FIND(
-        "matcherRegionFind", true, true, Feature.FIND, Feature.MATCHER_STATE, Feature.REGIONS),
-    MATCHER_REGION_MATCHES(
-        "matcherRegionMatches",
-        true,
-        true,
-        Feature.MATCHES,
-        Feature.MATCHER_STATE,
-        Feature.REGIONS),
-    MATCHER_REGION_TOKENIZE(
-        "matcherRegionTokenize",
-        true,
-        true,
-        Feature.LOOKING_AT,
-        Feature.MATCHER_STATE,
-        Feature.REGIONS),
-    FIND_IN_WINDOW("findInWindow", true, true, Feature.FIND, Feature.MATCHER_STATE),
-    PATTERN_SET_COMPILE("patternSetCompile", false, false, Feature.PATTERN_SET),
-    PATTERN_SET_FIND("patternSetFind", false, true, Feature.PATTERN_SET),
-    PATTERN_SET_MATCHES("patternSetMatches", false, true, Feature.PATTERN_SET),
-    UTF8_CAPTURE_BOUNDS("utf8CaptureBounds", false, true, Feature.FIND, Feature.UTF8_INPUT),
-    UTF8_DECODE_FIND("utf8DecodeFind", false, true, Feature.FIND, Feature.UTF8_INPUT),
-    UTF8_REPLACEMENT("utf8Replacement", false, true, Feature.UTF8_INPUT, Feature.UTF8_REPLACEMENT),
-    ANALYZE_PATTERN("analyzePattern", false, false, Feature.DIAGNOSTICS),
-    CACHED_ANALYSIS("cachedAnalysis", false, false, Feature.DIAGNOSTICS),
-    COMPILE_AND_ANALYZE("compileAndAnalyze", false, false, Feature.DIAGNOSTICS),
-    DFA_CACHE_GROWTH("dfaCacheGrowth", false, true, Feature.DFA_CACHE),
-    DIAGNOSTICS_FIND("diagnosticsFind", false, true, Feature.FIND, Feature.DIAGNOSTICS);
-
-    private final String jsonName;
-    private final boolean lifecycleRequired;
-    private final boolean inputRequired;
-    private final EnumSet<Feature> requiredFeatures;
-
-    Operation(
-        String jsonName,
-        boolean lifecycleRequired,
-        boolean inputRequired,
-        Feature... requiredFeatures) {
-      this.jsonName = jsonName;
-      this.lifecycleRequired = lifecycleRequired;
-      this.inputRequired = inputRequired;
-      this.requiredFeatures = EnumSet.noneOf(Feature.class);
-      Collections.addAll(this.requiredFeatures, requiredFeatures);
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    void validate(
-        String id,
-        List<String> patterns,
-        List<String> inputs,
-        ResultConsumption consumption,
-        MatcherLifecycle lifecycle,
-        Measurement measurement) {
-      if (inputRequired && inputs.isEmpty()) {
-        throw new IllegalArgumentException(id + " operation " + jsonName + " requires inputs");
-      }
-      if (!inputRequired
-          && !inputs.isEmpty()
-          && (this == COMPILE
-              || this == PATTERN_SET_COMPILE
-              || this == ANALYZE_PATTERN
-              || this == CACHED_ANALYSIS
-              || this == COMPILE_AND_ANALYZE)) {
-        throw new IllegalArgumentException(
-            id + " operation " + jsonName + " must not declare inputs");
-      }
-      if (lifecycleRequired && lifecycle.matcher() == MatcherReuse.NONE) {
-        throw new IllegalArgumentException(id + " operation " + jsonName + " requires lifecycle");
-      }
-      if (!lifecycleRequired
-          && lifecycle.matcher() != MatcherReuse.NONE
-          && this != FIND
-          && this != FIND_ALL_COUNT
-          && this != DIAGNOSTICS_FIND) {
-        throw new IllegalArgumentException(
-            id + " operation " + jsonName + " is incompatible with matcher lifecycle");
-      }
-      if ((this == PATTERN_SET_COMPILE || this == PATTERN_SET_FIND || this == PATTERN_SET_MATCHES)
-          && patterns.size() < 2) {
-        throw new IllegalArgumentException(
-            id + " pattern-set operation requires multiple patterns");
-      }
-      if (!supports(consumption)) {
-        throw new IllegalArgumentException(
-            id
-                + " operation "
-                + jsonName
-                + " cannot use result consumption "
-                + consumption.jsonName());
-      }
-      boolean compileOperation = this == COMPILE || this == PATTERN_SET_COMPILE;
-      if (compileOperation
-          && measurement.mode() != MeasurementMode.COMPILE_ONLY
-          && measurement.mode() != MeasurementMode.SINGLE_SHOT_COLD_START
-          && measurement.mode() != MeasurementMode.RETAINED_MEMORY
-          && measurement.mode() != MeasurementMode.SUBPROCESS_MEMORY) {
-        throw new IllegalArgumentException(
-            id + " compile operation requires compileOnly, singleShotColdStart, or memory mode");
-      }
-      if (!compileOperation && measurement.mode() == MeasurementMode.COMPILE_ONLY) {
-        throw new IllegalArgumentException(
-            id + " operation " + jsonName + " is incompatible with compileOnly mode");
-      }
-    }
-
-    EnumSet<Feature> requiredFeatures() {
-      return requiredFeatures.clone();
-    }
-
-    private boolean supports(ResultConsumption consumption) {
-      return switch (this) {
-        case MATCHES,
-            FIND,
-            LOOKING_AT,
-            FIND_GROUP_PRESENT,
-            FIND_SAMPLED_GROUP,
-            COMPILE_AND_FIND,
-            COMPILE_AND_MATCHES,
-            FIND_ROTATING_UTF16,
-            COMPILE_AND_FIND_ROTATING_UTF16,
-            MATCHER_REGION_FIND,
-            MATCHER_REGION_MATCHES,
-            FIND_IN_WINDOW,
-            UTF8_DECODE_FIND ->
-            consumption == ResultConsumption.BOOLEAN;
-        case DIAGNOSTICS_FIND ->
-            consumption == ResultConsumption.BOOLEAN
-                || consumption == ResultConsumption.BLACKHOLE_OBJECT;
-        case PATTERN_SET_FIND, PATTERN_SET_MATCHES ->
-            consumption == ResultConsumption.BOOLEAN
-                || consumption == ResultConsumption.BLACKHOLE_OBJECT;
-        case FIND_ALL_COUNT,
-            FIND_ALL_LENGTH_SUM,
-            FIND_ALL_GROUP_LENGTH_SUM,
-            MATCHES_CORPUS,
-            MATCHES_GROUP_LENGTH_SUM,
-            MATCHER_RESET_FIND,
-            MATCHER_REGION_TOKENIZE,
-            REPLACE_ALL_LENGTH_SUM,
-            SPLIT_LENGTH_SUM,
-            UTF8_CAPTURE_BOUNDS,
-            UTF8_REPLACEMENT ->
-            consumption == ResultConsumption.INTEGER;
-        case FIND_GROUP, REPLACE_FIRST, REPLACE_ALL, APPEND_REPLACEMENT, MANUAL_REPLACE_ALL ->
-            consumption == ResultConsumption.STRING;
-        case CAPTURE_GROUPS ->
-            consumption == ResultConsumption.STRING || consumption == ResultConsumption.STRING_LIST;
-        case SPLIT ->
-            consumption == ResultConsumption.STRING_LIST
-                || consumption == ResultConsumption.BLACKHOLE_OBJECT;
-        case COMPILE, PATTERN_SET_COMPILE -> consumption == ResultConsumption.COMPILED_OBJECT;
-        case MATCHER_CONSTRUCTION, ANALYZE_PATTERN, CACHED_ANALYSIS, COMPILE_AND_ANALYZE ->
-            consumption == ResultConsumption.BLACKHOLE_OBJECT;
-        case DFA_CACHE_GROWTH -> consumption == ResultConsumption.INTEGER;
-      };
-    }
-
-    Map<String, RecipeValueType> argumentTypes() {
-      return switch (this) {
-        case MATCHER_REGION_TOKENIZE -> Map.of("mode", RecipeValueType.STRING);
-        case FIND_ALL_GROUP_LENGTH_SUM, MATCHES_GROUP_LENGTH_SUM, CAPTURE_GROUPS ->
-            Map.of("groups", RecipeValueType.INTEGER_LIST);
-        case UTF8_CAPTURE_BOUNDS ->
-            Map.of(
-                "groups", RecipeValueType.INTEGER_LIST,
-                "bounds", RecipeValueType.STRING,
-                "expectedBounds", RecipeValueType.INTEGER_LIST);
-        case FIND_SAMPLED_GROUP ->
-            Map.of(
-                "group",
-                RecipeValueType.INTEGER,
-                "count",
-                RecipeValueType.INTEGER,
-                "mode",
-                RecipeValueType.STRING);
-        case FIND_GROUP_PRESENT, FIND_GROUP -> Map.of("group", RecipeValueType.INTEGER);
-        case REPLACE_FIRST,
-            REPLACE_ALL,
-            REPLACE_ALL_LENGTH_SUM,
-            APPEND_REPLACEMENT,
-            MANUAL_REPLACE_ALL,
-            UTF8_REPLACEMENT ->
-            Map.of("replacement", RecipeValueType.STRING);
-        case SPLIT, SPLIT_LENGTH_SUM -> Map.of("limit", RecipeValueType.INTEGER);
-        case COMPILE -> Map.of("flagSet", RecipeValueType.STRING);
-        case MATCHER_CONSTRUCTION -> Map.of("mode", RecipeValueType.STRING);
-        case FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 ->
-            Map.of(
-                "seed", RecipeValueType.INTEGER,
-                "count", RecipeValueType.INTEGER);
-        case DIAGNOSTICS_FIND ->
-            Map.of(
-                "action", RecipeValueType.STRING,
-                "listener", RecipeValueType.STRING,
-                "replacement", RecipeValueType.STRING);
-        case PATTERN_SET_COMPILE, PATTERN_SET_FIND, PATTERN_SET_MATCHES ->
-            Map.of(
-                "anchor", RecipeValueType.STRING,
-                "patternCount", RecipeValueType.INTEGER);
-        default -> Map.of();
-      };
-    }
-
-    Set<String> requiredArguments() {
-      return switch (this) {
-        case FIND_ALL_GROUP_LENGTH_SUM, MATCHES_GROUP_LENGTH_SUM, CAPTURE_GROUPS ->
-            Set.of("groups");
-        case UTF8_CAPTURE_BOUNDS -> Set.of("groups", "expectedBounds");
-        case FIND_SAMPLED_GROUP -> Set.of("group", "count", "mode");
-        case FIND_GROUP_PRESENT, FIND_GROUP -> Set.of("group");
-        case REPLACE_FIRST,
-            REPLACE_ALL,
-            REPLACE_ALL_LENGTH_SUM,
-            APPEND_REPLACEMENT,
-            MANUAL_REPLACE_ALL,
-            UTF8_REPLACEMENT ->
-            Set.of("replacement");
-        case PATTERN_SET_COMPILE, PATTERN_SET_FIND, PATTERN_SET_MATCHES -> Set.of("anchor");
-        case FIND_ROTATING_UTF16, COMPILE_AND_FIND_ROTATING_UTF16 -> Set.of("seed", "count");
-        default -> Set.of();
-      };
-    }
-
-    void validateArguments(String id, Map<String, RecipeValue> arguments) {
-      if (this == FIND_SAMPLED_GROUP) {
-        String mode = ((RecipeString) arguments.get("mode")).value();
-        if (!mode.equals("boolean") && !mode.equals("capture")) {
-          throw new IllegalArgumentException(id + " mode must be boolean or capture");
+        private fun <E> enumFromJson(
+            values: Array<E?>, name: String?, kind: String?
+        ): E? where E : Enum<E?>?, E : JsonNamed? {
+            for (value in values) {
+                if (value!!.jsonName() == name) {
+                    return value
+                }
+            }
+            throw IllegalArgumentException("Unknown " + kind + ": " + name)
         }
-      }
-      RecipeValue group = arguments.get("group");
-      if (group != null && ((RecipeInteger) group).value() < 0) {
-        throw new IllegalArgumentException(id + " group argument must not be negative");
-      }
-      RecipeValue groups = arguments.get("groups");
-      if (groups != null) {
-        List<Integer> values = ((RecipeIntegerList) groups).values();
-        if (values.isEmpty() || values.stream().anyMatch(value -> value < 0)) {
-          throw new IllegalArgumentException(
-              id + " groups argument must contain nonnegative group numbers");
+
+        private fun isString(value: JsonElement): Boolean {
+            return value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
         }
-      }
-      RecipeValue anchor = arguments.get("anchor");
-      if (anchor != null) {
-        String value = ((RecipeString) anchor).value();
-        if (!value.equals("unanchored") && !value.equals("anchored")) {
-          throw new IllegalArgumentException(
-              id + " anchor argument must be unanchored or anchored");
+
+        private fun isIntegerPrimitive(value: JsonElement): Boolean {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+                return false
+            }
+            try {
+                value.getAsBigDecimal().intValueExact()
+                return true
+            } catch (exception: ArithmeticException) {
+                return false
+            } catch (exception: NumberFormatException) {
+                return false
+            }
         }
-      }
-      RecipeValue patternCount = arguments.get("patternCount");
-      if (patternCount != null && ((RecipeInteger) patternCount).value() <= 0) {
-        throw new IllegalArgumentException(id + " patternCount argument must be positive");
-      }
-      RecipeValue count = arguments.get("count");
-      if (count != null && ((RecipeInteger) count).value() <= 0) {
-        throw new IllegalArgumentException(id + " count argument must be positive");
-      }
-      RecipeValue bounds = arguments.get("bounds");
-      if (bounds != null) {
-        String value = ((RecipeString) bounds).value();
-        if (!value.equals("start") && !value.equals("startEnd")) {
-          throw new IllegalArgumentException(id + " bounds argument must be start or startEnd");
-        }
-      }
     }
-
-    static Operation fromJson(String name) {
-      return enumFromJson(values(), name, "benchmark operation");
-    }
-  }
-
-  enum Flag implements JsonNamed {
-    CASE_INSENSITIVE("caseInsensitive"),
-    MULTILINE("multiline"),
-    DOTALL("dotAll"),
-    UNICODE_CASE("unicodeCase"),
-    COMMENTS("comments"),
-    LITERAL("literal"),
-    UNICODE_CHARACTER_CLASS("unicodeCharacterClass");
-
-    private final String jsonName;
-
-    Flag(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    static Flag fromJson(String name) {
-      return enumFromJson(values(), name, "regex flag");
-    }
-  }
-
-  enum Feature implements JsonNamed {
-    FIND("find"),
-    MATCHES("matches"),
-    LOOKING_AT("lookingAt"),
-    CAPTURE_PARTICIPATION("captureParticipation"),
-    CAPTURE_TEXT("captureText"),
-    NAMED_GROUPS("namedGroups"),
-    REPLACE("replace"),
-    NUMBERED_REPLACEMENT("numberedReplacement"),
-    NAMED_REPLACEMENT("namedReplacement"),
-    APPEND_REPLACEMENT("appendReplacement"),
-    FUNCTIONAL_REPLACEMENT("functionalReplacement"),
-    SPLIT("split"),
-    MATCHER_STATE("matcherState"),
-    REGIONS("regions"),
-    BOUNDS("bounds"),
-    PATTERN_SET("patternSet"),
-    UTF8_INPUT("utf8Input"),
-    UTF8_REPLACEMENT("utf8Replacement"),
-    DIAGNOSTICS("diagnostics"),
-    DFA_CACHE("dfaCache"),
-    FLAGGED_COMPILE("flaggedCompile"),
-    JAVA_CHARACTER_CLASS("javaCharacterClass"),
-    LINEAR_TIME("linearTime"),
-    RETAINED_HEAP("retainedHeap");
-
-    private final String jsonName;
-
-    Feature(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    static Feature fromJson(String name) {
-      return enumFromJson(values(), name, "engine-neutral feature requirement");
-    }
-  }
-
-  enum InputRepresentation implements JsonNamed {
-    JAVA_STRING("javaString"),
-    PREEXISTING_UTF8("preexistingUtf8"),
-    JAVA_STRING_WITH_TIMED_UTF8_CONVERSION("javaStringWithTimedUtf8Conversion");
-
-    private final String jsonName;
-
-    InputRepresentation(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    static InputRepresentation fromJson(String name) {
-      return enumFromJson(values(), name, "input representation");
-    }
-  }
-
-  enum ResultConsumption implements JsonNamed {
-    BOOLEAN("boolean", ResultType.BOOLEAN),
-    INTEGER("integer", ResultType.INTEGER),
-    STRING("string", ResultType.STRING),
-    STRING_LIST("stringList", ResultType.STRING_LIST),
-    COMPILED_OBJECT("compiledObject", null),
-    BLACKHOLE_OBJECT("blackholeObject", null);
-
-    private final String jsonName;
-    private final ResultType expectedType;
-
-    ResultConsumption(String jsonName, ResultType expectedType) {
-      this.jsonName = jsonName;
-      this.expectedType = expectedType;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    void validateExpected(String id, ExpectedResult expected) {
-      if (expected == null) {
-        return;
-      }
-      if (expectedType == null) {
-        throw new IllegalArgumentException(
-            id + " result consumption " + jsonName + " cannot declare expected");
-      }
-      if (expected.type() != expectedType) {
-        throw new IllegalArgumentException(
-            id
-                + " result consumption "
-                + jsonName
-                + " requires expected type "
-                + expectedType.jsonName());
-      }
-    }
-
-    static ResultConsumption fromJson(String name) {
-      return enumFromJson(values(), name, "result consumption");
-    }
-  }
-
-  enum ResultType implements JsonNamed {
-    BOOLEAN("boolean"),
-    INTEGER("integer"),
-    STRING("string"),
-    STRING_LIST("stringList");
-
-    private final String jsonName;
-
-    ResultType(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    void validate(JsonElement value) {
-      boolean valid =
-          switch (this) {
-            case BOOLEAN -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
-            case INTEGER ->
-                value.isJsonPrimitive()
-                    && value.getAsJsonPrimitive().isNumber()
-                    && isInteger(value);
-            case STRING -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
-            case STRING_LIST ->
-                value.isJsonArray()
-                    && value.getAsJsonArray().asList().stream()
-                        .allMatch(
-                            item -> item.isJsonPrimitive() && item.getAsJsonPrimitive().isString());
-          };
-      if (!valid) {
-        throw new IllegalArgumentException("Malformed " + jsonName + " expected result: " + value);
-      }
-    }
-
-    private static boolean isInteger(JsonElement value) {
-      try {
-        value.getAsBigDecimal().toBigIntegerExact();
-        return true;
-      } catch (ArithmeticException | NumberFormatException exception) {
-        return false;
-      }
-    }
-
-    static ResultType fromJson(String name) {
-      return enumFromJson(values(), name, "expected result type");
-    }
-  }
-
-  enum MatcherReuse implements JsonNamed {
-    NONE("none"),
-    NEW_PER_INVOCATION("newPerInvocation"),
-    RETAINED("retained");
-
-    private final String jsonName;
-
-    MatcherReuse(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    static MatcherReuse fromJson(String name) {
-      return enumFromJson(values(), name, "matcher reuse policy");
-    }
-  }
-
-  enum LifecycleStepKind implements JsonNamed {
-    RESET("reset"),
-    REGION("region"),
-    TRANSPARENT_BOUNDS("transparentBounds"),
-    ANCHORING_BOUNDS("anchoringBounds");
-
-    private final String jsonName;
-
-    LifecycleStepKind(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    void validate(Integer start, Integer end, Boolean enabled) {
-      switch (this) {
-        case RESET -> requireAbsent(start, end, enabled);
-        case REGION -> {
-          if (start == null || end == null || start < 0 || end < start || enabled != null) {
-            throw new IllegalArgumentException(
-                "region lifecycle step requires valid start/end and no enabled field");
-          }
-        }
-        case TRANSPARENT_BOUNDS, ANCHORING_BOUNDS -> {
-          if (enabled == null || start != null || end != null) {
-            throw new IllegalArgumentException(
-                jsonName + " lifecycle step requires enabled and no start/end");
-          }
-        }
-      }
-    }
-
-    private static void requireAbsent(Integer start, Integer end, Boolean enabled) {
-      if (start != null || end != null || enabled != null) {
-        throw new IllegalArgumentException("reset lifecycle step takes no parameters");
-      }
-    }
-
-    static LifecycleStepKind fromJson(String name) {
-      return enumFromJson(values(), name, "matcher lifecycle step");
-    }
-  }
-
-  enum MeasurementMode implements JsonNamed {
-    AVERAGE_TIME("averageTime"),
-    COMPILE_ONLY("compileOnly"),
-    SINGLE_SHOT_COLD_START("singleShotColdStart"),
-    RETAINED_MEMORY("retainedMemory"),
-    SUBPROCESS_MEMORY("subprocessMemory");
-
-    private final String jsonName;
-
-    MeasurementMode(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    void validate(TimingUnit unit, EnumSet<ExecutionConstraint> constraints) {
-      switch (this) {
-        case AVERAGE_TIME, COMPILE_ONLY -> {
-          if (!unit.isTime()) {
-            throw new IllegalArgumentException(jsonName + " requires a time unit");
-          }
-        }
-        case SINGLE_SHOT_COLD_START -> {
-          if (!unit.isTime()
-              || !constraints.contains(ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION)) {
-            throw new IllegalArgumentException(
-                jsonName + " requires a time unit and freshProcessPerInvocation");
-          }
-        }
-        case RETAINED_MEMORY, SUBPROCESS_MEMORY -> {
-          if (unit != TimingUnit.BYTES) {
-            throw new IllegalArgumentException(jsonName + " requires bytes timingUnit");
-          }
-        }
-      }
-      if (constraints.contains(ExecutionConstraint.NO_FORK)
-          && constraints.contains(ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION)) {
-        throw new IllegalArgumentException(
-            "Measurement constraints noFork and freshProcessPerInvocation are incompatible");
-      }
-    }
-
-    static MeasurementMode fromJson(String name) {
-      return enumFromJson(values(), name, "measurement mode");
-    }
-  }
-
-  enum TimingUnit implements JsonNamed {
-    NANOSECONDS("nanoseconds", true),
-    MICROSECONDS("microseconds", true),
-    MILLISECONDS("milliseconds", true),
-    BYTES("bytes", false);
-
-    private final String jsonName;
-    private final boolean time;
-
-    TimingUnit(String jsonName, boolean time) {
-      this.jsonName = jsonName;
-      this.time = time;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    boolean isTime() {
-      return time;
-    }
-
-    static TimingUnit fromJson(String name) {
-      return enumFromJson(values(), name, "measurement timing unit");
-    }
-  }
-
-  enum ExecutionConstraint implements JsonNamed {
-    NO_FORK("noFork"),
-    FRESH_PROCESS_PER_INVOCATION("freshProcessPerInvocation"),
-    RETAIN_STATE("retainState"),
-    PREMATERIALIZED_INPUT("prematerializedInput"),
-    ALLOCATION_PROFILE("allocationProfile");
-
-    private final String jsonName;
-
-    ExecutionConstraint(String jsonName) {
-      this.jsonName = jsonName;
-    }
-
-    @Override
-    public String jsonName() {
-      return jsonName;
-    }
-
-    static ExecutionConstraint fromJson(String name) {
-      return enumFromJson(values(), name, "execution constraint");
-    }
-  }
-
-  enum ExclusionKind {
-    EXPLICIT_TRIAL_EXCLUSION,
-    WORKLOAD_DISABLED,
-    UNSUPPORTED_FEATURE,
-    UNSUPPORTED_FLAG,
-    UNSUPPORTED_INPUT_REPRESENTATION,
-    MISSING_OPERATION_IMPLEMENTATION,
-    MISSING_ENGINE_ADAPTER
-  }
-
-  private interface JsonNamed {
-    String jsonName();
-  }
-
-  private interface EnumParser<E> {
-    E parse(String value);
-  }
-
-  private static <E extends Enum<E> & JsonNamed> E enumFromJson(
-      E[] values, String name, String kind) {
-    for (E value : values) {
-      if (value.jsonName().equals(name)) {
-        return value;
-      }
-    }
-    throw new IllegalArgumentException("Unknown " + kind + ": " + name);
-  }
-
-  private static final class JsonReader {
-    private final String context;
-    private final JsonObject object;
-
-    private JsonReader(String context, JsonObject object) {
-      this.context = context;
-      this.object = object;
-    }
-
-    static JsonReader object(String context, JsonElement element) {
-      if (element == null || !element.isJsonObject()) {
-        throw new IllegalArgumentException(context + " must be an object");
-      }
-      return new JsonReader(context, element.getAsJsonObject());
-    }
-
-    void requireOnly(String... allowedNames) {
-      Set<String> allowed = Set.of(allowedNames);
-      for (String name : object.keySet()) {
-        if (!allowed.contains(name)) {
-          throw new IllegalArgumentException(context + " has unknown field: " + name);
-        }
-      }
-    }
-
-    boolean has(String name) {
-      return object.has(name) && !object.get(name).isJsonNull();
-    }
-
-    JsonElement required(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        throw new IllegalArgumentException(context + " requires " + name);
-      }
-      return value;
-    }
-
-    String requiredString(String name) {
-      JsonElement value = required(name);
-      if (!isString(value)) {
-        throw new IllegalArgumentException(context + " field " + name + " must be a string");
-      }
-      return value.getAsString();
-    }
-
-    String optionalString(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return null;
-      }
-      if (!isString(value)) {
-        throw new IllegalArgumentException(context + " field " + name + " must be a string");
-      }
-      return value.getAsString();
-    }
-
-    int requiredInt(String name) {
-      JsonElement value = required(name);
-      if (!isIntegerPrimitive(value)) {
-        throw new IllegalArgumentException(context + " field " + name + " must be an integer");
-      }
-      return value.getAsBigDecimal().intValueExact();
-    }
-
-    Integer optionalInt(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return null;
-      }
-      if (!isIntegerPrimitive(value)) {
-        throw new IllegalArgumentException(context + " field " + name + " must be an integer");
-      }
-      return value.getAsBigDecimal().intValueExact();
-    }
-
-    boolean optionalBoolean(String name, boolean defaultValue) {
-      Boolean value = optionalBoolean(name);
-      return value == null ? defaultValue : value;
-    }
-
-    Boolean optionalBoolean(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return null;
-      }
-      if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {
-        throw new IllegalArgumentException(context + " field " + name + " must be a boolean");
-      }
-      return value.getAsBoolean();
-    }
-
-    JsonArray requiredArray(String name) {
-      try {
-        return required(name).getAsJsonArray();
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + name + " must be an array", exception);
-      }
-    }
-
-    JsonArray optionalArray(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return new JsonArray();
-      }
-      try {
-        return value.getAsJsonArray();
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + name + " must be an array", exception);
-      }
-    }
-
-    JsonObject requiredObject(String name) {
-      try {
-        return required(name).getAsJsonObject();
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + name + " must be an object", exception);
-      }
-    }
-
-    JsonObject optionalObject(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return null;
-      }
-      try {
-        return value.getAsJsonObject();
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + name + " must be an object", exception);
-      }
-    }
-
-    List<String> requiredStringList(String name) {
-      required(name);
-      return stringList(name);
-    }
-
-    List<String> optionalStringList(String name) {
-      JsonElement value = object.get(name);
-      if (value == null || value.isJsonNull()) {
-        return List.of();
-      }
-      return stringList(name);
-    }
-
-    private List<String> stringList(String name) {
-      JsonElement value = object.get(name);
-      try {
-        List<String> result = new ArrayList<>();
-        value
-            .getAsJsonArray()
-            .forEach(
-                item -> {
-                  if (!isString(item)) {
-                    throw new IllegalArgumentException();
-                  }
-                  result.add(item.getAsString());
-                });
-        return List.copyOf(result);
-      } catch (RuntimeException exception) {
-        throw new IllegalArgumentException(
-            context + " field " + name + " must be an array of strings", exception);
-      }
-    }
-  }
-
-  private static boolean isString(JsonElement value) {
-    return value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
-  }
-
-  private static boolean isIntegerPrimitive(JsonElement value) {
-    if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
-      return false;
-    }
-    try {
-      value.getAsBigDecimal().intValueExact();
-      return true;
-    } catch (ArithmeticException | NumberFormatException exception) {
-      return false;
-    }
-  }
 }

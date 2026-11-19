@@ -2,22 +2,22 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import com.code_intelligence.jazzer.junit.FuzzTest
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import com.code_intelligence.jazzer.junit.FuzzTest;
+class CompileFuzzer {
+    @FuzzTest(maxDuration = "30s")
+    fun compile(data: FuzzedDataProvider) {
+        fuzzerTestOneInput(data)
+    }
 
-public final class CompileFuzzer {
-
-  @FuzzTest(maxDuration = "30s")
-  void compile(FuzzedDataProvider data) {
-    fuzzerTestOneInput(data);
-  }
-
-  public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    int flags = FuzzSupport.consumeFlags(data);
-    String regex = data.consumeString(2048);
-    FuzzSupport.compileCompatibleOrSkip(regex, flags);
-  }
+    companion object {
+        fun fuzzerTestOneInput(data: FuzzedDataProvider) {
+            val flags = FuzzSupport.consumeFlags(data)
+            val regex = data.consumeString(2048)
+            FuzzSupport.compileCompatibleOrSkip(regex, flags)
+        }
+    }
 }

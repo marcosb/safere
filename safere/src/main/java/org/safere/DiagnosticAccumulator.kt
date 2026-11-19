@@ -2,231 +2,234 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import java.util.*
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+/** Enabled-only, bounded diagnostics state for one public operation.  */
+internal class DiagnosticAccumulator {
+    private var boundaryStrategy: MatchStrategy? = MatchStrategy.NONE
+    private var captureStrategy: MatchStrategy? = MatchStrategy.NONE
+    private val orderedParticipation = IntArray(PARTICIPATION_COUNT)
+    private var participationSize = 0
+    private val seenParticipation = LongArray(wordCount(PARTICIPATION_COUNT))
+    private val decisions = LongArray(wordCount(DECISION_COUNT))
+    private var forwardDfaSearchCount = 0
+    private var reverseDfaSearchCount = 0
+    private var matchCount = 0
+    private var intentionalDivergences: EnumSet<IntentionalDivergence?>? = null
 
-/** Enabled-only, bounded diagnostics state for one public operation. */
-final class DiagnosticAccumulator {
-  // Boundary-only outcomes such as LENGTH need no auxiliary participation or decision slots.
-  private static final MatchStrategy[] STRATEGIES = {
-    MatchStrategy.NONE,
-    MatchStrategy.LITERAL,
-    MatchStrategy.CHARACTER_CLASS,
-    MatchStrategy.KEYWORD,
-    MatchStrategy.SHIFT_DFA,
-    MatchStrategy.ONE_PASS,
-    MatchStrategy.DFA,
-    MatchStrategy.BIT_STATE,
-    MatchStrategy.NFA,
-    MatchStrategy.LITERAL_ALTERNATION
-  };
-  private static final StrategyRole[] ROLES = {
-    StrategyRole.START_ACCELERATION,
-    StrategyRole.REJECT_PREFILTER,
-    StrategyRole.CANDIDATE_VERIFICATION
-  };
-  private static final StrategyDisposition[] DISPOSITIONS = {
-    StrategyDisposition.INAPPLICABLE, StrategyDisposition.BYPASSED, StrategyDisposition.FALLBACK
-  };
-  private static final StrategyReason[] REASONS = {
-    StrategyReason.INPUT_TOO_SMALL,
-    StrategyReason.INPUT_TOO_LARGE,
-    StrategyReason.CAPTURES_REQUIRED,
-    StrategyReason.AUTHORITATIVE_BOUNDS_REQUIRED,
-    StrategyReason.EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED,
-    StrategyReason.DFA_BUDGET_EXCEEDED,
-    StrategyReason.WORK_BUDGET_EXCEEDED,
-    StrategyReason.OPTIMIZED_PATH_DISABLED,
-    StrategyReason.SPECULATIVE_WINDOW_EXCEEDED,
-    StrategyReason.SPECULATIVE_BACKOFF
-  };
-  private static final int STRATEGY_COUNT = STRATEGIES.length;
-  private static final int ROLE_COUNT = ROLES.length;
-  private static final int DISPOSITION_COUNT = DISPOSITIONS.length;
-  private static final int REASON_COUNT = REASONS.length;
-  private static final int PARTICIPATION_COUNT = STRATEGY_COUNT * ROLE_COUNT;
-  private static final int DECISION_COUNT = STRATEGY_COUNT * DISPOSITION_COUNT * REASON_COUNT;
-
-  private MatchStrategy boundaryStrategy = MatchStrategy.NONE;
-  private MatchStrategy captureStrategy = MatchStrategy.NONE;
-  private final int[] orderedParticipation = new int[PARTICIPATION_COUNT];
-  private int participationSize;
-  private final long[] seenParticipation = new long[wordCount(PARTICIPATION_COUNT)];
-  private final long[] decisions = new long[wordCount(DECISION_COUNT)];
-  private int forwardDfaSearchCount;
-  private int reverseDfaSearchCount;
-  private int matchCount;
-  private EnumSet<IntentionalDivergence> intentionalDivergences;
-
-  void intentionalDivergence(IntentionalDivergence divergence) {
-    if (intentionalDivergences == null) {
-      intentionalDivergences = EnumSet.noneOf(IntentionalDivergence.class);
+    fun intentionalDivergence(divergence: IntentionalDivergence?) {
+        if (intentionalDivergences == null) {
+            intentionalDivergences = EnumSet.noneOf<IntentionalDivergence?>(IntentionalDivergence::class.java)
+        }
+        intentionalDivergences!!.add(divergence)
     }
-    intentionalDivergences.add(divergence);
-  }
 
-  void reportIntentionalDivergences(SafeReMatchDiagnostics listener) {
-    if (intentionalDivergences != null) {
-      for (IntentionalDivergence divergence : intentionalDivergences) {
-        listener.onIntentionalDivergence(divergence);
-      }
+    fun reportIntentionalDivergences(listener: SafeReMatchDiagnostics) {
+        if (intentionalDivergences != null) {
+            for (divergence in intentionalDivergences) {
+                listener.onIntentionalDivergence(divergence)
+            }
+        }
     }
-  }
 
-  private static int wordCount(int bits) {
-    return (bits + Long.SIZE - 1) / Long.SIZE;
-  }
-
-  void boundary(MatchStrategy strategy) {
-    if (boundaryStrategy == MatchStrategy.NONE) {
-      boundaryStrategy = strategy;
+    fun boundary(strategy: MatchStrategy?) {
+        if (boundaryStrategy == MatchStrategy.NONE) {
+            boundaryStrategy = strategy
+        }
     }
-  }
 
-  void capture(MatchStrategy strategy) {
-    if (captureStrategy == MatchStrategy.NONE) {
-      captureStrategy = strategy;
+    fun capture(strategy: MatchStrategy?) {
+        if (captureStrategy == MatchStrategy.NONE) {
+            captureStrategy = strategy
+        }
     }
-  }
 
-  void participate(MatchStrategy strategy, StrategyRole role) {
-    int token = strategyIndex(strategy) * ROLE_COUNT + roleIndex(role);
-    int word = token / Long.SIZE;
-    long bit = 1L << (token % Long.SIZE);
-    if ((seenParticipation[word] & bit) != 0) {
-      return;
+    fun participate(strategy: MatchStrategy, role: StrategyRole) {
+        val token: Int = strategyIndex(strategy) * ROLE_COUNT + roleIndex(role)
+        val word = token / java.lang.Long.SIZE
+        val bit = 1L shl (token % java.lang.Long.SIZE)
+        if ((seenParticipation[word] and bit) != 0L) {
+            return
+        }
+        seenParticipation[word] = seenParticipation[word] or bit
+        orderedParticipation[participationSize++] = token
     }
-    seenParticipation[word] |= bit;
-    orderedParticipation[participationSize++] = token;
-  }
 
-  void decision(MatchStrategy strategy, StrategyDisposition disposition, StrategyReason reason) {
-    int token =
-        (strategyIndex(strategy) * DISPOSITION_COUNT + dispositionIndex(disposition)) * REASON_COUNT
-            + reasonIndex(reason);
-    decisions[token / Long.SIZE] |= 1L << (token % Long.SIZE);
-  }
-
-  void incrementMatchCount() {
-    matchCount++;
-  }
-
-  void incrementForwardDfaSearchCount() {
-    if (forwardDfaSearchCount < Integer.MAX_VALUE) {
-      forwardDfaSearchCount++;
+    fun decision(strategy: MatchStrategy, disposition: StrategyDisposition, reason: StrategyReason) {
+        val token: Int =
+            ((strategyIndex(strategy) * DISPOSITION_COUNT + dispositionIndex(disposition)) * REASON_COUNT
+                    + reasonIndex(reason))
+        decisions[token / java.lang.Long.SIZE] =
+            decisions[token / java.lang.Long.SIZE] or (1L shl (token % java.lang.Long.SIZE))
     }
-  }
 
-  void incrementReverseDfaSearchCount() {
-    if (reverseDfaSearchCount < Integer.MAX_VALUE) {
-      reverseDfaSearchCount++;
+    fun incrementMatchCount() {
+        matchCount++
     }
-  }
 
-  void matchCount(int count) {
-    matchCount = count;
-  }
-
-  int matchCount() {
-    return matchCount;
-  }
-
-  boolean captured() {
-    return captureStrategy != MatchStrategy.NONE;
-  }
-
-  OperationDiagnostics toEvent(
-      PatternDescriptor pattern,
-      MatchOperation operation,
-      MatchOutcome outcome,
-      CaptureMode captureMode,
-      int inputLength) {
-    List<StrategyParticipation> participation = new ArrayList<>(participationSize);
-    for (int i = 0; i < participationSize; i++) {
-      int token = orderedParticipation[i];
-      participation.add(
-          new StrategyParticipation(STRATEGIES[token / ROLE_COUNT], ROLES[token % ROLE_COUNT]));
+    fun incrementForwardDfaSearchCount() {
+        if (forwardDfaSearchCount < Integer.MAX_VALUE) {
+            forwardDfaSearchCount++
+        }
     }
-    Set<StrategyDecision> decisionSet = new LinkedHashSet<>();
-    for (int token = 0; token < DECISION_COUNT; token++) {
-      if ((decisions[token / Long.SIZE] & (1L << (token % Long.SIZE))) == 0) {
-        continue;
-      }
-      int strategyOrdinal = token / (DISPOSITION_COUNT * REASON_COUNT);
-      int remainder = token % (DISPOSITION_COUNT * REASON_COUNT);
-      decisionSet.add(
-          new StrategyDecision(
-              STRATEGIES[strategyOrdinal],
-              DISPOSITIONS[remainder / REASON_COUNT],
-              REASONS[remainder % REASON_COUNT]));
+
+    fun incrementReverseDfaSearchCount() {
+        if (reverseDfaSearchCount < Integer.MAX_VALUE) {
+            reverseDfaSearchCount++
+        }
     }
-    MatchStrategy effectiveCaptureStrategy =
-        captureMode == CaptureMode.EAGER ? captureStrategy : MatchStrategy.NONE;
-    return new OperationDiagnostics(
-        pattern,
-        operation,
-        outcome,
-        boundaryStrategy,
-        effectiveCaptureStrategy,
-        participation,
-        decisionSet,
-        forwardDfaSearchCount,
-        reverseDfaSearchCount,
-        captureMode,
-        inputLength,
-        matchCount);
-  }
 
-  private static int strategyIndex(MatchStrategy strategy) {
-    return switch (strategy) {
-      case NONE -> 0;
-      case LITERAL -> 1;
-      case CHARACTER_CLASS -> 2;
-      case KEYWORD -> 3;
-      case SHIFT_DFA -> 4;
-      case ONE_PASS -> 5;
-      case DFA -> 6;
-      case BIT_STATE -> 7;
-      case NFA -> 8;
-      case LITERAL_ALTERNATION -> 9;
-      case LENGTH -> throw new IllegalArgumentException("LENGTH is a boundary-only strategy");
-    };
-  }
+    fun matchCount(count: Int) {
+        matchCount = count
+    }
 
-  private static int roleIndex(StrategyRole role) {
-    return switch (role) {
-      case START_ACCELERATION -> 0;
-      case REJECT_PREFILTER -> 1;
-      case CANDIDATE_VERIFICATION -> 2;
-    };
-  }
+    fun matchCount(): Int {
+        return matchCount
+    }
 
-  private static int dispositionIndex(StrategyDisposition disposition) {
-    return switch (disposition) {
-      case INAPPLICABLE -> 0;
-      case BYPASSED -> 1;
-      case FALLBACK -> 2;
-    };
-  }
+    fun captured(): Boolean {
+        return captureStrategy != MatchStrategy.NONE
+    }
 
-  private static int reasonIndex(StrategyReason reason) {
-    return switch (reason) {
-      case INPUT_TOO_SMALL -> 0;
-      case INPUT_TOO_LARGE -> 1;
-      case CAPTURES_REQUIRED -> 2;
-      case AUTHORITATIVE_BOUNDS_REQUIRED -> 3;
-      case EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED -> 4;
-      case DFA_BUDGET_EXCEEDED -> 5;
-      case WORK_BUDGET_EXCEEDED -> 6;
-      case OPTIMIZED_PATH_DISABLED -> 7;
-      case SPECULATIVE_WINDOW_EXCEEDED -> 8;
-      case SPECULATIVE_BACKOFF -> 9;
-    };
-  }
+    fun toEvent(
+        pattern: PatternDescriptor?,
+        operation: MatchOperation?,
+        outcome: MatchOutcome?,
+        captureMode: CaptureMode?,
+        inputLength: Int
+    ): OperationDiagnostics {
+        val participation: MutableList<StrategyParticipation?> = ArrayList<StrategyParticipation?>(participationSize)
+        for (i in 0..<participationSize) {
+            val token = orderedParticipation[i]
+            participation.add(
+                StrategyParticipation(STRATEGIES[token / ROLE_COUNT], ROLES[token % ROLE_COUNT])
+            )
+        }
+        val decisionSet: MutableSet<StrategyDecision?> = LinkedHashSet<StrategyDecision?>()
+        for (token in 0..<DECISION_COUNT) {
+            if ((decisions[token / java.lang.Long.SIZE] and (1L shl (token % java.lang.Long.SIZE))) == 0L) {
+                continue
+            }
+            val strategyOrdinal: Int = token / (DISPOSITION_COUNT * REASON_COUNT)
+            val remainder: Int = token % (DISPOSITION_COUNT * REASON_COUNT)
+            decisionSet.add(
+                StrategyDecision(
+                    STRATEGIES[strategyOrdinal],
+                    DISPOSITIONS[remainder / REASON_COUNT],
+                    REASONS[remainder % REASON_COUNT]
+                )
+            )
+        }
+        val effectiveCaptureStrategy =
+            if (captureMode == CaptureMode.EAGER) captureStrategy else MatchStrategy.NONE
+        return OperationDiagnostics(
+            pattern,
+            operation,
+            outcome,
+            boundaryStrategy,
+            effectiveCaptureStrategy,
+            participation,
+            decisionSet,
+            forwardDfaSearchCount,
+            reverseDfaSearchCount,
+            captureMode,
+            inputLength,
+            matchCount
+        )
+    }
+
+    companion object {
+        // Boundary-only outcomes such as LENGTH need no auxiliary participation or decision slots.
+        private val STRATEGIES = arrayOf<MatchStrategy?>(
+            MatchStrategy.NONE,
+            MatchStrategy.LITERAL,
+            MatchStrategy.CHARACTER_CLASS,
+            MatchStrategy.KEYWORD,
+            MatchStrategy.SHIFT_DFA,
+            MatchStrategy.ONE_PASS,
+            MatchStrategy.DFA,
+            MatchStrategy.BIT_STATE,
+            MatchStrategy.NFA,
+            MatchStrategy.LITERAL_ALTERNATION
+        )
+        private val ROLES = arrayOf<StrategyRole?>(
+            StrategyRole.START_ACCELERATION,
+            StrategyRole.REJECT_PREFILTER,
+            StrategyRole.CANDIDATE_VERIFICATION
+        )
+        private val DISPOSITIONS = arrayOf<StrategyDisposition?>(
+            StrategyDisposition.INAPPLICABLE, StrategyDisposition.BYPASSED, StrategyDisposition.FALLBACK
+        )
+        private val REASONS = arrayOf<StrategyReason?>(
+            StrategyReason.INPUT_TOO_SMALL,
+            StrategyReason.INPUT_TOO_LARGE,
+            StrategyReason.CAPTURES_REQUIRED,
+            StrategyReason.AUTHORITATIVE_BOUNDS_REQUIRED,
+            StrategyReason.EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED,
+            StrategyReason.DFA_BUDGET_EXCEEDED,
+            StrategyReason.WORK_BUDGET_EXCEEDED,
+            StrategyReason.OPTIMIZED_PATH_DISABLED,
+            StrategyReason.SPECULATIVE_WINDOW_EXCEEDED,
+            StrategyReason.SPECULATIVE_BACKOFF
+        )
+        private val STRATEGY_COUNT: Int = STRATEGIES.length
+        private val ROLE_COUNT: Int = ROLES.length
+        private val DISPOSITION_COUNT: Int = DISPOSITIONS.length
+        private val REASON_COUNT: Int = REASONS.length
+        private val PARTICIPATION_COUNT: Int = STRATEGY_COUNT * ROLE_COUNT
+        private val DECISION_COUNT: Int = STRATEGY_COUNT * DISPOSITION_COUNT * REASON_COUNT
+
+        private fun wordCount(bits: Int): Int {
+            return (bits + java.lang.Long.SIZE - 1) / java.lang.Long.SIZE
+        }
+
+        private fun strategyIndex(strategy: MatchStrategy): Int {
+            return when (strategy) {
+                MatchStrategy.NONE -> 0
+                MatchStrategy.LITERAL -> 1
+                MatchStrategy.CHARACTER_CLASS -> 2
+                MatchStrategy.KEYWORD -> 3
+                MatchStrategy.SHIFT_DFA -> 4
+                MatchStrategy.ONE_PASS -> 5
+                MatchStrategy.DFA -> 6
+                MatchStrategy.BIT_STATE -> 7
+                MatchStrategy.NFA -> 8
+                MatchStrategy.LITERAL_ALTERNATION -> 9
+                MatchStrategy.LENGTH -> throw IllegalArgumentException("LENGTH is a boundary-only strategy")
+            }
+        }
+
+        private fun roleIndex(role: StrategyRole): Int {
+            return when (role) {
+                StrategyRole.START_ACCELERATION -> 0
+                StrategyRole.REJECT_PREFILTER -> 1
+                StrategyRole.CANDIDATE_VERIFICATION -> 2
+            }
+        }
+
+        private fun dispositionIndex(disposition: StrategyDisposition): Int {
+            return when (disposition) {
+                StrategyDisposition.INAPPLICABLE -> 0
+                StrategyDisposition.BYPASSED -> 1
+                StrategyDisposition.FALLBACK -> 2
+            }
+        }
+
+        private fun reasonIndex(reason: StrategyReason): Int {
+            return when (reason) {
+                StrategyReason.INPUT_TOO_SMALL -> 0
+                StrategyReason.INPUT_TOO_LARGE -> 1
+                StrategyReason.CAPTURES_REQUIRED -> 2
+                StrategyReason.AUTHORITATIVE_BOUNDS_REQUIRED -> 3
+                StrategyReason.EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED -> 4
+                StrategyReason.DFA_BUDGET_EXCEEDED -> 5
+                StrategyReason.WORK_BUDGET_EXCEEDED -> 6
+                StrategyReason.OPTIMIZED_PATH_DISABLED -> 7
+                StrategyReason.SPECULATIVE_WINDOW_EXCEEDED -> 8
+                StrategyReason.SPECULATIVE_BACKOFF -> 9
+            }
+        }
+    }
 }

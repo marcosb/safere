@@ -2,97 +2,110 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.nio.charset.StandardCharsets
+import java.util.function.Function
+import java.util.regex.MatchResult
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-/** Failed inner candidates must be rejected before scanning the leading repetition backward. */
+/** Failed inner candidates must be rejected before scanning the leading repetition backward.  */
 @DisabledForCrosscheck("uses SafeRE work counters and diagnostics")
 @Tag("work-counter")
 @Isolated
-@Execution(ExecutionMode.SAME_THREAD)
-class LeadingExpansionVerificationWorkTest {
-  @AfterEach
-  void disableDiagnostics() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void failedInnerCandidatesCostComparableWorkAcrossEntryPoints(boolean diagnostics) {
-    Pattern.setDiagnostics(
-        diagnostics ? new SafeReMatchDiagnostics() {} : SafeReMatchDiagnostics.NONE);
-    List<String> failures = new ArrayList<>();
-    for (String regex : List.of("\\s*# noqa[0-9]", "\\s*# noqa\\b", "[é😀]*# noqa[0-9]")) {
-      Pattern pattern = Pattern.compile(regex);
-      for (int size : new int[] {2_000, 20_000}) {
-        String input = (regex.startsWith("[é") ? "é😀" : " ").repeat(size) + "# noqaX";
-        Utf8Input utf8 = Utf8Input.trusted(input.getBytes(UTF_8));
-        Map<String, Runnable> operations = new LinkedHashMap<>();
-        operations.put("String find", () -> assertThat(pattern.matcher(input).find()).isFalse());
-        operations.put("UTF-8 find", () -> assertThat(pattern.matcher(utf8).find()).isFalse());
-        operations.put("matcher-free find", () -> assertThat(pattern.find(utf8)).isFalse());
-        operations.put(
-            "replaceAll",
-            () -> assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(input));
-        operations.put(
-            "replaceFirst",
-            () -> assertThat(pattern.matcher(input).replaceFirst("X")).isEqualTo(input));
-        operations.put(
-            "function replacement",
-            () -> assertThat(pattern.matcher(input).replaceAll(m -> "X")).isEqualTo(input));
-        operations.put("split", () -> assertThat(pattern.split(input)).containsExactly(input));
-        long reference = work(operations.get("String find"));
-        operations.forEach(
-            (name, operation) -> {
-              long actual = work(operation);
-              if (actual > reference * 2 + 100) {
-                failures.add(
-                    String.format(
-                        "%s: %s at %s repetitions: %s units versus %s for find()",
-                        regex, name, size, actual, reference));
-              }
-            });
-      }
+@Execution(
+    ExecutionMode.SAME_THREAD
+)
+internal class LeadingExpansionVerificationWorkTest {
+    @AfterEach
+    fun disableDiagnostics() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
     }
-    assertThat(failures).as("diagnostics=%s", diagnostics).isEmpty();
-  }
 
-  private static long work(Runnable operation) {
-    operation.run();
-    return WorkCounter.countForTesting(operation);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void failedInnerCandidatesAfterSuccessfulReplacementHaveTheSameBound(boolean diagnostics) {
-    Pattern.setDiagnostics(
-        diagnostics ? new SafeReMatchDiagnostics() {} : SafeReMatchDiagnostics.NONE);
-    Pattern pattern = Pattern.compile("\\s*# noqa[0-9]");
-    for (int size : new int[] {2_000, 20_000}) {
-      String input = "# noqa1;" + " ".repeat(size) + "# noqaX";
-      String expected = "X;" + " ".repeat(size) + "# noqaX";
-      long reference =
-          work(() -> assertThat(pattern.matcher(input).replaceAll(m -> "X")).isEqualTo(expected));
-      long actual =
-          work(() -> assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(expected));
-      assertThat(actual)
-          .as("%s leading spaces after a match, diagnostics=%s", size, diagnostics)
-          .isLessThanOrEqualTo(reference * 2 + 100);
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun failedInnerCandidatesCostComparableWorkAcrossEntryPoints(diagnostics: Boolean) {
+        Pattern.setDiagnostics(
+            if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
+        val failures: MutableList<String?> = ArrayList<String?>()
+        for (regex in mutableListOf<String?>("\\s*# noqa[0-9]", "\\s*# noqa\\b", "[é😀]*# noqa[0-9]")) {
+            val pattern = Pattern.compile(regex)
+            for (size in intArrayOf(2000, 20000)) {
+                val input = (if (regex!!.startsWith("[é")) "é😀" else " ").repeat(size) + "# noqaX"
+                val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
+                val operations: MutableMap<String?, Runnable?> = LinkedHashMap<String?, Runnable?>()
+                operations.put(
+                    "String find",
+                    Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+                operations.put("UTF-8 find", Runnable { Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
+                operations.put("matcher-free find", Runnable { Assertions.assertThat(pattern.find(utf8)).isFalse() })
+                operations.put(
+                    "replaceAll",
+                    Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(input) })
+                operations.put(
+                    "replaceFirst",
+                    Runnable { Assertions.assertThat(pattern.matcher(input).replaceFirst("X")).isEqualTo(input) })
+                operations.put(
+                    "function replacement",
+                    Runnable {
+                        Assertions.assertThat(
+                            pattern.matcher(input).replaceAll(Function { m: MatchResult? -> "X" })
+                        ).isEqualTo(input)
+                    })
+                operations.put(
+                    "split",
+                    Runnable { Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input) })
+                val reference: Long = Companion.work(operations.get("String find")!!)
+                operations.forEach { (name: String?, operation: Runnable?) ->
+                    val actual: Long = Companion.work(operation!!)
+                    if (actual > reference * 2 + 100) {
+                        failures.add(
+                            String.format(
+                                "%s: %s at %s repetitions: %s units versus %s for find()",
+                                regex, name, size, actual, reference
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        Assertions.assertThat<String?>(failures).`as`("diagnostics=%s", diagnostics).isEmpty()
     }
-  }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun failedInnerCandidatesAfterSuccessfulReplacementHaveTheSameBound(diagnostics: Boolean) {
+        Pattern.setDiagnostics(
+            if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
+        val pattern = Pattern.compile("\\s*# noqa[0-9]")
+        for (size in intArrayOf(2000, 20000)) {
+            val input = "# noqa1;" + " ".repeat(size) + "# noqaX"
+            val expected = "X;" + " ".repeat(size) + "# noqaX"
+            val reference: Long =
+                work(Runnable {
+                    Assertions.assertThat(
+                        pattern.matcher(input).replaceAll(Function { m: MatchResult? -> "X" })
+                    ).isEqualTo(expected)
+                })
+            val actual: Long =
+                work(Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(expected) })
+            Assertions.assertThat(actual)
+                .`as`("%s leading spaces after a match, diagnostics=%s", size, diagnostics)
+                .isLessThanOrEqualTo(reference * 2 + 100)
+        }
+    }
+
+    companion object {
+        private fun work(operation: Runnable): Long {
+            operation.run()
+            return WorkCounter.countForTesting(operation)
+        }
+    }
 }

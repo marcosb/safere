@@ -2,110 +2,103 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
-
-package org.safere;
+package org.safere
 
 /**
  * Bit flags controlling the behavior of the regular expression parser. These flags affect what
  * syntax is accepted and how certain constructs are interpreted.
- *
- * <p>These correspond to RE2's ParseFlags enum in regexp.h.
+ * 
+ * 
+ * These correspond to RE2's ParseFlags enum in regexp.h.
  */
-final class ParseFlags {
+internal object ParseFlags {
+    /** No flags set.  */
+    const val NONE: Int = 0
 
-  /** No flags set. */
-  public static final int NONE = 0;
+    /** Fold case during matching (case-insensitive).  */
+    val FOLD_CASE: Int = 1 shl 0
 
-  /** Fold case during matching (case-insensitive). */
-  public static final int FOLD_CASE = 1 << 0;
+    /** Treat the pattern as a literal string instead of a regexp.  */
+    val LITERAL: Int = 1 shl 1
 
-  /** Treat the pattern as a literal string instead of a regexp. */
-  public static final int LITERAL = 1 << 1;
+    /** Allow character classes like `[^a-z]`, `\D`, and `\s` to match newline.  */
+    val CLASS_NL: Int = 1 shl 2
 
-  /** Allow character classes like {@code [^a-z]}, {@code \D}, and {@code \s} to match newline. */
-  public static final int CLASS_NL = 1 << 2;
+    /** Allow `.` to match newline.  */
+    val DOT_NL: Int = 1 shl 3
 
-  /** Allow {@code .} to match newline. */
-  public static final int DOT_NL = 1 << 3;
+    /** Combined: both [.CLASS_NL] and [.DOT_NL].  */
+    val MATCH_NL: Int = CLASS_NL or DOT_NL
 
-  /** Combined: both {@link #CLASS_NL} and {@link #DOT_NL}. */
-  public static final int MATCH_NL = CLASS_NL | DOT_NL;
+    /**
+     * Treat `^` and `$` as only matching at beginning and end of text, not around
+     * embedded newlines. This is Perl's default mode.
+     */
+    val ONE_LINE: Int = 1 shl 4
 
-  /**
-   * Treat {@code ^} and {@code $} as only matching at beginning and end of text, not around
-   * embedded newlines. This is Perl's default mode.
-   */
-  public static final int ONE_LINE = 1 << 4;
+    /** Regexp and text are in Latin-1, not UTF-8/Unicode. Not used in Java.  */
+    val LATIN1: Int = 1 shl 5
 
-  /** Regexp and text are in Latin-1, not UTF-8/Unicode. Not used in Java. */
-  public static final int LATIN1 = 1 << 5;
+    /** Repetition operators (`*`, `+`, `?`) are non-greedy by default.  */
+    val NON_GREEDY: Int = 1 shl 6
 
-  /** Repetition operators ({@code *}, {@code +}, {@code ?}) are non-greedy by default. */
-  public static final int NON_GREEDY = 1 << 6;
+    /** Allow Perl character classes: `\d`, `\s`, `\w` and their negations.  */
+    val PERL_CLASSES: Int = 1 shl 7
 
-  /** Allow Perl character classes: {@code \d}, {@code \s}, {@code \w} and their negations. */
-  public static final int PERL_CLASSES = 1 << 7;
+    /** Allow Perl's `\b` (word boundary) and `\B` (not word boundary).  */
+    val PERL_B: Int = 1 shl 8
 
-  /** Allow Perl's {@code \b} (word boundary) and {@code \B} (not word boundary). */
-  public static final int PERL_B = 1 << 8;
+    /**
+     * Perl extensions: non-capturing parens `(?:...)`, non-greedy quantifiers, flag editing,
+     * etc.
+     */
+    val PERL_X: Int = 1 shl 9
 
-  /**
-   * Perl extensions: non-capturing parens {@code (?:...)}, non-greedy quantifiers, flag editing,
-   * etc.
-   */
-  public static final int PERL_X = 1 << 9;
+    /**
+     * Allow `\p{Han}` for Unicode script/category groups and `\P{Han}` for their
+     * negation.
+     */
+    val UNICODE_GROUPS: Int = 1 shl 10
 
-  /**
-   * Allow {@code \p{Han}} for Unicode script/category groups and {@code \P{Han}} for their
-   * negation.
-   */
-  public static final int UNICODE_GROUPS = 1 << 10;
+    /**
+     * Verbose/comments mode: ignore unescaped whitespace and `#`-to-EOL comments. Corresponds
+     * to Java's [java.util.regex.Pattern.COMMENTS] flag and Perl's `(?x)`.
+     */
+    val COMMENTS: Int = 1 shl 11
 
-  /**
-   * Verbose/comments mode: ignore unescaped whitespace and {@code #}-to-EOL comments. Corresponds
-   * to Java's {@link java.util.regex.Pattern#COMMENTS} flag and Perl's {@code (?x)}.
-   */
-  public static final int COMMENTS = 1 << 11;
+    /**
+     * Unicode character classes mode: makes `\d`, `\w`, `\s`, and `\b` use
+     * Unicode definitions instead of ASCII-only. Corresponds to Java's [ ][java.util.regex.Pattern.UNICODE_CHARACTER_CLASS] flag.
+     */
+    val UNICODE_CHAR_CLASS: Int = 1 shl 12
 
-  /**
-   * Unicode character classes mode: makes {@code \d}, {@code \w}, {@code \s}, and {@code \b} use
-   * Unicode definitions instead of ASCII-only. Corresponds to Java's {@link
-   * java.util.regex.Pattern#UNICODE_CHARACTER_CLASS} flag.
-   */
-  public static final int UNICODE_CHAR_CLASS = 1 << 12;
+    /** Never match `\n`, even if the regexp mentions it explicitly.  */
+    val NEVER_NL: Int = 1 shl 13
 
-  /** Never match {@code \n}, even if the regexp mentions it explicitly. */
-  public static final int NEVER_NL = 1 << 13;
+    /** Parse all parentheses as non-capturing.  */
+    val NEVER_CAPTURE: Int = 1 shl 14
 
-  /** Parse all parentheses as non-capturing. */
-  public static final int NEVER_CAPTURE = 1 << 14;
+    /**
+     * Composite flag matching Perl's default behavior. Includes [.CLASS_NL], [.ONE_LINE],
+     * [.PERL_CLASSES], [.PERL_B], [.PERL_X], and [.UNICODE_GROUPS].
+     */
+    val LIKE_PERL: Int = CLASS_NL or ONE_LINE or PERL_CLASSES or PERL_B or PERL_X or UNICODE_GROUPS
 
-  /**
-   * Composite flag matching Perl's default behavior. Includes {@link #CLASS_NL}, {@link #ONE_LINE},
-   * {@link #PERL_CLASSES}, {@link #PERL_B}, {@link #PERL_X}, and {@link #UNICODE_GROUPS}.
-   */
-  public static final int LIKE_PERL =
-      CLASS_NL | ONE_LINE | PERL_CLASSES | PERL_B | PERL_X | UNICODE_GROUPS;
+    /**
+     * Internal flag: on [RegexpOp.END_TEXT], indicates the original pattern used `$`
+     * rather than `\z`.
+     */
+    val WAS_DOLLAR: Int = 1 shl 15
 
-  /**
-   * Internal flag: on {@link RegexpOp#END_TEXT}, indicates the original pattern used {@code $}
-   * rather than {@code \z}.
-   */
-  public static final int WAS_DOLLAR = 1 << 15;
+    /**
+     * Unix lines mode: only `'\n'` is recognized as a line terminator in the behavior of `.`, `^`, and `$`. Without this flag, all JDK line terminators are recognized:
+     * `'\n'`, `'\r'`, `"\r\n"`, `'\u0085'`, `'\u2028'`, and `'\u2029'`.
+     */
+    val UNIX_LINES: Int = 1 shl 16
 
-  /**
-   * Unix lines mode: only {@code '\n'} is recognized as a line terminator in the behavior of {@code
-   * .}, {@code ^}, and {@code $}. Without this flag, all JDK line terminators are recognized:
-   * {@code '\n'}, {@code '\r'}, {@code "\r\n"}, {@code '\u0085'}, {@code '\u2028'}, and {@code
-   * '\u2029'}.
-   */
-  public static final int UNIX_LINES = 1 << 16;
+    /** Use Unicode-aware case folding when [.FOLD_CASE] is active.  */
+    val UNICODE_CASE: Int = 1 shl 17
 
-  /** Use Unicode-aware case folding when {@link #FOLD_CASE} is active. */
-  public static final int UNICODE_CASE = 1 << 17;
-
-  /** Mask of all valid parse flags. */
-  public static final int ALL_FLAGS = (1 << 18) - 1;
-
-  private ParseFlags() {} // Non-instantiable.
+    /** Mask of all valid parse flags.  */
+    val ALL_FLAGS: Int = (1 shl 18) - 1
 }

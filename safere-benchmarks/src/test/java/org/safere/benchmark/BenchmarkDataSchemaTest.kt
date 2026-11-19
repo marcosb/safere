@@ -2,55 +2,56 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonParser
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
+import java.nio.file.Files
+import java.nio.file.Path
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+internal class BenchmarkDataSchemaTest {
+    @Test
+    @Throws(Exception::class)
+    fun checkedInDocumentUsesOnlyTheAuthoritativeSchema() {
+        val benchmarkData =
+            if (Files.exists(Path.of("benchmark-data.json")))
+                Path.of("benchmark-data.json")
+            else
+                Path.of("safere-benchmarks", "benchmark-data.json")
+        val root = JsonParser.parseString(Files.readString(benchmarkData)).getAsJsonObject()
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.junit.jupiter.api.Test;
+        BenchmarkDataSchema.validate(root)
+        BenchmarkDataSchema.requireWorkloads(root)
 
-class BenchmarkDataSchemaTest {
-  @Test
-  void checkedInDocumentUsesOnlyTheAuthoritativeSchema() throws Exception {
-    Path benchmarkData =
-        Files.exists(Path.of("benchmark-data.json"))
-            ? Path.of("benchmark-data.json")
-            : Path.of("safere-benchmarks", "benchmark-data.json");
-    JsonObject root = JsonParser.parseString(Files.readString(benchmarkData)).getAsJsonObject();
+        Assertions.assertThat<String?>(root.keySet())
+            .containsExactlyInAnyOrder("schemaVersion", "configuration", "inputs", "workloads")
+        Assertions.assertThat<String?>(root.getAsJsonObject("configuration").keySet())
+            .containsExactlyInAnyOrder("collection", "crosscheckOverhead", "vectorScan")
+    }
 
-    BenchmarkDataSchema.validate(root);
-    BenchmarkDataSchema.requireWorkloads(root);
-
-    assertThat(root.keySet())
-        .containsExactlyInAnyOrder("schemaVersion", "configuration", "inputs", "workloads");
-    assertThat(root.getAsJsonObject("configuration").keySet())
-        .containsExactlyInAnyOrder("collection", "crosscheckOverhead", "vectorScan");
-  }
-
-  @Test
-  void investigationOwnsItsProtocolConfiguration() {
-    JsonObject root =
-        JsonParser.parseString(
+    @Test
+    fun investigationOwnsItsProtocolConfiguration() {
+        val root =
+            JsonParser.parseString(
                 """
                 {"schemaVersion":2,"inputs":[],"workloads":[],
                  "configuration":{"investigation":{"rounds":32,"usages":{"text":{"readEvery":1}}}}}
-                """)
-            .getAsJsonObject();
-    BenchmarkDataSchema.validate(root);
-    root.getAsJsonObject("configuration").addProperty("investigation", "invalid");
-    assertThatThrownBy(() -> BenchmarkDataSchema.validate(root))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
+                
+                """.trimIndent()
+            )
+                .getAsJsonObject()
+        BenchmarkDataSchema.validate(root)
+        root.getAsJsonObject("configuration").addProperty("investigation", "invalid")
+        Assertions.assertThatThrownBy(ThrowingCallable { BenchmarkDataSchema.validate(root) })
+            .isInstanceOf(IllegalArgumentException::class.java)
+    }
 
-  @Test
-  void rejectsUnknownTopLevelFields() {
-    JsonObject root =
-        JsonParser.parseString(
+    @Test
+    fun rejectsUnknownTopLevelFields() {
+        val root =
+            JsonParser.parseString(
                 """
                 {
                   "schemaVersion": 2,
@@ -58,18 +59,20 @@ class BenchmarkDataSchemaTest {
                   "workloads": [],
                   "regex": {}
                 }
-                """)
-            .getAsJsonObject();
+                
+                """.trimIndent()
+            )
+                .getAsJsonObject()
 
-    assertThatThrownBy(() -> BenchmarkDataSchema.validate(root))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("benchmark-data.json has unknown field: regex");
-  }
+        Assertions.assertThatThrownBy(ThrowingCallable { BenchmarkDataSchema.validate(root) })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("benchmark-data.json has unknown field: regex")
+    }
 
-  @Test
-  void rejectsUnknownConfigurationFields() {
-    JsonObject root =
-        JsonParser.parseString(
+    @Test
+    fun rejectsUnknownConfigurationFields() {
+        val root =
+            JsonParser.parseString(
                 """
                 {
                   "schemaVersion": 2,
@@ -77,11 +80,13 @@ class BenchmarkDataSchemaTest {
                   "inputs": [],
                   "workloads": []
                 }
-                """)
-            .getAsJsonObject();
+                
+                """.trimIndent()
+            )
+                .getAsJsonObject()
 
-    assertThatThrownBy(() -> BenchmarkDataSchema.validate(root))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("benchmark-data.json configuration has unknown field: legacyWorkloads");
-  }
+        Assertions.assertThatThrownBy(ThrowingCallable { BenchmarkDataSchema.validate(root) })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("benchmark-data.json configuration has unknown field: legacyWorkloads")
+    }
 }

@@ -2,56 +2,66 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.function.Executable
+import org.safere.Pattern
+import java.time.Duration
+import java.util.regex.PatternSyntaxException
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-
-import java.time.Duration;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-final class FuzzSupportOracleTimeoutTest {
-  private static final String TIMEOUT_PROPERTY = "safere.fuzz.jdkOracleTimeoutMillis";
-
-  @Test
-  @DisplayName("JDK oracle timeout marks pathological backtracking input unavailable")
-  void jdkOracleTimeoutMarksPathologicalBacktrackingInputUnavailable() {
-    String previous = System.getProperty(TIMEOUT_PROPERTY);
-    System.setProperty(TIMEOUT_PROPERTY, "1");
-    try {
-      assertTimeoutPreemptively(
-          Duration.ofSeconds(2),
-          () ->
-              assertFalse(
-                  FuzzSupport.jdkOracleCompletesForTesting(
-                      "(?:(?:(a|aa))+)+y", "a".repeat(64) + "x")));
-    } finally {
-      if (previous == null) {
-        System.clearProperty(TIMEOUT_PROPERTY);
-      } else {
-        System.setProperty(TIMEOUT_PROPERTY, previous);
-      }
+internal class FuzzSupportOracleTimeoutTest {
+    @Test
+    @DisplayName("JDK oracle timeout marks pathological backtracking input unavailable")
+    fun jdkOracleTimeoutMarksPathologicalBacktrackingInputUnavailable() {
+        val previous = System.getProperty(TIMEOUT_PROPERTY)
+        System.setProperty(TIMEOUT_PROPERTY, "1")
+        try {
+            Assertions.assertTimeoutPreemptively(
+                Duration.ofSeconds(2),
+                Executable {
+                    Assertions.assertFalse(
+                        FuzzSupport.jdkOracleCompletesForTesting(
+                            "(?:(?:(a|aa))+)+y", "a".repeat(64) + "x"
+                        )
+                    )
+                })
+        } finally {
+            if (previous == null) {
+                System.clearProperty(TIMEOUT_PROPERTY)
+            } else {
+                System.setProperty(TIMEOUT_PROPERTY, previous)
+            }
+        }
     }
-  }
 
-  @Test
-  @DisplayName("JDK oracle stack overflow marks recursive matching unavailable")
-  void jdkOracleStackOverflowMarksRecursiveMatchingUnavailable() {
-    assertFalse(FuzzSupport.jdkOracleStackOverflowIsAvailableForTesting());
-  }
-
-  @Test
-  @DisplayName("intentional syntax rejection remains an exploratory finding")
-  void intentionalSyntaxRejectionRemainsAnExploratoryFinding() {
-    for (String regex : new String[] {"[a&&&b]", "(?x:[a& & &b])", "(?ix)[a& & &b]"}) {
-      assertThatThrownBy(() -> org.safere.Pattern.compile(regex))
-          .isInstanceOf(java.util.regex.PatternSyntaxException.class);
-      assertThatThrownBy(() -> FuzzSupport.compileCompatibleOrSkip(regex, 0))
-          .isInstanceOf(AssertionError.class)
-          .hasMessageContaining("compile divergence");
+    @Test
+    @DisplayName("JDK oracle stack overflow marks recursive matching unavailable")
+    fun jdkOracleStackOverflowMarksRecursiveMatchingUnavailable() {
+        Assertions.assertFalse(FuzzSupport.jdkOracleStackOverflowIsAvailableForTesting())
     }
-  }
+
+    @Test
+    @DisplayName("intentional syntax rejection remains an exploratory finding")
+    fun intentionalSyntaxRejectionRemainsAnExploratoryFinding() {
+        for (regex in arrayOf<String>("[a&&&b]", "(?x:[a& & &b])", "(?ix)[a& & &b]")) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isInstanceOf(PatternSyntaxException::class.java)
+            org.assertj.core.api.Assertions.assertThatThrownBy(ThrowingCallable {
+                FuzzSupport.compileCompatibleOrSkip(
+                    regex,
+                    0
+                )
+            })
+                .isInstanceOf(AssertionError::class.java)
+                .hasMessageContaining("compile divergence")
+        }
+    }
+
+    companion object {
+        private const val TIMEOUT_PROPERTY = "safere.fuzz.jdkOracleTimeoutMillis"
+    }
 }

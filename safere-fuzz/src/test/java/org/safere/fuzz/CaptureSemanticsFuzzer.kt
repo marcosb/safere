@@ -2,482 +2,510 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import com.code_intelligence.jazzer.junit.FuzzTest
+import org.assertj.core.api.Assertions
+import org.safere.Pattern
+import org.safere.Utf8Input
+import org.safere.fuzz.FuzzSupport.CompiledPattern
+import org.safere.fuzz.FuzzSupport.MatcherPair
+import java.nio.charset.StandardCharsets
+import java.util.function.Function
+import java.util.regex.MatchResult
+import kotlin.math.max
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import com.code_intelligence.jazzer.junit.FuzzTest;
-import org.safere.Pattern;
-import org.safere.Utf8Input;
-
-public final class CaptureSemanticsFuzzer {
-  private static final String[] ATOMS = {
-    "()",
-    "(a)",
-    "(a?)",
-    "(a)?",
-    "(\\b)",
-    "(a|aa)",
-    "()|\\W+",
-    "(a)|b",
-    "b|(a)",
-    "a|(b)|()",
-    "a|(){2}",
-    "a|(?:()){2}",
-    ".|(){2}",
-    "((a))",
-    "(?:|(a))",
-    "(?:a(b)?){1,2}",
-    "(ab?)+(a){0,2}",
-    "(?<word>a)",
-    "(?<word>a|aa)"
-  };
-  private static final String[] QUANTIFIERS = {
-    "*", "+", "?", "{0,2}", "{1,2}", "*?", "+?", "??", "{0,2}?", "{1,2}?", "*+", "?+", "{0,2}+"
-  };
-  private static final String[] CHAINED_QUANTIFIERS = {
-    "{0}", "{1}", "{0,2}", "{1}?", "{0}?", "{0}+", "{1}+", "{0,2}+"
-  };
-  private static final String[] PREFIXES = {"", "x", "(?:x)?"};
-  private static final String[] SUFFIXES = {"", "y", "c?"};
-
-  @FuzzTest(maxDuration = "30s")
-  void quantifiedCaptures(FuzzedDataProvider data) {
-    fuzzerTestOneInput(data);
-  }
-
-  @FuzzTest(maxDuration = "30s")
-  void acceptedPaths(FuzzedDataProvider data) {
-    String atom = pick(data, "a", "ab", "é", "😀");
-    int count = data.consumeInt(3, 64);
-    int maximum = data.consumeInt(2, 32);
-    int minimum = data.consumeBoolean() ? 0 : 1;
-    String captured = data.consumeBoolean() ? "(?<last>" + atom + ")" : "(?:(?<last>" + atom + "))";
-    String outer = data.consumeBoolean() ? "*" : "+";
-    String reluctant = data.consumeBoolean() ? "?" : "";
-    String run = atom.repeat(count);
-
-    // These oracles describe the accepted path directly. JDK nested-repeat captures can retain
-    // an earlier iteration, so a differential oracle cannot establish this invariant (#1079).
-    assertAcceptedPath(
-        "(?:" + captured + "{" + minimum + "," + maximum + "})" + outer + reluctant + "!",
-        run + "!",
-        run.length() - atom.length(),
-        run.length());
-    assertAcceptedPath(
-        "(?:(?:" + atom + "(?<last>b)?){1," + maximum + "})+",
-        run + "b",
-        run.length(),
-        run.length() + 1);
-    assertAcceptedPath(
-        "(?:(?<last>" + atom + "b?)+(" + atom + "){0," + maximum + "})+",
-        run + "b",
-        run.length() - atom.length(),
-        run.length() + 1);
-  }
-
-  @FuzzTest(maxDuration = "30s")
-  void minimumRespectingEmptyStop(FuzzedDataProvider data) {
-    String atom = pick(data, "a", "ab", "é", "😀");
-    String prefix = pick(data, "", "x", "😀");
-    int count = data.consumeInt(0, 8);
-    int minimum = data.consumeInt(0, 4);
-    int maximum = data.consumeBoolean() ? -1 : data.consumeInt(minimum, 6);
-    boolean greedy = data.consumeBoolean();
-    String quantifier = "{" + minimum + "," + (maximum < 0 ? "" : maximum) + "}";
-    String operand = "(?:(?<empty>)|" + Pattern.quote(atom) + ")";
-    int wrappers = data.consumeInt(0, 3);
-    operand = "(?:".repeat(wrappers) + operand + ")".repeat(wrappers);
-    Pattern pattern =
-        Pattern.compile(
-            "\\A" + Pattern.quote(prefix) + operand + quantifier + (greedy ? "" : "?") + "!");
-    String input = prefix + atom.repeat(count) + "!";
-    // A bounded independent execution tree, never a production result-repair strategy. Every
-    // consuming iteration advances one atom; at most minimum + count + 1 iterations are needed.
-    Integer expected =
-        emptyStopCapture(
-            minimum, maximum < 0 ? minimum + count + 1 : maximum, greedy, count, 0, 0, -1);
-    for (int operation = 0; operation < 3; operation++) {
-      var matcher = pattern.matcher(input);
-      boolean matched =
-          switch (operation) {
-            case 0 -> matcher.matches();
-            case 1 -> matcher.find();
-            default -> matcher.lookingAt();
-          };
-      assertThat(matched).as("/%s/ on %s", pattern, input).isEqualTo(expected != null);
-      if (matched) {
-        int position = expected < 0 ? -1 : prefix.length() + expected * atom.length();
-        assertThat(matcher.start()).isZero();
-        assertThat(matcher.end()).isEqualTo(input.length());
-        assertThat(matcher.start(1)).isEqualTo(position);
-        assertThat(matcher.end(1)).isEqualTo(position);
-        assertThat(matcher.group(1)).isEqualTo(expected < 0 ? null : "");
-        var snapshot = matcher.toMatchResult();
-        matcher.reset();
-        assertThat(snapshot.start(1)).isEqualTo(position);
-      }
+class CaptureSemanticsFuzzer {
+    @FuzzTest(maxDuration = "30s")
+    fun quantifiedCaptures(data: FuzzedDataProvider) {
+        fuzzerTestOneInput(data)
     }
-    // A fresh pattern has no capture-demand history, so matches() exercises DFA recognition
-    // before deferred capture extraction. Search still exercises the guarded selection rule.
-    Pattern bytePattern = Pattern.compile(pattern.pattern(), pattern.flags());
-    var bytes = bytePattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8)));
-    assertThat(bytes.matches()).isEqualTo(expected != null);
-    if (expected != null) {
-      int position =
-          expected < 0
-              ? -1
-              : prefix.getBytes(UTF_8).length + expected * atom.getBytes(UTF_8).length;
-      assertThat(bytes.start(1)).isEqualTo(position);
-      assertThat(bytes.end(1)).isEqualTo(position);
+
+    @FuzzTest(maxDuration = "30s")
+    fun acceptedPaths(data: FuzzedDataProvider) {
+        val atom: String = pick(data, "a", "ab", "é", "😀")
+        val count = data.consumeInt(3, 64)
+        val maximum = data.consumeInt(2, 32)
+        val minimum = if (data.consumeBoolean()) 0 else 1
+        val captured = if (data.consumeBoolean()) "(?<last>" + atom + ")" else "(?:(?<last>" + atom + "))"
+        val outer = if (data.consumeBoolean()) "*" else "+"
+        val reluctant = if (data.consumeBoolean()) "?" else ""
+        val run = atom.repeat(count)
+
+        // These oracles describe the accepted path directly. JDK nested-repeat captures can retain
+        // an earlier iteration, so a differential oracle cannot establish this invariant (#1079).
+        assertAcceptedPath(
+            "(?:" + captured + "{" + minimum + "," + maximum + "})" + outer + reluctant + "!",
+            run + "!",
+            run.length - atom.length,
+            run.length
+        )
+        assertAcceptedPath(
+            "(?:(?:" + atom + "(?<last>b)?){1," + maximum + "})+",
+            run + "b",
+            run.length,
+            run.length + 1
+        )
+        assertAcceptedPath(
+            "(?:(?<last>" + atom + "b?)+(" + atom + "){0," + maximum + "})+",
+            run + "b",
+            run.length - atom.length,
+            run.length + 1
+        )
     }
-    bytes.reset();
-    assertThat(bytes.find()).isEqualTo(expected != null);
-    if (expected != null) {
-      int position =
-          expected < 0
-              ? -1
-              : prefix.getBytes(UTF_8).length + expected * atom.getBytes(UTF_8).length;
-      assertThat(bytes.start(1)).isEqualTo(position);
-      assertThat(bytes.end(1)).isEqualTo(position);
-    }
-    assertThat(
+
+    @FuzzTest(maxDuration = "30s")
+    fun minimumRespectingEmptyStop(data: FuzzedDataProvider) {
+        val atom: String = pick(data, "a", "ab", "é", "😀")
+        val prefix: String = pick(data, "", "x", "😀")
+        val count = data.consumeInt(0, 8)
+        val minimum = data.consumeInt(0, 4)
+        val maximum = if (data.consumeBoolean()) -1 else data.consumeInt(minimum, 6)
+        val greedy = data.consumeBoolean()
+        val quantifier = "{" + minimum + "," + (if (maximum < 0) "" else maximum) + "}"
+        var operand = "(?:(?<empty>)|" + Pattern.quote(atom) + ")"
+        val wrappers = data.consumeInt(0, 3)
+        operand = "(?:".repeat(wrappers) + operand + ")".repeat(wrappers)
+        val pattern =
+            Pattern.compile(
+                "\\A" + Pattern.quote(prefix) + operand + quantifier + (if (greedy) "" else "?") + "!"
+            )
+        val input = prefix + atom.repeat(count) + "!"
+        // A bounded independent execution tree, never a production result-repair strategy. Every
+        // consuming iteration advances one atom; at most minimum + count + 1 iterations are needed.
+        val expected: Int? =
+            emptyStopCapture(
+                minimum, if (maximum < 0) minimum + count + 1 else maximum, greedy, count, 0, 0, -1
+            )
+        for (operation in 0..2) {
+            val matcher = pattern.matcher(input)
+            val matched =
+                when (operation) {
+                    0 -> matcher.matches()
+                    1 -> matcher.find()
+                    else -> matcher.lookingAt()
+                }
+            Assertions.assertThat(matched).`as`("/%s/ on %s", pattern, input).isEqualTo(expected != null)
+            if (matched) {
+                val position = if (expected!! < 0) -1 else prefix.length + expected * atom.length
+                Assertions.assertThat(matcher.start()).isZero()
+                Assertions.assertThat(matcher.end()).isEqualTo(input.length)
+                Assertions.assertThat(matcher.start(1)).isEqualTo(position)
+                Assertions.assertThat(matcher.end(1)).isEqualTo(position)
+                Assertions.assertThat(matcher.group(1)).isEqualTo(if (expected < 0) null else "")
+                val snapshot = matcher.toMatchResult()
+                matcher.reset()
+                Assertions.assertThat(snapshot.start(1)).isEqualTo(position)
+            }
+        }
+        // A fresh pattern has no capture-demand history, so matches() exercises DFA recognition
+        // before deferred capture extraction. Search still exercises the guarded selection rule.
+        val bytePattern = Pattern.compile(pattern.pattern(), pattern.flags())
+        val bytes = bytePattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(bytes.matches()).isEqualTo(expected != null)
+        if (expected != null) {
+            val position =
+                if (expected < 0)
+                    -1
+                else
+                    prefix.toByteArray(StandardCharsets.UTF_8).size + expected * atom.toByteArray(StandardCharsets.UTF_8).size
+            Assertions.assertThat(bytes.start(1)).isEqualTo(position)
+            Assertions.assertThat(bytes.end(1)).isEqualTo(position)
+        }
+        bytes.reset()
+        Assertions.assertThat(bytes.find()).isEqualTo(expected != null)
+        if (expected != null) {
+            val position =
+                if (expected < 0)
+                    -1
+                else
+                    prefix.toByteArray(StandardCharsets.UTF_8).size + expected * atom.toByteArray(StandardCharsets.UTF_8).size
+            Assertions.assertThat(bytes.start(1)).isEqualTo(position)
+            Assertions.assertThat(bytes.end(1)).isEqualTo(position)
+        }
+        Assertions.assertThat(
             pattern
                 .matcher(input)
-                .replaceAll(result -> result.group(1) == null ? "omitted" : "empty"))
-        .isEqualTo(expected == null ? input : expected < 0 ? "omitted" : "empty");
-    fullMatchTerminatorCaptures(data);
-  }
+                .replaceAll(Function { result: MatchResult? -> if (result!!.group(1) == null) "omitted" else "empty" })
+        )
+            .isEqualTo(if (expected == null) input else if (expected < 0) "omitted" else "empty")
+        fullMatchTerminatorCaptures(data)
+    }
 
-  private static void fullMatchTerminatorCaptures(FuzzedDataProvider data) {
-    String atom = pick(data, "a", "ab", "é", "😀");
-    String prefix = pick(data, "", "x", "😀");
-    String terminator = pick(data, "\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029");
-    int minimum = data.consumeInt(0, 4);
-    int maximum = data.consumeBoolean() ? -1 : data.consumeInt(minimum, 8);
-    int count = data.consumeInt(0, 10);
-    boolean greedy = data.consumeBoolean();
-    int flags = data.consumeBoolean() ? Pattern.UNIX_LINES : 0;
-    String regex =
-        "^"
-            + Pattern.quote(prefix)
-            + "(?<last>(?:"
-            + Pattern.quote(atom)
-            + ")?){"
-            + minimum
-            + ","
-            + (maximum < 0 ? "" : maximum)
-            + "}"
-            + (greedy ? "" : "?")
-            + "((?:"
-            + Pattern.quote(terminator)
-            + ")??)$";
-    String input = prefix + atom.repeat(count) + terminator;
-    boolean expected = maximum < 0 || count <= maximum;
-    boolean participates = minimum > 0 || count > 0 || (greedy && maximum != 0);
-    boolean empty = minimum > count || (greedy && (maximum < 0 || maximum > count));
-    Pattern pattern = Pattern.compile(regex, flags);
-    var matcher = pattern.matcher(input);
-    assertThat(matcher.matches()).as("/%s/ on %s", regex, input).isEqualTo(expected);
-    if (expected) {
-      int start =
-          !participates ? -1 : prefix.length() + (empty ? count : count - 1) * atom.length();
-      int end = !participates ? -1 : prefix.length() + count * atom.length();
-      assertThat(matcher.start(1)).isEqualTo(start);
-      assertThat(matcher.end(1)).isEqualTo(end);
-      assertThat(matcher.group(2)).isEqualTo(terminator);
-      assertThat(matcher.end()).isEqualTo(input.length());
-      var snapshot = matcher.toMatchResult();
-      assertThat(snapshot.group()).isEqualTo(input);
-      assertThat(snapshot.group(2)).isEqualTo(terminator);
-    }
-    // Keep the UTF-8 pattern's capture-demand history independent of String group access.
-    var bytes = Pattern.compile(regex, flags).matcher(Utf8Input.trusted(input.getBytes(UTF_8)));
-    assertThat(bytes.matches()).isEqualTo(expected);
-    if (expected) {
-      int start =
-          !participates
-              ? -1
-              : prefix.getBytes(UTF_8).length
-                  + (empty ? count : count - 1) * atom.getBytes(UTF_8).length;
-      int end =
-          !participates ? -1 : prefix.getBytes(UTF_8).length + count * atom.getBytes(UTF_8).length;
-      assertThat(bytes.start(1)).isEqualTo(start);
-      assertThat(bytes.end(1)).isEqualTo(end);
-      assertThat(bytes.start(2))
-          .isEqualTo(input.getBytes(UTF_8).length - terminator.getBytes(UTF_8).length);
-      assertThat(bytes.end(2)).isEqualTo(input.getBytes(UTF_8).length);
-      assertThat(bytes.end()).isEqualTo(input.getBytes(UTF_8).length);
-    }
-  }
+    @FuzzTest(maxDuration = "30s")
+    fun emptyCaptures(data: FuzzedDataProvider) {
+        val minimum = data.consumeInt(0, 4)
+        var maximum = if (data.consumeBoolean()) -1 else data.consumeInt(max(2, minimum), 8)
+        if (minimum <= 1 && data.consumeBoolean()) {
+            maximum = data.consumeInt(minimum, 1)
+        }
+        if (maximum > 1 && data.consumeBoolean()) {
+            maximum = intArrayOf(16, 256, 1000)[data.consumeInt(0, 2)]
+        }
+        var quantifier = "{" + minimum + "," + (if (maximum < 0) "" else maximum) + "}"
+        if (data.consumeBoolean() && maximum < 0 && minimum <= 1) {
+            quantifier = if (minimum == 0) "*" else "+"
+        }
+        val mode: String = pick(data, "", "?", "+")
+        var operand: String = pick(data, "(?<empty>)", "(?<empty>(?:))", "((?<empty>))")
+        val wrappers = data.consumeInt(0, 3)
+        operand = "(?:".repeat(wrappers) + operand + ")".repeat(wrappers)
+        val prefix: String = pick(data, "", "a", "é", "😀")
+        val suffix: String = pick(data, "", "b", "é", "😀")
+        val pattern =
+            Pattern.compile(
+                Pattern.quote(prefix) + operand + quantifier + mode + Pattern.quote(suffix)
+            )
+        val input = prefix + suffix
+        val participates = maximum != 0 && (minimum > 0 || mode != "?")
+        val position = if (participates) prefix.length else -1
 
-  private static Integer emptyStopCapture(
-      int minimum,
-      int maximum,
-      boolean greedy,
-      int length,
-      int iterations,
-      int position,
-      int capture) {
-    if (iterations == maximum) {
-      return position == length ? capture : null;
-    }
-    if (!greedy && iterations >= minimum && position == length) {
-      return capture;
-    }
-    Integer empty =
-        iterations + 1 >= minimum
-            ? (position == length ? position : null)
-            : emptyStopCapture(
-                minimum, maximum, greedy, length, iterations + 1, position, position);
-    if (empty != null) {
-      return empty;
-    }
-    if (position < length) {
-      Integer consuming =
-          emptyStopCapture(minimum, maximum, greedy, length, iterations + 1, position + 1, capture);
-      if (consuming != null) {
-        return consuming;
-      }
-    }
-    return greedy && iterations >= minimum && position == length ? capture : null;
-  }
-
-  @FuzzTest(maxDuration = "30s")
-  void emptyCaptures(FuzzedDataProvider data) {
-    int minimum = data.consumeInt(0, 4);
-    int maximum = data.consumeBoolean() ? -1 : data.consumeInt(Math.max(2, minimum), 8);
-    if (minimum <= 1 && data.consumeBoolean()) {
-      maximum = data.consumeInt(minimum, 1);
-    }
-    if (maximum > 1 && data.consumeBoolean()) {
-      maximum = new int[] {16, 256, 1000}[data.consumeInt(0, 2)];
-    }
-    String quantifier = "{" + minimum + "," + (maximum < 0 ? "" : maximum) + "}";
-    if (data.consumeBoolean() && maximum < 0 && minimum <= 1) {
-      quantifier = minimum == 0 ? "*" : "+";
-    }
-    String mode = pick(data, "", "?", "+");
-    String operand = pick(data, "(?<empty>)", "(?<empty>(?:))", "((?<empty>))");
-    int wrappers = data.consumeInt(0, 3);
-    operand = "(?:".repeat(wrappers) + operand + ")".repeat(wrappers);
-    String prefix = pick(data, "", "a", "é", "😀");
-    String suffix = pick(data, "", "b", "é", "😀");
-    Pattern pattern =
-        Pattern.compile(
-            Pattern.quote(prefix) + operand + quantifier + mode + Pattern.quote(suffix));
-    String input = prefix + suffix;
-    boolean participates = maximum != 0 && (minimum > 0 || !mode.equals("?"));
-    int position = participates ? prefix.length() : -1;
-
-    // Empty iterations count and publish captures; redundant wrappers do not select another
-    // participation policy. JDK's direct-empty suppression is intentionally not the oracle.
-    for (int operation = 0; operation < 3; operation++) {
-      var matcher = pattern.matcher(input);
-      boolean matched =
-          switch (operation) {
-            case 0 -> matcher.find();
-            case 1 -> matcher.matches();
-            default -> matcher.lookingAt();
-          };
-      assertThat(matched).as("/%s/ on %s", pattern, input).isTrue();
-      assertThat(matcher.start()).isZero();
-      assertThat(matcher.end()).isEqualTo(input.length());
-      for (int group = 1; group <= matcher.groupCount(); group++) {
-        assertThat(matcher.start(group)).isEqualTo(position);
-        assertThat(matcher.end(group)).isEqualTo(position);
-        assertThat(matcher.group(group)).isEqualTo(participates ? "" : null);
-      }
-      assertThat(matcher.start("empty")).isEqualTo(position);
-      var snapshot = matcher.toMatchResult();
-      matcher.reset();
-      assertThat(snapshot.start(1)).isEqualTo(position);
-      assertThat(snapshot.end(1)).isEqualTo(position);
-    }
-    var utf8 = pattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8)));
-    assertThat(utf8.find()).isTrue();
-    assertThat(utf8.start()).isZero();
-    assertThat(utf8.end()).isEqualTo(input.getBytes(UTF_8).length);
-    int bytePosition = participates ? prefix.getBytes(UTF_8).length : -1;
-    for (int group = 1; group <= utf8.groupCount(); group++) {
-      assertThat(utf8.start(group)).isEqualTo(bytePosition);
-      assertThat(utf8.end(group)).isEqualTo(bytePosition);
-    }
-    assertThat(
+        // Empty iterations count and publish captures; redundant wrappers do not select another
+        // participation policy. JDK's direct-empty suppression is intentionally not the oracle.
+        for (operation in 0..2) {
+            val matcher = pattern.matcher(input)
+            val matched =
+                when (operation) {
+                    0 -> matcher.find()
+                    1 -> matcher.matches()
+                    else -> matcher.lookingAt()
+                }
+            Assertions.assertThat(matched).`as`("/%s/ on %s", pattern, input).isTrue()
+            Assertions.assertThat(matcher.start()).isZero()
+            Assertions.assertThat(matcher.end()).isEqualTo(input.length)
+            for (group in 1..matcher.groupCount()) {
+                Assertions.assertThat(matcher.start(group)).isEqualTo(position)
+                Assertions.assertThat(matcher.end(group)).isEqualTo(position)
+                Assertions.assertThat(matcher.group(group)).isEqualTo(if (participates) "" else null)
+            }
+            Assertions.assertThat(matcher.start("empty")).isEqualTo(position)
+            val snapshot = matcher.toMatchResult()
+            matcher.reset()
+            Assertions.assertThat(snapshot.start(1)).isEqualTo(position)
+            Assertions.assertThat(snapshot.end(1)).isEqualTo(position)
+        }
+        val utf8 = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(utf8.find()).isTrue()
+        Assertions.assertThat(utf8.start()).isZero()
+        Assertions.assertThat(utf8.end()).isEqualTo(input.toByteArray(StandardCharsets.UTF_8).size)
+        val bytePosition = if (participates) prefix.toByteArray(StandardCharsets.UTF_8).size else -1
+        for (group in 1..utf8.groupCount()) {
+            Assertions.assertThat(utf8.start(group)).isEqualTo(bytePosition)
+            Assertions.assertThat(utf8.end(group)).isEqualTo(bytePosition)
+        }
+        Assertions.assertThat(
             pattern
                 .matcher(input)
-                .replaceAll(result -> result.group(1) == null ? "omitted" : "empty"))
-        .isEqualTo(participates ? "empty" : "omitted");
-  }
-
-  private static void assertAcceptedPath(String regex, String input, int start, int end) {
-    Pattern pattern = Pattern.compile(regex);
-    for (int operation = 0; operation < 3; operation++) {
-      var matcher = pattern.matcher(input);
-      boolean matched =
-          switch (operation) {
-            case 0 -> matcher.find();
-            case 1 -> matcher.matches();
-            default -> matcher.lookingAt();
-          };
-      assertThat(matched).as("/%s/ on %s", regex, input).isTrue();
-      assertThat(matcher.start()).isZero();
-      assertThat(matcher.end()).isEqualTo(input.length());
-      assertThat(matcher.start("last")).isEqualTo(start);
-      assertThat(matcher.end("last")).isEqualTo(end);
-      if (matcher.groupCount() > 1) {
-        assertThat(matcher.start(2)).isEqualTo(-1);
-        assertThat(matcher.end(2)).isEqualTo(-1);
-      }
-      var snapshot = matcher.toMatchResult();
-      matcher.reset();
-      assertThat(snapshot.start(1)).isEqualTo(start);
-      assertThat(snapshot.end(1)).isEqualTo(end);
-    }
-    var utf8 = pattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8)));
-    assertThat(utf8.find()).isTrue();
-    assertThat(utf8.end()).isEqualTo(input.getBytes(UTF_8).length);
-    assertThat(utf8.start(1)).isEqualTo(input.substring(0, start).getBytes(UTF_8).length);
-    assertThat(utf8.end(1)).isEqualTo(input.substring(0, end).getBytes(UTF_8).length);
-    assertThat(pattern.matcher(input).replaceAll("[${last}]"))
-        .isEqualTo("[" + input.substring(start, end) + "]");
-  }
-
-  public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    boolean named = data.consumeBoolean();
-    String regex = consumeRegex(data, named);
-    String input = consumeCaptureInput(data);
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileOrSkip(regex, 0);
-    if (pattern == null) {
-      return;
+                .replaceAll(Function { result: MatchResult? -> if (result!!.group(1) == null) "omitted" else "empty" })
+        )
+            .isEqualTo(if (participates) "empty" else "omitted")
     }
 
-    assertMatchOperations(pattern, input, named);
-    assertReplacementOperations(pattern, input, named);
-    assertZeroCountPossessive(data);
-  }
+    companion object {
+        private val ATOMS = arrayOf<String>(
+            "()",
+            "(a)",
+            "(a?)",
+            "(a)?",
+            "(\\b)",
+            "(a|aa)",
+            "()|\\W+",
+            "(a)|b",
+            "b|(a)",
+            "a|(b)|()",
+            "a|(){2}",
+            "a|(?:()){2}",
+            ".|(){2}",
+            "((a))",
+            "(?:|(a))",
+            "(?:a(b)?){1,2}",
+            "(ab?)+(a){0,2}",
+            "(?<word>a)",
+            "(?<word>a|aa)"
+        )
+        private val QUANTIFIERS = arrayOf<String>(
+            "*", "+", "?", "{0,2}", "{1,2}", "*?", "+?", "??", "{0,2}?", "{1,2}?", "*+", "?+", "{0,2}+"
+        )
+        private val CHAINED_QUANTIFIERS = arrayOf<String>(
+            "{0}", "{1}", "{0,2}", "{1}?", "{0}?", "{0}+", "{1}+", "{0,2}+"
+        )
+        private val PREFIXES = arrayOf<String>("", "x", "(?:x)?")
+        private val SUFFIXES = arrayOf<String>("", "y", "c?")
 
-  private static void assertZeroCountPossessive(FuzzedDataProvider data) {
-    // Keep zero-count operands as a separate axis so existing corpus inputs retain their decoding.
-    // Refs #1130: descendants below {0} cannot consume, even if they contain consuming branches.
-    boolean named = data.consumeBoolean();
-    String atom = named ? pick(data, "(?<word>a)", "(?<word>a|aa)") : pick(data, ATOMS);
-    String zero = "(?:" + atom + ")" + pick(data, "{0}", "{0,0}", "{0}?", "{0,0}?");
-    String operand =
-        switch (data.consumeInt(0, 5)) {
-          case 0 -> zero;
-          case 1 -> "(" + zero + ")";
-          case 2 -> zero + "(b){0}";
-          case 3 -> zero + "|(b){0}";
-          case 4 -> "(?:" + zero + "){2}";
-          case 5 -> "(?:" + zero + ")*";
-          default -> throw new AssertionError();
-        };
-    String regex =
-        pick(data, PREFIXES)
-            + "(?:"
-            + operand
-            + ")"
-            + pick(data, "*+", "?+", "++", "{0}+", "{1}+", "{2}+", "{0,2}+", "{1,}+")
-            + pick(data, SUFFIXES);
-    String input = consumeCaptureInput(data);
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileOrSkip(regex, 0);
-    if (pattern != null) {
-      assertMatchOperations(pattern, input, named);
-      assertReplacementOperations(pattern, input, named);
-    }
-  }
+        private fun fullMatchTerminatorCaptures(data: FuzzedDataProvider) {
+            val atom: String = pick(data, "a", "ab", "é", "😀")
+            val prefix: String = pick(data, "", "x", "😀")
+            val terminator: String = pick(data, "\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
+            val minimum = data.consumeInt(0, 4)
+            val maximum = if (data.consumeBoolean()) -1 else data.consumeInt(minimum, 8)
+            val count = data.consumeInt(0, 10)
+            val greedy = data.consumeBoolean()
+            val flags = if (data.consumeBoolean()) Pattern.UNIX_LINES else 0
+            val regex =
+                ("^"
+                        + Pattern.quote(prefix)
+                        + "(?<last>(?:"
+                        + Pattern.quote(atom)
+                        + ")?){"
+                        + minimum
+                        + ","
+                        + (if (maximum < 0) "" else maximum)
+                        + "}"
+                        + (if (greedy) "" else "?")
+                        + "((?:"
+                        + Pattern.quote(terminator)
+                        + ")??)$")
+            val input = prefix + atom.repeat(count) + terminator
+            val expected = maximum < 0 || count <= maximum
+            val participates = minimum > 0 || count > 0 || (greedy && maximum != 0)
+            val empty = minimum > count || (greedy && (maximum < 0 || maximum > count))
+            val pattern = Pattern.compile(regex, flags)
+            val matcher = pattern.matcher(input)
+            Assertions.assertThat(matcher.matches()).`as`("/%s/ on %s", regex, input).isEqualTo(expected)
+            if (expected) {
+                val start =
+                    if (!participates) -1 else prefix.length + (if (empty) count else count - 1) * atom.length
+                val end = if (!participates) -1 else prefix.length + count * atom.length
+                Assertions.assertThat(matcher.start(1)).isEqualTo(start)
+                Assertions.assertThat(matcher.end(1)).isEqualTo(end)
+                Assertions.assertThat(matcher.group(2)).isEqualTo(terminator)
+                Assertions.assertThat(matcher.end()).isEqualTo(input.length)
+                val snapshot = matcher.toMatchResult()
+                Assertions.assertThat(snapshot.group()).isEqualTo(input)
+                Assertions.assertThat(snapshot.group(2)).isEqualTo(terminator)
+            }
+            // Keep the UTF-8 pattern's capture-demand history independent of String group access.
+            val bytes =
+                Pattern.compile(regex, flags).matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
+            Assertions.assertThat(bytes.matches()).isEqualTo(expected)
+            if (expected) {
+                val start =
+                    if (!participates)
+                        -1
+                    else
+                        (prefix.toByteArray(StandardCharsets.UTF_8).size
+                                + (if (empty) count else count - 1) * atom.toByteArray(StandardCharsets.UTF_8).size)
+                val end =
+                    if (!participates) -1 else prefix.toByteArray(StandardCharsets.UTF_8).size + count * atom.toByteArray(
+                        StandardCharsets.UTF_8
+                    ).size
+                Assertions.assertThat(bytes.start(1)).isEqualTo(start)
+                Assertions.assertThat(bytes.end(1)).isEqualTo(end)
+                Assertions.assertThat(bytes.start(2))
+                    .isEqualTo(input.toByteArray(StandardCharsets.UTF_8).size - terminator.toByteArray(StandardCharsets.UTF_8).size)
+                Assertions.assertThat(bytes.end(2)).isEqualTo(input.toByteArray(StandardCharsets.UTF_8).size)
+                Assertions.assertThat(bytes.end()).isEqualTo(input.toByteArray(StandardCharsets.UTF_8).size)
+            }
+        }
 
-  private static String consumeRegex(FuzzedDataProvider data, boolean named) {
-    String atom = named ? pick(data, "(?<word>a)", "(?<word>a|aa)") : pick(data, ATOMS);
-    String regex = "(?:" + atom + ")";
-    if (!data.consumeBoolean()) {
-      regex += pick(data, QUANTIFIERS);
-    }
-    if (data.consumeBoolean()) {
-      regex += pick(data, CHAINED_QUANTIFIERS);
-    }
-    if (data.consumeBoolean()) {
-      regex = "(?:" + regex + ")" + pick(data, QUANTIFIERS);
-    }
-    return pick(data, PREFIXES) + regex + pick(data, SUFFIXES);
-  }
+        private fun emptyStopCapture(
+            minimum: Int,
+            maximum: Int,
+            greedy: Boolean,
+            length: Int,
+            iterations: Int,
+            position: Int,
+            capture: Int
+        ): Int? {
+            if (iterations == maximum) {
+                return if (position == length) capture else null
+            }
+            if (!greedy && iterations >= minimum && position == length) {
+                return capture
+            }
+            val empty =
+                if (iterations + 1 >= minimum)
+                    (if (position == length) position else null)
+                else
+                    emptyStopCapture(
+                        minimum, maximum, greedy, length, iterations + 1, position, position
+                    )
+            if (empty != null) {
+                return empty
+            }
+            if (position < length) {
+                val consuming: Int? =
+                    emptyStopCapture(minimum, maximum, greedy, length, iterations + 1, position + 1, capture)
+                if (consuming != null) {
+                    return consuming
+                }
+            }
+            return if (greedy && iterations >= minimum && position == length) capture else null
+        }
 
-  private static String consumeCaptureInput(FuzzedDataProvider data) {
-    int length = data.consumeInt(0, 64);
-    StringBuilder input = new StringBuilder(length);
-    for (int i = 0; i < length; i++) {
-      input.append(
-          switch (data.consumeInt(0, 5)) {
-            case 0 -> 'a';
-            case 1 -> 'b';
-            case 2 -> 'c';
-            case 3 -> 'x';
-            case 4 -> 'y';
-            case 5 -> ' ';
-            default -> throw new AssertionError();
-          });
+        private fun assertAcceptedPath(regex: String?, input: String, start: Int, end: Int) {
+            val pattern = Pattern.compile(regex)
+            for (operation in 0..2) {
+                val matcher = pattern.matcher(input)
+                val matched =
+                    when (operation) {
+                        0 -> matcher.find()
+                        1 -> matcher.matches()
+                        else -> matcher.lookingAt()
+                    }
+                Assertions.assertThat(matched).`as`("/%s/ on %s", regex, input).isTrue()
+                Assertions.assertThat(matcher.start()).isZero()
+                Assertions.assertThat(matcher.end()).isEqualTo(input.length)
+                Assertions.assertThat(matcher.start("last")).isEqualTo(start)
+                Assertions.assertThat(matcher.end("last")).isEqualTo(end)
+                if (matcher.groupCount() > 1) {
+                    Assertions.assertThat(matcher.start(2)).isEqualTo(-1)
+                    Assertions.assertThat(matcher.end(2)).isEqualTo(-1)
+                }
+                val snapshot = matcher.toMatchResult()
+                matcher.reset()
+                Assertions.assertThat(snapshot.start(1)).isEqualTo(start)
+                Assertions.assertThat(snapshot.end(1)).isEqualTo(end)
+            }
+            val utf8 = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
+            Assertions.assertThat(utf8.find()).isTrue()
+            Assertions.assertThat(utf8.end()).isEqualTo(input.toByteArray(StandardCharsets.UTF_8).size)
+            Assertions.assertThat(utf8.start(1))
+                .isEqualTo(input.substring(0, start).toByteArray(StandardCharsets.UTF_8).size)
+            Assertions.assertThat(utf8.end(1))
+                .isEqualTo(input.substring(0, end).toByteArray(StandardCharsets.UTF_8).size)
+            Assertions.assertThat(pattern.matcher(input).replaceAll("[\${last}]"))
+                .isEqualTo("[" + input.substring(start, end) + "]")
+        }
+
+        fun fuzzerTestOneInput(data: FuzzedDataProvider) {
+            val named = data.consumeBoolean()
+            val regex: String = consumeRegex(data, named)
+            val input: String = consumeCaptureInput(data)
+            val pattern = FuzzSupport.compileOrSkip(regex, 0)
+            if (pattern == null) {
+                return
+            }
+
+            assertMatchOperations(pattern, input, named)
+            assertReplacementOperations(pattern, input, named)
+            assertZeroCountPossessive(data)
+        }
+
+        private fun assertZeroCountPossessive(data: FuzzedDataProvider) {
+            // Keep zero-count operands as a separate axis so existing corpus inputs retain their decoding.
+            // Refs #1130: descendants below {0} cannot consume, even if they contain consuming branches.
+            val named = data.consumeBoolean()
+            val atom: String = if (named) pick(data, "(?<word>a)", "(?<word>a|aa)") else pick(data, *ATOMS)
+            val zero = "(?:" + atom + ")" + pick(data, "{0}", "{0,0}", "{0}?", "{0,0}?")
+            val operand =
+                when (data.consumeInt(0, 5)) {
+                    0 -> zero
+                    1 -> "(" + zero + ")"
+                    2 -> zero + "(b){0}"
+                    3 -> zero + "|(b){0}"
+                    4 -> "(?:" + zero + "){2}"
+                    5 -> "(?:" + zero + ")*"
+                    else -> throw AssertionError()
+                }
+            val regex: String =
+                (pick(data, *PREFIXES)
+                        + "(?:"
+                        + operand
+                        + ")"
+                        + pick(data, "*+", "?+", "++", "{0}+", "{1}+", "{2}+", "{0,2}+", "{1,}+")
+                        + pick(data, *SUFFIXES))
+            val input: String = consumeCaptureInput(data)
+            val pattern = FuzzSupport.compileOrSkip(regex, 0)
+            if (pattern != null) {
+                assertMatchOperations(pattern, input, named)
+                assertReplacementOperations(pattern, input, named)
+            }
+        }
+
+        private fun consumeRegex(data: FuzzedDataProvider, named: Boolean): String {
+            val atom: String = if (named) pick(data, "(?<word>a)", "(?<word>a|aa)") else pick(data, *ATOMS)
+            var regex = "(?:" + atom + ")"
+            if (!data.consumeBoolean()) {
+                regex += pick(data, *QUANTIFIERS)
+            }
+            if (data.consumeBoolean()) {
+                regex += pick(data, *CHAINED_QUANTIFIERS)
+            }
+            if (data.consumeBoolean()) {
+                regex = "(?:" + regex + ")" + pick(data, *QUANTIFIERS)
+            }
+            return pick(data, *PREFIXES) + regex + pick(data, *SUFFIXES)
+        }
+
+        private fun consumeCaptureInput(data: FuzzedDataProvider): String {
+            val length = data.consumeInt(0, 64)
+            val input = StringBuilder(length)
+            for (i in 0..<length) {
+                input.append(
+                    when (data.consumeInt(0, 5)) {
+                        0 -> 'a'
+                        1 -> 'b'
+                        2 -> 'c'
+                        3 -> 'x'
+                        4 -> 'y'
+                        5 -> ' '
+                        else -> throw AssertionError()
+                    }
+                )
+            }
+            return input.toString()
+        }
+
+        private fun assertMatchOperations(
+            pattern: CompiledPattern, input: String, named: Boolean
+        ) {
+            var matcher = pattern.matcher(input)
+            observeGroups(matcher, matcher.matches(), named)
+
+            matcher = pattern.matcher(input)
+            observeGroups(matcher, matcher.lookingAt(), named)
+
+            matcher = pattern.matcher(input)
+            var matches = 0
+            while (matcher.find() && matches < 128) {
+                observeGroups(matcher, true, named)
+                matches++
+            }
+        }
+
+        private fun observeGroups(
+            matcher: MatcherPair, matched: Boolean, named: Boolean
+        ) {
+            matcher.groupCount()
+            if (!matched) {
+                return
+            }
+            for (group in 0..matcher.groupCount()) {
+                matcher.group(group)
+                matcher.start(group)
+                matcher.end(group)
+            }
+            matcher.toMatchResult()
+            if (named) {
+                matcher.group("word")
+                matcher.start("word")
+                matcher.end("word")
+            }
+        }
+
+        private fun assertReplacementOperations(
+            pattern: CompiledPattern, input: String, named: Boolean
+        ) {
+            pattern.matcher(input).replaceAll("[$1]")
+            pattern.matcher(input).replaceFirst("[$1]")
+            pattern.matcher(input).replaceAll(Function { match: MatchResult? -> "[" + match!!.group(1) + "]" })
+
+            val matcher = pattern.matcher(input)
+            val builder = StringBuilder()
+            while (matcher.find()) {
+                matcher.appendReplacement(builder, "[$1]")
+            }
+            matcher.appendTail(builder)
+
+            if (named) {
+                pattern.matcher(input).replaceAll("[\${word}]")
+            }
+        }
+
+        private fun pick(data: FuzzedDataProvider, vararg values: String): String {
+            return values[data.consumeInt(0, values.size - 1)]
+        }
     }
-    return input.toString();
-  }
-
-  private static void assertMatchOperations(
-      FuzzSupport.CompiledPattern pattern, String input, boolean named) {
-    FuzzSupport.MatcherPair matcher = pattern.matcher(input);
-    observeGroups(matcher, matcher.matches(), named);
-
-    matcher = pattern.matcher(input);
-    observeGroups(matcher, matcher.lookingAt(), named);
-
-    matcher = pattern.matcher(input);
-    int matches = 0;
-    while (matcher.find() && matches < 128) {
-      observeGroups(matcher, true, named);
-      matches++;
-    }
-  }
-
-  private static void observeGroups(
-      FuzzSupport.MatcherPair matcher, boolean matched, boolean named) {
-    matcher.groupCount();
-    if (!matched) {
-      return;
-    }
-    for (int group = 0; group <= matcher.groupCount(); group++) {
-      matcher.group(group);
-      matcher.start(group);
-      matcher.end(group);
-    }
-    matcher.toMatchResult();
-    if (named) {
-      matcher.group("word");
-      matcher.start("word");
-      matcher.end("word");
-    }
-  }
-
-  private static void assertReplacementOperations(
-      FuzzSupport.CompiledPattern pattern, String input, boolean named) {
-    pattern.matcher(input).replaceAll("[$1]");
-    pattern.matcher(input).replaceFirst("[$1]");
-    pattern.matcher(input).replaceAll(match -> "[" + match.group(1) + "]");
-
-    FuzzSupport.MatcherPair matcher = pattern.matcher(input);
-    StringBuilder builder = new StringBuilder();
-    while (matcher.find()) {
-      matcher.appendReplacement(builder, "[$1]");
-    }
-    matcher.appendTail(builder);
-
-    if (named) {
-      pattern.matcher(input).replaceAll("[${word}]");
-    }
-  }
-
-  private static String pick(FuzzedDataProvider data, String... values) {
-    return values[data.consumeInt(0, values.length - 1)];
-  }
 }

@@ -2,816 +2,836 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import java.util.List
+import java.util.function.Function
+import java.util.regex.MatchResult
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import java.util.stream.Collectors
+import java.util.stream.Stream
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.MatchResult;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-/** Trace-based lifecycle tests for {@link Matcher}. */
+/** Trace-based lifecycle tests for [Matcher].  */
 @DisabledForCrosscheck("this test is itself a SafeRE-vs-JDK lifecycle crosscheck")
-class MatcherStateMachineTraceTest {
-
-  @Test
-  void nullableRepeatFindPreservesPriorityWithinTransparentRegions() {
-    // OSS-Fuzz 575905869: the empty alternative must win before the dot alternative.
-    for (String regex :
-        List.of(
+internal class MatcherStateMachineTraceTest {
+    @Test
+    fun nullableRepeatFindPreservesPriorityWithinTransparentRegions() {
+        // OSS-Fuzz 575905869: the empty alternative must win before the dot alternative.
+        for (regex in mutableListOf<String?>(
             "(?:[a-c]{0,2}(?:|.))+",
             "(?:a{0,2}(?:|.))+",
             "(?:a?(?:|.))+",
             "(?:a*(?:|.))+",
             "(?:a{0,2}(?:|.))*",
             "(?:a{0,2}(?:|.)){1,3}",
-            "(?:([a-c]{0,2})(?:|.))+")) {
-      for (String body : List.of("!a!a!", "!a中a!", "!a😀a!", "!a\udc00a!")) {
-        for (int padding : List.of(0, 1, 5)) {
-          String input = "x".repeat(padding) + body + "z";
-          for (boolean anchoring : List.of(false, true)) {
-            for (boolean transparent : List.of(false, true)) {
-              assertTrace(
-                  regex,
-                  input,
-                  Step.region(padding, padding + body.length()),
-                  Step.useAnchoringBounds(anchoring),
-                  Step.useTransparentBounds(transparent),
-                  Step.lookingAt(),
-                  Step.findWithBounds(),
-                  Step.findWithBounds(),
-                  Step.findWithBounds());
+            "(?:([a-c]{0,2})(?:|.))+"
+        )) {
+            for (body in mutableListOf<String?>("!a!a!", "!a中a!", "!a😀a!", "!a\udc00a!")) {
+                for (padding in mutableListOf<Int?>(0, 1, 5)) {
+                    val input = "x".repeat(padding!!) + body + "z"
+                    for (anchoring in mutableListOf<Boolean?>(false, true)) {
+                        for (transparent in mutableListOf<Boolean?>(false, true)) {
+                            Companion.assertTrace(
+                                regex!!,
+                                input,
+                                Step.Companion.region(padding, padding + body!!.length),
+                                Step.Companion.useAnchoringBounds(anchoring!!),
+                                Step.Companion.useTransparentBounds(transparent!!),
+                                Step.Companion.lookingAt(),
+                                Step.Companion.findWithBounds(),
+                                Step.Companion.findWithBounds(),
+                                Step.Companion.findWithBounds()
+                            )
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  void failedExplicitFindStartRetainsResetContinuation() {
-    for (String regex : List.of("^[ab]*", "\\A(a?)", "a")) {
-      assertTrace(
-          regex,
-          "a!",
-          Step.findFrom(1),
-          Step.findWithBounds(),
-          Step.findWithBounds(),
-          Step.findWithBounds());
+    @Test
+    fun failedExplicitFindStartRetainsResetContinuation() {
+        for (regex in mutableListOf<String?>("^[ab]*", "\\A(a?)", "a")) {
+            Companion.assertTrace(
+                regex!!,
+                "a!",
+                Step.Companion.findFrom(1),
+                Step.Companion.findWithBounds(),
+                Step.Companion.findWithBounds(),
+                Step.Companion.findWithBounds()
+            )
+        }
     }
-  }
 
-  @Test
-  @DisplayName("failed find after an empty anchored match preserves continuation like the JDK")
-  void emptyAnchoredMatchContinuation() {
-    // JDK 26 does not specify empty-match advancement after failure precisely (issue #817).
-    for (String regex : List.of("^[ab]*", "\\A(a?)", "^(a|b)*", "^(?:a*)", "(?m)^[ab]*")) {
-      for (String input : List.of("", "!", "!a😀b!", "a!", "!".repeat(512), "!\na")) {
-        for (boolean region : List.of(false, true)) {
-          for (boolean anchoring : List.of(false, true)) {
-            for (Step initial : List.of(Step.find(), Step.lookingAt())) {
-              for (Step attempt : List.of(Step.find(), Step.lookingAt(), Step.matches())) {
-                String text = region ? "xx" + input + "yy" : input;
-                assertTrace(
-                    regex,
-                    text,
-                    Step.region(region ? 2 : 0, region ? input.length() + 2 : input.length()),
-                    Step.useAnchoringBounds(anchoring),
-                    initial,
-                    attempt,
-                    Step.findWithBounds(),
-                    Step.findWithBounds(),
-                    Step.findWithBounds(),
-                    Step.findWithBounds());
-              }
+    @Test
+    @DisplayName("failed find after an empty anchored match preserves continuation like the JDK")
+    fun emptyAnchoredMatchContinuation() {
+        // JDK 26 does not specify empty-match advancement after failure precisely (issue #817).
+        for (regex in mutableListOf<String?>("^[ab]*", "\\A(a?)", "^(a|b)*", "^(?:a*)", "(?m)^[ab]*")) {
+            for (input in List.of<String?>("", "!", "!a😀b!", "a!", "!".repeat(512), "!\na")) {
+                for (region in mutableListOf<Boolean?>(false, true)) {
+                    for (anchoring in mutableListOf<Boolean?>(false, true)) {
+                        for (initial in List.of<Step?>(Step.Companion.find(), Step.Companion.lookingAt())) {
+                            for (attempt in List.of<Step?>(
+                                Step.Companion.find(),
+                                Step.Companion.lookingAt(),
+                                Step.Companion.matches()
+                            )) {
+                                val text = if (region) "xx" + input + "yy" else input
+                                Companion.assertTrace(
+                                    regex!!,
+                                    text,
+                                    Step.Companion.region(
+                                        if (region) 2 else 0,
+                                        if (region) input.length + 2 else input.length
+                                    ),
+                                    Step.Companion.useAnchoringBounds(anchoring!!),
+                                    initial,
+                                    attempt,
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.findWithBounds()
+                                )
+                            }
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  @DisplayName("anchored attempts preserve find continuation after earlier matches")
-  void anchoredAttemptsPreserveFindContinuation() {
-    // Covers issue #808, including empty matches and repeated failed attempts.
-    for (String regex : List.of("a", "(a+)", "a*", "(a|b)+", "😀*", "^a", "^[ab]")) {
-      for (String input : List.of("a a", "ba a", "a!", "!a", "😀!😀", "a")) {
-        for (Step initial : List.of(Step.find(), Step.lookingAt())) {
-          for (Step attempt : List.of(Step.matches(), Step.lookingAt())) {
-            for (boolean region : List.of(false, true)) {
-              String text = region ? "xx" + input + "yy" : input;
-              assertTrace(
-                  regex,
-                  text,
-                  Step.region(region ? 2 : 0, region ? input.length() + 2 : input.length()),
-                  initial,
-                  attempt,
-                  Step.start(),
-                  attempt,
-                  Step.findWithBounds(),
-                  Step.findWithBounds(),
-                  Step.reset(),
-                  Step.find(),
-                  Step.start());
+    @Test
+    @DisplayName("anchored attempts preserve find continuation after earlier matches")
+    fun anchoredAttemptsPreserveFindContinuation() {
+        // Covers issue #808, including empty matches and repeated failed attempts.
+        for (regex in mutableListOf<String?>("a", "(a+)", "a*", "(a|b)+", "😀*", "^a", "^[ab]")) {
+            for (input in mutableListOf<String?>("a a", "ba a", "a!", "!a", "😀!😀", "a")) {
+                for (initial in List.of<Step?>(Step.Companion.find(), Step.Companion.lookingAt())) {
+                    for (attempt in List.of<Step?>(Step.Companion.matches(), Step.Companion.lookingAt())) {
+                        for (region in mutableListOf<Boolean?>(false, true)) {
+                            val text: String = (if (region) "xx" + input + "yy" else input)!!
+                            Companion.assertTrace(
+                                regex!!,
+                                text,
+                                Step.Companion.region(
+                                    if (region) 2 else 0,
+                                    if (region) input!!.length + 2 else input!!.length
+                                ),
+                                initial,
+                                attempt,
+                                Step.Companion.start(),
+                                attempt,
+                                Step.Companion.findWithBounds(),
+                                Step.Companion.findWithBounds(),
+                                Step.Companion.reset(),
+                                Step.Companion.find(),
+                                Step.Companion.start()
+                            )
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  @DisplayName("interleaved match attempts retain continuation through exhaustion and resets")
-  void interleavedAttemptsRetainContinuation() {
-    List<Step> operations = List.of(Step.findWithBounds(), Step.matches(), Step.lookingAt());
-    for (String regex : List.of("a", "a*", "(a|b)+", "^a", "^[ab]", "😀*")) {
-      for (String input : List.of("", "a", "a a", "!a", "😀!😀", "ba".repeat(300))) {
-        for (Step first : operations) {
-          for (Step second : operations) {
-            for (Step third : operations) {
-              for (Step fourth : operations) {
-                assertTrace(
-                    regex,
-                    input,
-                    first,
-                    second,
-                    third,
-                    fourth,
-                    Step.findWithBounds(),
-                    Step.usePattern("a*"),
-                    Step.matches(),
-                    Step.findWithBounds(),
-                    Step.region(0, input.length()),
-                    Step.matches(),
-                    Step.findWithBounds(),
-                    Step.findFrom(input.length()),
-                    Step.matches(),
-                    Step.findWithBounds());
-              }
+    @Test
+    @DisplayName("interleaved match attempts retain continuation through exhaustion and resets")
+    fun interleavedAttemptsRetainContinuation() {
+        val operations =
+            List.of<Step?>(Step.Companion.findWithBounds(), Step.Companion.matches(), Step.Companion.lookingAt())
+        for (regex in mutableListOf<String?>("a", "a*", "(a|b)+", "^a", "^[ab]", "😀*")) {
+            for (input in List.of<String?>("", "a", "a a", "!a", "😀!😀", "ba".repeat(300))) {
+                for (first in operations) {
+                    for (second in operations) {
+                        for (third in operations) {
+                            for (fourth in operations) {
+                                Companion.assertTrace(
+                                    regex!!,
+                                    input,
+                                    first,
+                                    second,
+                                    third,
+                                    fourth,
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.usePattern("a*"),
+                                    Step.Companion.matches(),
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.region(0, input.length),
+                                    Step.Companion.matches(),
+                                    Step.Companion.findWithBounds(),
+                                    Step.Companion.findFrom(input.length),
+                                    Step.Companion.matches(),
+                                    Step.Companion.findWithBounds()
+                                )
+                            }
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  @DisplayName("failed matches() leaves the next find() sequence JDK-compatible")
-  void failedMatchesLeavesNextFindSequenceJdkCompatible() {
-    assertTrace(
-        "a",
-        "ba",
-        Step.matches(),
-        Step.find(),
-        Step.group(),
-        Step.start(),
-        Step.end(),
-        Step.find());
-  }
-
-  @Test
-  @DisplayName("failed lookingAt() leaves the next find() sequence JDK-compatible")
-  void failedLookingAtLeavesNextFindSequenceJdkCompatible() {
-    assertTrace(
-        "a",
-        "ba",
-        Step.lookingAt(),
-        Step.find(),
-        Step.group(),
-        Step.start(),
-        Step.end(),
-        Step.find());
-  }
-
-  @Test
-  @DisplayName("empty matches advance the following find() sequence like the JDK")
-  void emptyMatchesAdvanceFollowingFindSequenceLikeJdk() {
-    assertTrace(
-        "a*",
-        "ba",
-        Step.find(),
-        Step.group(),
-        Step.find(),
-        Step.group(),
-        Step.find(),
-        Step.group(),
-        Step.find());
-  }
-
-  @Test
-  @DisplayName("find(int) resets region and append position before searching")
-  void findStartResetsRegionAndAppendPositionBeforeSearching() {
-    assertTrace(
-        "\\d+",
-        "xx11yy22",
-        Step.region(2, 4),
-        Step.find(),
-        Step.appendReplacement("[$0]"),
-        Step.findFrom(6),
-        Step.regionStart(),
-        Step.regionEnd(),
-        Step.appendReplacement("[$0]"),
-        Step.appendTail());
-  }
-
-  @Test
-  @DisplayName("usePattern preserves the JDK-compatible next search position")
-  void usePatternPreservesJdkCompatibleNextSearchPosition() {
-    assertTrace(
-        "a*",
-        "ba",
-        Step.find(),
-        Step.group(),
-        Step.usePattern("."),
-        Step.find(),
-        Step.group(),
-        Step.find(),
-        Step.group());
-  }
-
-  @Test
-  @DisplayName("bounds changes preserve observable match data")
-  void boundsChangesPreserveObservableMatchData() {
-    assertTrace(
-        "(a+)",
-        "xxaaaa",
-        Step.region(2, 6),
-        Step.find(),
-        Step.useAnchoringBounds(false),
-        Step.group(1),
-        Step.toMatchResult(),
-        Step.useTransparentBounds(true),
-        Step.start(1),
-        Step.end(1));
-  }
-
-  @Test
-  @DisplayName("structural mutations during results() traversal match the JDK")
-  void structuralMutationsDuringResultsTraversalMatchJdk() {
-    for (Mutation mutation : structuralMutations()) {
-      String safere = runResultsMutationTrace(mutation, false);
-      String jdk = runResultsMutationTrace(mutation, true);
-
-      assertThat(safere).as(mutation.name()).isEqualTo(jdk);
-    }
-  }
-
-  @Test
-  @DisplayName("structural mutations during functional replacement match the JDK")
-  void structuralMutationsDuringFunctionalReplacementMatchJdk() {
-    for (Mutation mutation : structuralMutations()) {
-      String safereAll = runFunctionalReplacementMutationTrace(mutation, false, false);
-      String jdkAll = runFunctionalReplacementMutationTrace(mutation, true, false);
-      String safereFirst = runFunctionalReplacementMutationTrace(mutation, false, true);
-      String jdkFirst = runFunctionalReplacementMutationTrace(mutation, true, true);
-
-      assertThat(safereAll).as("replaceAll %s", mutation.name()).isEqualTo(jdkAll);
-      assertThat(safereFirst).as("replaceFirst %s", mutation.name()).isEqualTo(jdkFirst);
-    }
-  }
-
-  private static List<Mutation> structuralMutations() {
-    return List.of(
-        new Mutation("useTransparentBounds(true)", subject -> subject.useTransparentBounds(true)),
-        new Mutation("useTransparentBounds(false)", subject -> subject.useTransparentBounds(false)),
-        new Mutation("useAnchoringBounds(true)", subject -> subject.useAnchoringBounds(true)),
-        new Mutation("useAnchoringBounds(false)", subject -> subject.useAnchoringBounds(false)),
-        new Mutation(
-            "appendReplacement", subject -> subject.appendReplacement(new StringBuilder(), "x")),
-        new Mutation("appendTail", subject -> subject.appendTail(new StringBuilder())));
-  }
-
-  private static String runResultsMutationTrace(Mutation mutation, boolean jdk) {
-    TraceSubject subject = traceSubject("a", "aa", jdk);
-    try {
-      List<String> groups = subject.resultsWithMutation(mutation).collect(Collectors.toList());
-      return "ok:" + groups;
-    } catch (RuntimeException e) {
-      return "throws " + e.getClass().getSimpleName();
-    }
-  }
-
-  private static String runFunctionalReplacementMutationTrace(
-      Mutation mutation, boolean jdk, boolean first) {
-    TraceSubject subject = traceSubject("a", "aa", jdk);
-    try {
-      String replaced =
-          first
-              ? subject.replaceFirstWithMutation(mutation)
-              : subject.replaceAllWithMutation(mutation);
-      return "ok:" + replaced;
-    } catch (RuntimeException e) {
-      return "throws " + e.getClass().getSimpleName();
-    }
-  }
-
-  private static TraceSubject traceSubject(String regex, String input, boolean jdk) {
-    if (jdk) {
-      return new JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input));
-    }
-    return new SafeReSubject(Pattern.compile(regex).matcher(input));
-  }
-
-  private static void assertTrace(String regex, String input, Step... steps) {
-    TraceSubject safere = new SafeReSubject(Pattern.compile(regex).matcher(input));
-    TraceSubject jdk = new JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input));
-
-    List<String> safereTrace = trace(safere, steps);
-    List<String> jdkTrace = trace(jdk, steps);
-
-    assertThat(safereTrace).as("trace for /%s/ on %s", regex, input).isEqualTo(jdkTrace);
-  }
-
-  private static List<String> trace(TraceSubject subject, Step... steps) {
-    List<String> events = new ArrayList<>();
-    for (Step step : steps) {
-      events.add(step.apply(subject));
-    }
-    return events;
-  }
-
-  @SuppressWarnings("UnusedMethod")
-  private interface TraceSubject {
-    boolean matches();
-
-    boolean lookingAt();
-
-    boolean find();
-
-    boolean find(int start);
-
-    String group();
-
-    String group(int group);
-
-    int start();
-
-    int start(int group);
-
-    int end();
-
-    int end(int group);
-
-    void reset();
-
-    void region(int start, int end);
-
-    int regionStart();
-
-    int regionEnd();
-
-    void usePattern(String regex);
-
-    void useAnchoringBounds(boolean value);
-
-    void useTransparentBounds(boolean value);
-
-    MatchResult toMatchResult();
-
-    void appendReplacement(StringBuilder builder, String replacement);
-
-    void appendTail(StringBuilder builder);
-
-    Stream<String> resultsWithMutation(Mutation mutation);
-
-    String replaceAllWithMutation(Mutation mutation);
-
-    String replaceFirstWithMutation(Mutation mutation);
-  }
-
-  private static final class SafeReSubject implements TraceSubject {
-    private final Matcher matcher;
-
-    SafeReSubject(Matcher matcher) {
-      this.matcher = matcher;
-    }
-
-    @Override
-    public boolean matches() {
-      return matcher.matches();
-    }
-
-    @Override
-    public boolean lookingAt() {
-      return matcher.lookingAt();
-    }
-
-    @Override
-    public boolean find() {
-      return matcher.find();
-    }
-
-    @Override
-    public boolean find(int start) {
-      return matcher.find(start);
-    }
-
-    @Override
-    public String group() {
-      return matcher.group();
-    }
-
-    @Override
-    public String group(int group) {
-      return matcher.group(group);
-    }
-
-    @Override
-    public int start() {
-      return matcher.start();
-    }
-
-    @Override
-    public int start(int group) {
-      return matcher.start(group);
-    }
-
-    @Override
-    public int end() {
-      return matcher.end();
-    }
-
-    @Override
-    public int end(int group) {
-      return matcher.end(group);
-    }
-
-    @Override
-    public void reset() {
-      matcher.reset();
-    }
-
-    @Override
-    public void region(int start, int end) {
-      matcher.region(start, end);
-    }
-
-    @Override
-    public int regionStart() {
-      return matcher.regionStart();
-    }
-
-    @Override
-    public int regionEnd() {
-      return matcher.regionEnd();
-    }
-
-    @Override
-    public void usePattern(String regex) {
-      matcher.usePattern(Pattern.compile(regex));
-    }
-
-    @Override
-    public void useAnchoringBounds(boolean value) {
-      matcher.useAnchoringBounds(value);
-    }
-
-    @Override
-    public void useTransparentBounds(boolean value) {
-      matcher.useTransparentBounds(value);
-    }
-
-    @Override
-    public MatchResult toMatchResult() {
-      return matcher.toMatchResult();
-    }
-
-    @Override
-    public void appendReplacement(StringBuilder builder, String replacement) {
-      matcher.appendReplacement(builder, replacement);
-    }
-
-    @Override
-    public void appendTail(StringBuilder builder) {
-      matcher.appendTail(builder);
-    }
-
-    @Override
-    public Stream<String> resultsWithMutation(Mutation mutation) {
-      return matcher
-          .results()
-          .map(
-              result -> {
-                mutation.apply(this);
-                return result.group();
-              });
-    }
-
-    @Override
-    public String replaceAllWithMutation(Mutation mutation) {
-      return matcher.replaceAll(
-          result -> {
-            mutation.apply(this);
-            return "x";
-          });
-    }
-
-    @Override
-    public String replaceFirstWithMutation(Mutation mutation) {
-      return matcher.replaceFirst(
-          result -> {
-            mutation.apply(this);
-            return "x";
-          });
-    }
-  }
-
-  private static final class JdkSubject implements TraceSubject {
-    private final java.util.regex.Matcher matcher;
-
-    JdkSubject(java.util.regex.Matcher matcher) {
-      this.matcher = matcher;
-    }
-
-    @Override
-    public boolean matches() {
-      return matcher.matches();
-    }
-
-    @Override
-    public boolean lookingAt() {
-      return matcher.lookingAt();
-    }
-
-    @Override
-    public boolean find() {
-      return matcher.find();
-    }
-
-    @Override
-    public boolean find(int start) {
-      return matcher.find(start);
-    }
-
-    @Override
-    public String group() {
-      return matcher.group();
-    }
-
-    @Override
-    public String group(int group) {
-      return matcher.group(group);
-    }
-
-    @Override
-    public int start() {
-      return matcher.start();
-    }
-
-    @Override
-    public int start(int group) {
-      return matcher.start(group);
-    }
-
-    @Override
-    public int end() {
-      return matcher.end();
-    }
-
-    @Override
-    public int end(int group) {
-      return matcher.end(group);
-    }
-
-    @Override
-    public void reset() {
-      matcher.reset();
-    }
-
-    @Override
-    public void region(int start, int end) {
-      matcher.region(start, end);
-    }
-
-    @Override
-    public int regionStart() {
-      return matcher.regionStart();
-    }
-
-    @Override
-    public int regionEnd() {
-      return matcher.regionEnd();
-    }
-
-    @Override
-    public void usePattern(String regex) {
-      matcher.usePattern(java.util.regex.Pattern.compile(regex));
-    }
-
-    @Override
-    public void useAnchoringBounds(boolean value) {
-      matcher.useAnchoringBounds(value);
-    }
-
-    @Override
-    public void useTransparentBounds(boolean value) {
-      matcher.useTransparentBounds(value);
-    }
-
-    @Override
-    public MatchResult toMatchResult() {
-      return matcher.toMatchResult();
-    }
-
-    @Override
-    public void appendReplacement(StringBuilder builder, String replacement) {
-      matcher.appendReplacement(builder, replacement);
-    }
-
-    @Override
-    public void appendTail(StringBuilder builder) {
-      matcher.appendTail(builder);
-    }
-
-    @Override
-    public Stream<String> resultsWithMutation(Mutation mutation) {
-      return matcher
-          .results()
-          .map(
-              result -> {
-                mutation.apply(this);
-                return result.group();
-              });
-    }
-
-    @Override
-    public String replaceAllWithMutation(Mutation mutation) {
-      return matcher.replaceAll(
-          result -> {
-            mutation.apply(this);
-            return "x";
-          });
-    }
-
-    @Override
-    public String replaceFirstWithMutation(Mutation mutation) {
-      return matcher.replaceFirst(
-          result -> {
-            mutation.apply(this);
-            return "x";
-          });
-    }
-  }
-
-  private record Mutation(String name, Effect effect) {
-    void apply(TraceSubject subject) {
-      effect.apply(subject);
-    }
-  }
-
-  private record Step(String name, Operation operation) {
-    static Step matches() {
-      return value("matches", subject -> subject.matches());
-    }
-
-    static Step lookingAt() {
-      return value("lookingAt", subject -> subject.lookingAt());
-    }
-
-    static Step find() {
-      return value("find", subject -> subject.find());
-    }
-
-    static Step findWithBounds() {
-      return value(
-          "findWithBounds",
-          subject -> subject.find() ? subject.start() + ":" + subject.end() : "false");
-    }
-
-    static Step findFrom(int start) {
-      return value("find(" + start + ")", subject -> subject.find(start));
-    }
-
-    static Step group() {
-      return value("group", subject -> subject.group());
-    }
-
-    static Step group(int group) {
-      return value("group(" + group + ")", subject -> subject.group(group));
-    }
-
-    static Step start() {
-      return value("start", subject -> subject.start());
-    }
-
-    static Step start(int group) {
-      return value("start(" + group + ")", subject -> subject.start(group));
-    }
-
-    static Step end() {
-      return value("end", subject -> subject.end());
-    }
-
-    static Step end(int group) {
-      return value("end(" + group + ")", subject -> subject.end(group));
-    }
-
-    static Step reset() {
-      return effect("reset", TraceSubject::reset);
-    }
-
-    static Step region(int start, int end) {
-      return effect("region(" + start + "," + end + ")", subject -> subject.region(start, end));
-    }
-
-    static Step regionStart() {
-      return value("regionStart", subject -> subject.regionStart());
-    }
-
-    static Step regionEnd() {
-      return value("regionEnd", subject -> subject.regionEnd());
-    }
-
-    static Step usePattern(String regex) {
-      return effect("usePattern(" + regex + ")", subject -> subject.usePattern(regex));
-    }
-
-    static Step useAnchoringBounds(boolean value) {
-      return effect(
-          "useAnchoringBounds(" + value + ")", subject -> subject.useAnchoringBounds(value));
-    }
-
-    static Step useTransparentBounds(boolean value) {
-      return effect(
-          "useTransparentBounds(" + value + ")", subject -> subject.useTransparentBounds(value));
-    }
-
-    static Step toMatchResult() {
-      return value("toMatchResult", subject -> snapshot(subject.toMatchResult()));
-    }
-
-    static Step appendReplacement(String replacement) {
-      return new Step(
-          "appendReplacement(" + replacement + ")",
-          subject -> {
-            StringBuilder builder = new StringBuilder();
-            subject.appendReplacement(builder, replacement);
-            return builder.toString();
-          });
-    }
-
-    static Step appendTail() {
-      return new Step(
-          "appendTail",
-          subject -> {
-            StringBuilder builder = new StringBuilder();
-            subject.appendTail(builder);
-            return builder.toString();
-          });
-    }
-
-    String apply(TraceSubject subject) {
-      try {
-        return name + "=" + operation.apply(subject);
-      } catch (RuntimeException e) {
-        return name + " throws " + e.getClass().getSimpleName();
-      }
-    }
-
-    private static Step value(String name, Operation operation) {
-      return new Step(name, operation);
-    }
-
-    private static Step effect(String name, Effect effect) {
-      return new Step(
-          name,
-          subject -> {
-            effect.apply(subject);
-            return "ok";
-          });
-    }
-
-    private static String snapshot(MatchResult result) {
-      List<String> groups = new ArrayList<>();
-      for (int group = 0; group <= result.groupCount(); group++) {
-        try {
-          groups.add(
-              group
-                  + ":"
-                  + result.start(group)
-                  + "-"
-                  + result.end(group)
-                  + "="
-                  + result.group(group));
-        } catch (RuntimeException e) {
-          groups.add(group + ":throws " + e.getClass().getSimpleName());
+    @Test
+    @DisplayName("failed matches() leaves the next find() sequence JDK-compatible")
+    fun failedMatchesLeavesNextFindSequenceJdkCompatible() {
+        assertTrace(
+            "a",
+            "ba",
+            Step.Companion.matches(),
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.start(),
+            Step.Companion.end(),
+            Step.Companion.find()
+        )
+    }
+
+    @Test
+    @DisplayName("failed lookingAt() leaves the next find() sequence JDK-compatible")
+    fun failedLookingAtLeavesNextFindSequenceJdkCompatible() {
+        assertTrace(
+            "a",
+            "ba",
+            Step.Companion.lookingAt(),
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.start(),
+            Step.Companion.end(),
+            Step.Companion.find()
+        )
+    }
+
+    @Test
+    @DisplayName("empty matches advance the following find() sequence like the JDK")
+    fun emptyMatchesAdvanceFollowingFindSequenceLikeJdk() {
+        assertTrace(
+            "a*",
+            "ba",
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.find()
+        )
+    }
+
+    @Test
+    @DisplayName("find(int) resets region and append position before searching")
+    fun findStartResetsRegionAndAppendPositionBeforeSearching() {
+        assertTrace(
+            "\\d+",
+            "xx11yy22",
+            Step.Companion.region(2, 4),
+            Step.Companion.find(),
+            Step.Companion.appendReplacement("[$0]"),
+            Step.Companion.findFrom(6),
+            Step.Companion.regionStart(),
+            Step.Companion.regionEnd(),
+            Step.Companion.appendReplacement("[$0]"),
+            Step.Companion.appendTail()
+        )
+    }
+
+    @Test
+    @DisplayName("usePattern preserves the JDK-compatible next search position")
+    fun usePatternPreservesJdkCompatibleNextSearchPosition() {
+        assertTrace(
+            "a*",
+            "ba",
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.usePattern("."),
+            Step.Companion.find(),
+            Step.Companion.group(),
+            Step.Companion.find(),
+            Step.Companion.group()
+        )
+    }
+
+    @Test
+    @DisplayName("bounds changes preserve observable match data")
+    fun boundsChangesPreserveObservableMatchData() {
+        assertTrace(
+            "(a+)",
+            "xxaaaa",
+            Step.Companion.region(2, 6),
+            Step.Companion.find(),
+            Step.Companion.useAnchoringBounds(false),
+            Step.Companion.group(1),
+            Step.Companion.toMatchResult(),
+            Step.Companion.useTransparentBounds(true),
+            Step.Companion.start(1),
+            Step.Companion.end(1)
+        )
+    }
+
+    @Test
+    @DisplayName("structural mutations during results() traversal match the JDK")
+    fun structuralMutationsDuringResultsTraversalMatchJdk() {
+        for (mutation in structuralMutations()) {
+            val safere: String = runResultsMutationTrace(mutation, false)
+            val jdk: String = runResultsMutationTrace(mutation, true)
+
+            Assertions.assertThat(safere).`as`(mutation.name).isEqualTo(jdk)
         }
-      }
-      return groups.toString();
     }
-  }
 
-  private interface Operation {
-    Object apply(TraceSubject subject);
-  }
+    @Test
+    @DisplayName("structural mutations during functional replacement match the JDK")
+    fun structuralMutationsDuringFunctionalReplacementMatchJdk() {
+        for (mutation in structuralMutations()) {
+            val safereAll: String = runFunctionalReplacementMutationTrace(mutation, false, false)
+            val jdkAll: String = runFunctionalReplacementMutationTrace(mutation, true, false)
+            val safereFirst: String = runFunctionalReplacementMutationTrace(mutation, false, true)
+            val jdkFirst: String = runFunctionalReplacementMutationTrace(mutation, true, true)
 
-  private interface Effect {
-    void apply(TraceSubject subject);
-  }
+            Assertions.assertThat(safereAll).`as`("replaceAll %s", mutation.name).isEqualTo(jdkAll)
+            Assertions.assertThat(safereFirst).`as`("replaceFirst %s", mutation.name).isEqualTo(jdkFirst)
+        }
+    }
+
+    private interface TraceSubject {
+        fun matches(): Boolean
+
+        fun lookingAt(): Boolean
+
+        fun find(): Boolean
+
+        fun find(start: Int): Boolean
+
+        fun group(): String?
+
+        fun group(group: Int): String?
+
+        fun start(): Int
+
+        fun start(group: Int): Int
+
+        fun end(): Int
+
+        fun end(group: Int): Int
+
+        fun reset()
+
+        fun region(start: Int, end: Int)
+
+        fun regionStart(): Int
+
+        fun regionEnd(): Int
+
+        fun usePattern(regex: String?)
+
+        fun useAnchoringBounds(value: Boolean)
+
+        fun useTransparentBounds(value: Boolean)
+
+        fun toMatchResult(): MatchResult?
+
+        fun appendReplacement(builder: StringBuilder?, replacement: String?)
+
+        fun appendTail(builder: StringBuilder?)
+
+        fun resultsWithMutation(mutation: Mutation?): Stream<String?>?
+
+        fun replaceAllWithMutation(mutation: Mutation?): String?
+
+        fun replaceFirstWithMutation(mutation: Mutation?): String
+    }
+
+    private class SafeReSubject(private val matcher: Matcher) : TraceSubject {
+        override fun matches(): Boolean {
+            return matcher.matches()
+        }
+
+        override fun lookingAt(): Boolean {
+            return matcher.lookingAt()
+        }
+
+        override fun find(): Boolean {
+            return matcher.find()
+        }
+
+        override fun find(start: Int): Boolean {
+            return matcher.find(start)
+        }
+
+        override fun group(): String? {
+            return matcher.group()
+        }
+
+        override fun group(group: Int): String? {
+            return matcher.group(group)
+        }
+
+        override fun start(): Int {
+            return matcher.start()
+        }
+
+        override fun start(group: Int): Int {
+            return matcher.start(group)
+        }
+
+        override fun end(): Int {
+            return matcher.end()
+        }
+
+        override fun end(group: Int): Int {
+            return matcher.end(group)
+        }
+
+        override fun reset() {
+            matcher.reset()
+        }
+
+        override fun region(start: Int, end: Int) {
+            matcher.region(start, end)
+        }
+
+        override fun regionStart(): Int {
+            return matcher.regionStart()
+        }
+
+        override fun regionEnd(): Int {
+            return matcher.regionEnd()
+        }
+
+        override fun usePattern(regex: String?) {
+            matcher.usePattern(Pattern.compile(regex))
+        }
+
+        override fun useAnchoringBounds(value: Boolean) {
+            matcher.useAnchoringBounds(value)
+        }
+
+        override fun useTransparentBounds(value: Boolean) {
+            matcher.useTransparentBounds(value)
+        }
+
+        override fun toMatchResult(): MatchResult {
+            return matcher.toMatchResult()
+        }
+
+        override fun appendReplacement(builder: StringBuilder, replacement: String?) {
+            matcher.appendReplacement(builder, replacement)
+        }
+
+        override fun appendTail(builder: StringBuilder) {
+            matcher.appendTail(builder)
+        }
+
+        override fun resultsWithMutation(mutation: Mutation): Stream<String?>? {
+            return matcher
+                .results()
+                .map<String?> { result: MatchResult? ->
+                    mutation.apply(this)
+                    result!!.group()
+                }
+        }
+
+        override fun replaceAllWithMutation(mutation: Mutation): String? {
+            return matcher.replaceAll(
+                Function { result: MatchResult? ->
+                    mutation.apply(this)
+                    "x"
+                })
+        }
+
+        override fun replaceFirstWithMutation(mutation: Mutation): String? {
+            return matcher.replaceFirst(
+                Function { result: MatchResult? ->
+                    mutation.apply(this)
+                    "x"
+                })
+        }
+    }
+
+    private class JdkSubject(private val matcher: Matcher) : TraceSubject {
+        override fun matches(): Boolean {
+            return matcher.matches()
+        }
+
+        override fun lookingAt(): Boolean {
+            return matcher.lookingAt()
+        }
+
+        override fun find(): Boolean {
+            return matcher.find()
+        }
+
+        override fun find(start: Int): Boolean {
+            return matcher.find(start)
+        }
+
+        override fun group(): String? {
+            return matcher.group()
+        }
+
+        override fun group(group: Int): String? {
+            return matcher.group(group)
+        }
+
+        override fun start(): Int {
+            return matcher.start()
+        }
+
+        override fun start(group: Int): Int {
+            return matcher.start(group)
+        }
+
+        override fun end(): Int {
+            return matcher.end()
+        }
+
+        override fun end(group: Int): Int {
+            return matcher.end(group)
+        }
+
+        override fun reset() {
+            matcher.reset()
+        }
+
+        override fun region(start: Int, end: Int) {
+            matcher.region(start, end)
+        }
+
+        override fun regionStart(): Int {
+            return matcher.regionStart()
+        }
+
+        override fun regionEnd(): Int {
+            return matcher.regionEnd()
+        }
+
+        override fun usePattern(regex: String) {
+            matcher.usePattern(Pattern.compile(regex))
+        }
+
+        override fun useAnchoringBounds(value: Boolean) {
+            matcher.useAnchoringBounds(value)
+        }
+
+        override fun useTransparentBounds(value: Boolean) {
+            matcher.useTransparentBounds(value)
+        }
+
+        override fun toMatchResult(): MatchResult {
+            return matcher.toMatchResult()
+        }
+
+        override fun appendReplacement(builder: StringBuilder, replacement: String) {
+            matcher.appendReplacement(builder, replacement)
+        }
+
+        override fun appendTail(builder: StringBuilder) {
+            matcher.appendTail(builder)
+        }
+
+        override fun resultsWithMutation(mutation: Mutation): Stream<String?>? {
+            return matcher
+                .results()
+                .map<String?> { result: MatchResult? ->
+                    mutation.apply(this)
+                    result!!.group()
+                }
+        }
+
+        override fun replaceAllWithMutation(mutation: Mutation): String? {
+            return matcher.replaceAll(
+                Function { result: MatchResult? ->
+                    mutation.apply(this)
+                    "x"
+                })
+        }
+
+        override fun replaceFirstWithMutation(mutation: Mutation): String? {
+            return matcher.replaceFirst(
+                Function { result: MatchResult? ->
+                    mutation.apply(this)
+                    "x"
+                })
+        }
+    }
+
+    @JvmRecord
+    private data class Mutation(val name: String?, val effect: Effect?) {
+        fun apply(subject: TraceSubject?) {
+            effect!!.apply(subject)
+        }
+    }
+
+    @JvmRecord
+    private data class Step(val name: String?, val operation: Operation?) {
+        fun apply(subject: TraceSubject?): String {
+            try {
+                return name + "=" + operation!!.apply(subject)
+            } catch (e: RuntimeException) {
+                return name + " throws " + e.javaClass.getSimpleName()
+            }
+        }
+
+        companion object {
+            fun matches(): Step {
+                return value(
+                    "matches",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.matches() })
+            }
+
+            fun lookingAt(): Step {
+                return value(
+                    "lookingAt",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.lookingAt() })
+            }
+
+            fun find(): Step {
+                return value(
+                    "find",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.find() })
+            }
+
+            fun findWithBounds(): Step {
+                return value(
+                    "findWithBounds",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? ->
+                        if (subject!!.find()) subject.start().toString() + ":" + subject.end() else "false"
+                    })
+            }
+
+            fun findFrom(start: Int): Step {
+                return value(
+                    "find(" + start + ")",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.find(start) })
+            }
+
+            fun group(): Step {
+                return value(
+                    "group",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.group() })
+            }
+
+            fun group(group: Int): Step {
+                return value(
+                    "group(" + group + ")",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.group(group) })
+            }
+
+            fun start(): Step {
+                return value(
+                    "start",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.start() })
+            }
+
+            fun start(group: Int): Step {
+                return value(
+                    "start(" + group + ")",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.start(group) })
+            }
+
+            fun end(): Step {
+                return value(
+                    "end",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.end() })
+            }
+
+            fun end(group: Int): Step {
+                return value(
+                    "end(" + group + ")",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.end(group) })
+            }
+
+            fun reset(): Step {
+                return effect("reset", MatcherStateMachineTraceTest.Effect { obj: TraceSubject? -> obj!!.reset() })
+            }
+
+            fun region(start: Int, end: Int): Step {
+                return effect(
+                    "region(" + start + "," + end + ")",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.region(start, end) })
+            }
+
+            fun regionStart(): Step {
+                return value(
+                    "regionStart",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.regionStart() })
+            }
+
+            fun regionEnd(): Step {
+                return value(
+                    "regionEnd",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> subject!!.regionEnd() })
+            }
+
+            fun usePattern(regex: String?): Step {
+                return effect(
+                    "usePattern(" + regex + ")",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.usePattern(regex) })
+            }
+
+            fun useAnchoringBounds(value: Boolean): Step {
+                return effect(
+                    "useAnchoringBounds(" + value + ")",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useAnchoringBounds(value) })
+            }
+
+            fun useTransparentBounds(value: Boolean): Step {
+                return effect(
+                    "useTransparentBounds(" + value + ")",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useTransparentBounds(value) })
+            }
+
+            fun toMatchResult(): Step {
+                return value(
+                    "toMatchResult",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? -> Companion.snapshot(subject!!.toMatchResult()!!) })
+            }
+
+            fun appendReplacement(replacement: String?): Step {
+                return Step(
+                    "appendReplacement(" + replacement + ")",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? ->
+                        val builder = StringBuilder()
+                        subject!!.appendReplacement(builder, replacement)
+                        builder.toString()
+                    })
+            }
+
+            fun appendTail(): Step {
+                return Step(
+                    "appendTail",
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? ->
+                        val builder = StringBuilder()
+                        subject!!.appendTail(builder)
+                        builder.toString()
+                    })
+            }
+
+            private fun value(name: String?, operation: Operation?): Step {
+                return Step(name, operation)
+            }
+
+            private fun effect(name: String?, effect: Effect): Step {
+                return Step(
+                    name,
+                    MatcherStateMachineTraceTest.Operation { subject: TraceSubject? ->
+                        effect.apply(subject)
+                        "ok"
+                    })
+            }
+
+            private fun snapshot(result: MatchResult): String? {
+                val groups: MutableList<String?> = ArrayList<String?>()
+                for (group in 0..result.groupCount()) {
+                    try {
+                        groups.add(
+                            (group
+                                .toString() + ":"
+                                    + result.start(group)
+                                    + "-"
+                                    + result.end(group)
+                                    + "="
+                                    + result.group(group))
+                        )
+                    } catch (e: RuntimeException) {
+                        groups.add(group.toString() + ":throws " + e.javaClass.getSimpleName())
+                    }
+                }
+                return groups.toString()
+            }
+        }
+    }
+
+    private interface Operation {
+        fun apply(subject: TraceSubject?): Any?
+    }
+
+    private interface Effect {
+        fun apply(subject: TraceSubject?)
+    }
+
+    companion object {
+        private fun structuralMutations(): MutableList<Mutation> {
+            return List.of<Mutation?>(
+                Mutation(
+                    "useTransparentBounds(true)",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useTransparentBounds(true) }),
+                Mutation(
+                    "useTransparentBounds(false)",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useTransparentBounds(false) }),
+                Mutation(
+                    "useAnchoringBounds(true)",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useAnchoringBounds(true) }),
+                Mutation(
+                    "useAnchoringBounds(false)",
+                    MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useAnchoringBounds(false) }),
+                Mutation(
+                    "appendReplacement", MatcherStateMachineTraceTest.Effect { subject: TraceSubject? ->
+                        subject!!.appendReplacement(
+                            StringBuilder(), "x"
+                        )
+                    }),
+                Mutation("appendTail", MatcherStateMachineTraceTest.Effect { subject: TraceSubject? ->
+                    subject!!.appendTail(
+                        StringBuilder()
+                    )
+                })
+            )
+        }
+
+        private fun runResultsMutationTrace(mutation: Mutation?, jdk: Boolean): String {
+            val subject: TraceSubject = traceSubject("a", "aa", jdk)
+            try {
+                val groups = subject.resultsWithMutation(mutation)!!.collect(Collectors.toList())
+                return "ok:" + groups
+            } catch (e: RuntimeException) {
+                return "throws " + e.javaClass.getSimpleName()
+            }
+        }
+
+        private fun runFunctionalReplacementMutationTrace(
+            mutation: Mutation?, jdk: Boolean, first: Boolean
+        ): String {
+            val subject: TraceSubject = traceSubject("a", "aa", jdk)
+            try {
+                val replaced =
+                    (if (first)
+                        subject.replaceFirstWithMutation(mutation)
+                    else
+                        subject.replaceAllWithMutation(mutation))!!
+                return "ok:" + replaced
+            } catch (e: RuntimeException) {
+                return "throws " + e.javaClass.getSimpleName()
+            }
+        }
+
+        private fun traceSubject(regex: String, input: String, jdk: Boolean): TraceSubject {
+            if (jdk) {
+                return JdkSubject(Pattern.compile(regex).matcher(input))
+            }
+            return SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
+        }
+
+        private fun assertTrace(regex: String, input: String, vararg steps: Step) {
+            val safere: TraceSubject = SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
+            val jdk: TraceSubject = JdkSubject(Pattern.compile(regex).matcher(input))
+
+            val safereTrace: MutableList<String?> = trace(safere, *steps)
+            val jdkTrace: MutableList<String?> = trace(jdk, *steps)
+
+            Assertions.assertThat<String?>(safereTrace).`as`("trace for /%s/ on %s", regex, input).isEqualTo(jdkTrace)
+        }
+
+        private fun trace(subject: TraceSubject?, vararg steps: Step): MutableList<String?> {
+            val events: MutableList<String?> = ArrayList<String?>()
+            for (step in steps) {
+                events.add(step.apply(subject))
+            }
+            return events
+        }
+    }
 }

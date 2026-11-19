@@ -4,133 +4,116 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import java.util.stream.Collectors
 
-import static org.assertj.core.api.Assertions.assertThat;
+/** Tests for [Pattern.splitAsStream].  */
+internal class PatternSplitAsStreamTest {
+    private class LiteralCharSequence(private val value: String) : CharSequence {
+        override fun length(): Int {
+            return value.length
+        }
 
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+        override fun charAt(index: Int): Char {
+            return value.get(index)
+        }
 
-/** Tests for {@link Pattern#splitAsStream(CharSequence)}. */
-class PatternSplitAsStreamTest {
-  private static final class LiteralCharSequence implements CharSequence {
-    private final String value;
-
-    LiteralCharSequence(String value) {
-      this.value = value;
+        override fun subSequence(start: Int, end: Int): CharSequence {
+            return value.subSequence(start, end)
+        }
     }
 
-    @Override
-    public int length() {
-      return value.length();
+    private class MutableCharSequence(value: String) : CharSequence {
+        private val value: StringBuilder
+
+        init {
+            this.value = StringBuilder(value)
+        }
+
+        fun set(newValue: String?) {
+            value.setLength(0)
+            value.append(newValue)
+        }
+
+        override fun length(): Int {
+            return value.length
+        }
+
+        override fun charAt(index: Int): Char {
+            return value.get(index)
+        }
+
+        override fun subSequence(start: Int, end: Int): CharSequence {
+            return value.subSequence(start, end)
+        }
+
+        override fun toString(): String {
+            return value.toString()
+        }
     }
 
-    @Override
-    public char charAt(int index) {
-      return value.charAt(index);
+    @Test
+    @DisplayName("splitAsStream splits input around matches")
+    fun splitAsStreamBasic() {
+        val p = Pattern.compile(",")
+        val parts = p.splitAsStream("a,b,c").collect(Collectors.toList())
+        Assertions.assertThat<String?>(parts).containsExactly("a", "b", "c")
     }
 
-    @Override
-    public CharSequence subSequence(int start, int end) {
-      return value.subSequence(start, end);
-    }
-  }
-
-  private static final class MutableCharSequence implements CharSequence {
-    private final StringBuilder value;
-
-    MutableCharSequence(String value) {
-      this.value = new StringBuilder(value);
+    @Test
+    @DisplayName("splitAsStream with no match returns entire input")
+    fun splitAsStreamNoMatch() {
+        val p = Pattern.compile(",")
+        val parts = p.splitAsStream("abc").collect(Collectors.toList())
+        Assertions.assertThat<String?>(parts).containsExactly("abc")
     }
 
-    void set(String newValue) {
-      value.setLength(0);
-      value.append(newValue);
+    @Test
+    @DisplayName("splitAsStream with regex pattern")
+    fun splitAsStreamRegex() {
+        val p = Pattern.compile("\\s+")
+        val parts = p.splitAsStream("hello  world\tfoo").collect(Collectors.toList())
+        Assertions.assertThat<String?>(parts).containsExactly("hello", "world", "foo")
     }
 
-    @Override
-    public int length() {
-      return value.length();
+    @Test
+    @DisplayName("splitAsStream count() works without collecting")
+    fun splitAsStreamCount() {
+        val p = Pattern.compile(",")
+        val count = p.splitAsStream("a,b,c,d").count()
+        Assertions.assertThat(count).isEqualTo(4)
     }
 
-    @Override
-    public char charAt(int index) {
-      return value.charAt(index);
+    @Test
+    @DisplayName("splitAsStream discards trailing empty strings")
+    fun splitAsStreamTrailingEmpty() {
+        val p = Pattern.compile(",")
+        val parts = p.splitAsStream("a,b,").collect(Collectors.toList())
+        Assertions.assertThat<String?>(parts).containsExactly("a", "b")
     }
 
-    @Override
-    public CharSequence subSequence(int start, int end) {
-      return value.subSequence(start, end);
+    @Test
+    @DisplayName("splitAsStream reads custom CharSequence content via charAt()")
+    fun splitAsStreamCustomCharSequence() {
+        val p = Pattern.compile(",")
+        val parts =
+            p.splitAsStream(LiteralCharSequence("a,b,c")).collect(Collectors.toList())
+        Assertions.assertThat<String?>(parts).containsExactly("a", "b", "c")
     }
 
-    @Override
-    public String toString() {
-      return value.toString();
+    @Test
+    @DisplayName("splitAsStream reads input lazily when stream is consumed")
+    fun splitAsStreamReadsInputLazily() {
+        val p = Pattern.compile(",")
+        val input = MutableCharSequence("a,b")
+        val stream = p.splitAsStream(input)
+
+        input.set("x,y,z")
+
+        Assertions.assertThat<String?>(stream.collect(Collectors.toList())).containsExactly("x", "y", "z")
     }
-  }
-
-  @Test
-  @DisplayName("splitAsStream splits input around matches")
-  void splitAsStreamBasic() {
-    Pattern p = Pattern.compile(",");
-    List<String> parts = p.splitAsStream("a,b,c").collect(Collectors.toList());
-    assertThat(parts).containsExactly("a", "b", "c");
-  }
-
-  @Test
-  @DisplayName("splitAsStream with no match returns entire input")
-  void splitAsStreamNoMatch() {
-    Pattern p = Pattern.compile(",");
-    List<String> parts = p.splitAsStream("abc").collect(Collectors.toList());
-    assertThat(parts).containsExactly("abc");
-  }
-
-  @Test
-  @DisplayName("splitAsStream with regex pattern")
-  void splitAsStreamRegex() {
-    Pattern p = Pattern.compile("\\s+");
-    List<String> parts = p.splitAsStream("hello  world\tfoo").collect(Collectors.toList());
-    assertThat(parts).containsExactly("hello", "world", "foo");
-  }
-
-  @Test
-  @DisplayName("splitAsStream count() works without collecting")
-  void splitAsStreamCount() {
-    Pattern p = Pattern.compile(",");
-    long count = p.splitAsStream("a,b,c,d").count();
-    assertThat(count).isEqualTo(4);
-  }
-
-  @Test
-  @DisplayName("splitAsStream discards trailing empty strings")
-  void splitAsStreamTrailingEmpty() {
-    Pattern p = Pattern.compile(",");
-    List<String> parts = p.splitAsStream("a,b,").collect(Collectors.toList());
-    assertThat(parts).containsExactly("a", "b");
-  }
-
-  @Test
-  @DisplayName("splitAsStream reads custom CharSequence content via charAt()")
-  void splitAsStreamCustomCharSequence() {
-    Pattern p = Pattern.compile(",");
-    List<String> parts =
-        p.splitAsStream(new LiteralCharSequence("a,b,c")).collect(Collectors.toList());
-    assertThat(parts).containsExactly("a", "b", "c");
-  }
-
-  @Test
-  @DisplayName("splitAsStream reads input lazily when stream is consumed")
-  void splitAsStreamReadsInputLazily() {
-    Pattern p = Pattern.compile(",");
-    MutableCharSequence input = new MutableCharSequence("a,b");
-    Stream<String> stream = p.splitAsStream(input);
-
-    input.set("x,y,z");
-
-    assertThat(stream.collect(Collectors.toList())).containsExactly("x", "y", "z");
-  }
 }

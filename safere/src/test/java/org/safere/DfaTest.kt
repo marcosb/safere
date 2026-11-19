@@ -2,1493 +2,1556 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.safere.StateAccelerator.*
+import java.lang.reflect.Array
+import java.nio.charset.StandardCharsets
+import java.util.*
+import java.util.List
+import java.util.regex.Pattern
 
 /**
- * Tests for {@link Dfa}.
- *
- * <p>Many tests verify that the DFA produces the same match/no-match result as the NFA. The DFA
+ * Tests for [Dfa].
+ * 
+ * 
+ * Many tests verify that the DFA produces the same match/no-match result as the NFA. The DFA
  * only reports match boundaries (not capture groups), so tests focus on match detection and end
  * position.
  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-class DfaTest {
-
-  private static final int FLAGS =
-      ParseFlags.PERL_X | ParseFlags.PERL_CLASSES | ParseFlags.PERL_B | ParseFlags.UNICODE_GROUPS;
-
-  @Test
-  void unpairedSurrogateWordTransitionsRemainCacheableInEveryScanDirection() {
-    Pattern pattern = Pattern.compile("(?U)\\b");
-    for (String unit : List.of("\uD800", "\uDC00")) {
-      InputScanner scanner = new StringInputScanner(unit.repeat(64));
-      for (int operation = 0; operation < 3; operation++) {
-        boolean reverse = operation == 1;
-        Prog prog = reverse ? pattern.reverseProg() : pattern.prog();
-        Dfa dfa = new Dfa(prog, 10000, Dfa.buildSetup(prog), false);
-        Dfa.State start = dfa.startState(scanner, reverse ? scanner.length() : 0, false, reverse);
-        boolean matched =
-            switch (operation) {
-              case 0 -> dfa.doSearch(scanner, false, false).matched();
-              case 1 -> dfa.doSearchReverse(scanner, scanner.length(), 0, false, false).matched();
-              default -> dfa.doSearchMany(scanner, false).matched();
-            };
-        assertThat(matched).isFalse();
-        // Exclude the EOF slot: ordinary unpaired halves must populate a consuming transition.
-        assertThat(
-                Arrays.stream(start.next, 0, start.next.length - 1).anyMatch(next -> next != null))
-            .as("unpaired %s operation=%s", Integer.toHexString(unit.charAt(0)), operation)
-            .isTrue();
-      }
-    }
-  }
-
-  @Test
-  void anchoredStartCachingDoesNotDiscardAnUnanchoredMatch() {
-    Prog prog = Compiler.compile(Parser.parse("[0-9]*0", FLAGS));
-    String text = "011" + "~".repeat(512) + "0";
-    for (InputScanner scanner :
-        List.of(new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8)))) {
-      for (boolean reverseContext : new boolean[] {false, true}) {
-        Dfa dfa = new Dfa(prog, 10000, Dfa.buildSetup(prog), false);
-        dfa.startState(scanner, 0, true, reverseContext);
-        for (int reuse = 0; reuse < 2; reuse++) {
-          Dfa.SearchResult result = dfa.doSearch(scanner, false, false);
-          assertThat(result).isNotNull();
-          assertThat(result.matched()).isTrue();
-          assertThat(result.pos()).isEqualTo(1);
+internal class DfaTest {
+    @Test
+    fun unpairedSurrogateWordTransitionsRemainCacheableInEveryScanDirection() {
+        val pattern = Pattern.compile("(?U)\\b")
+        for (unit in mutableListOf<String?>("\uD800", "\uDC00")) {
+            val scanner: InputScanner = StringInputScanner(unit!!.repeat(64))
+            for (operation in 0..2) {
+                val reverse = operation == 1
+                val prog = if (reverse) pattern.reverseProg() else pattern.prog()
+                val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+                val start = dfa.startState(scanner, if (reverse) scanner.length() else 0, false, reverse)
+                val matched =
+                    when (operation) {
+                        0 -> dfa.doSearch(scanner, false, false).matched
+                        1 -> dfa.doSearchReverse(scanner, scanner.length(), 0, false, false).matched
+                        else -> dfa.doSearchMany(scanner, false).matched
+                    }
+                Assertions.assertThat(matched).isFalse()
+                // Exclude the EOF slot: ordinary unpaired halves must populate a consuming transition.
+                Assertions.assertThat(
+                    Arrays.stream<Dfa.State?>(start.next, 0, start.next.size - 1)
+                        .anyMatch { next: Dfa.State? -> next != null })
+                    .`as`("unpaired %s operation=%s", Integer.toHexString(unit.get(0).code), operation)
+                    .isTrue()
+            }
         }
-      }
     }
-  }
 
-  @Test
-  void longestDeferredMatchRetainsEveryConsumingBranch() {
-    // Issue #857: each assertion succeeds before the consuming alternative finishes.
-    for (String assertion : List.of("\\b", "\\B", "(?m:$)")) {
-      String text =
-          switch (assertion) {
-            case "\\b" -> "a!a";
-            case "\\B" -> "aaa";
-            default -> "a\na";
-          };
-      for (boolean assertionFirst : new boolean[] {false, true}) {
-        String suffix = Pattern.quote(text.substring(1));
-        String alternatives = assertionFirst ? assertion + "|" + suffix : suffix + "|" + assertion;
-        Pattern pattern = Pattern.compile("a(?:" + alternatives + ")");
-        Dfa longest = new Dfa(pattern.prog(), 10000, Dfa.buildSetup(pattern.prog()), true);
-        for (int pass = 0; pass < 2; pass++) {
-          for (boolean anchored : new boolean[] {true, false}) {
-            Dfa.SearchResult result = longest.doSearch(text, anchored, true);
-            assertThat(result).as(assertion).isNotNull();
-            assertThat(result.matched()).as(assertion).isTrue();
-            assertThat(result.pos()).as(assertion).isEqualTo(text.length());
-          }
-        }
-      }
-    }
-  }
-
-  @Test
-  void startCacheAllocationIsBoundedIndependentlyOfAssertionBits() throws Exception {
-    Field cache = Dfa.class.getDeclaredField("startStateByContext");
-    cache.setAccessible(true);
-    for (String regex : List.of("a+b", "(?m)^a+$", "(?-d:(?m:$))(?dm:$)", "\\b{g}a")) {
-      Pattern pattern = Pattern.compile(regex);
-      for (Prog prog : List.of(pattern.prog(), pattern.reverseProg())) {
-        Dfa dfa = new Dfa(prog, 10000, Dfa.buildSetup(prog), false);
-        assertThat(Array.getLength(cache.get(dfa))).as(regex).isLessThanOrEqualTo(256);
-      }
-    }
-  }
-
-  @Test
-  void startCacheRetainsCompleteContextAcrossReplacements() {
-    for (String regex : List.of("a+b", "(?m)^a+$", "(?-d:(?m:$))(?dm:$)", "\\b{g}a")) {
-      Pattern pattern = Pattern.compile(regex);
-      for (Prog prog : List.of(pattern.prog(), pattern.reverseProg())) {
-        Dfa cached = new Dfa(prog, 10000, Dfa.buildSetup(prog), false);
-        List<String> inputs = List.of("a\r\na\na", "a\ra", "é a\u0301\na", "", "a\u2028b");
-        for (int pass = 0; pass < 2; pass++) {
-          for (String text : pass == 0 ? inputs : inputs.reversed()) {
-            InputScanner scanner = new StringInputScanner(text);
-            for (int pos = 0; pos <= text.length(); pos++) {
-              for (boolean anchored : new boolean[] {false, true}) {
-                for (boolean reverse : new boolean[] {false, true}) {
-                  Dfa fresh = new Dfa(prog, 10000, Dfa.buildSetup(prog), false);
-                  Dfa.State expected = fresh.startState(scanner, pos, anchored, reverse);
-                  Dfa.State actual = cached.startState(scanner, pos, anchored, reverse);
-                  assertThat(actual.flags).as(regex).isEqualTo(expected.flags);
-                  assertThat(actual.insts).as(regex).containsExactly(expected.insts);
+    @Test
+    fun anchoredStartCachingDoesNotDiscardAnUnanchoredMatch() {
+        val prog = Compiler.compile(Parser.parse("[0-9]*0", FLAGS))
+        val text = "011" + "~".repeat(512) + "0"
+        for (scanner in List.of<InputScanner?>(
+            StringInputScanner(text), Utf8InputScanner(
+                text.toByteArray(
+                    StandardCharsets.UTF_8
+                )
+            )
+        )) {
+            for (reverseContext in booleanArrayOf(false, true)) {
+                val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+                dfa.startState(scanner, 0, true, reverseContext)
+                for (reuse in 0..1) {
+                    val result = dfa.doSearch(scanner, false, false)
+                    Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+                    Assertions.assertThat(result!!.matched).isTrue()
+                    Assertions.assertThat(result.pos).isEqualTo(1)
                 }
-              }
             }
-          }
         }
-      }
-    }
-  }
-
-  /** Compiles a pattern and searches with the DFA (unanchored, first match). */
-  private static Dfa.SearchResult search(String pattern, String text) {
-    Regexp re = Parser.parse(pattern, FLAGS);
-    Prog prog = Compiler.compile(re);
-    return Dfa.search(prog, text, false, false);
-  }
-
-  /** Compiles a pattern and searches with the DFA (anchored, longest match = full match). */
-  private static Dfa.SearchResult fullMatch(String pattern, String text) {
-    Regexp re = Parser.parse(pattern, FLAGS);
-    Prog prog = Compiler.compile(re);
-    Dfa.SearchResult r = Dfa.search(prog, text, true, true);
-    if (r != null && r.matched() && r.pos() != text.length()) {
-      // Match didn't cover the entire text — not a full match.
-      return new Dfa.SearchResult(false, r.pos());
-    }
-    return r;
-  }
-
-  /** Compiles a pattern and searches with the DFA (unanchored, longest match). */
-  private static Dfa.SearchResult longestMatch(String pattern, String text) {
-    Regexp re = Parser.parse(pattern, FLAGS);
-    Prog prog = Compiler.compile(re);
-    return Dfa.search(prog, text, false, true);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Basic matching
-  // ---------------------------------------------------------------------------
-
-  @Nested
-  @DisplayName("Literals")
-  class Literals {
-    @Test
-    void singleChar() {
-      Dfa.SearchResult r = search("a", "a");
-      assertThat(r.matched()).isTrue();
     }
 
     @Test
-    void multiChar() {
-      Dfa.SearchResult r = search("abc", "xabcy");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void noMatch() {
-      Dfa.SearchResult r = search("abc", "def");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void emptyPattern() {
-      Dfa.SearchResult r = search("", "hello");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void emptyText() {
-      Dfa.SearchResult r = search("", "");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void atEnd() {
-      Dfa.SearchResult r = search("xyz", "abcxyz");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(6);
-    }
-  }
-
-  @Nested
-  @DisplayName("Character classes")
-  class CharClasses {
-    @Test
-    void nonAsciiClassCachePreservesLargeClassIds() {
-      int rangeCount = 32_769;
-      int firstCp = 0x10000;
-      int[] ranges = new int[rangeCount * 2];
-      for (int i = 0; i < rangeCount; i++) {
-        int cp = firstCp + i * 2;
-        ranges[i * 2] = cp;
-        ranges[i * 2 + 1] = cp;
-      }
-
-      Prog prog = new Prog();
-      prog.allocInst();
-      int charClass = prog.allocInst();
-      int match = prog.allocInst();
-      prog.mutableInst(charClass).initCharClass(match, ranges);
-      prog.mutableInst(match).initMatch(0);
-      prog.setStart(charClass);
-      prog.setStartUnanchored(charClass);
-      prog.freeze();
-
-      Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-      String text = Character.toString(firstCp + (rangeCount - 1) * 2);
-
-      assertThat(dfa.doSearch(text, true, false).matched()).isTrue();
-      assertThat(dfa.doSearch(text, true, false).matched()).isTrue();
-    }
-
-    @Test
-    void digitClass() {
-      Dfa.SearchResult r = search("\\d+", "abc123def");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void wordClass() {
-      Dfa.SearchResult r = search("\\w+", "hello");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void range() {
-      Dfa.SearchResult r = search("[a-z]+", "HELLO world");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void negatedClass() {
-      Dfa.SearchResult r = search("[^0-9]+", "123abc456");
-      assertThat(r.matched()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("Quantifiers")
-  class Quantifiers {
-    @Test
-    void star() {
-      Dfa.SearchResult r = fullMatch("a*", "aaa");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(3);
-    }
-
-    @Test
-    void plus() {
-      Dfa.SearchResult r = fullMatch("a+", "aaa");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(3);
-    }
-
-    @Test
-    void plusNoMatch() {
-      Dfa.SearchResult r = fullMatch("a+", "");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void quest() {
-      Dfa.SearchResult r = fullMatch("a?", "a");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void questEmpty() {
-      Dfa.SearchResult r = fullMatch("a?", "");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void repeat() {
-      Dfa.SearchResult r = fullMatch("a{3}", "aaa");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void repeatRange() {
-      Dfa.SearchResult r = fullMatch("a{2,4}", "aaa");
-      assertThat(r.matched()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("Alternation")
-  class Alternation {
-    @Test
-    void firstAlt() {
-      Dfa.SearchResult r = search("cat|dog", "I have a cat");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void secondAlt() {
-      Dfa.SearchResult r = search("cat|dog", "I have a dog");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void noAlt() {
-      Dfa.SearchResult r = search("cat|dog", "I have a bird");
-      assertThat(r.matched()).isFalse();
-    }
-  }
-
-  @Nested
-  @DisplayName("Anchors")
-  class Anchors {
-    @Test
-    void startAnchor() {
-      Dfa.SearchResult r = search("^hello", "hello world");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void startAnchorFail() {
-      Dfa.SearchResult r = search("^hello", "say hello");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void endAnchor() {
-      Dfa.SearchResult r = search("world$", "hello world");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void endAnchorFail() {
-      Dfa.SearchResult r = search("world$", "world cup");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void fullAnchor() {
-      Dfa.SearchResult r = search("^abc$", "abc");
-      assertThat(r.matched()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("Dot")
-  class Dot {
-    @Test
-    void dotMatchesChar() {
-      Dfa.SearchResult r = fullMatch("a.c", "abc");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void dotDoesNotMatchNewline() {
-      Dfa.SearchResult r = fullMatch("a.c", "a\nc");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void dotPlus() {
-      Dfa.SearchResult r = fullMatch(".+", "hello");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(5);
-    }
-  }
-
-  @Nested
-  @DisplayName("Word boundary")
-  class WordBoundary {
-    @Test
-    void wordBoundaryMatch() {
-      Dfa.SearchResult r = search("\\bfoo\\b", "foo bar");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void wordBoundaryNoMatch() {
-      Dfa.SearchResult r = search("\\bfoo\\b", "foobar");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void wordBoundaryInMiddle() {
-      Dfa.SearchResult r = search("\\bbar\\b", "foo bar baz");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(7);
-    }
-
-    @Test
-    void unicodeWordBoundaryStartStateCacheDistinguishesNextCharacterContext() {
-      Regexp re = Parser.parse("\\b.", FLAGS | ParseFlags.UNICODE_CHAR_CLASS);
-      Prog prog = Compiler.compile(re);
-      Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-
-      Dfa.SearchResult boundary = dfa.doSearch("!\u00E9", 1, true, false);
-      Dfa.SearchResult nonBoundary = dfa.doSearch("!!", 1, true, false);
-
-      assertThat(boundary.matched()).isTrue();
-      assertThat(boundary.pos()).isEqualTo(2);
-      assertThat(nonBoundary.matched()).isFalse();
-    }
-  }
-
-  @Nested
-  @DisplayName("Match modes")
-  class MatchModes {
-    @Test
-    void fullMatchSuccess() {
-      Dfa.SearchResult r = fullMatch("abc", "abc");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(3);
-    }
-
-    @Test
-    void fullMatchFailure() {
-      Dfa.SearchResult r = fullMatch("abc", "abcd");
-      assertThat(r.matched()).isFalse();
-    }
-
-    @Test
-    void longestMatchGreedy() {
-      Dfa.SearchResult r = longestMatch("a+", "aaa");
-      assertThat(r.matched()).isTrue();
-      assertThat(r.pos()).isEqualTo(3);
-    }
-
-    @Test
-    void firstMatchShortest() {
-      Dfa.SearchResult r = search("a+", "aaa");
-      assertThat(r.matched()).isTrue();
-      // First match should still match (may not return the shortest match
-      // since DFA with .*? prefix finds leftmost).
-    }
-  }
-
-  @Nested
-  @DisplayName("Unicode")
-  class Unicode {
-    @Test
-    void supplementaryPlane() {
-      Dfa.SearchResult r = search(".", "😀");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void unicodeLetters() {
-      Dfa.SearchResult r = search("[à-ÿ]+", "café");
-      assertThat(r.matched()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("Complex patterns")
-  class Complex {
-    @Test
-    void emailLike() {
-      Dfa.SearchResult r = search("[a-z]+@[a-z]+\\.[a-z]+", "user@example.com");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void ipAddress() {
-      Dfa.SearchResult r = search("\\d+\\.\\d+\\.\\d+\\.\\d+", "ip is 192.168.1.1 here");
-      assertThat(r.matched()).isTrue();
-    }
-
-    @Test
-    void alternationWithQuantifiers() {
-      Dfa.SearchResult r = fullMatch("(ab|cd)+", "ababcdab");
-      assertThat(r.matched()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("State budget")
-  class Budget {
-    @Test
-    void exceedBudgetReturnsNull() {
-      // Alternation with many branches forces many DFA states.
-      Regexp re = Parser.parse("(a|b)(c|d)(e|f)(g|h)(i|j)", FLAGS);
-      Prog prog = Compiler.compile(re);
-      // Budget of 2 is too small for this pattern.
-      Dfa.SearchResult r = Dfa.search(prog, "acegi", false, false, 2);
-      // Budget exceeded -- should return null to signal fallback to NFA.
-      assertThat(r).isNull();
-    }
-
-    @Test
-    void linearTimeGuarantee() {
-      // Pathological for backtracking: a?^n a^n
-      int n = 25;
-      String pattern = "a?".repeat(n) + "a".repeat(n);
-      String text = "a".repeat(n);
-      Regexp re = Parser.parse(pattern, FLAGS);
-      Prog prog = Compiler.compile(re);
-      Dfa.SearchResult r = Dfa.search(prog, text, true, true);
-      // May bail out (return null) due to state explosion, which is fine.
-      // The important thing is it completes quickly, not exponentially.
-      if (r != null) {
-        assertThat(r.matched()).isTrue();
-      }
-    }
-
-    /**
-     * A budget too small to hold the working set, over an input long enough that rebuilding the
-     * cache is cheaper than finishing on the NFA. Every one of these searches returned null before
-     * the DFA could discard its cache and carry on.
-     */
-    @Test
-    void discardingTheStateCacheAgreesWithABudgetLargeEnoughToAvoidIt() {
-      String text = sourceShapedText(100_000, /* withTrailingMatch= */ true);
-      for (String pattern :
-          List.of(
-              "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}",
-              "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}#")) {
-        Prog prog = Compiler.compile(Parser.parse(pattern, FLAGS));
-        for (boolean longest : new boolean[] {false, true}) {
-          Dfa.SearchResult ample = Dfa.search(prog, text, false, longest, 4_000_000);
-          assertThat(ample).isNotNull();
-          Dfa.SearchResult resetting = Dfa.search(prog, text, false, longest, 500);
-          assertThat(resetting).isNotNull();
-          assertThat(resetting.matched()).isEqualTo(ample.matched());
-          assertThat(resetting.pos()).isEqualTo(ample.pos());
-        }
-      }
-    }
-
-    /**
-     * Discarding the cache renumbers every state and rebuilds the arrays the search loops index by
-     * state id, so a missed invalidation shows up as a wrong answer rather than a crash. This walks
-     * a whole find loop against {@code java.util.regex} to catch that.
-     */
-    @Test
-    void repeatedFindsOverAResettingDfaMatchTheJdk() {
-      String text = sourceShapedText(400_000, /* withTrailingMatch= */ true);
-      String regex = "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}";
-      Matcher actual = Pattern.compile(regex).matcher(text);
-      java.util.regex.Matcher expected = java.util.regex.Pattern.compile(regex).matcher(text);
-      while (expected.find()) {
-        assertThat(actual.find()).isTrue();
-        assertThat(actual.start()).isEqualTo(expected.start());
-        assertThat(actual.end()).isEqualTo(expected.end());
-      }
-      assertThat(actual.find()).isFalse();
-    }
-
-    /**
-     * A {@link Dfa} instance lives in a per-{@link Pattern} {@link ThreadLocal}, so an input that
-     * fills the cache faster than {@code MIN_PROGRESS_PER_CACHED_STATE} positions per state must
-     * back off rather than permanently bricking the {@link Dfa} for later searches on the same
-     * thread.
-     */
-    @Test
-    void unproductiveCacheExhaustionBacksOffAndThenRecovers() {
-      String pattern = "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}";
-      Prog prog = Compiler.compile(Parser.parse(pattern, FLAGS));
-      Dfa dfa = new Dfa(prog, 500, Dfa.buildSetup(prog), false);
-
-      // Irregular 10..14-character words vary the spacing between [A-Za-z]{10}\s+ starts so the
-      // active subset of {0..100} offsets is distinct at almost every position, filling the
-      // 500-state budget in ~600 characters (well under the 5,000-character threshold).
-      Random rng = new Random(1);
-      StringBuilder denseBuilder = new StringBuilder();
-      while (denseBuilder.length() < 3_000) {
-        denseBuilder.append("abcdefghijklmno", 0, 10 + rng.nextInt(5)).append(' ');
-      }
-      String dense = denseBuilder.toString();
-      assertThat(dfa.doSearch(dense, 0, false, false)).isNull();
-      // Within the 2x backoff window (10,000 positions), the full cache refuses to flush again.
-      assertThat(dfa.doSearch(dense, 1_000, false, false)).isNull();
-
-      // Moving to another input and starting far into it does not prove that the fallback scanned
-      // the skipped text. Repeated fallback attempts eventually allow a bounded reset retry.
-      String productive = sourceShapedText(100_000, /* withTrailingMatch= */ true);
-      Dfa.SearchResult ample =
-          new Dfa(prog, 4_000_000, Dfa.buildSetup(prog), false)
-              .doSearch(productive, 12_000, false, false);
-      assertThat(ample).isNotNull();
-      assertThat(dfa.doSearch(productive, 12_000, false, false)).isNull();
-      Dfa.SearchResult recovered = null;
-      for (int attempt = 0; attempt < 1_000 && recovered == null; attempt++) {
-        recovered = dfa.doSearch(productive, 12_000, false, false);
-      }
-      assertThat(recovered).isNotNull();
-      assertThat(recovered.matched()).isEqualTo(ample.matched());
-      assertThat(recovered.pos()).isEqualTo(ample.pos());
-    }
-
-    @Test
-    void fullCacheCanRecoverWhenNextSearchNeedsANewStartContext() {
-      String pattern = "(?m)(\\Aa|^b)";
-      Prog prog = Compiler.compile(Parser.parse(pattern, FLAGS));
-      Dfa dfa = new Dfa(prog, 1, Dfa.buildSetup(prog), false);
-      assertThat(dfa.doSearch("a", 0, false, false)).isNull();
-      String productive = " ".repeat(999) + "\n" + "z";
-      Dfa.SearchResult expected =
-          new Dfa(prog, 4_000_000, Dfa.buildSetup(prog), false)
-              .doSearch(productive, 1_000, true, false);
-      assertThat(expected).isNotNull();
-      Dfa.SearchResult actual = dfa.doSearch(productive, 1_000, true, false);
-      assertThat(actual).isNotNull();
-      assertThat(actual.matched()).isEqualTo(expected.matched());
-      assertThat(actual.pos()).isEqualTo(expected.pos());
-    }
-
-    @Test
-    void startingAtANonzeroOffsetDoesNotCreditTheSkippedPrefix()
-        throws ReflectiveOperationException {
-      Prog prog = Compiler.compile(Parser.parse("a", FLAGS));
-      Dfa dfa = new Dfa(prog, 100, Dfa.buildSetup(prog), false);
-      Dfa.SearchResult result = dfa.doSearch(" ".repeat(1_000) + "a", 1_000, true, false);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-
-      Field steps = Dfa.class.getDeclaredField("dfaStepsSinceReset");
-      steps.setAccessible(true);
-      assertThat(steps.getLong(dfa)).isLessThanOrEqualTo(1);
-    }
-
-    @Test
-    void completedNoMatchScanCountsTowardCacheProductivity() throws ReflectiveOperationException {
-      Prog prog = Compiler.compile(Parser.parse("[ab]*c", FLAGS));
-      Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-      Dfa.SearchResult result = dfa.doSearch("a".repeat(1_000), 0, false, false);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isFalse();
-
-      Field steps = Dfa.class.getDeclaredField("dfaStepsSinceReset");
-      steps.setAccessible(true);
-      assertThat(steps.getLong(dfa)).isGreaterThanOrEqualTo(1_000);
-    }
-
-    @Test
-    void completedNonAsciiNoMatchScanCountsTowardCacheProductivity()
-        throws ReflectiveOperationException {
-      Prog prog = Compiler.compile(Parser.parse("abc", FLAGS));
-      Dfa dfa = new Dfa(prog, 10_000, Dfa.buildSetup(prog), false);
-      Dfa.SearchResult result = dfa.doSearch("é" + "x".repeat(1_000), 0, false, false);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isFalse();
-
-      Field steps = Dfa.class.getDeclaredField("dfaStepsSinceReset");
-      steps.setAccessible(true);
-      assertThat(steps.getLong(dfa)).isGreaterThanOrEqualTo(1_001);
-    }
-
-    @Test
-    void bailoutBackoffDoesNotCountAnUnscannedStartGap() throws ReflectiveOperationException {
-      Prog prog = Compiler.compile(Parser.parse("a", FLAGS));
-      Dfa dfa = new Dfa(prog, 100, Dfa.buildSetup(prog), false);
-      assertThat(dfa.doSearch("a", 0, true, false)).isNotNull();
-
-      Field bailed = Dfa.class.getDeclaredField("lastSearchBailed");
-      bailed.setAccessible(true);
-      bailed.setBoolean(dfa, true);
-      assertThat(dfa.doSearch(" ".repeat(1_000) + "a", 1_000, true, false)).isNotNull();
-
-      Field progress = Dfa.class.getDeclaredField("backoffProgress");
-      progress.setAccessible(true);
-      assertThat(progress.getLong(dfa)).isLessThanOrEqualTo(66);
-    }
-
-    /**
-     * With a one-state budget the cache can be productive enough to earn a reset and still be too
-     * small to continue afterwards. That is budget exhaustion too, so it must be reported the same
-     * way as a refused reset.
-     */
-    @Test
-    void failureAfterAGrantedResetIsReportedAsBudgetExhaustion()
-        throws ReflectiveOperationException {
-      Prog prog = Compiler.compile(Parser.parse("a", FLAGS));
-      Dfa dfa = new Dfa(prog, 1, Dfa.buildSetup(prog), false);
-      assertThat(dfa.doSearch(" ".repeat(20) + "a", 0, false, false)).isNull();
-
-      // A granted reset zeroes the productivity counter; a refused one leaves the scan credited.
-      Field steps = Dfa.class.getDeclaredField("dfaStepsSinceReset");
-      steps.setAccessible(true);
-      assertThat(steps.getLong(dfa)).isZero();
-      assertThat(dfa.lastSearchBailed()).isTrue();
-    }
-
-    /**
-     * Callers report every null DFA result as {@link StrategyReason#DFA_BUDGET_EXCEEDED}. This pins
-     * the contract that makes that accurate: a search returns null exactly when it sets {@link
-     * Dfa#lastSearchBailed()}. A new null exit for some other reason fails here and needs its own
-     * reason instead.
-     */
-    @Test
-    void everyNullResultIsBudgetExhaustion() {
-      List<String> regexes =
-          List.of("a", "[ab]*c", "(?m)^b|\\Aa", "\\bfoo\\b", "x[a-z]{3,8}y", "(a|b)*abb", "é+[^a]");
-      List<String> texts =
-          List.of(
-              "",
-              "a",
-              " ".repeat(20) + "a",
-              "abababababc",
-              "foo bar foo",
-              "xabcdy xqqqqqqqqqqy",
-              "abbabbaabb".repeat(10),
-              "ééé b\n b",
-              sourceShapedText(2_000, /* withTrailingMatch= */ true));
-      int nullResults = 0;
-      int nonNullResults = 0;
-      for (String regex : regexes) {
-        Prog prog = Compiler.compile(Parser.parse(regex, FLAGS));
-        Prog reverseProg = Pattern.compile(regex).flatReverseDfaProg();
-        for (int budget : new int[] {1, 2, 3, 4, 8, 64}) {
-          // Reuse each DFA across searches so a flag left over from an earlier search is caught.
-          Dfa first = new Dfa(prog, budget, Dfa.buildSetup(prog), false);
-          Dfa longest = new Dfa(prog, budget, Dfa.buildSetup(prog), true);
-          Dfa reverse =
-              reverseProg == null
-                  ? null
-                  : new Dfa(reverseProg, budget, Dfa.buildSetup(reverseProg), true);
-          for (String text : texts) {
-            for (boolean anchored : new boolean[] {false, true}) {
-              String where = regex + " budget=" + budget + " anchored=" + anchored;
-              List<Object> results = new ArrayList<>();
-              results.add(first.doSearch(text, 0, anchored, false));
-              assertBailFlagMatches(first, results.getLast(), "doSearch " + where);
-              results.add(longest.doSearch(text, 0, anchored, true));
-              assertBailFlagMatches(longest, results.getLast(), "doSearch longest " + where);
-              results.add(longest.doSearchMany(text, anchored));
-              assertBailFlagMatches(longest, results.getLast(), "doSearchMany " + where);
-              if (reverse != null) {
-                results.add(
-                    reverse.doSearchReverse(
-                        new StringInputScanner(text), text.length(), 0, anchored, true));
-                assertBailFlagMatches(reverse, results.getLast(), "doSearchReverse " + where);
-              }
-              for (Object result : results) {
-                if (result == null) {
-                  nullResults++;
-                } else {
-                  nonNullResults++;
+    fun longestDeferredMatchRetainsEveryConsumingBranch() {
+        // Issue #857: each assertion succeeds before the consuming alternative finishes.
+        for (assertion in mutableListOf<String?>("\\b", "\\B", "(?m:$)")) {
+            val text =
+                when (assertion) {
+                    "\\b" -> "a!a"
+                    "\\B" -> "aaa"
+                    else -> "a\na"
                 }
-              }
+            for (assertionFirst in booleanArrayOf(false, true)) {
+                val suffix = Pattern.quote(text.substring(1))
+                val alternatives = if (assertionFirst) assertion + "|" + suffix else suffix + "|" + assertion
+                val pattern = Pattern.compile("a(?:" + alternatives + ")")
+                val longest = Dfa(pattern.prog(), 10000, Dfa.buildSetup(pattern.prog()), true)
+                for (pass in 0..1) {
+                    for (anchored in booleanArrayOf(true, false)) {
+                        val result = longest.doSearch(text, anchored, true)
+                        Assertions.assertThat<Dfa.SearchResult?>(result).`as`(assertion).isNotNull()
+                        Assertions.assertThat(result!!.matched).`as`(assertion).isTrue()
+                        Assertions.assertThat(result.pos).`as`(assertion).isEqualTo(text.length)
+                    }
+                }
             }
-          }
         }
-      }
-      assertThat(nullResults).isPositive();
-      assertThat(nonNullResults).isPositive();
     }
 
-    private static void assertBailFlagMatches(Dfa dfa, Object result, String description) {
-      assertThat(dfa.lastSearchBailed()).as(description).isEqualTo(result == null);
-    }
-
-    /**
-     * Text shaped like source code: mostly short words, an occasional long one, and a marker
-     * literal every so often. The pattern above only has live state within a hundred characters of
-     * a long word or a marker, so states accumulate slowly enough for rebuilding the cache to be
-     * worth it -- uniformly random text of any alphabet either needs a new state on every character
-     * or never fills the cache at all.
-     */
-    private static String sourceShapedText(int size, boolean withTrailingMatch) {
-      String alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
-      Random random = new Random(7);
-      StringBuilder text = new StringBuilder(size + 64);
-      for (int word = 0; text.length() < size; word++) {
-        if (word % 120 == 119) {
-          text.append("Result");
-        } else {
-          int length = word % 20 == 19 ? 10 + random.nextInt(5) : 2 + random.nextInt(7);
-          for (int i = 0; i < length; i++) {
-            text.append(alphabet.charAt(random.nextInt(alphabet.length())));
-          }
-        }
-        text.append(word % 11 == 10 ? '\n' : ' ');
-      }
-      text.setLength(size);
-      return withTrailingMatch ? text + " abcdefghij Result klmnopqrst " : text.toString();
-    }
-  }
-
-  @Test
-  void reverseProbeReportsLiveFrontierAsInconclusive() {
-    String text = "x".repeat(10_000) + "abc";
-    for (InputScanner scanner :
-        List.of(new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8)))) {
-      Dfa reverse = Pattern.compile("(?s:.*)abc$").reverseDfa();
-      for (int pass = 0; pass < 2; pass++) {
-        Dfa.SearchResult probe =
-            reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64);
-        assertThat(probe).isNotNull();
-        assertThat(probe.scanLimitReached()).isTrue();
-        assertThat(reverse.lastSearchBailed()).isFalse();
-
-        Dfa.SearchResult full = reverse.doSearchReverse(scanner, scanner.length(), 0, true, true);
-        assertThat(full).isNotNull();
-        assertThat(full.scanLimitReached()).isFalse();
-        assertThat(full.matched()).isTrue();
-        assertThat(full.pos()).isZero();
-
-        Dfa.SearchResult existence =
-            reverse.doSearchReverse(scanner, scanner.length(), 0, true, false, 64);
-        assertThat(existence).isNotNull();
-        assertThat(existence.scanLimitReached()).isFalse();
-        assertThat(existence.matched()).isTrue();
-        assertThat(existence.pos()).isEqualTo(scanner.length() - 3);
-      }
-    }
-  }
-
-  @Test
-  void reverseProbeRetainsAssertionContextAndCodePointBoundaries() {
-    for (String prefix : List.of("x".repeat(1_024), "é😀".repeat(400), "x".repeat(1_024) + " ")) {
-      for (String tail : List.of("abc", "終点😀")) {
-        String text = prefix + tail;
-        for (InputScanner scanner :
-            List.of(new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8)))) {
-          for (String regex : List.of("\\b" + tail + "$", "\\B" + tail + "$", tail + "$")) {
-            Dfa reverse = Pattern.compile(regex).reverseDfa();
-            Dfa.SearchResult full =
-                reverse.doSearchReverse(scanner, scanner.length(), 0, true, true);
-            for (int limit = 0; limit <= 16; limit++) {
-              Dfa.SearchResult probe =
-                  reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, limit);
-              assertThat(probe).as("/%s/ limit %s", regex, limit).isNotNull();
-              assertThat(reverse.lastSearchBailed()).isFalse();
-              if (!probe.scanLimitReached()) {
-                assertThat(probe).as("/%s/ limit %s", regex, limit).isEqualTo(full);
-              }
+    @Test
+    @Throws(Exception::class)
+    fun startCacheAllocationIsBoundedIndependentlyOfAssertionBits() {
+        val cache = Dfa::class.java.getDeclaredField("startStateByContext")
+        cache.setAccessible(true)
+        for (regex in mutableListOf<String?>("a+b", "(?m)^a+$", "(?-d:(?m:$))(?dm:$)", "\\b{g}a")) {
+            val pattern = Pattern.compile(regex)
+            for (prog in List.of<Prog?>(pattern.prog(), pattern.reverseProg())) {
+                val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+                Assertions.assertThat(Array.getLength(cache.get(dfa))).`as`(regex).isLessThanOrEqualTo(256)
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  void reverseDfaPreservesContextAtStartLimit() {
-    for (String prefix : List.of("xy", "é", "€", "😀", "\n")) {
-      String text = prefix + "a";
-      for (InputScanner scanner :
-          List.of(new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8)))) {
-        for (String regex : List.of("a", "\\ba|a", "\\Ba|a", "\\ba", "\\Ba", "^a|b", "(?m)^a")) {
-          boolean expected =
-              java.util.regex.Pattern.compile(regex).matcher(text).find(prefix.length());
-          Dfa reverse = Pattern.compile(regex).reverseDfa();
-          for (int pass = 0; pass < 2; pass++) {
-            Dfa.SearchResult result =
-                reverse.doSearchReverse(
-                    scanner, scanner.length(), scanner.length() - 1, true, true);
-            assertThat(result)
-                .as("%s after %s (%s)", regex, prefix, scanner.getClass())
-                .isNotNull();
-            assertThat(result.matched())
-                .as("%s after %s (%s)", regex, prefix, scanner.getClass())
-                .isEqualTo(expected);
-            if (expected) {
-              assertThat(result.pos()).isEqualTo(scanner.length() - 1);
+    @Test
+    fun startCacheRetainsCompleteContextAcrossReplacements() {
+        for (regex in mutableListOf<String?>("a+b", "(?m)^a+$", "(?-d:(?m:$))(?dm:$)", "\\b{g}a")) {
+            val pattern = Pattern.compile(regex)
+            for (prog in List.of<Prog?>(pattern.prog(), pattern.reverseProg())) {
+                val cached = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+                val inputs: MutableList<String> =
+                    mutableListOf<String?>("a\r\na\na", "a\ra", "é a\u0301\na", "", "a\u2028b")
+                for (pass in 0..1) {
+                    for (text in if (pass == 0) inputs else inputs.reversed()) {
+                        val scanner: InputScanner = StringInputScanner(text)
+                        for (pos in 0..text.length) {
+                            for (anchored in booleanArrayOf(false, true)) {
+                                for (reverse in booleanArrayOf(false, true)) {
+                                    val fresh = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+                                    val expected = fresh.startState(scanner, pos, anchored, reverse)
+                                    val actual = cached.startState(scanner, pos, anchored, reverse)
+                                    Assertions.assertThat(actual.flags).`as`(regex).isEqualTo(expected.flags)
+                                    Assertions.assertThat(actual.insts).`as`(regex).containsExactly(*expected.insts)
+                                }
+                            }
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  void reverseDfaDecodesFromInteriorStartLimit() {
-    for (String text : List.of("é", "€", "😀")) {
-      for (InputScanner scanner :
-          List.of(new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8)))) {
-        for (String regex : List.of(".", ".|", ".+")) {
-          Dfa reverse = Pattern.compile(regex).reverseDfa();
-          for (int start = 1; start < scanner.length(); start++) {
-            for (int pass = 0; pass < 2; pass++) {
-              Dfa.SearchResult result =
-                  reverse.doSearchReverse(scanner, scanner.length(), start, true, true);
-              assertThat(result)
-                  .as("%s on %s from %s (%s)", regex, text, start, scanner.getClass())
-                  .isNotNull();
-              assertThat(result.matched()).isTrue();
-              assertThat(result.pos()).isEqualTo(regex.equals(".+") ? start : scanner.length() - 1);
+    // ---------------------------------------------------------------------------
+    // Basic matching
+    // ---------------------------------------------------------------------------
+    @Nested
+    @DisplayName("Literals")
+    internal inner class Literals {
+        @Test
+        fun singleChar() {
+            val r: Dfa.SearchResult = search("a", "a")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun multiChar() {
+            val r: Dfa.SearchResult = search("abc", "xabcy")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun noMatch() {
+            val r: Dfa.SearchResult = search("abc", "def")
+            Assertions.assertThat(r.matched).isFalse()
+        }
+
+        @Test
+        fun emptyPattern() {
+            val r: Dfa.SearchResult = search("", "hello")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun emptyText() {
+            val r: Dfa.SearchResult = search("", "")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun atEnd() {
+            val r: Dfa.SearchResult = search("xyz", "abcxyz")
+            Assertions.assertThat(r.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(6)
+        }
+    }
+
+    @Nested
+    @DisplayName("Character classes")
+    internal inner class CharClasses {
+        @Test
+        fun nonAsciiClassCachePreservesLargeClassIds() {
+            val rangeCount = 32769
+            val firstCp = 0x10000
+            val ranges = IntArray(rangeCount * 2)
+            for (i in 0..<rangeCount) {
+                val cp = firstCp + i * 2
+                ranges[i * 2] = cp
+                ranges[i * 2 + 1] = cp
             }
-          }
-        }
-      }
-    }
-  }
 
-  @Test
-  void reverseDfaRecordsDeferredMatchAtStartLimitWhenPreferredBranchCrossesIt() {
-    // The character before startLimit only supplies assertion context. A higher-priority branch
-    // that consumes it and reaches MATCH starts left of startLimit, so it must not hide the
-    // deferred-assertion match that starts exactly at startLimit.
-    record Case(String regex, String text, int startLimit) {}
-    for (Case c :
-        List.of(
-            new Case("\\w?\\b-", "1b-", 2),
-            new Case("(\\w?)(b|\\b-)?", "1b-", 2),
-            new Case("x?\\Bb", "xb", 1),
-            new Case("(x?)(x|\\Bb)?", "xxb", 2),
-            new Case("(?m)\\n?^b", "\nb", 1),
-            new Case("\\w?\\b😀", "b😀", 1))) {
-      for (InputScanner scanner :
-          List.of(
-              new StringInputScanner(c.text()), new Utf8InputScanner(c.text().getBytes(UTF_8)))) {
-        int startLimit =
-            scanner instanceof Utf8InputScanner
-                ? c.text().substring(0, c.startLimit()).getBytes(UTF_8).length
-                : c.startLimit();
-        Dfa reverse = Pattern.compile(c.regex()).reverseDfa();
-        for (int pass = 0; pass < 2; pass++) {
-          Dfa.SearchResult result =
-              reverse.doSearchReverse(scanner, scanner.length(), startLimit, true, true);
-          assertThat(result).as("%s (%s)", c, scanner.getClass()).isNotNull();
-          assertThat(result.matched()).as("%s (%s)", c, scanner.getClass()).isTrue();
-          assertThat(result.pos()).as("%s (%s)", c, scanner.getClass()).isEqualTo(startLimit);
-        }
-      }
-    }
-  }
+            val prog = Prog()
+            prog.allocInst()
+            val charClass = prog.allocInst()
+            val match = prog.allocInst()
+            prog.mutableInst(charClass).initCharClass(match, ranges)
+            prog.mutableInst(match).initMatch(0)
+            prog.setStart(charClass)
+            prog.setStartUnanchored(charClass)
+            prog.freeze()
 
-  @Test
-  void utf8FindAllKeepsDeferredAssertionMatchAtPreviousMatchEnd() {
-    record Case(String regex, String text, List<String> expected) {}
-    for (Case c :
-        List.of(
-            new Case("(\\w?)(b|\\b-)?", "1b-", List.of("0:2", "2:3", "3:3")),
-            new Case("(x?)(x|\\Bb)?", "xxb", List.of("0:2", "2:3", "3:3")),
-            new Case("(?m)(\\n?)(\\n|^b)?", "\n\nb", List.of("0:2", "2:3", "3:3")),
-            new Case("(\\w?)(b|\\b😀)?", "1b😀", List.of("0:2", "2:6", "6:6")))) {
-      Pattern pattern = Pattern.compile(c.regex());
-      for (int pass = 0; pass < 2; pass++) {
-        Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(c.text().getBytes(UTF_8)));
-        List<String> spans = new ArrayList<>();
+            val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+            val text = Character.toString(firstCp + (rangeCount - 1) * 2)
+
+            Assertions.assertThat(dfa.doSearch(text, true, false).matched).isTrue()
+            Assertions.assertThat(dfa.doSearch(text, true, false).matched).isTrue()
+        }
+
+        @Test
+        fun digitClass() {
+            val r: Dfa.SearchResult = search("\\d+", "abc123def")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun wordClass() {
+            val r: Dfa.SearchResult = search("\\w+", "hello")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun range() {
+            val r: Dfa.SearchResult = search("[a-z]+", "HELLO world")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun negatedClass() {
+            val r: Dfa.SearchResult = search("[^0-9]+", "123abc456")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+    }
+
+    @Nested
+    @DisplayName("Quantifiers")
+    internal inner class Quantifiers {
+        @Test
+        fun star() {
+            val r: Dfa.SearchResult? = fullMatch("a*", "aaa")
+            Assertions.assertThat(r!!.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(3)
+        }
+
+        @Test
+        fun plus() {
+            val r: Dfa.SearchResult? = fullMatch("a+", "aaa")
+            Assertions.assertThat(r!!.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(3)
+        }
+
+        @Test
+        fun plusNoMatch() {
+            val r: Dfa.SearchResult? = fullMatch("a+", "")
+            Assertions.assertThat(r!!.matched).isFalse()
+        }
+
+        @Test
+        fun quest() {
+            val r: Dfa.SearchResult? = fullMatch("a?", "a")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+
+        @Test
+        fun questEmpty() {
+            val r: Dfa.SearchResult? = fullMatch("a?", "")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+
+        @Test
+        fun repeat() {
+            val r: Dfa.SearchResult? = fullMatch("a{3}", "aaa")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+
+        @Test
+        fun repeatRange() {
+            val r: Dfa.SearchResult? = fullMatch("a{2,4}", "aaa")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+    }
+
+    @Nested
+    @DisplayName("Alternation")
+    internal inner class Alternation {
+        @Test
+        fun firstAlt() {
+            val r: Dfa.SearchResult = search("cat|dog", "I have a cat")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun secondAlt() {
+            val r: Dfa.SearchResult = search("cat|dog", "I have a dog")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun noAlt() {
+            val r: Dfa.SearchResult = search("cat|dog", "I have a bird")
+            Assertions.assertThat(r.matched).isFalse()
+        }
+    }
+
+    @Nested
+    @DisplayName("Anchors")
+    internal inner class Anchors {
+        @Test
+        fun startAnchor() {
+            val r: Dfa.SearchResult = search("^hello", "hello world")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun startAnchorFail() {
+            val r: Dfa.SearchResult = search("^hello", "say hello")
+            Assertions.assertThat(r.matched).isFalse()
+        }
+
+        @Test
+        fun endAnchor() {
+            val r: Dfa.SearchResult = search("world$", "hello world")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun endAnchorFail() {
+            val r: Dfa.SearchResult = search("world$", "world cup")
+            Assertions.assertThat(r.matched).isFalse()
+        }
+
+        @Test
+        fun fullAnchor() {
+            val r: Dfa.SearchResult = search("^abc$", "abc")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+    }
+
+    @Nested
+    @DisplayName("Dot")
+    internal inner class Dot {
+        @Test
+        fun dotMatchesChar() {
+            val r: Dfa.SearchResult? = fullMatch("a.c", "abc")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+
+        @Test
+        fun dotDoesNotMatchNewline() {
+            val r: Dfa.SearchResult? = fullMatch("a.c", "a\nc")
+            Assertions.assertThat(r!!.matched).isFalse()
+        }
+
+        @Test
+        fun dotPlus() {
+            val r: Dfa.SearchResult? = fullMatch(".+", "hello")
+            Assertions.assertThat(r!!.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(5)
+        }
+    }
+
+    @Nested
+    @DisplayName("Word boundary")
+    internal inner class WordBoundary {
+        @Test
+        fun wordBoundaryMatch() {
+            val r: Dfa.SearchResult = search("\\bfoo\\b", "foo bar")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun wordBoundaryNoMatch() {
+            val r: Dfa.SearchResult = search("\\bfoo\\b", "foobar")
+            Assertions.assertThat(r.matched).isFalse()
+        }
+
+        @Test
+        fun wordBoundaryInMiddle() {
+            val r: Dfa.SearchResult = search("\\bbar\\b", "foo bar baz")
+            Assertions.assertThat(r.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(7)
+        }
+
+        @Test
+        fun unicodeWordBoundaryStartStateCacheDistinguishesNextCharacterContext() {
+            val re = Parser.parse("\\b.", FLAGS or ParseFlags.UNICODE_CHAR_CLASS)
+            val prog = Compiler.compile(re)
+            val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+
+            val boundary = dfa.doSearch("!\u00E9", 1, true, false)
+            val nonBoundary = dfa.doSearch("!!", 1, true, false)
+
+            Assertions.assertThat(boundary.matched).isTrue()
+            Assertions.assertThat(boundary.pos).isEqualTo(2)
+            Assertions.assertThat(nonBoundary.matched).isFalse()
+        }
+    }
+
+    @Nested
+    @DisplayName("Match modes")
+    internal inner class MatchModes {
+        @Test
+        fun fullMatchSuccess() {
+            val r: Dfa.SearchResult? = fullMatch("abc", "abc")
+            Assertions.assertThat(r!!.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(3)
+        }
+
+        @Test
+        fun fullMatchFailure() {
+            val r: Dfa.SearchResult? = fullMatch("abc", "abcd")
+            Assertions.assertThat(r!!.matched).isFalse()
+        }
+
+        @Test
+        fun longestMatchGreedy() {
+            val r: Dfa.SearchResult = longestMatch("a+", "aaa")
+            Assertions.assertThat(r.matched).isTrue()
+            Assertions.assertThat(r.pos).isEqualTo(3)
+        }
+
+        @Test
+        fun firstMatchShortest() {
+            val r: Dfa.SearchResult = search("a+", "aaa")
+            Assertions.assertThat(r.matched).isTrue()
+            // First match should still match (may not return the shortest match
+            // since DFA with .*? prefix finds leftmost).
+        }
+    }
+
+    @Nested
+    @DisplayName("Unicode")
+    internal inner class Unicode {
+        @Test
+        fun supplementaryPlane() {
+            val r: Dfa.SearchResult = search(".", "😀")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun unicodeLetters() {
+            val r: Dfa.SearchResult = search("[à-ÿ]+", "café")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+    }
+
+    @Nested
+    @DisplayName("Complex patterns")
+    internal inner class Complex {
+        @Test
+        fun emailLike() {
+            val r: Dfa.SearchResult = search("[a-z]+@[a-z]+\\.[a-z]+", "user@example.com")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun ipAddress() {
+            val r: Dfa.SearchResult = search("\\d+\\.\\d+\\.\\d+\\.\\d+", "ip is 192.168.1.1 here")
+            Assertions.assertThat(r.matched).isTrue()
+        }
+
+        @Test
+        fun alternationWithQuantifiers() {
+            val r: Dfa.SearchResult? = fullMatch("(ab|cd)+", "ababcdab")
+            Assertions.assertThat(r!!.matched).isTrue()
+        }
+    }
+
+    @Nested
+    @DisplayName("State budget")
+    internal inner class Budget {
+        @Test
+        fun exceedBudgetReturnsNull() {
+            // Alternation with many branches forces many DFA states.
+            val re = Parser.parse("(a|b)(c|d)(e|f)(g|h)(i|j)", FLAGS)
+            val prog = Compiler.compile(re)
+            // Budget of 2 is too small for this pattern.
+            val r = Dfa.search(prog, "acegi", false, false, 2)
+            // Budget exceeded -- should return null to signal fallback to NFA.
+            Assertions.assertThat<Dfa.SearchResult?>(r).isNull()
+        }
+
+        @Test
+        fun linearTimeGuarantee() {
+            // Pathological for backtracking: a?^n a^n
+            val n = 25
+            val pattern = "a?".repeat(n) + "a".repeat(n)
+            val text = "a".repeat(n)
+            val re = Parser.parse(pattern, FLAGS)
+            val prog = Compiler.compile(re)
+            val r = Dfa.search(prog, text, true, true)
+            // May bail out (return null) due to state explosion, which is fine.
+            // The important thing is it completes quickly, not exponentially.
+            if (r != null) {
+                Assertions.assertThat(r.matched).isTrue()
+            }
+        }
+
+        /**
+         * A budget too small to hold the working set, over an input long enough that rebuilding the
+         * cache is cheaper than finishing on the NFA. Every one of these searches returned null before
+         * the DFA could discard its cache and carry on.
+         */
+        @Test
+        fun discardingTheStateCacheAgreesWithABudgetLargeEnoughToAvoidIt() {
+            val text: String = sourceShapedText(100000,  /* withTrailingMatch= */true)
+            for (pattern in mutableListOf<String?>(
+                "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}",
+                "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}#"
+            )) {
+                val prog = Compiler.compile(Parser.parse(pattern, FLAGS))
+                for (longest in booleanArrayOf(false, true)) {
+                    val ample = Dfa.search(prog, text, false, longest, 4000000)
+                    Assertions.assertThat<Dfa.SearchResult?>(ample).isNotNull()
+                    val resetting = Dfa.search(prog, text, false, longest, 500)
+                    Assertions.assertThat<Dfa.SearchResult?>(resetting).isNotNull()
+                    Assertions.assertThat(resetting!!.matched).isEqualTo(ample!!.matched)
+                    Assertions.assertThat(resetting.pos).isEqualTo(ample.pos)
+                }
+            }
+        }
+
+        /**
+         * Discarding the cache renumbers every state and rebuilds the arrays the search loops index by
+         * state id, so a missed invalidation shows up as a wrong answer rather than a crash. This walks
+         * a whole find loop against `java.util.regex` to catch that.
+         */
+        @Test
+        fun repeatedFindsOverAResettingDfaMatchTheJdk() {
+            val text: String = sourceShapedText(400000,  /* withTrailingMatch= */true)
+            val regex = "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}"
+            val actual = Pattern.compile(regex).matcher(text)
+            val expected = Pattern.compile(regex).matcher(text)
+            while (expected.find()) {
+                Assertions.assertThat(actual.find()).isTrue()
+                Assertions.assertThat(actual.start()).isEqualTo(expected.start())
+                Assertions.assertThat(actual.end()).isEqualTo(expected.end())
+            }
+            Assertions.assertThat(actual.find()).isFalse()
+        }
+
+        /**
+         * A [Dfa] instance lives in a per-[Pattern] [ThreadLocal], so an input that
+         * fills the cache faster than `MIN_PROGRESS_PER_CACHED_STATE` positions per state must
+         * back off rather than permanently bricking the [Dfa] for later searches on the same
+         * thread.
+         */
+        @Test
+        fun unproductiveCacheExhaustionBacksOffAndThenRecovers() {
+            val pattern = "[A-Za-z]{10}\\s+[\\s\\S]{0,100}Result[\\s\\S]{0,100}\\s+[A-Za-z]{10}"
+            val prog = Compiler.compile(Parser.parse(pattern, FLAGS))
+            val dfa = Dfa(prog, 500, Dfa.buildSetup(prog), false)
+
+            // Irregular 10..14-character words vary the spacing between [A-Za-z]{10}\s+ starts so the
+            // active subset of {0..100} offsets is distinct at almost every position, filling the
+            // 500-state budget in ~600 characters (well under the 5,000-character threshold).
+            val rng = Random(1)
+            val denseBuilder = StringBuilder()
+            while (denseBuilder.length < 3000) {
+                denseBuilder.append("abcdefghijklmno", 0, 10 + rng.nextInt(5)).append(' ')
+            }
+            val dense = denseBuilder.toString()
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch(dense, 0, false, false)).isNull()
+            // Within the 2x backoff window (10,000 positions), the full cache refuses to flush again.
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch(dense, 1000, false, false)).isNull()
+
+            // Moving to another input and starting far into it does not prove that the fallback scanned
+            // the skipped text. Repeated fallback attempts eventually allow a bounded reset retry.
+            val productive: String = sourceShapedText(100000,  /* withTrailingMatch= */true)
+            val ample =
+                Dfa(prog, 4000000, Dfa.buildSetup(prog), false)
+                    .doSearch(productive, 12000, false, false)
+            Assertions.assertThat<Dfa.SearchResult?>(ample).isNotNull()
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch(productive, 12000, false, false)).isNull()
+            var recovered: Dfa.SearchResult? = null
+            var attempt = 0
+            while (attempt < 1000 && recovered == null) {
+                recovered = dfa.doSearch(productive, 12000, false, false)
+                attempt++
+            }
+            Assertions.assertThat<Dfa.SearchResult?>(recovered).isNotNull()
+            Assertions.assertThat(recovered!!.matched).isEqualTo(ample.matched)
+            Assertions.assertThat(recovered.pos).isEqualTo(ample.pos)
+        }
+
+        @Test
+        fun fullCacheCanRecoverWhenNextSearchNeedsANewStartContext() {
+            val pattern = "(?m)(\\Aa|^b)"
+            val prog = Compiler.compile(Parser.parse(pattern, FLAGS))
+            val dfa = Dfa(prog, 1, Dfa.buildSetup(prog), false)
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch("a", 0, false, false)).isNull()
+            val productive = " ".repeat(999) + "\n" + "z"
+            val expected =
+                Dfa(prog, 4000000, Dfa.buildSetup(prog), false)
+                    .doSearch(productive, 1000, true, false)
+            Assertions.assertThat<Dfa.SearchResult?>(expected).isNotNull()
+            val actual = dfa.doSearch(productive, 1000, true, false)
+            Assertions.assertThat<Dfa.SearchResult?>(actual).isNotNull()
+            Assertions.assertThat(actual.matched).isEqualTo(expected.matched)
+            Assertions.assertThat(actual.pos).isEqualTo(expected.pos)
+        }
+
+        @Test
+        @Throws(ReflectiveOperationException::class)
+        fun startingAtANonzeroOffsetDoesNotCreditTheSkippedPrefix() {
+            val prog = Compiler.compile(Parser.parse("a", FLAGS))
+            val dfa = Dfa(prog, 100, Dfa.buildSetup(prog), false)
+            val result = dfa.doSearch(" ".repeat(1000) + "a", 1000, true, false)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isTrue()
+
+            val steps = Dfa::class.java.getDeclaredField("dfaStepsSinceReset")
+            steps.setAccessible(true)
+            Assertions.assertThat(steps.getLong(dfa)).isLessThanOrEqualTo(1)
+        }
+
+        @Test
+        @Throws(ReflectiveOperationException::class)
+        fun completedNoMatchScanCountsTowardCacheProductivity() {
+            val prog = Compiler.compile(Parser.parse("[ab]*c", FLAGS))
+            val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+            val result = dfa.doSearch("a".repeat(1000), 0, false, false)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isFalse()
+
+            val steps = Dfa::class.java.getDeclaredField("dfaStepsSinceReset")
+            steps.setAccessible(true)
+            Assertions.assertThat(steps.getLong(dfa)).isGreaterThanOrEqualTo(1000)
+        }
+
+        @Test
+        @Throws(ReflectiveOperationException::class)
+        fun completedNonAsciiNoMatchScanCountsTowardCacheProductivity() {
+            val prog = Compiler.compile(Parser.parse("abc", FLAGS))
+            val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
+            val result = dfa.doSearch("é" + "x".repeat(1000), 0, false, false)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isFalse()
+
+            val steps = Dfa::class.java.getDeclaredField("dfaStepsSinceReset")
+            steps.setAccessible(true)
+            Assertions.assertThat(steps.getLong(dfa)).isGreaterThanOrEqualTo(1001)
+        }
+
+        @Test
+        @Throws(ReflectiveOperationException::class)
+        fun bailoutBackoffDoesNotCountAnUnscannedStartGap() {
+            val prog = Compiler.compile(Parser.parse("a", FLAGS))
+            val dfa = Dfa(prog, 100, Dfa.buildSetup(prog), false)
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch("a", 0, true, false)).isNotNull()
+
+            val bailed = Dfa::class.java.getDeclaredField("lastSearchBailed")
+            bailed.setAccessible(true)
+            bailed.setBoolean(dfa, true)
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch(" ".repeat(1000) + "a", 1000, true, false))
+                .isNotNull()
+
+            val progress = Dfa::class.java.getDeclaredField("backoffProgress")
+            progress.setAccessible(true)
+            Assertions.assertThat(progress.getLong(dfa)).isLessThanOrEqualTo(66)
+        }
+
+        /**
+         * With a one-state budget the cache can be productive enough to earn a reset and still be too
+         * small to continue afterwards. That is budget exhaustion too, so it must be reported the same
+         * way as a refused reset.
+         */
+        @Test
+        @Throws(ReflectiveOperationException::class)
+        fun failureAfterAGrantedResetIsReportedAsBudgetExhaustion() {
+            val prog = Compiler.compile(Parser.parse("a", FLAGS))
+            val dfa = Dfa(prog, 1, Dfa.buildSetup(prog), false)
+            Assertions.assertThat<Dfa.SearchResult?>(dfa.doSearch(" ".repeat(20) + "a", 0, false, false)).isNull()
+
+            // A granted reset zeroes the productivity counter; a refused one leaves the scan credited.
+            val steps = Dfa::class.java.getDeclaredField("dfaStepsSinceReset")
+            steps.setAccessible(true)
+            Assertions.assertThat(steps.getLong(dfa)).isZero()
+            Assertions.assertThat(dfa.lastSearchBailed()).isTrue()
+        }
+
+        /**
+         * Callers report every null DFA result as [StrategyReason.DFA_BUDGET_EXCEEDED]. This pins
+         * the contract that makes that accurate: a search returns null exactly when it sets [ ][Dfa.lastSearchBailed]. A new null exit for some other reason fails here and needs its own
+         * reason instead.
+         */
+        @Test
+        fun everyNullResultIsBudgetExhaustion() {
+            val regexes =
+                mutableListOf<String?>("a", "[ab]*c", "(?m)^b|\\Aa", "\\bfoo\\b", "x[a-z]{3,8}y", "(a|b)*abb", "é+[^a]")
+            val texts =
+                List.of<String?>(
+                    "",
+                    "a",
+                    " ".repeat(20) + "a",
+                    "abababababc",
+                    "foo bar foo",
+                    "xabcdy xqqqqqqqqqqy",
+                    "abbabbaabb".repeat(10),
+                    "ééé b\n b",
+                    sourceShapedText(2000,  /* withTrailingMatch= */true)
+                )
+            var nullResults = 0
+            var nonNullResults = 0
+            for (regex in regexes) {
+                val prog = Compiler.compile(Parser.parse(regex, FLAGS))
+                val reverseProg = org.safere.Pattern.compile(regex).flatReverseDfaProg()
+                for (budget in intArrayOf(1, 2, 3, 4, 8, 64)) {
+                    // Reuse each DFA across searches so a flag left over from an earlier search is caught.
+                    val first = Dfa(prog, budget, Dfa.buildSetup(prog), false)
+                    val longest = Dfa(prog, budget, Dfa.buildSetup(prog), true)
+                    val reverse =
+                        if (reverseProg == null)
+                            null
+                        else
+                            Dfa(reverseProg, budget, Dfa.buildSetup(reverseProg), true)
+                    for (text in texts) {
+                        for (anchored in booleanArrayOf(false, true)) {
+                            val where = regex + " budget=" + budget + " anchored=" + anchored
+                            val results: MutableList<Any?> = ArrayList<Any?>()
+                            results.add(first.doSearch(text, 0, anchored, false))
+                            assertBailFlagMatches(first, results.getLast(), "doSearch " + where)
+                            results.add(longest.doSearch(text, 0, anchored, true))
+                            assertBailFlagMatches(longest, results.getLast(), "doSearch longest " + where)
+                            results.add(longest.doSearchMany(text, anchored))
+                            assertBailFlagMatches(longest, results.getLast(), "doSearchMany " + where)
+                            if (reverse != null) {
+                                results.add(
+                                    reverse.doSearchReverse(
+                                        StringInputScanner(text), text.length, 0, anchored, true
+                                    )
+                                )
+                                assertBailFlagMatches(reverse, results.getLast(), "doSearchReverse " + where)
+                            }
+                            for (result in results) {
+                                if (result == null) {
+                                    nullResults++
+                                } else {
+                                    nonNullResults++
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Assertions.assertThat(nullResults).isPositive()
+            Assertions.assertThat(nonNullResults).isPositive()
+        }
+
+        companion object {
+            private fun assertBailFlagMatches(dfa: Dfa, result: Any?, description: String?) {
+                Assertions.assertThat(dfa.lastSearchBailed()).`as`(description).isEqualTo(result == null)
+            }
+
+            /**
+             * Text shaped like source code: mostly short words, an occasional long one, and a marker
+             * literal every so often. The pattern above only has live state within a hundred characters of
+             * a long word or a marker, so states accumulate slowly enough for rebuilding the cache to be
+             * worth it -- uniformly random text of any alphabet either needs a new state on every character
+             * or never fills the cache at all.
+             */
+            private fun sourceShapedText(size: Int, withTrailingMatch: Boolean): String {
+                val alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+                val random = Random(7)
+                val text = StringBuilder(size + 64)
+                var word = 0
+                while (text.length < size) {
+                    if (word % 120 == 119) {
+                        text.append("Result")
+                    } else {
+                        val length = if (word % 20 == 19) 10 + random.nextInt(5) else 2 + random.nextInt(7)
+                        for (i in 0..<length) {
+                            text.append(alphabet.get(random.nextInt(alphabet.length)))
+                        }
+                    }
+                    text.append(if (word % 11 == 10) '\n' else ' ')
+                    word++
+                }
+                text.setLength(size)
+                return if (withTrailingMatch) text.toString() + " abcdefghij Result klmnopqrst " else text.toString()
+            }
+        }
+    }
+
+    @Test
+    fun reverseProbeReportsLiveFrontierAsInconclusive() {
+        val text = "x".repeat(10000) + "abc"
+        for (scanner in List.of<InputScanner?>(
+            StringInputScanner(text), Utf8InputScanner(
+                text.toByteArray(
+                    StandardCharsets.UTF_8
+                )
+            )
+        )) {
+            val reverse = org.safere.Pattern.compile("(?s:.*)abc$").reverseDfa()
+            for (pass in 0..1) {
+                val probe =
+                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, 64)
+                Assertions.assertThat<Dfa.SearchResult?>(probe).isNotNull()
+                Assertions.assertThat(probe!!.scanLimitReached).isTrue()
+                Assertions.assertThat(reverse.lastSearchBailed()).isFalse()
+
+                val full = reverse.doSearchReverse(scanner, scanner.length(), 0, true, true)
+                Assertions.assertThat<Dfa.SearchResult?>(full).isNotNull()
+                Assertions.assertThat(full!!.scanLimitReached).isFalse()
+                Assertions.assertThat(full.matched).isTrue()
+                Assertions.assertThat(full.pos).isZero()
+
+                val existence =
+                    reverse.doSearchReverse(scanner, scanner.length(), 0, true, false, 64)
+                Assertions.assertThat<Dfa.SearchResult?>(existence).isNotNull()
+                Assertions.assertThat(existence!!.scanLimitReached).isFalse()
+                Assertions.assertThat(existence.matched).isTrue()
+                Assertions.assertThat(existence.pos).isEqualTo(scanner.length() - 3)
+            }
+        }
+    }
+
+    @Test
+    fun reverseProbeRetainsAssertionContextAndCodePointBoundaries() {
+        for (prefix in List.of<String?>("x".repeat(1024), "é😀".repeat(400), "x".repeat(1024) + " ")) {
+            for (tail in mutableListOf<String?>("abc", "終点😀")) {
+                val text = prefix + tail
+                for (scanner in List.of<InputScanner?>(
+                    StringInputScanner(text), Utf8InputScanner(
+                        text.toByteArray(
+                            StandardCharsets.UTF_8
+                        )
+                    )
+                )) {
+                    for (regex in List.of<String?>("\\b" + tail + "$", "\\B" + tail + "$", tail + "$")) {
+                        val reverse = org.safere.Pattern.compile(regex).reverseDfa()
+                        val full =
+                            reverse.doSearchReverse(scanner, scanner.length(), 0, true, true)
+                        for (limit in 0..16) {
+                            val probe =
+                                reverse.doSearchReverse(scanner, scanner.length(), 0, true, true, limit)
+                            Assertions.assertThat<Dfa.SearchResult?>(probe).`as`("/%s/ limit %s", regex, limit)
+                                .isNotNull()
+                            Assertions.assertThat(reverse.lastSearchBailed()).isFalse()
+                            if (!probe!!.scanLimitReached) {
+                                Assertions.assertThat<Dfa.SearchResult?>(probe).`as`("/%s/ limit %s", regex, limit)
+                                    .isEqualTo(full)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun reverseDfaPreservesContextAtStartLimit() {
+        for (prefix in mutableListOf<String?>("xy", "é", "€", "😀", "\n")) {
+            val text = prefix + "a"
+            for (scanner in List.of<InputScanner?>(
+                StringInputScanner(text), Utf8InputScanner(
+                    text.toByteArray(
+                        StandardCharsets.UTF_8
+                    )
+                )
+            )) {
+                for (regex in mutableListOf<String?>("a", "\\ba|a", "\\Ba|a", "\\ba", "\\Ba", "^a|b", "(?m)^a")) {
+                    val expected =
+                        Pattern.compile(regex).matcher(text).find(prefix!!.length)
+                    val reverse = org.safere.Pattern.compile(regex).reverseDfa()
+                    for (pass in 0..1) {
+                        val result =
+                            reverse.doSearchReverse(
+                                scanner, scanner.length(), scanner.length() - 1, true, true
+                            )
+                        Assertions.assertThat<Dfa.SearchResult?>(result)
+                            .`as`("%s after %s (%s)", regex, prefix, scanner.javaClass)
+                            .isNotNull()
+                        Assertions.assertThat(result!!.matched)
+                            .`as`("%s after %s (%s)", regex, prefix, scanner.javaClass)
+                            .isEqualTo(expected)
+                        if (expected) {
+                            Assertions.assertThat(result.pos).isEqualTo(scanner.length() - 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun reverseDfaDecodesFromInteriorStartLimit() {
+        for (text in mutableListOf<String?>("é", "€", "😀")) {
+            for (scanner in List.of<InputScanner?>(
+                StringInputScanner(text), Utf8InputScanner(
+                    text!!.toByteArray(
+                        StandardCharsets.UTF_8
+                    )
+                )
+            )) {
+                for (regex in mutableListOf<String?>(".", ".|", ".+")) {
+                    val reverse = org.safere.Pattern.compile(regex).reverseDfa()
+                    for (start in 1..<scanner.length()) {
+                        for (pass in 0..1) {
+                            val result =
+                                reverse.doSearchReverse(scanner, scanner.length(), start, true, true)
+                            Assertions.assertThat<Dfa.SearchResult?>(result)
+                                .`as`("%s on %s from %s (%s)", regex, text, start, scanner.javaClass)
+                                .isNotNull()
+                            Assertions.assertThat(result!!.matched).isTrue()
+                            Assertions.assertThat(result.pos)
+                                .isEqualTo(if (regex == ".+") start else scanner.length() - 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun reverseDfaRecordsDeferredMatchAtStartLimitWhenPreferredBranchCrossesIt() {
+        // The character before startLimit only supplies assertion context. A higher-priority branch
+        // that consumes it and reaches MATCH starts left of startLimit, so it must not hide the
+        // deferred-assertion match that starts exactly at startLimit.
+        data class Case(val regex: String?, val text: String?, val startLimit: Int)
+        for (c in List.of<Case?>(
+            Case("\\w?\\b-", "1b-", 2),
+            Case("(\\w?)(b|\\b-)?", "1b-", 2),
+            Case("x?\\Bb", "xb", 1),
+            Case("(x?)(x|\\Bb)?", "xxb", 2),
+            Case("(?m)\\n?^b", "\nb", 1),
+            Case("\\w?\\b😀", "b😀", 1)
+        )) {
+            for (scanner in List.of<InputScanner?>(
+                StringInputScanner(c.text), Utf8InputScanner(c.text!!.toByteArray(StandardCharsets.UTF_8))
+            )) {
+                val startLimit =
+                    if (scanner is Utf8InputScanner)
+                        c.text.substring(0, c.startLimit).toByteArray(StandardCharsets.UTF_8).size
+                    else
+                        c.startLimit
+                val reverse = org.safere.Pattern.compile(c.regex).reverseDfa()
+                for (pass in 0..1) {
+                    val result =
+                        reverse.doSearchReverse(scanner, scanner.length(), startLimit, true, true)
+                    Assertions.assertThat<Dfa.SearchResult?>(result).`as`("%s (%s)", c, scanner.javaClass).isNotNull()
+                    Assertions.assertThat(result!!.matched).`as`("%s (%s)", c, scanner.javaClass).isTrue()
+                    Assertions.assertThat(result.pos).`as`("%s (%s)", c, scanner.javaClass).isEqualTo(startLimit)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun utf8FindAllKeepsDeferredAssertionMatchAtPreviousMatchEnd() {
+        data class Case(val regex: String?, val text: String?, val expected: MutableList<String?>?)
+        for (c in List.of<Case?>(
+            Case("(\\w?)(b|\\b-)?", "1b-", mutableListOf<String?>("0:2", "2:3", "3:3")),
+            Case("(x?)(x|\\Bb)?", "xxb", mutableListOf<String?>("0:2", "2:3", "3:3")),
+            Case("(?m)(\\n?)(\\n|^b)?", "\n\nb", mutableListOf<String?>("0:2", "2:3", "3:3")),
+            Case("(\\w?)(b|\\b😀)?", "1b😀", mutableListOf<String?>("0:2", "2:6", "6:6"))
+        )) {
+            val pattern = org.safere.Pattern.compile(c.regex)
+            for (pass in 0..1) {
+                val matcher = pattern.matcher(Utf8Input.validated(c.text!!.toByteArray(StandardCharsets.UTF_8)))
+                val spans: MutableList<String?> = ArrayList<String?>()
+                while (matcher.find()) {
+                    spans.add(matcher.start().toString() + ":" + matcher.end())
+                    // The second pass reads captures, which records capture demand on the pattern.
+                    if (pass == 1) {
+                        Assertions.assertThat(matcher.start(1)).isGreaterThanOrEqualTo(matcher.start())
+                    }
+                }
+                Assertions.assertThat<String?>(spans).`as`("%s pass %s", c, pass).isEqualTo(c.expected)
+            }
+        }
+    }
+
+    @Test
+    fun reverseDfaPruningCorrectness() {
+        val p = org.safere.Pattern.compile("\\B([^a])*[^a][^a]")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val text = "bbbb"
+        val r = revDfa.doSearchReverse(text, 4, 0, true, true)
+        Assertions.assertThat<Dfa.SearchResult?>(r).isNotNull()
+        Assertions.assertThat(r!!.matched).isTrue()
+        Assertions.assertThat(r.pos).isEqualTo(1)
+    }
+
+    @Test
+    fun reverseDfaDeferredMatchCorrectness() {
+        val p = org.safere.Pattern.compile("\\ba|a")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val text = "a"
+        val r = revDfa.doSearchReverse(text, 1, 0, true, true)
+        Assertions.assertThat<Dfa.SearchResult?>(r).isNotNull()
+        Assertions.assertThat(r!!.matched).isTrue()
+        Assertions.assertThat(r.pos).isEqualTo(0)
+
+        val text2 = "aa"
+        val r2 = revDfa.doSearchReverse(text2, 2, 1, true, true)
+        Assertions.assertThat<Dfa.SearchResult?>(r2).isNotNull()
+        Assertions.assertThat(r2!!.matched).isTrue()
+        Assertions.assertThat(r2.pos).isEqualTo(1)
+    }
+
+    @Test
+    fun reverseDfaMixedDeferredAndConsumingMatchPreservesDeferredStart() {
+        val p = org.safere.Pattern.compile("(?:(?:\\ba?)|\\B|[^a])a?")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val r = revDfa.doSearchReverse("ba", 2, 1, true, true)
+
+        Assertions.assertThat<Dfa.SearchResult?>(r).isNotNull()
+        Assertions.assertThat(r!!.matched).isTrue()
+        Assertions.assertThat(r.pos).isEqualTo(1)
+    }
+
+    @Test
+    fun reverseDfaAsciiFastPathPreservesAnchoredStartFilter() {
+        val p = org.safere.Pattern.compile("^a")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val first = revDfa.doSearchReverse("xa", 2, 0, true, true)
+        val second = revDfa.doSearchReverse("xa", 2, 0, true, true)
+
+        Assertions.assertThat<Dfa.SearchResult?>(first).isNotNull()
+        Assertions.assertThat<Dfa.SearchResult?>(second).isNotNull()
+        Assertions.assertThat(first!!.matched).isFalse()
+        Assertions.assertThat(second!!.matched).isFalse()
+    }
+
+    @Test
+    fun reverseDfaAsciiFastPathPreservesDeferredMatchAmbiguity() {
+        val p = org.safere.Pattern.compile("(?:\\B{1}|a).")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val first = revDfa.doSearchReverse("ab", 2, 0, true, true)
+        val second = revDfa.doSearchReverse("ab", 2, 0, true, true)
+
+        Assertions.assertThat<Dfa.SearchResult?>(first).isNotNull()
+        Assertions.assertThat<Dfa.SearchResult?>(second).isNotNull()
+        Assertions.assertThat(first!!.matched).isTrue()
+        Assertions.assertThat(second!!.matched).isTrue()
+        Assertions.assertThat(first.ambiguous).isTrue()
+        Assertions.assertThat(second.ambiguous).isTrue()
+    }
+
+    @Test
+    fun reverseDfaAsciiFastPathPreservesAcceptedAfterMatchAmbiguity() {
+        val p = org.safere.Pattern.compile("^(?:\\B|a)b")
+        val revDfa = p.reverseDfa()
+        Assertions.assertThat<Dfa?>(revDfa).isNotNull()
+
+        val first = revDfa.doSearchReverse("ab", 2, 0, true, true)
+        val second = revDfa.doSearchReverse("ab", 2, 0, true, true)
+
+        Assertions.assertThat<Dfa.SearchResult?>(first).isNotNull()
+        Assertions.assertThat<Dfa.SearchResult?>(second).isNotNull()
+        Assertions.assertThat(first!!.matched).isTrue()
+        Assertions.assertThat(second!!.matched).isTrue()
+        Assertions.assertThat(first.ambiguous).isTrue()
+        Assertions.assertThat(second.ambiguous).isTrue()
+    }
+
+    @Nested
+    @DisplayName("Self-Loop Escape Acceleration")
+    internal inner class SelfLoopEscapeAcceleration {
+        @Test
+        fun quotedStringLongPayload() {
+            val filler = "x".repeat(5000)
+            val text = "prefix \"" + filler + "\" suffix"
+            val result: Dfa.SearchResult = search("\"[^\"]*\"", text)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isTrue()
+            Assertions.assertThat(result.pos).isEqualTo(8 + 5000 + 1)
+        }
+
+        @Test
+        fun headerLineTerminatorLongPayload() {
+            val filler = "a".repeat(10000)
+            val text = "header:" + filler + "\nrest"
+            val result: Dfa.SearchResult = search("header:[^\n]*\n", text)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isTrue()
+            Assertions.assertThat(result.pos).isEqualTo(7 + 10000 + 1)
+        }
+
+        @Test
+        fun htmlTagLongPayload() {
+            val filler = "content".repeat(1000)
+            val text = "before <div " + filler + "> after"
+            val result: Dfa.SearchResult = search("<[^>]*>", text)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isTrue()
+            Assertions.assertThat(result.pos).isEqualTo(12 + 7000 + 1)
+        }
+
+        @Test
+        fun multiEscapeBytePair() {
+            val filler = "data".repeat(1000)
+            val text = "prefix " + filler + ",suffix"
+            val result: Dfa.SearchResult = search("[^,\n]*,", text)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isTrue()
+            Assertions.assertThat(result.pos).isEqualTo(7 + 4000 + 1)
+        }
+
+        @Test
+        fun selfLoopNoEscapeFoundUntilEof() {
+            val filler = "x".repeat(5000)
+            val text = "start \"" + filler
+            val result: Dfa.SearchResult = search("\"[^\"]*\"", text)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result.matched).isFalse()
+        }
+
+        @Test
+        fun selfLoopStopsAtNonAsciiTransitions() {
+            assertNonAsciiEscapeMatches("é")
+            assertNonAsciiEscapeMatches("😀")
+        }
+
+        @Test
+        fun startAccelerationUsesOnlyTheActiveInputSubstrate() {
+            val pattern = org.safere.Pattern.compile("(?m)^foo")
+            val dfa = pattern.forwardFirstMatchDfa()
+
+            Assertions.assertThat(dfa.hasStartAcceleration(StringInputScanner("foo"))).isTrue()
+            Assertions.assertThat(dfa.hasStartAcceleration(Utf8InputScanner("foo".toByteArray(StandardCharsets.UTF_8))))
+                .isFalse()
+        }
+
+        @Test
+        fun selfLoopUtf8ScannerEquivalence() {
+            val filler = "x".repeat(2000)
+            val text = "start \"" + filler + "\" end"
+            val bytes = text.toByteArray(StandardCharsets.UTF_8)
+            val re = Parser.parse("\"[^\"]*\"", FLAGS)
+            val prog = Compiler.compile(re)
+            val scanner = Utf8InputScanner(bytes, 0, bytes.size)
+            val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+            val result = dfa.doSearch(scanner, 0, false, false)
+            Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
+            Assertions.assertThat(result!!.matched).isTrue()
+            Assertions.assertThat(result.pos).isEqualTo(7 + 2000 + 1)
+        }
+
+        companion object {
+            private fun assertNonAsciiEscapeMatches(escape: String) {
+                val pattern = "A[\\x00-\\x21\\x23-\\x7F]*" + escape
+                val text = "A" + "x".repeat(1000) + escape
+                val compiledPattern = org.safere.Pattern.compile(pattern)
+                Assertions.assertThat(compiledPattern.matcher(text).find()).isTrue()
+                Assertions.assertThat(compiledPattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))))
+                    .isTrue()
+
+                val stringResult: Dfa.SearchResult = search(pattern, text)
+                Assertions.assertThat<Dfa.SearchResult?>(stringResult).isNotNull()
+                Assertions.assertThat(stringResult.matched).isTrue()
+
+                val bytes = text.toByteArray(StandardCharsets.UTF_8)
+                val re = Parser.parse(pattern, FLAGS)
+                val prog = Compiler.compile(re)
+                val utf8Result =
+                    Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+                        .doSearch(Utf8InputScanner(bytes, 0, bytes.size), 0, false, false)
+                Assertions.assertThat<Dfa.SearchResult?>(utf8Result).isNotNull()
+                Assertions.assertThat(utf8Result!!.matched).isTrue()
+            }
+        }
+    }
+
+    @Test
+    fun multilineAnchorAlternationRejectsFalseUtf8Candidate() {
+        val regex = "(b|(?m:^a))cd[0-9]"
+        val input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_"
+        val enabled = EnginePathOptions.builder().startAcceleration(true).build()
+        val disabled = EnginePathOptions.builder().startAcceleration(false).build()
+        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+        val control = org.safere.Pattern.compile(regex, 0, disabled)
+        val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
+
+        Assertions.assertThat(control.find(utf8)).isFalse()
+        Assertions.assertThat(accelerated.find(utf8))
+            .`as`("Accelerated DFA must not match (?m:^a) when 'a' is not after line terminator")
+            .isEqualTo(control.find(utf8))
+    }
+
+    @Test
+    fun multilineAnchorAlternationRejectsFalseStringCandidate() {
+        val regex = "(b|(?m:^a))cd[0-9]"
+        val input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_"
+        val enabled = EnginePathOptions.builder().startAcceleration(true).build()
+        val disabled = EnginePathOptions.builder().startAcceleration(false).build()
+        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+        val control = org.safere.Pattern.compile(regex, 0, disabled)
+
+        Assertions.assertThat(control.matcher(input).find()).isFalse()
+        Assertions.assertThat(accelerated.matcher(input).find())
+            .`as`("Accelerated DFA String search must match unaccelerated control")
+            .isEqualTo(control.matcher(input).find())
+    }
+
+    @Test
+    fun wordBoundaryAnchorAlternationWithFalseCandidate() {
+        val regex = "(b|\\ba)cd[0-9]"
+        val input = "x".repeat(100) + "0cb_bacd19c1__19x y_"
+        val enabled = EnginePathOptions.builder().startAcceleration(true).build()
+        val disabled = EnginePathOptions.builder().startAcceleration(false).build()
+        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+        val control = org.safere.Pattern.compile(regex, 0, disabled)
+
+        Assertions.assertThat(control.matcher(input).find()).isFalse()
+        Assertions.assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find())
+    }
+
+    @Test
+    fun startOfTextAnchorAlternationWithFalseCandidate() {
+        val regex = "(b|\\Aa)cd[0-9]"
+        val input = "x".repeat(100) + "0cb1bacd19c1__19x y_"
+        val enabled = EnginePathOptions.builder().startAcceleration(true).build()
+        val disabled = EnginePathOptions.builder().startAcceleration(false).build()
+        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+        val control = org.safere.Pattern.compile(regex, 0, disabled)
+
+        Assertions.assertThat(control.matcher(input).find()).isFalse()
+        Assertions.assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find())
+    }
+
+    @Test
+    fun multilineAnchorTrueCandidateMatches() {
+        val regex = "(b|(?m:^a))cd[0-9]"
+        val input = "x".repeat(100) + "0cb\nacd19c1__19x y_"
+        val enabled = EnginePathOptions.builder().startAcceleration(true).build()
+        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+
+        Assertions.assertThat(accelerated.matcher(input).find()).isTrue()
+        Assertions.assertThat(accelerated.find(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+    }
+
+    @Test
+    fun automataDerivedStartStateAcceleratesOptionalWhitespaceBracket() {
+        val pattern = org.safere.Pattern.compile("[ \\t]*\\[\\[.*?\\]\\]")
+        val text = "x".repeat(1000) + "[[test]]" + "y".repeat(1000)
+        Assertions.assertThat(pattern.matcher(text).find()).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+    }
+
+    @Test
+    fun automataDerivedStartStateAcceleratesAlternations() {
+        val re = Parser.parse("apple|banana|cherry", FLAGS)
+        val prog = Compiler.compile(re)
+        val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+        val scanner: InputScanner = StringInputScanner("x".repeat(100))
+        val s = dfa.startState(scanner, 0, false)
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(AsciiTripleEscape::class.java)
+
+        val pattern = org.safere.Pattern.compile("apple|banana|cherry")
+        val text = "x".repeat(500) + "banana" + "y".repeat(500)
+        Assertions.assertThat(pattern.matcher(text).find()).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+
+        val noMatch = "x".repeat(1000)
+        Assertions.assertThat(pattern.matcher(noMatch).find()).isFalse()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8)))).isFalse()
+    }
+
+    @Test
+    fun automataDerivedStartStateAcceleratesMultiTokenAlternation() {
+        val pattern = org.safere.Pattern.compile("(?:image-tokens|video-tokens|pdf-tokens)")
+        val text = "x".repeat(500) + "video-tokens" + "y".repeat(500)
+        Assertions.assertThat(pattern.matcher(text).find()).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+
+        val noMatch = "x".repeat(1000)
+        Assertions.assertThat(pattern.matcher(noMatch).find()).isFalse()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8)))).isFalse()
+    }
+
+    @Test
+    fun automataDerivedStartStateAcceleratesDisjointRangeAlternation() {
+        val pattern = org.safere.Pattern.compile("[0-9]{3}|[a-z]{3}")
+        val text = "---".repeat(100) + "123" + "---".repeat(100)
+        Assertions.assertThat(pattern.matcher(text).find()).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+
+        val noMatch = "---".repeat(200)
+        Assertions.assertThat(pattern.matcher(noMatch).find()).isFalse()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8)))).isFalse()
+    }
+
+    @Test
+    fun wordBoundaryLongText() {
+        val regex = "(?:\\w(?:\\b))"
+        val input = "#".repeat(260) + "a"
+        val pattern = org.safere.Pattern.compile(regex)
+        Assertions.assertThat(pattern.matcher(input).find()).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+    }
+
+    @Test
+    fun matchDenseNumericFindAllDoesNotUseStartAcceleration() {
+        val pattern = org.safere.Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
+        val text = ByteArray(32768)
+        val random = Random(42)
+        for (i in text.indices) {
+            text[i] = (47 + random.nextInt(11)).toByte() // '/', '0'-'9'
+        }
+        val matcher = pattern.matcher(Utf8Input.trusted(text, 0, text.size))
+        var matches = 0
         while (matcher.find()) {
-          spans.add(matcher.start() + ":" + matcher.end());
-          // The second pass reads captures, which records capture demand on the pattern.
-          if (pass == 1) {
-            assertThat(matcher.start(1)).isGreaterThanOrEqualTo(matcher.start());
-          }
+            matches++
         }
-        assertThat(spans).as("%s pass %s", c, pass).isEqualTo(c.expected());
-      }
-    }
-  }
-
-  @Test
-  void reverseDfaPruningCorrectness() {
-    Pattern p = Pattern.compile("\\B([^a])*[^a][^a]");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    String text = "bbbb";
-    Dfa.SearchResult r = revDfa.doSearchReverse(text, 4, 0, true, true);
-    assertThat(r).isNotNull();
-    assertThat(r.matched()).isTrue();
-    assertThat(r.pos()).isEqualTo(1);
-  }
-
-  @Test
-  void reverseDfaDeferredMatchCorrectness() {
-    Pattern p = Pattern.compile("\\ba|a");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    String text = "a";
-    Dfa.SearchResult r = revDfa.doSearchReverse(text, 1, 0, true, true);
-    assertThat(r).isNotNull();
-    assertThat(r.matched()).isTrue();
-    assertThat(r.pos()).isEqualTo(0);
-
-    String text2 = "aa";
-    Dfa.SearchResult r2 = revDfa.doSearchReverse(text2, 2, 1, true, true);
-    assertThat(r2).isNotNull();
-    assertThat(r2.matched()).isTrue();
-    assertThat(r2.pos()).isEqualTo(1);
-  }
-
-  @Test
-  void reverseDfaMixedDeferredAndConsumingMatchPreservesDeferredStart() {
-    Pattern p = Pattern.compile("(?:(?:\\ba?)|\\B|[^a])a?");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    Dfa.SearchResult r = revDfa.doSearchReverse("ba", 2, 1, true, true);
-
-    assertThat(r).isNotNull();
-    assertThat(r.matched()).isTrue();
-    assertThat(r.pos()).isEqualTo(1);
-  }
-
-  @Test
-  void reverseDfaAsciiFastPathPreservesAnchoredStartFilter() {
-    Pattern p = Pattern.compile("^a");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    Dfa.SearchResult first = revDfa.doSearchReverse("xa", 2, 0, true, true);
-    Dfa.SearchResult second = revDfa.doSearchReverse("xa", 2, 0, true, true);
-
-    assertThat(first).isNotNull();
-    assertThat(second).isNotNull();
-    assertThat(first.matched()).isFalse();
-    assertThat(second.matched()).isFalse();
-  }
-
-  @Test
-  void reverseDfaAsciiFastPathPreservesDeferredMatchAmbiguity() {
-    Pattern p = Pattern.compile("(?:\\B{1}|a).");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    Dfa.SearchResult first = revDfa.doSearchReverse("ab", 2, 0, true, true);
-    Dfa.SearchResult second = revDfa.doSearchReverse("ab", 2, 0, true, true);
-
-    assertThat(first).isNotNull();
-    assertThat(second).isNotNull();
-    assertThat(first.matched()).isTrue();
-    assertThat(second.matched()).isTrue();
-    assertThat(first.ambiguous()).isTrue();
-    assertThat(second.ambiguous()).isTrue();
-  }
-
-  @Test
-  void reverseDfaAsciiFastPathPreservesAcceptedAfterMatchAmbiguity() {
-    Pattern p = Pattern.compile("^(?:\\B|a)b");
-    Dfa revDfa = p.reverseDfa();
-    assertThat(revDfa).isNotNull();
-
-    Dfa.SearchResult first = revDfa.doSearchReverse("ab", 2, 0, true, true);
-    Dfa.SearchResult second = revDfa.doSearchReverse("ab", 2, 0, true, true);
-
-    assertThat(first).isNotNull();
-    assertThat(second).isNotNull();
-    assertThat(first.matched()).isTrue();
-    assertThat(second.matched()).isTrue();
-    assertThat(first.ambiguous()).isTrue();
-    assertThat(second.ambiguous()).isTrue();
-  }
-
-  @Nested
-  @DisplayName("Self-Loop Escape Acceleration")
-  class SelfLoopEscapeAcceleration {
-    @Test
-    void quotedStringLongPayload() {
-      String filler = "x".repeat(5000);
-      String text = "prefix \"" + filler + "\" suffix";
-      Dfa.SearchResult result = search("\"[^\"]*\"", text);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-      assertThat(result.pos()).isEqualTo(8 + 5000 + 1);
+        Assertions.assertThat(matches).isEqualTo(112)
     }
 
     @Test
-    void headerLineTerminatorLongPayload() {
-      String filler = "a".repeat(10000);
-      String text = "header:" + filler + "\nrest";
-      Dfa.SearchResult result = search("header:[^\n]*\n", text);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-      assertThat(result.pos()).isEqualTo(7 + 10000 + 1);
+    fun automataDerivedAnchoredStartStateAcceleratesSelfLoop() {
+        val regex = "[^\"]*\""
+        val re = Parser.parse(regex, FLAGS or ParseFlags.DOT_NL or ParseFlags.CLASS_NL)
+        val prog = Compiler.compile(re)
+        val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+        val scanner: InputScanner = StringInputScanner("a".repeat(100) + "\"")
+        val s = dfa.startState(scanner, 0, true)
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(SingleAsciiEscape::class.java)
+
+        val pattern = org.safere.Pattern.compile(regex)
+        val matching = "a\n".repeat(2048) + "\""
+        Assertions.assertThat(pattern.matcher(matching).matches()).isTrue()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(matching.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isTrue()
+
+        val noMatch = "a\n".repeat(2048)
+        Assertions.assertThat(pattern.matcher(noMatch).matches()).isFalse()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isFalse()
     }
 
     @Test
-    void htmlTagLongPayload() {
-      String filler = "content".repeat(1000);
-      String text = "before <div " + filler + "> after";
-      Dfa.SearchResult result = search("<[^>]*>", text);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-      assertThat(result.pos()).isEqualTo(12 + 7000 + 1);
+    fun automataDerivedAnchoredStartStateAcceleratesPairEscapes() {
+        val regex = "[^\"]*\""
+        val re = Parser.parse(regex, FLAGS)
+        val prog = Compiler.compile(re)
+        val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
+        val scanner: InputScanner = StringInputScanner("a".repeat(100) + "\"")
+        val s = dfa.startState(scanner, 0, true)
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
+        Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(AsciiPairEscape::class.java)
+
+        val pattern = org.safere.Pattern.compile(regex)
+        val matching = "a".repeat(4096) + "\""
+        Assertions.assertThat(pattern.matcher(matching).matches()).isTrue()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(matching.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isTrue()
+
+        val noMatch = "a".repeat(4096)
+        Assertions.assertThat(pattern.matcher(noMatch).matches()).isFalse()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isFalse()
     }
 
     @Test
-    void multiEscapeBytePair() {
-      String filler = "data".repeat(1000);
-      String text = "prefix " + filler + ",suffix";
-      Dfa.SearchResult result = search("[^,\n]*,", text);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-      assertThat(result.pos()).isEqualTo(7 + 4000 + 1);
+    fun automataDerivedInteriorStateAcceleratesSelfLoop() {
+        val regex = "prefix:\\s*[^;]+;\\s*suffix"
+        val pattern = org.safere.Pattern.compile(regex)
+
+        val matching = "prefix: " + "a".repeat(4096) + "; suffix"
+        Assertions.assertThat(pattern.matcher(matching).find()).isTrue()
+        Assertions.assertThat(pattern.matcher(matching).matches()).isTrue()
+        Assertions.assertThat(pattern.matcher(Utf8Input.validated(matching.toByteArray(StandardCharsets.UTF_8))).find())
+            .isTrue()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(matching.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isTrue()
+
+        val noMatch = "prefix: " + "a".repeat(4096)
+        Assertions.assertThat(pattern.matcher(noMatch).find()).isFalse()
+        Assertions.assertThat(pattern.matcher(noMatch).matches()).isFalse()
+        Assertions.assertThat(pattern.matcher(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8))).find())
+            .isFalse()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(noMatch.toByteArray(StandardCharsets.UTF_8))).matches()
+        ).isFalse()
     }
 
     @Test
-    void selfLoopNoEscapeFoundUntilEof() {
-      String filler = "x".repeat(5000);
-      String text = "start \"" + filler;
-      Dfa.SearchResult result = search("\"[^\"]*\"", text);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isFalse();
+    fun adaptiveQuarantineOnAdversarialPeriodicNoise() {
+        val regex = "q[0-9]{4}z"
+        val pattern = org.safere.Pattern.compile(regex)
+
+        // 2,000 repetitions of "q1234a" (12,000 bytes). Distance between 'q' is 6 bytes.
+        // Downstream fails on 'a' instead of 'z'.
+        val adversarialNoise = "q1234a".repeat(2000)
+        Assertions.assertThat(pattern.matcher(adversarialNoise).find()).isFalse()
+        Assertions.assertThat(
+            pattern.matcher(Utf8Input.validated(adversarialNoise.toByteArray(StandardCharsets.UTF_8))).find()
+        )
+            .isFalse()
+
+        // Adversarial noise followed by an actual valid match at the end
+        val withMatch = adversarialNoise + "q1234z"
+        val stringMatcher = pattern.matcher(withMatch)
+        Assertions.assertThat(stringMatcher.find()).isTrue()
+        Assertions.assertThat(stringMatcher.start()).isEqualTo(adversarialNoise.length)
+        Assertions.assertThat(stringMatcher.end()).isEqualTo(withMatch.length)
+
+        val utf8Matcher = pattern.matcher(Utf8Input.validated(withMatch.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(utf8Matcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.start()).isEqualTo(adversarialNoise.length)
+        Assertions.assertThat(utf8Matcher.end()).isEqualTo(withMatch.length)
     }
 
     @Test
-    void selfLoopStopsAtNonAsciiTransitions() {
-      assertNonAsciiEscapeMatches("é");
-      assertNonAsciiEscapeMatches("😀");
+    fun burstyHeaderRecoversAccelerationInCleanBody() {
+        val regex = "q[0-9]{4}z"
+        val pattern = org.safere.Pattern.compile(regex)
+
+        // 100 repetitions of noise (600 bytes header) followed by 50 KB of clean text, ending in a
+        // match
+        val header = "q1234a".repeat(100)
+        val cleanBody = "the quick brown fox jumps over the lazy dog. ".repeat(1000)
+        val target = "q1234z"
+        val input = header + cleanBody + target
+
+        val stringMatcher = pattern.matcher(input)
+        Assertions.assertThat(stringMatcher.find()).isTrue()
+        Assertions.assertThat(stringMatcher.start()).isEqualTo(header.length + cleanBody.length)
+        Assertions.assertThat(stringMatcher.end()).isEqualTo(input.length)
+
+        val utf8Matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(utf8Matcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.start()).isEqualTo(header.length + cleanBody.length)
+        Assertions.assertThat(utf8Matcher.end()).isEqualTo(input.length)
     }
 
     @Test
-    void startAccelerationUsesOnlyTheActiveInputSubstrate() {
-      Pattern pattern = Pattern.compile("(?m)^foo");
-      Dfa dfa = pattern.forwardFirstMatchDfa();
+    fun denseConsecutiveValidMatchesNotThrottled() {
+        val regex = "q[0-9]{4}z"
+        val pattern = org.safere.Pattern.compile(regex)
 
-      assertThat(dfa.hasStartAcceleration(new StringInputScanner("foo"))).isTrue();
-      assertThat(dfa.hasStartAcceleration(new Utf8InputScanner("foo".getBytes(UTF_8)))).isFalse();
+        // 50 valid consecutive matches back-to-back
+        val denseMatches = "q1234z".repeat(50)
+        val stringMatcher = pattern.matcher(denseMatches)
+        var matchCount = 0
+        while (stringMatcher.find()) {
+            matchCount++
+        }
+        Assertions.assertThat(matchCount).isEqualTo(50)
+
+        val utf8Matcher = pattern.matcher(Utf8Input.validated(denseMatches.toByteArray(StandardCharsets.UTF_8)))
+        matchCount = 0
+        while (utf8Matcher.find()) {
+            matchCount++
+        }
+        Assertions.assertThat(matchCount).isEqualTo(50)
     }
 
     @Test
-    void selfLoopUtf8ScannerEquivalence() {
-      String filler = "x".repeat(2000);
-      String text = "start \"" + filler + "\" end";
-      byte[] bytes = text.getBytes(UTF_8);
-      Regexp re = Parser.parse("\"[^\"]*\"", FLAGS);
-      Prog prog = Compiler.compile(re);
-      Utf8InputScanner scanner = new Utf8InputScanner(bytes, 0, bytes.length);
-      Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-      Dfa.SearchResult result = dfa.doSearch(scanner, 0, false, false);
-      assertThat(result).isNotNull();
-      assertThat(result.matched()).isTrue();
-      assertThat(result.pos()).isEqualTo(7 + 2000 + 1);
+    fun dfaReacceleratesStartStateAfterFalseCandidate() {
+        val pattern = org.safere.Pattern.compile("fo[0-9]+")
+        val text = "foox" + "a".repeat(100000)
+        val utf8Input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
+        Assertions.assertThat(pattern.find(utf8Input)).isFalse()
+
+        val stringMatcher = pattern.matcher(text)
+        Assertions.assertThat(stringMatcher.find()).isFalse()
     }
 
-    private static void assertNonAsciiEscapeMatches(String escape) {
-      String pattern = "A[\\x00-\\x21\\x23-\\x7F]*" + escape;
-      String text = "A" + "x".repeat(1000) + escape;
-      Pattern compiledPattern = Pattern.compile(pattern);
-      assertThat(compiledPattern.matcher(text).find()).isTrue();
-      assertThat(compiledPattern.find(Utf8Input.validated(text.getBytes(UTF_8)))).isTrue();
+    @Test
+    fun dfaReacceleratesToNextMatchAfterFalseCandidate() {
+        val pattern = org.safere.Pattern.compile("fo[0-9]+")
+        val text = "foox" + "a".repeat(100000) + "fo123"
+        val utf8Input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
+        Assertions.assertThat(pattern.find(utf8Input)).isTrue()
 
-      Dfa.SearchResult stringResult = search(pattern, text);
-      assertThat(stringResult).isNotNull();
-      assertThat(stringResult.matched()).isTrue();
-
-      byte[] bytes = text.getBytes(UTF_8);
-      Regexp re = Parser.parse(pattern, FLAGS);
-      Prog prog = Compiler.compile(re);
-      Dfa.SearchResult utf8Result =
-          new Dfa(prog, 1000, Dfa.buildSetup(prog), false)
-              .doSearch(new Utf8InputScanner(bytes, 0, bytes.length), 0, false, false);
-      assertThat(utf8Result).isNotNull();
-      assertThat(utf8Result.matched()).isTrue();
+        val stringMatcher = pattern.matcher(text)
+        Assertions.assertThat(stringMatcher.find()).isTrue()
+        Assertions.assertThat(stringMatcher.start()).isEqualTo(4 + 100000)
+        Assertions.assertThat(stringMatcher.end()).isEqualTo(4 + 100000 + 5)
     }
-  }
 
-  @Test
-  void multilineAnchorAlternationRejectsFalseUtf8Candidate() {
-    String regex = "(b|(?m:^a))cd[0-9]";
-    String input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_";
-    EnginePathOptions enabled = EnginePathOptions.builder().startAcceleration(true).build();
-    EnginePathOptions disabled = EnginePathOptions.builder().startAcceleration(false).build();
-    Pattern accelerated = Pattern.compile(regex, 0, enabled);
-    Pattern control = Pattern.compile(regex, 0, disabled);
-    Utf8Input utf8 = Utf8Input.validated(input.getBytes(UTF_8));
+    @Test
+    fun dfaFastForwardAcceptingStartStateMatch() {
+        val regexp = "^(?:(?:b|(?:$)))"
+        val text = "#".repeat(260) + "\n\nbb"
+        val utf8 = text.toByteArray(StandardCharsets.UTF_8)
 
-    assertThat(control.find(utf8)).isFalse();
-    assertThat(accelerated.find(utf8))
-        .as("Accelerated DFA must not match (?m:^a) when 'a' is not after line terminator")
-        .isEqualTo(control.find(utf8));
-  }
+        val pat = org.safere.Pattern.compile(regexp, org.safere.Pattern.MULTILINE)
+        val utfM = pat.matcher(Utf8Input.validated(utf8))
+        Assertions.assertThat(utfM.find()).isTrue()
+        Assertions.assertThat(utfM.start()).isEqualTo(261)
+        Assertions.assertThat(utfM.end()).isEqualTo(261)
+        Assertions.assertThat(utfM.find()).isTrue()
+        Assertions.assertThat(utfM.start()).isEqualTo(262)
+        Assertions.assertThat(utfM.end()).isEqualTo(263)
+        Assertions.assertThat(utfM.find()).isFalse()
 
-  @Test
-  void multilineAnchorAlternationRejectsFalseStringCandidate() {
-    String regex = "(b|(?m:^a))cd[0-9]";
-    String input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_";
-    EnginePathOptions enabled = EnginePathOptions.builder().startAcceleration(true).build();
-    EnginePathOptions disabled = EnginePathOptions.builder().startAcceleration(false).build();
-    Pattern accelerated = Pattern.compile(regex, 0, enabled);
-    Pattern control = Pattern.compile(regex, 0, disabled);
-
-    assertThat(control.matcher(input).find()).isFalse();
-    assertThat(accelerated.matcher(input).find())
-        .as("Accelerated DFA String search must match unaccelerated control")
-        .isEqualTo(control.matcher(input).find());
-  }
-
-  @Test
-  void wordBoundaryAnchorAlternationWithFalseCandidate() {
-    String regex = "(b|\\ba)cd[0-9]";
-    String input = "x".repeat(100) + "0cb_bacd19c1__19x y_";
-    EnginePathOptions enabled = EnginePathOptions.builder().startAcceleration(true).build();
-    EnginePathOptions disabled = EnginePathOptions.builder().startAcceleration(false).build();
-    Pattern accelerated = Pattern.compile(regex, 0, enabled);
-    Pattern control = Pattern.compile(regex, 0, disabled);
-
-    assertThat(control.matcher(input).find()).isFalse();
-    assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find());
-  }
-
-  @Test
-  void startOfTextAnchorAlternationWithFalseCandidate() {
-    String regex = "(b|\\Aa)cd[0-9]";
-    String input = "x".repeat(100) + "0cb1bacd19c1__19x y_";
-    EnginePathOptions enabled = EnginePathOptions.builder().startAcceleration(true).build();
-    EnginePathOptions disabled = EnginePathOptions.builder().startAcceleration(false).build();
-    Pattern accelerated = Pattern.compile(regex, 0, enabled);
-    Pattern control = Pattern.compile(regex, 0, disabled);
-
-    assertThat(control.matcher(input).find()).isFalse();
-    assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find());
-  }
-
-  @Test
-  void multilineAnchorTrueCandidateMatches() {
-    String regex = "(b|(?m:^a))cd[0-9]";
-    String input = "x".repeat(100) + "0cb\nacd19c1__19x y_";
-    EnginePathOptions enabled = EnginePathOptions.builder().startAcceleration(true).build();
-    Pattern accelerated = Pattern.compile(regex, 0, enabled);
-
-    assertThat(accelerated.matcher(input).find()).isTrue();
-    assertThat(accelerated.find(Utf8Input.validated(input.getBytes(UTF_8)))).isTrue();
-  }
-
-  @Test
-  void automataDerivedStartStateAcceleratesOptionalWhitespaceBracket() {
-    Pattern pattern = Pattern.compile("[ \\t]*\\[\\[.*?\\]\\]");
-    String text = "x".repeat(1000) + "[[test]]" + "y".repeat(1000);
-    assertThat(pattern.matcher(text).find()).isTrue();
-    assertThat(pattern.find(Utf8Input.validated(text.getBytes(UTF_8)))).isTrue();
-  }
-
-  @Test
-  void automataDerivedStartStateAcceleratesAlternations() {
-    Regexp re = Parser.parse("apple|banana|cherry", FLAGS);
-    Prog prog = Compiler.compile(re);
-    Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-    InputScanner scanner = new StringInputScanner("x".repeat(100));
-    Dfa.State s = dfa.startState(scanner, 0, false);
-    assertThat(s.accelerator).isNotNull();
-    assertThat(s.accelerator).isInstanceOf(StateAccelerator.AsciiTripleEscape.class);
-
-    Pattern pattern = Pattern.compile("apple|banana|cherry");
-    String text = "x".repeat(500) + "banana" + "y".repeat(500);
-    assertThat(pattern.matcher(text).find()).isTrue();
-    assertThat(pattern.find(Utf8Input.validated(text.getBytes(UTF_8)))).isTrue();
-
-    String noMatch = "x".repeat(1000);
-    assertThat(pattern.matcher(noMatch).find()).isFalse();
-    assertThat(pattern.find(Utf8Input.validated(noMatch.getBytes(UTF_8)))).isFalse();
-  }
-
-  @Test
-  void automataDerivedStartStateAcceleratesMultiTokenAlternation() {
-    Pattern pattern = Pattern.compile("(?:image-tokens|video-tokens|pdf-tokens)");
-    String text = "x".repeat(500) + "video-tokens" + "y".repeat(500);
-    assertThat(pattern.matcher(text).find()).isTrue();
-    assertThat(pattern.find(Utf8Input.validated(text.getBytes(UTF_8)))).isTrue();
-
-    String noMatch = "x".repeat(1000);
-    assertThat(pattern.matcher(noMatch).find()).isFalse();
-    assertThat(pattern.find(Utf8Input.validated(noMatch.getBytes(UTF_8)))).isFalse();
-  }
-
-  @Test
-  void automataDerivedStartStateAcceleratesDisjointRangeAlternation() {
-    Pattern pattern = Pattern.compile("[0-9]{3}|[a-z]{3}");
-    String text = "---".repeat(100) + "123" + "---".repeat(100);
-    assertThat(pattern.matcher(text).find()).isTrue();
-    assertThat(pattern.find(Utf8Input.validated(text.getBytes(UTF_8)))).isTrue();
-
-    String noMatch = "---".repeat(200);
-    assertThat(pattern.matcher(noMatch).find()).isFalse();
-    assertThat(pattern.find(Utf8Input.validated(noMatch.getBytes(UTF_8)))).isFalse();
-  }
-
-  @Test
-  void wordBoundaryLongText() {
-    String regex = "(?:\\w(?:\\b))";
-    String input = "#".repeat(260) + "a";
-    Pattern pattern = Pattern.compile(regex);
-    assertThat(pattern.matcher(input).find()).isTrue();
-    assertThat(pattern.find(Utf8Input.validated(input.getBytes(UTF_8)))).isTrue();
-  }
-
-  @Test
-  void matchDenseNumericFindAllDoesNotUseStartAcceleration() {
-    Pattern pattern = Pattern.compile("\\d{3}/\\d{3}/\\d{4}");
-    byte[] text = new byte[32768];
-    Random random = new Random(42);
-    for (int i = 0; i < text.length; i++) {
-      text[i] = (byte) (47 + random.nextInt(11)); // '/', '0'-'9'
+        val strM = pat.matcher(text)
+        Assertions.assertThat(strM.find()).isTrue()
+        Assertions.assertThat(strM.start()).isEqualTo(261)
+        Assertions.assertThat(strM.end()).isEqualTo(261)
     }
-    Utf8Matcher matcher = pattern.matcher(Utf8Input.trusted(text, 0, text.length));
-    int matches = 0;
-    while (matcher.find()) {
-      matches++;
+
+    companion object {
+        private val FLAGS =
+            ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
+
+        /** Compiles a pattern and searches with the DFA (unanchored, first match).  */
+        private fun search(pattern: String?, text: String?): Dfa.SearchResult {
+            val re = Parser.parse(pattern, FLAGS)
+            val prog = Compiler.compile(re)
+            return Dfa.search(prog, text, false, false)
+        }
+
+        /** Compiles a pattern and searches with the DFA (anchored, longest match = full match).  */
+        private fun fullMatch(pattern: String?, text: String): Dfa.SearchResult? {
+            val re = Parser.parse(pattern, FLAGS)
+            val prog = Compiler.compile(re)
+            val r = Dfa.search(prog, text, true, true)
+            if (r != null && r.matched && r.pos != text.length) {
+                // Match didn't cover the entire text — not a full match.
+                return Dfa.SearchResult(false, r.pos)
+            }
+            return r
+        }
+
+        /** Compiles a pattern and searches with the DFA (unanchored, longest match).  */
+        private fun longestMatch(pattern: String?, text: String?): Dfa.SearchResult {
+            val re = Parser.parse(pattern, FLAGS)
+            val prog = Compiler.compile(re)
+            return Dfa.search(prog, text, false, true)
+        }
     }
-    assertThat(matches).isEqualTo(112);
-  }
-
-  @Test
-  void automataDerivedAnchoredStartStateAcceleratesSelfLoop() {
-    String regex = "[^\"]*\"";
-    Regexp re = Parser.parse(regex, FLAGS | ParseFlags.DOT_NL | ParseFlags.CLASS_NL);
-    Prog prog = Compiler.compile(re);
-    Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-    InputScanner scanner = new StringInputScanner("a".repeat(100) + "\"");
-    Dfa.State s = dfa.startState(scanner, 0, true);
-    assertThat(s.accelerator).isNotNull();
-    assertThat(s.accelerator).isInstanceOf(StateAccelerator.SingleAsciiEscape.class);
-
-    Pattern pattern = Pattern.compile(regex);
-    String matching = "a\n".repeat(2048) + "\"";
-    assertThat(pattern.matcher(matching).matches()).isTrue();
-    assertThat(pattern.matcher(Utf8Input.validated(matching.getBytes(UTF_8))).matches()).isTrue();
-
-    String noMatch = "a\n".repeat(2048);
-    assertThat(pattern.matcher(noMatch).matches()).isFalse();
-    assertThat(pattern.matcher(Utf8Input.validated(noMatch.getBytes(UTF_8))).matches()).isFalse();
-  }
-
-  @Test
-  void automataDerivedAnchoredStartStateAcceleratesPairEscapes() {
-    String regex = "[^\"]*\"";
-    Regexp re = Parser.parse(regex, FLAGS);
-    Prog prog = Compiler.compile(re);
-    Dfa dfa = new Dfa(prog, 1000, Dfa.buildSetup(prog), false);
-    InputScanner scanner = new StringInputScanner("a".repeat(100) + "\"");
-    Dfa.State s = dfa.startState(scanner, 0, true);
-    assertThat(s.accelerator).isNotNull();
-    assertThat(s.accelerator).isInstanceOf(StateAccelerator.AsciiPairEscape.class);
-
-    Pattern pattern = Pattern.compile(regex);
-    String matching = "a".repeat(4096) + "\"";
-    assertThat(pattern.matcher(matching).matches()).isTrue();
-    assertThat(pattern.matcher(Utf8Input.validated(matching.getBytes(UTF_8))).matches()).isTrue();
-
-    String noMatch = "a".repeat(4096);
-    assertThat(pattern.matcher(noMatch).matches()).isFalse();
-    assertThat(pattern.matcher(Utf8Input.validated(noMatch.getBytes(UTF_8))).matches()).isFalse();
-  }
-
-  @Test
-  void automataDerivedInteriorStateAcceleratesSelfLoop() {
-    String regex = "prefix:\\s*[^;]+;\\s*suffix";
-    Pattern pattern = Pattern.compile(regex);
-
-    String matching = "prefix: " + "a".repeat(4096) + "; suffix";
-    assertThat(pattern.matcher(matching).find()).isTrue();
-    assertThat(pattern.matcher(matching).matches()).isTrue();
-    assertThat(pattern.matcher(Utf8Input.validated(matching.getBytes(UTF_8))).find()).isTrue();
-    assertThat(pattern.matcher(Utf8Input.validated(matching.getBytes(UTF_8))).matches()).isTrue();
-
-    String noMatch = "prefix: " + "a".repeat(4096);
-    assertThat(pattern.matcher(noMatch).find()).isFalse();
-    assertThat(pattern.matcher(noMatch).matches()).isFalse();
-    assertThat(pattern.matcher(Utf8Input.validated(noMatch.getBytes(UTF_8))).find()).isFalse();
-    assertThat(pattern.matcher(Utf8Input.validated(noMatch.getBytes(UTF_8))).matches()).isFalse();
-  }
-
-  @Test
-  void adaptiveQuarantineOnAdversarialPeriodicNoise() {
-    String regex = "q[0-9]{4}z";
-    Pattern pattern = Pattern.compile(regex);
-
-    // 2,000 repetitions of "q1234a" (12,000 bytes). Distance between 'q' is 6 bytes.
-    // Downstream fails on 'a' instead of 'z'.
-    String adversarialNoise = "q1234a".repeat(2000);
-    assertThat(pattern.matcher(adversarialNoise).find()).isFalse();
-    assertThat(pattern.matcher(Utf8Input.validated(adversarialNoise.getBytes(UTF_8))).find())
-        .isFalse();
-
-    // Adversarial noise followed by an actual valid match at the end
-    String withMatch = adversarialNoise + "q1234z";
-    Matcher stringMatcher = pattern.matcher(withMatch);
-    assertThat(stringMatcher.find()).isTrue();
-    assertThat(stringMatcher.start()).isEqualTo(adversarialNoise.length());
-    assertThat(stringMatcher.end()).isEqualTo(withMatch.length());
-
-    var utf8Matcher = pattern.matcher(Utf8Input.validated(withMatch.getBytes(UTF_8)));
-    assertThat(utf8Matcher.find()).isTrue();
-    assertThat(utf8Matcher.start()).isEqualTo(adversarialNoise.length());
-    assertThat(utf8Matcher.end()).isEqualTo(withMatch.length());
-  }
-
-  @Test
-  void burstyHeaderRecoversAccelerationInCleanBody() {
-    String regex = "q[0-9]{4}z";
-    Pattern pattern = Pattern.compile(regex);
-
-    // 100 repetitions of noise (600 bytes header) followed by 50 KB of clean text, ending in a
-    // match
-    String header = "q1234a".repeat(100);
-    String cleanBody = "the quick brown fox jumps over the lazy dog. ".repeat(1000);
-    String target = "q1234z";
-    String input = header + cleanBody + target;
-
-    Matcher stringMatcher = pattern.matcher(input);
-    assertThat(stringMatcher.find()).isTrue();
-    assertThat(stringMatcher.start()).isEqualTo(header.length() + cleanBody.length());
-    assertThat(stringMatcher.end()).isEqualTo(input.length());
-
-    var utf8Matcher = pattern.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-    assertThat(utf8Matcher.find()).isTrue();
-    assertThat(utf8Matcher.start()).isEqualTo(header.length() + cleanBody.length());
-    assertThat(utf8Matcher.end()).isEqualTo(input.length());
-  }
-
-  @Test
-  void denseConsecutiveValidMatchesNotThrottled() {
-    String regex = "q[0-9]{4}z";
-    Pattern pattern = Pattern.compile(regex);
-
-    // 50 valid consecutive matches back-to-back
-    String denseMatches = "q1234z".repeat(50);
-    Matcher stringMatcher = pattern.matcher(denseMatches);
-    int matchCount = 0;
-    while (stringMatcher.find()) {
-      matchCount++;
-    }
-    assertThat(matchCount).isEqualTo(50);
-
-    var utf8Matcher = pattern.matcher(Utf8Input.validated(denseMatches.getBytes(UTF_8)));
-    matchCount = 0;
-    while (utf8Matcher.find()) {
-      matchCount++;
-    }
-    assertThat(matchCount).isEqualTo(50);
-  }
-
-  @Test
-  void dfaReacceleratesStartStateAfterFalseCandidate() {
-    Pattern pattern = Pattern.compile("fo[0-9]+");
-    String text = "foox" + "a".repeat(100000);
-    var utf8Input = Utf8Input.validated(text.getBytes(UTF_8));
-    assertThat(pattern.find(utf8Input)).isFalse();
-
-    Matcher stringMatcher = pattern.matcher(text);
-    assertThat(stringMatcher.find()).isFalse();
-  }
-
-  @Test
-  void dfaReacceleratesToNextMatchAfterFalseCandidate() {
-    Pattern pattern = Pattern.compile("fo[0-9]+");
-    String text = "foox" + "a".repeat(100000) + "fo123";
-    var utf8Input = Utf8Input.validated(text.getBytes(UTF_8));
-    assertThat(pattern.find(utf8Input)).isTrue();
-
-    Matcher stringMatcher = pattern.matcher(text);
-    assertThat(stringMatcher.find()).isTrue();
-    assertThat(stringMatcher.start()).isEqualTo(4 + 100000);
-    assertThat(stringMatcher.end()).isEqualTo(4 + 100000 + 5);
-  }
-
-  @Test
-  void dfaFastForwardAcceptingStartStateMatch() {
-    String regexp = "^(?:(?:b|(?:$)))";
-    String text = "#".repeat(260) + "\n\nbb";
-    byte[] utf8 = text.getBytes(UTF_8);
-
-    Pattern pat = Pattern.compile(regexp, Pattern.MULTILINE);
-    var utfM = pat.matcher(Utf8Input.validated(utf8));
-    assertThat(utfM.find()).isTrue();
-    assertThat(utfM.start()).isEqualTo(261);
-    assertThat(utfM.end()).isEqualTo(261);
-    assertThat(utfM.find()).isTrue();
-    assertThat(utfM.start()).isEqualTo(262);
-    assertThat(utfM.end()).isEqualTo(263);
-    assertThat(utfM.find()).isFalse();
-
-    var strM = pat.matcher(text);
-    assertThat(strM.find()).isTrue();
-    assertThat(strM.start()).isEqualTo(261);
-    assertThat(strM.end()).isEqualTo(261);
-  }
 }

@@ -2,185 +2,191 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*
+import java.util.Map
 
 /**
  * Encapsulates structural analysis of a regular expression AST in a single bottom-up pass using the
- * stack-safe {@link Walker}.
+ * stack-safe [Walker].
  */
-record AstAnalysis(
-    boolean hasLazy,
-    boolean hasAlt,
-    boolean hasNullableAlt,
-    boolean canMatchEmpty,
-    boolean hasUserCaptures,
-    int minMatchLength,
-    Map<String, Integer> namedGroups) {
+@JvmRecord
+internal data class AstAnalysis(
+    val hasLazy: Boolean,
+    val hasAlt: Boolean,
+    val hasNullableAlt: Boolean,
+    val canMatchEmpty: Boolean,
+    val hasUserCaptures: Boolean,
+    val minMatchLength: Int,
+    val namedGroups: MutableMap<String?, Int?>?
+) {
+    @JvmRecord
+    private data class AnalysisNode(
+        val hasLazy: Boolean,
+        val hasAlt: Boolean,
+        val hasNullableAlt: Boolean,
+        val canMatchEmpty: Boolean,
+        val hasUserCaptures: Boolean,
+        val minMatchLength: Int
+    )
 
-  static AstAnalysis analyze(Regexp re) {
-    if (re == null) {
-      return new AstAnalysis(false, false, false, true, false, 0, Map.of());
-    }
-    AstAnalysisWalker walker = new AstAnalysisWalker();
-    AnalysisNode root = walker.walk(re, new AnalysisNode(false, false, false, true, false, 0));
-    Map<String, Integer> named = walker.named;
-    return new AstAnalysis(
-        root.hasLazy,
-        root.hasAlt,
-        root.hasNullableAlt,
-        root.canMatchEmpty,
-        root.hasUserCaptures,
-        root.minMatchLength,
-        named == null ? Map.of() : Collections.unmodifiableMap(named));
-  }
+    private class AstAnalysisWalker : Walker<AnalysisNode>() {
+        private var named: MutableMap<String?, Int?>? = null
 
-  private record AnalysisNode(
-      boolean hasLazy,
-      boolean hasAlt,
-      boolean hasNullableAlt,
-      boolean canMatchEmpty,
-      boolean hasUserCaptures,
-      int minMatchLength) {}
-
-  private static final class AstAnalysisWalker extends Walker<AnalysisNode> {
-    private Map<String, Integer> named;
-
-    @Override
-    protected AnalysisNode shortVisit(Regexp re, AnalysisNode parentArg) {
-      return new AnalysisNode(false, false, false, true, false, 0);
-    }
-
-    @Override
-    protected AnalysisNode postVisit(
-        Regexp re, AnalysisNode parentArg, AnalysisNode preArg, List<AnalysisNode> childArgs) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      if (re.op == RegexpOp.CAPTURE && re.name != null && !re.name.isEmpty()) {
-        if (named == null) {
-          named = new HashMap<>();
+        override fun shortVisit(re: Regexp?, parentArg: AnalysisNode?): AnalysisNode {
+            return AnalysisNode(false, false, false, true, false, 0)
         }
-        named.put(re.name, re.cap);
-      }
 
-      boolean anyLazy = re.nonGreedy();
-      boolean anyAlt = re.op == RegexpOp.ALTERNATE;
-      boolean anyNullableAlt = false;
-      boolean anyUserCaptures = re.op == RegexpOp.CAPTURE && re.cap > 0;
-
-      for (AnalysisNode child : childArgs) {
-        if (child.hasLazy) {
-          anyLazy = true;
-        }
-        if (child.hasAlt) {
-          anyAlt = true;
-        }
-        if (child.hasNullableAlt) {
-          anyNullableAlt = true;
-        }
-        if (child.hasUserCaptures) {
-          anyUserCaptures = true;
-        }
-      }
-
-      boolean canMatchEmpty;
-      int minMatchLength;
-
-      switch (re.op) {
-        case NO_MATCH -> {
-          canMatchEmpty = false;
-          minMatchLength = Integer.MAX_VALUE / 2;
-        }
-        case EMPTY_MATCH,
-            BEGIN_LINE,
-            END_LINE,
-            BEGIN_TEXT,
-            END_TEXT,
-            WORD_BOUNDARY,
-            NO_WORD_BOUNDARY,
-            GRAPHEME_CLUSTER_BOUNDARY,
-            HAVE_MATCH -> {
-          canMatchEmpty = true;
-          minMatchLength = 0;
-        }
-        case LITERAL -> {
-          canMatchEmpty = false;
-          minMatchLength = Character.charCount(re.rune);
-        }
-        case LITERAL_STRING -> {
-          int count = 0;
-          if (re.runes != null) {
-            for (int r : re.runes) {
-              count += Character.charCount(r);
+        override fun postVisit(
+            re: Regexp, parentArg: AnalysisNode?, preArg: AnalysisNode?, childArgs: MutableList<AnalysisNode>
+        ): AnalysisNode {
+            if (WorkCounterConfig.ENABLED) {
+                record()
             }
-          }
-          canMatchEmpty = count == 0;
-          minMatchLength = count;
-        }
-        case CHAR_CLASS, ANY_CHAR, ANY_BYTE, GRAPHEME_CLUSTER -> {
-          canMatchEmpty = false;
-          minMatchLength = 1;
-        }
-        case STAR, QUEST -> {
-          canMatchEmpty = true;
-          minMatchLength = 0;
-        }
-        case PLUS -> {
-          canMatchEmpty = !childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty;
-          minMatchLength = !childArgs.isEmpty() ? childArgs.getFirst().minMatchLength : 0;
-        }
-        case REPEAT -> {
-          int subMin = !childArgs.isEmpty() ? childArgs.getFirst().minMatchLength : 0;
-          minMatchLength =
-              (int) Math.min((long) subMin * Math.max(0, re.min), Integer.MAX_VALUE / 2);
-          canMatchEmpty =
-              re.min == 0 || (!childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty);
-        }
-        case CAPTURE, NON_CAPTURE -> {
-          canMatchEmpty = !childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty;
-          minMatchLength = !childArgs.isEmpty() ? childArgs.getFirst().minMatchLength : 0;
-        }
-        case CONCAT -> {
-          boolean allEmpty = true;
-          long sum = 0;
-          for (AnalysisNode child : childArgs) {
-            if (!child.canMatchEmpty) {
-              allEmpty = false;
+            if (re.op == RegexpOp.CAPTURE && re.name != null && !re.name.isEmpty()) {
+                if (named == null) {
+                    named = HashMap<String?, Int?>()
+                }
+                named!!.put(re.name, re.cap)
             }
-            sum += child.minMatchLength;
-          }
-          canMatchEmpty = allEmpty;
-          minMatchLength = (int) Math.min(sum, Integer.MAX_VALUE / 2);
-        }
-        case ALTERNATE -> {
-          boolean anyChildEmpty = false;
-          int min = Integer.MAX_VALUE / 2;
-          for (AnalysisNode child : childArgs) {
-            if (child.canMatchEmpty) {
-              anyChildEmpty = true;
-            }
-            min = Math.min(min, child.minMatchLength);
-          }
-          canMatchEmpty = anyChildEmpty || childArgs.isEmpty();
-          minMatchLength = min == Integer.MAX_VALUE / 2 ? 0 : min;
-          if (anyChildEmpty) {
-            anyNullableAlt = true;
-          }
-        }
-        default -> {
-          canMatchEmpty = false;
-          minMatchLength = 0;
-        }
-      }
 
-      return new AnalysisNode(
-          anyLazy, anyAlt, anyNullableAlt, canMatchEmpty, anyUserCaptures, minMatchLength);
+            var anyLazy = re.nonGreedy()
+            var anyAlt = re.op == RegexpOp.ALTERNATE
+            var anyNullableAlt = false
+            var anyUserCaptures = re.op == RegexpOp.CAPTURE && re.cap > 0
+
+            for (child in childArgs) {
+                if (child.hasLazy) {
+                    anyLazy = true
+                }
+                if (child.hasAlt) {
+                    anyAlt = true
+                }
+                if (child.hasNullableAlt) {
+                    anyNullableAlt = true
+                }
+                if (child.hasUserCaptures) {
+                    anyUserCaptures = true
+                }
+            }
+
+            val canMatchEmpty: Boolean
+            val minMatchLength: Int
+
+            when (re.op) {
+                RegexpOp.NO_MATCH -> {
+                    canMatchEmpty = false
+                    minMatchLength = Integer.MAX_VALUE / 2
+                }
+
+                RegexpOp.EMPTY_MATCH, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.HAVE_MATCH -> {
+                    canMatchEmpty = true
+                    minMatchLength = 0
+                }
+
+                RegexpOp.LITERAL -> {
+                    canMatchEmpty = false
+                    minMatchLength = Character.charCount(re.rune)
+                }
+
+                RegexpOp.LITERAL_STRING -> {
+                    var count = 0
+                    if (re.runes != null) {
+                        for (r in re.runes) {
+                            count += Character.charCount(r)
+                        }
+                    }
+                    canMatchEmpty = count == 0
+                    minMatchLength = count
+                }
+
+                RegexpOp.CHAR_CLASS, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.GRAPHEME_CLUSTER -> {
+                    canMatchEmpty = false
+                    minMatchLength = 1
+                }
+
+                RegexpOp.STAR, RegexpOp.QUEST -> {
+                    canMatchEmpty = true
+                    minMatchLength = 0
+                }
+
+                RegexpOp.PLUS -> {
+                    canMatchEmpty = !childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty
+                    minMatchLength = if (!childArgs.isEmpty()) childArgs.getFirst().minMatchLength else 0
+                }
+
+                RegexpOp.REPEAT -> {
+                    val subMin = if (!childArgs.isEmpty()) childArgs.getFirst().minMatchLength else 0
+                    minMatchLength =
+                        Math.min(subMin.toLong() * Math.max(0, re.min), (Integer.MAX_VALUE / 2).toLong()).toInt()
+                    canMatchEmpty =
+                        re.min == 0 || (!childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty)
+                }
+
+                RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE -> {
+                    canMatchEmpty = !childArgs.isEmpty() && childArgs.getFirst().canMatchEmpty
+                    minMatchLength = if (!childArgs.isEmpty()) childArgs.getFirst().minMatchLength else 0
+                }
+
+                RegexpOp.CONCAT -> {
+                    var allEmpty = true
+                    var sum: Long = 0
+                    for (child in childArgs) {
+                        if (!child.canMatchEmpty) {
+                            allEmpty = false
+                        }
+                        sum += child.minMatchLength.toLong()
+                    }
+                    canMatchEmpty = allEmpty
+                    minMatchLength = Math.min(sum, (Integer.MAX_VALUE / 2).toLong()).toInt()
+                }
+
+                RegexpOp.ALTERNATE -> {
+                    var anyChildEmpty = false
+                    var min = Integer.MAX_VALUE / 2
+                    for (child in childArgs) {
+                        if (child.canMatchEmpty) {
+                            anyChildEmpty = true
+                        }
+                        min = Math.min(min, child.minMatchLength)
+                    }
+                    canMatchEmpty = anyChildEmpty || childArgs.isEmpty()
+                    minMatchLength = if (min == Integer.MAX_VALUE / 2) 0 else min
+                    if (anyChildEmpty) {
+                        anyNullableAlt = true
+                    }
+                }
+
+                else -> {
+                    canMatchEmpty = false
+                    minMatchLength = 0
+                }
+            }
+
+            return AnalysisNode(
+                anyLazy, anyAlt, anyNullableAlt, canMatchEmpty, anyUserCaptures, minMatchLength
+            )
+        }
     }
-  }
+
+    companion object {
+        fun analyze(re: Regexp?): AstAnalysis {
+            if (re == null) {
+                return AstAnalysis(false, false, false, true, false, 0, Map.of<String?, Int?>())
+            }
+            val walker = AstAnalysisWalker()
+            val root = walker.walk(re, AnalysisNode(false, false, false, true, false, 0))
+            val named = walker.named
+            return AstAnalysis(
+                root.hasLazy,
+                root.hasAlt,
+                root.hasNullableAlt,
+                root.canMatchEmpty,
+                root.hasUserCaptures,
+                root.minMatchLength,
+                if (named == null) Map.of<String?, Int?>() else Collections.unmodifiableMap<String?, Int?>(named)
+            )
+        }
+    }
 }

@@ -2,1267 +2,1332 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.exhaustive
 
-package org.safere.exhaustive;
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import org.safere.exhaustive.SweepWorkers.LineWorker
+import org.safere.exhaustive.SweepWorkers.ProgressReporter
+import java.io.*
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.List
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.IllegalStateException
+import kotlin.Int
+import kotlin.Long
+import kotlin.RuntimeException
+import kotlin.Throws
+import kotlin.check
+import kotlin.io.println
+import kotlin.io.use
+import kotlin.require
+import kotlin.text.StringBuilder
+import kotlin.text.contains
+import kotlin.text.isEmpty
+import kotlin.text.replace
+import kotlin.text.startsWith
+import kotlin.use
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.DataInputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.PatternSyntaxException;
+/** Offline differential sweep for SafeRE character-class expression bugs.  */
+object CharacterClassDivergenceSweep {
+    private val INPUTS: MutableList<String> = mutableListOf<String?>(
+        "", "a", "b", "c", "&", "-", "0", "1", "9", "A", "Z", "_", "`", "x", " ", "\t", "\u0100",
+        "\u00e9", "\n", "]"
+    )
 
-/** Offline differential sweep for SafeRE character-class expression bugs. */
-public final class CharacterClassDivergenceSweep {
-  private static final List<String> INPUTS =
-      List.of(
-          "", "a", "b", "c", "&", "-", "0", "1", "9", "A", "Z", "_", "`", "x", " ", "\t", "\u0100",
-          "\u00e9", "\n", "]");
+    private val BASE_PIECES: MutableList<Piece> = List.of<Piece?>(
+        piece("empty", ""),
+        piece("a", "a"),
+        piece("b", "b"),
+        piece("ab", "ab"),
+        piece("rangeAB", "a-b"),
+        piece("zero", "0"),
+        piece("range01", "0-1"),
+        piece("rawAmp", "&"),
+        piece("escapedAmp", "\\&"),
+        piece("quoteAmp", "\\Q&\\E"),
+        piece("quoteA", "\\Qa\\E"),
+        piece("quoteAB", "\\Qab\\E"),
+        piece("quoteEmpty", "\\Q\\E"),
+        piece("nonInline", "\u0100"),
+        piece("escapedNonAscii", "\\\u0100"),
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("nestedAB", "[ab]"),
+        piece("nestedNotB", "[^b]"),
+        piece("digit", "\\d"),
+        piece("nonDigit", "\\D"),
+        piece("word", "\\w"),
+        piece("nonWord", "\\W"),
+        piece("propertyLower", "\\p{Lower}"),
+        piece("propertyNotLower", "\\P{Lower}"),
+        piece("propertyJavaLower", "\\p{javaLowerCase}")
+    )
 
-  private static final List<Piece> BASE_PIECES =
-      List.of(
-          piece("empty", ""),
-          piece("a", "a"),
-          piece("b", "b"),
-          piece("ab", "ab"),
-          piece("rangeAB", "a-b"),
-          piece("zero", "0"),
-          piece("range01", "0-1"),
-          piece("rawAmp", "&"),
-          piece("escapedAmp", "\\&"),
-          piece("quoteAmp", "\\Q&\\E"),
-          piece("quoteA", "\\Qa\\E"),
-          piece("quoteAB", "\\Qab\\E"),
-          piece("quoteEmpty", "\\Q\\E"),
-          piece("nonInline", "\u0100"),
-          piece("escapedNonAscii", "\\\u0100"),
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("nestedAB", "[ab]"),
-          piece("nestedNotB", "[^b]"),
-          piece("digit", "\\d"),
-          piece("nonDigit", "\\D"),
-          piece("word", "\\w"),
-          piece("nonWord", "\\W"),
-          piece("propertyLower", "\\p{Lower}"),
-          piece("propertyNotLower", "\\P{Lower}"),
-          piece("propertyJavaLower", "\\p{javaLowerCase}"));
+    private val LEFT_PIECES: MutableList<Piece> = List.of<Piece?>(
+        piece("a", "a"),
+        piece("b", "b"),
+        piece("ab", "ab"),
+        piece("rangeAB", "a-b"),
+        piece("zero", "0"),
+        piece("digit", "\\d"),
+        piece("word", "\\w"),
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("nestedAB", "[ab]"),
+        piece("quoteA", "\\Qa\\E"),
+        piece("quoteAB", "\\Qab\\E")
+    )
 
-  private static final List<Piece> LEFT_PIECES =
-      List.of(
-          piece("a", "a"),
-          piece("b", "b"),
-          piece("ab", "ab"),
-          piece("rangeAB", "a-b"),
-          piece("zero", "0"),
-          piece("digit", "\\d"),
-          piece("word", "\\w"),
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("nestedAB", "[ab]"),
-          piece("quoteA", "\\Qa\\E"),
-          piece("quoteAB", "\\Qab\\E"));
+    private val AMPERSAND_PIECES: MutableList<Piece> =
+        List.of<Piece?>(piece("rawAmp", "&"), piece("escapedAmp", "\\&"), piece("quoteAmp", "\\Q&\\E"))
 
-  private static final List<Piece> AMPERSAND_PIECES =
-      List.of(piece("rawAmp", "&"), piece("escapedAmp", "\\&"), piece("quoteAmp", "\\Q&\\E"));
+    private val RIGHT_PIECES: MutableList<Piece> = List.of<Piece?>(
+        piece("empty", ""),
+        piece("a", "a"),
+        piece("b", "b"),
+        piece("ab", "ab"),
+        piece("rangeAB", "a-b"),
+        piece("zero", "0"),
+        piece("range01", "0-1"),
+        piece("rawAmp", "&"),
+        piece("escapedAmp", "\\&"),
+        piece("quoteAmp", "\\Q&\\E"),
+        piece("quoteA", "\\Qa\\E"),
+        piece("quoteEmpty", "\\Q\\E"),
+        piece("nonInline", "\u0100"),
+        piece("escapedNonAscii", "\\\u0100"),
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("nestedAB", "[ab]"),
+        piece("digit", "\\d"),
+        piece("word", "\\w"),
+        piece("nonDigit", "\\D"),
+        piece("propertyLower", "\\p{Lower}"),
+        piece("propertyNotLower", "\\P{Lower}"),
+        piece("propertyJavaLower", "\\p{javaLowerCase}")
+    )
 
-  private static final List<Piece> RIGHT_PIECES =
-      List.of(
-          piece("empty", ""),
-          piece("a", "a"),
-          piece("b", "b"),
-          piece("ab", "ab"),
-          piece("rangeAB", "a-b"),
-          piece("zero", "0"),
-          piece("range01", "0-1"),
-          piece("rawAmp", "&"),
-          piece("escapedAmp", "\\&"),
-          piece("quoteAmp", "\\Q&\\E"),
-          piece("quoteA", "\\Qa\\E"),
-          piece("quoteEmpty", "\\Q\\E"),
-          piece("nonInline", "\u0100"),
-          piece("escapedNonAscii", "\\\u0100"),
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("nestedAB", "[ab]"),
-          piece("digit", "\\d"),
-          piece("word", "\\w"),
-          piece("nonDigit", "\\D"),
-          piece("propertyLower", "\\p{Lower}"),
-          piece("propertyNotLower", "\\P{Lower}"),
-          piece("propertyJavaLower", "\\p{javaLowerCase}"));
+    private val TRAILING_PIECES: MutableList<Piece> = List.of<Piece?>(
+        piece("none", ""),
+        piece("rawAmp", "&"),
+        piece("escapedAmp", "\\&"),
+        piece("quoteAmp", "\\Q&\\E"),
+        piece("rangeToNonDigit", "-\\D"),
+        piece("rangeToA", "-a"),
+        piece("rangeToAmp", "-&"),
+        piece("rawAmpRangeToAmp", "&-&"),
+        piece("rawAmpRangeToA", "&-a"),
+        piece("rangeToIntersection", "-&&"),
+        piece("zeroWidthRangeToNonDigit", "\\Q\\E-\\D"),
+        piece("doubleClose", "]")
+    )
 
-  private static final List<Piece> TRAILING_PIECES =
-      List.of(
-          piece("none", ""),
-          piece("rawAmp", "&"),
-          piece("escapedAmp", "\\&"),
-          piece("quoteAmp", "\\Q&\\E"),
-          piece("rangeToNonDigit", "-\\D"),
-          piece("rangeToA", "-a"),
-          piece("rangeToAmp", "-&"),
-          piece("rawAmpRangeToAmp", "&-&"),
-          piece("rawAmpRangeToA", "&-a"),
-          piece("rangeToIntersection", "-&&"),
-          piece("zeroWidthRangeToNonDigit", "\\Q\\E-\\D"),
-          piece("doubleClose", "]"));
+    private val SEPARATORS: MutableList<Piece?> = List.of<Piece?>(
+        piece("none", ""),
+        piece("emptyQuote", "\\Q\\E"),
+        piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
+        piece("space", " "),
+        piece("comment", " #x\n"),
+        piece("emptyQuoteSpace", "\\Q\\E "),
+        piece("spaceEmptyQuote", " \\Q\\E")
+    )
 
-  private static final List<Piece> SEPARATORS =
-      List.of(
-          piece("none", ""),
-          piece("emptyQuote", "\\Q\\E"),
-          piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
-          piece("space", " "),
-          piece("comment", " #x\n"),
-          piece("emptyQuoteSpace", "\\Q\\E "),
-          piece("spaceEmptyQuote", " \\Q\\E"));
+    private val COMMENT_SEPARATORS: MutableList<Piece> = List.of<Piece?>(
+        piece("none", ""),
+        piece("emptyQuote", "\\Q\\E"),
+        piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
+        piece("space", " "),
+        piece("comment", " #x\n"),
+        piece("emptyQuoteSpace", "\\Q\\E "),
+        piece("spaceEmptyQuote", " \\Q\\E")
+    )
 
-  private static final List<Piece> COMMENT_SEPARATORS =
-      List.of(
-          piece("none", ""),
-          piece("emptyQuote", "\\Q\\E"),
-          piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
-          piece("space", " "),
-          piece("comment", " #x\n"),
-          piece("emptyQuoteSpace", "\\Q\\E "),
-          piece("spaceEmptyQuote", " \\Q\\E"));
+    private val OPERATORS: MutableList<Piece> = List.of<Piece?>(
+        piece("&&", "&&"),
+        piece("&&&", "&&&"),
+        piece("&&&&", "&&&&"),
+        piece("&&&&&", "&&&&&"),
+        piece("&&&&&&", "&&&&&&")
+    )
 
-  private static final List<Piece> OPERATORS =
-      List.of(
-          piece("&&", "&&"),
-          piece("&&&", "&&&"),
-          piece("&&&&", "&&&&"),
-          piece("&&&&&", "&&&&&"),
-          piece("&&&&&&", "&&&&&&"));
+    private val SECOND_OPERATORS: MutableList<Piece> =
+        List.of<Piece?>(piece("&&", "&&"), piece("&&&", "&&&"), piece("&&&&", "&&&&"))
 
-  private static final List<Piece> SECOND_OPERATORS =
-      List.of(piece("&&", "&&"), piece("&&&", "&&&"), piece("&&&&", "&&&&"));
+    private val GRAMMAR_LEFT_ATOMS: MutableList<Piece> = List.of<Piece?>(
+        piece("empty", ""),
+        piece("a", "a"),
+        piece("dash", "-"),
+        piece("rangeAB", "a-b"),
+        piece("digit", "\\d"),
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("quoteAmp", "\\Q&\\E")
+    )
 
-  private static final List<Piece> GRAMMAR_LEFT_ATOMS =
-      List.of(
-          piece("empty", ""),
-          piece("a", "a"),
-          piece("dash", "-"),
-          piece("rangeAB", "a-b"),
-          piece("digit", "\\d"),
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("quoteAmp", "\\Q&\\E"));
+    private val GRAMMAR_RHS_ATOMS: MutableList<Piece> = List.of<Piece?>(
+        piece("empty", ""),
+        piece("a", "a"),
+        piece("b", "b"),
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("nestedAB", "[ab]"),
+        piece("propertyNotLower", "\\P{Lower}"),
+        piece("digit", "\\d")
+    )
 
-  private static final List<Piece> GRAMMAR_RHS_ATOMS =
-      List.of(
-          piece("empty", ""),
-          piece("a", "a"),
-          piece("b", "b"),
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("nestedAB", "[ab]"),
-          piece("propertyNotLower", "\\P{Lower}"),
-          piece("digit", "\\d"));
+    private val GRAMMAR_TAILS: MutableList<Piece> = List.of<Piece?>(
+        piece("none", ""),
+        piece("rangeToAmp", "-&"),
+        piece("rawAmpRangeToAmp", "&-&"),
+        piece("rawAmpRangeToA", "&-a"),
+        piece("rangeToA", "-a"),
+        piece("propertyNotLower", "\\P{Lower}"),
+        piece("doubleClose", "]")
+    )
 
-  private static final List<Piece> GRAMMAR_TAILS =
-      List.of(
-          piece("none", ""),
-          piece("rangeToAmp", "-&"),
-          piece("rawAmpRangeToAmp", "&-&"),
-          piece("rawAmpRangeToA", "&-a"),
-          piece("rangeToA", "-a"),
-          piece("propertyNotLower", "\\P{Lower}"),
-          piece("doubleClose", "]"));
+    private val GRAMMAR_ZERO_WIDTH_AND_TRIVIA: MutableList<Piece> = List.of<Piece?>(
+        piece("none", ""),
+        piece("emptyQuote", "\\Q\\E"),
+        piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
+        piece("space", " "),
+        piece("comment", " #x\n"),
+        piece("emptyQuoteSpace", "\\Q\\E "),
+        piece("spaceEmptyQuote", " \\Q\\E")
+    )
 
-  private static final List<Piece> GRAMMAR_ZERO_WIDTH_AND_TRIVIA =
-      List.of(
-          piece("none", ""),
-          piece("emptyQuote", "\\Q\\E"),
-          piece("twoEmptyQuotes", "\\Q\\E\\Q\\E"),
-          piece("space", " "),
-          piece("comment", " #x\n"),
-          piece("emptyQuoteSpace", "\\Q\\E "),
-          piece("spaceEmptyQuote", " \\Q\\E"));
+    private val RAW_AMPERSAND_CLOSE_TAILS: MutableList<Piece> = List.of<Piece?>(
+        piece("rawAmpSpace", "& "),
+        piece("rawAmpEmptyQuote", "&\\Q\\E"),
+        piece("rawAmpEmptyQuoteSpace", "&\\Q\\E "),
+        piece("rangeToAmpRawAmp", "-&&"),
+        piece("rangeToAmpRawAmpSpace", "-& &"),
+        piece("rangeToAmpEmptyQuoteRawAmp", "-&\\Q\\E&"),
+        piece("rangeToAmpCommentRawAmp", "-& #x\n&"),
+        piece("rangeToARawAmp", "-a&"),
+        piece("rangeToARawAmpSpace", "-a& "),
+        piece("rangeToAEmptyQuoteRawAmpSpace", "-a\\Q\\E& ")
+    )
 
-  private static final List<Piece> RAW_AMPERSAND_CLOSE_TAILS =
-      List.of(
-          piece("rawAmpSpace", "& "),
-          piece("rawAmpEmptyQuote", "&\\Q\\E"),
-          piece("rawAmpEmptyQuoteSpace", "&\\Q\\E "),
-          piece("rangeToAmpRawAmp", "-&&"),
-          piece("rangeToAmpRawAmpSpace", "-& &"),
-          piece("rangeToAmpEmptyQuoteRawAmp", "-&\\Q\\E&"),
-          piece("rangeToAmpCommentRawAmp", "-& #x\n&"),
-          piece("rangeToARawAmp", "-a&"),
-          piece("rangeToARawAmpSpace", "-a& "),
-          piece("rangeToAEmptyQuoteRawAmpSpace", "-a\\Q\\E& "));
+    private val NESTED_RIGHTS: MutableList<Piece> = List.of<Piece?>(
+        piece("nestedA", "[a]"),
+        piece("nestedB", "[b]"),
+        piece("nestedAB", "[ab]"),
+        piece("nestedNotB", "[^b]")
+    )
 
-  private static final List<Piece> NESTED_RIGHTS =
-      List.of(
-          piece("nestedA", "[a]"),
-          piece("nestedB", "[b]"),
-          piece("nestedAB", "[ab]"),
-          piece("nestedNotB", "[^b]"));
-
-  private CharacterClassDivergenceSweep() {}
-
-  public static void main(String[] args) throws IOException {
-    SweepOptions options =
-        SweepOptions.parse(
-            args,
-            Path.of("target", "exhaustive-reports", "character-class-sweep"),
-            "character-class-divergences.jsonl",
-            1_000_000);
-    Files.createDirectories(options.outputDir());
-    if (options.replayFile() != null) {
-      Files.deleteIfExists(options.jsonlPath());
-    }
-    options.printStartup("character-class");
-
-    if (options.replayFile() != null) {
-      runReplay(options);
-      return;
-    }
-
-    SweepRunState state = runSweep(options);
-
-    System.out.println("checked=" + state.checked.sum());
-    System.out.println("generated=" + state.generated);
-    System.out.println("divergences=" + state.divergences.sum());
-    System.out.println("threads=" + options.threads());
-  }
-
-  private static SweepRunState runSweep(SweepOptions options) throws IOException {
-    try (SweepRunState runState = new SweepRunState(options, options.totalChecks(totalCases()))) {
-      runState.enableCompactLogs(
-          "character-class", totalCases(), List.of("UNKNOWN"), List.of(DivergenceStatus.UNKNOWN));
-      SweepWorkers.run(
-          options.threads(),
-          "character-class-sweep-",
-          workerIndex -> {
-            SweepState worker = new SweepState(runState, workerIndex);
-            runSeparatedSingleAmpersandMatrix(worker);
-            runClassicMatrix(worker);
-            runChainedAmpersandMatrix(worker);
-            runGrammarSequenceMatrix(worker);
-            runRawAmpersandBeforeCloseMatrix(worker);
-            worker.finish();
-          });
-      return runState;
-    }
-  }
-
-  static long totalCases() {
-    return sum(
-        separatedSingleAmpersandCases(),
-        classicCases(),
-        chainedAmpersandCases(),
-        grammarSequenceCases(),
-        rawAmpersandBeforeCloseCases());
-  }
-
-  private static void runReplay(SweepOptions options) throws IOException {
-    try (BufferedReader reader =
-            Files.newBufferedReader(options.replayFile(), StandardCharsets.UTF_8);
-        SweepRunState runState = new SweepRunState(options, 0)) {
-      long generated =
-          SweepWorkers.runStreamingLines(
-              options.threads(),
-              "character-class-replay-",
-              reader,
-              line -> {
-                runState.checked.increment();
-                evaluateCase(runState, replayCase(line), -1, -1);
-              });
-      runState.recordGenerated(generated);
-      System.out.println("checked=" + runState.checked.sum());
-      System.out.println("generated=" + runState.generated);
-      System.out.println("divergences=" + runState.divergences.sum());
-      System.out.println("threads=" + options.threads());
-      System.out.println("jsonl=" + options.jsonlPath());
-      if (runState.divergences.sum() > 0) {
-        throw new IllegalStateException(
-            "replay found " + runState.divergences.sum() + " behavioral divergences");
-      }
-    }
-  }
-
-  private static CaseSpec replayCase(String line) {
-    var object = SweepJson.parseObject(line);
-    var caseObject = SweepJson.object(object, "case");
-    List<Piece> pieces = new ArrayList<>();
-    for (var element : SweepJson.array(caseObject, "pieces")) {
-      var piece = element.getAsJsonObject();
-      pieces.add(new Piece(SweepJson.string(piece, "label"), SweepJson.string(piece, "text")));
-    }
-    return new CaseSpec(
-        SweepJson.string(caseObject, "template"),
-        SweepJson.bool(caseObject, "comments"),
-        SweepJson.bool(caseObject, "negated"),
-        pieces);
-  }
-
-  private static long classicCases() {
-    long cases = 0;
-    for (boolean comments : List.of(false, true)) {
-      long separators = comments ? COMMENT_SEPARATORS.size() : nonCommentSeparators().size();
-      long twoLeftCases =
-          product(
-              BASE_PIECES.size(),
-              BASE_PIECES.size(),
-              separators,
-              OPERATORS.size(),
-              separators,
-              RIGHT_PIECES.size(),
-              TRAILING_PIECES.size());
-      long rawAmpLeftCases =
-          product(
-              BASE_PIECES.size(),
-              AMPERSAND_PIECES.size(),
-              separators,
-              OPERATORS.size(),
-              separators,
-              RIGHT_PIECES.size(),
-              TRAILING_PIECES.size());
-      long noLeftCases =
-          product(
-              separators,
-              OPERATORS.size(),
-              separators,
-              RIGHT_PIECES.size(),
-              TRAILING_PIECES.size());
-      cases = Math.addExact(cases, product(2, sum(twoLeftCases, rawAmpLeftCases, noLeftCases)));
-    }
-    return cases;
-  }
-
-  private static void runClassicMatrix(SweepState state) {
-    for (boolean comments : List.of(false, true)) {
-      for (boolean negated : List.of(false, true)) {
-        List<Piece> separators = comments ? COMMENT_SEPARATORS : nonCommentSeparators();
-        for (Piece first : BASE_PIECES) {
-          for (Piece second : BASE_PIECES) {
-            for (Piece separator : separators) {
-              for (Piece operator : OPERATORS) {
-                for (Piece afterOperator : separators) {
-                  for (Piece right : RIGHT_PIECES) {
-                    for (Piece trailing : TRAILING_PIECES) {
-                      state.check7(
-                          "classic-two-lefts",
-                          comments,
-                          negated,
-                          first,
-                          second,
-                          separator,
-                          operator,
-                          afterOperator,
-                          right,
-                          trailing);
-                    }
-                  }
-                }
-              }
-            }
-          }
+    @Throws(IOException::class)
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val options: SweepOptions =
+            SweepOptions.Companion.parse(
+                args,
+                Path.of("target", "exhaustive-reports", "character-class-sweep"),
+                "character-class-divergences.jsonl",
+                1000000
+            )
+        Files.createDirectories(options.outputDir)
+        if (options.replayFile != null) {
+            Files.deleteIfExists(options.jsonlPath())
         }
-        for (Piece first : BASE_PIECES) {
-          for (Piece ampersand : AMPERSAND_PIECES) {
-            for (Piece separator : separators) {
-              for (Piece operator : OPERATORS) {
-                for (Piece afterOperator : separators) {
-                  for (Piece right : RIGHT_PIECES) {
-                    for (Piece trailing : TRAILING_PIECES) {
-                      state.check7(
-                          "classic-raw-amp-left",
-                          comments,
-                          negated,
-                          first,
-                          ampersand,
-                          separator,
-                          operator,
-                          afterOperator,
-                          right,
-                          trailing);
-                    }
-                  }
-                }
-              }
-            }
-          }
+        options.printStartup("character-class")
+
+        if (options.replayFile != null) {
+            runReplay(options)
+            return
         }
-        for (Piece separator : separators) {
-          for (Piece operator : OPERATORS) {
-            for (Piece afterOperator : separators) {
-              for (Piece right : RIGHT_PIECES) {
-                for (Piece trailing : TRAILING_PIECES) {
-                  state.check5(
-                      "classic-no-left",
-                      comments,
-                      negated,
-                      separator,
-                      operator,
-                      afterOperator,
-                      right,
-                      trailing);
-                }
-              }
-            }
-          }
-        }
-      }
+
+        val state = runSweep(options)
+
+        println("checked=" + state.checked.sum())
+        println("generated=" + state.generated)
+        println("divergences=" + state.divergences.sum())
+        println("threads=" + options.threads)
     }
-  }
 
-  private static long chainedAmpersandCases() {
-    long rawAmpCases =
-        product(
-            LEFT_PIECES.size(),
-            COMMENT_SEPARATORS.size(),
-            OPERATORS.size(),
-            COMMENT_SEPARATORS.size(),
-            AMPERSAND_PIECES.size(),
-            COMMENT_SEPARATORS.size(),
-            SECOND_OPERATORS.size(),
-            COMMENT_SEPARATORS.size(),
-            RIGHT_PIECES.size(),
-            TRAILING_PIECES.size());
-    long nestedRhsCases =
-        product(
-            LEFT_PIECES.size(),
-            COMMENT_SEPARATORS.size(),
-            OPERATORS.size(),
-            COMMENT_SEPARATORS.size(),
-            nestedRights().size(),
-            COMMENT_SEPARATORS.size(),
-            SECOND_OPERATORS.size(),
-            COMMENT_SEPARATORS.size(),
-            RIGHT_PIECES.size());
-    return product(2, sum(rawAmpCases, nestedRhsCases));
-  }
+    @Throws(IOException::class)
+    private fun runSweep(options: SweepOptions): SweepRunState {
+        SweepRunState(options, options.totalChecks(totalCases())).use { runState ->
+            runState.enableCompactLogs(
+                "character-class",
+                totalCases(),
+                mutableListOf<String?>("UNKNOWN"),
+                List.of<DivergenceStatus?>(DivergenceStatus.UNKNOWN)
+            )
+            SweepWorkers.run(
+                options.threads,
+                "character-class-sweep-",
+                SweepWorkers.Worker { workerIndex: Int ->
+                    val worker = SweepState(runState, workerIndex)
+                    runSeparatedSingleAmpersandMatrix(worker)
+                    runClassicMatrix(worker)
+                    runChainedAmpersandMatrix(worker)
+                    runGrammarSequenceMatrix(worker)
+                    runRawAmpersandBeforeCloseMatrix(worker)
+                    worker.finish()
+                })
+            return runState
+        }
+    }
 
-  private static void runChainedAmpersandMatrix(SweepState state) {
-    for (boolean negated : List.of(false, true)) {
-      for (Piece left : LEFT_PIECES) {
-        for (Piece separator1 : COMMENT_SEPARATORS) {
-          for (Piece firstOperator : OPERATORS) {
-            for (Piece separator2 : COMMENT_SEPARATORS) {
-              for (Piece ampersand : AMPERSAND_PIECES) {
-                for (Piece separator3 : COMMENT_SEPARATORS) {
-                  for (Piece secondOperator : SECOND_OPERATORS) {
-                    for (Piece separator4 : COMMENT_SEPARATORS) {
-                      for (Piece right : RIGHT_PIECES) {
-                        for (Piece trailing : TRAILING_PIECES) {
-                          state.check10(
-                              "chained-raw-amp",
-                              true,
-                              negated,
-                              left,
-                              separator1,
-                              firstOperator,
-                              separator2,
-                              ampersand,
-                              separator3,
-                              secondOperator,
-                              separator4,
-                              right,
-                              trailing);
+    @JvmStatic
+    fun totalCases(): Long {
+        return sum(
+            separatedSingleAmpersandCases(),
+            classicCases(),
+            chainedAmpersandCases(),
+            grammarSequenceCases(),
+            rawAmpersandBeforeCloseCases()
+        )
+    }
+
+    @Throws(IOException::class)
+    private fun runReplay(options: SweepOptions) {
+        Files.newBufferedReader(options.replayFile, StandardCharsets.UTF_8).use { reader ->
+            SweepRunState(options, 0).use { runState ->
+                val generated =
+                    SweepWorkers.runStreamingLines(
+                        options.threads,
+                        "character-class-replay-",
+                        reader,
+                        LineWorker { line: String? ->
+                            runState.checked.increment()
+                            evaluateCase(runState, replayCase(line), -1, -1)
+                        })
+                runState.recordGenerated(generated)
+                println("checked=" + runState.checked.sum())
+                println("generated=" + runState.generated)
+                println("divergences=" + runState.divergences.sum())
+                println("threads=" + options.threads)
+                println("jsonl=" + options.jsonlPath())
+                check(runState.divergences.sum() <= 0) { "replay found " + runState.divergences.sum() + " behavioral divergences" }
+            }
+        }
+    }
+
+    private fun replayCase(line: String?): CaseSpec {
+        val `object` = SweepJson.parseObject(line)
+        val caseObject = SweepJson.`object`(`object`, "case")
+        val pieces: MutableList<Piece> = ArrayList<Piece>()
+        for (element in SweepJson.array(caseObject, "pieces")) {
+            val piece = element.getAsJsonObject()
+            pieces.add(Piece(SweepJson.string(piece, "label"), SweepJson.string(piece, "text")))
+        }
+        return CaseSpec(
+            SweepJson.string(caseObject, "template"),
+            SweepJson.bool(caseObject, "comments"),
+            SweepJson.bool(caseObject, "negated"),
+            pieces
+        )
+    }
+
+    private fun classicCases(): Long {
+        var cases: Long = 0
+        for (comments in mutableListOf<Boolean?>(false, true)) {
+            val separators = (if (comments) COMMENT_SEPARATORS.size else nonCommentSeparators().size).toLong()
+            val twoLeftCases =
+                product(
+                    BASE_PIECES.size.toLong(),
+                    BASE_PIECES.size.toLong(),
+                    separators,
+                    OPERATORS.size.toLong(),
+                    separators,
+                    RIGHT_PIECES.size.toLong(),
+                    TRAILING_PIECES.size.toLong()
+                )
+            val rawAmpLeftCases =
+                product(
+                    BASE_PIECES.size.toLong(),
+                    AMPERSAND_PIECES.size.toLong(),
+                    separators,
+                    OPERATORS.size.toLong(),
+                    separators,
+                    RIGHT_PIECES.size.toLong(),
+                    TRAILING_PIECES.size.toLong()
+                )
+            val noLeftCases =
+                product(
+                    separators,
+                    OPERATORS.size.toLong(),
+                    separators,
+                    RIGHT_PIECES.size.toLong(),
+                    TRAILING_PIECES.size.toLong()
+                )
+            cases = Math.addExact(cases, product(2, sum(twoLeftCases, rawAmpLeftCases, noLeftCases)))
+        }
+        return cases
+    }
+
+    private fun runClassicMatrix(state: SweepState) {
+        for (comments in mutableListOf<Boolean?>(false, true)) {
+            for (negated in mutableListOf<Boolean?>(false, true)) {
+                val separators = if (comments) COMMENT_SEPARATORS else nonCommentSeparators()
+                for (first in BASE_PIECES) {
+                    for (second in BASE_PIECES) {
+                        for (separator in separators) {
+                            for (operator in OPERATORS) {
+                                for (afterOperator in separators) {
+                                    for (right in RIGHT_PIECES) {
+                                        for (trailing in TRAILING_PIECES) {
+                                            state.check7(
+                                                "classic-two-lefts",
+                                                comments!!,
+                                                negated!!,
+                                                first,
+                                                second,
+                                                separator,
+                                                operator,
+                                                afterOperator,
+                                                right,
+                                                trailing
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
-                      }
                     }
-                  }
                 }
-              }
-            }
-          }
-        }
-      }
-      for (Piece left : LEFT_PIECES) {
-        for (Piece separator1 : COMMENT_SEPARATORS) {
-          for (Piece firstOperator : OPERATORS) {
-            for (Piece separator2 : COMMENT_SEPARATORS) {
-              for (Piece nested : nestedRights()) {
-                for (Piece separator3 : COMMENT_SEPARATORS) {
-                  for (Piece secondOperator : SECOND_OPERATORS) {
-                    for (Piece separator4 : COMMENT_SEPARATORS) {
-                      for (Piece right : RIGHT_PIECES) {
-                        state.check9(
-                            "chained-nested-rhs",
-                            true,
-                            negated,
-                            left,
-                            separator1,
-                            firstOperator,
-                            separator2,
-                            nested,
-                            separator3,
-                            secondOperator,
-                            separator4,
-                            right);
-                      }
+                for (first in BASE_PIECES) {
+                    for (ampersand in AMPERSAND_PIECES) {
+                        for (separator in separators) {
+                            for (operator in OPERATORS) {
+                                for (afterOperator in separators) {
+                                    for (right in RIGHT_PIECES) {
+                                        for (trailing in TRAILING_PIECES) {
+                                            state.check7(
+                                                "classic-raw-amp-left",
+                                                comments!!,
+                                                negated!!,
+                                                first,
+                                                ampersand,
+                                                separator,
+                                                operator,
+                                                afterOperator,
+                                                right,
+                                                trailing
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                  }
                 }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private static long grammarSequenceCases() {
-    long cases = 0;
-    for (boolean comments : List.of(false, true)) {
-      long trivia = comments ? GRAMMAR_ZERO_WIDTH_AND_TRIVIA.size() : nonCommentSeparators().size();
-      cases =
-          Math.addExact(
-              cases,
-              product(
-                  2,
-                  GRAMMAR_LEFT_ATOMS.size(),
-                  OPERATORS.size(),
-                  GRAMMAR_RHS_ATOMS.size(),
-                  GRAMMAR_TAILS.size(),
-                  trivia,
-                  GRAMMAR_TAILS.size()));
-    }
-    return cases;
-  }
-
-  private static void runGrammarSequenceMatrix(SweepState state) {
-    for (boolean comments : List.of(false, true)) {
-      for (boolean negated : List.of(false, true)) {
-        List<Piece> trivia = comments ? GRAMMAR_ZERO_WIDTH_AND_TRIVIA : nonCommentSeparators();
-        for (Piece left : GRAMMAR_LEFT_ATOMS) {
-          for (Piece operator : OPERATORS) {
-            for (Piece right : GRAMMAR_RHS_ATOMS) {
-              for (Piece tail1 : GRAMMAR_TAILS) {
-                for (Piece separator : trivia) {
-                  for (Piece tail2 : GRAMMAR_TAILS) {
-                    state.check6(
-                        "grammar-sequence",
-                        comments,
-                        negated,
-                        left,
-                        operator,
-                        right,
-                        tail1,
-                        separator,
-                        tail2);
-                  }
+                for (separator in separators) {
+                    for (operator in OPERATORS) {
+                        for (afterOperator in separators) {
+                            for (right in RIGHT_PIECES) {
+                                for (trailing in TRAILING_PIECES) {
+                                    state.check5(
+                                        "classic-no-left",
+                                        comments!!,
+                                        negated!!,
+                                        separator,
+                                        operator,
+                                        afterOperator,
+                                        right,
+                                        trailing
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
         }
-      }
     }
-  }
 
-  private static long rawAmpersandBeforeCloseCases() {
-    return product(
-        2,
-        LEFT_PIECES.size(),
-        AMPERSAND_PIECES.size(),
-        COMMENT_SEPARATORS.size(),
-        OPERATORS.size(),
-        COMMENT_SEPARATORS.size(),
-        RAW_AMPERSAND_CLOSE_TAILS.size());
-  }
+    private fun chainedAmpersandCases(): Long {
+        val rawAmpCases =
+            product(
+                LEFT_PIECES.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                OPERATORS.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                AMPERSAND_PIECES.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                SECOND_OPERATORS.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                RIGHT_PIECES.size.toLong(),
+                TRAILING_PIECES.size.toLong()
+            )
+        val nestedRhsCases =
+            product(
+                LEFT_PIECES.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                OPERATORS.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                nestedRights().size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                SECOND_OPERATORS.size.toLong(),
+                COMMENT_SEPARATORS.size.toLong(),
+                RIGHT_PIECES.size.toLong()
+            )
+        return product(2, sum(rawAmpCases, nestedRhsCases))
+    }
 
-  private static void runRawAmpersandBeforeCloseMatrix(SweepState state) {
-    for (boolean negated : List.of(false, true)) {
-      for (Piece left : LEFT_PIECES) {
-        for (Piece ampersand : AMPERSAND_PIECES) {
-          for (Piece beforeOperator : COMMENT_SEPARATORS) {
-            for (Piece operator : OPERATORS) {
-              for (Piece afterOperator : COMMENT_SEPARATORS) {
-                for (Piece tail : RAW_AMPERSAND_CLOSE_TAILS) {
-                  state.check6(
-                      "raw-ampersand-before-close",
-                      true,
-                      negated,
-                      left,
-                      ampersand,
-                      beforeOperator,
-                      operator,
-                      afterOperator,
-                      tail);
+    private fun runChainedAmpersandMatrix(state: SweepState) {
+        for (negated in mutableListOf<Boolean?>(false, true)) {
+            for (left in LEFT_PIECES) {
+                for (separator1 in COMMENT_SEPARATORS) {
+                    for (firstOperator in OPERATORS) {
+                        for (separator2 in COMMENT_SEPARATORS) {
+                            for (ampersand in AMPERSAND_PIECES) {
+                                for (separator3 in COMMENT_SEPARATORS) {
+                                    for (secondOperator in SECOND_OPERATORS) {
+                                        for (separator4 in COMMENT_SEPARATORS) {
+                                            for (right in RIGHT_PIECES) {
+                                                for (trailing in TRAILING_PIECES) {
+                                                    state.check10(
+                                                        "chained-raw-amp",
+                                                        true,
+                                                        negated!!,
+                                                        left,
+                                                        separator1,
+                                                        firstOperator,
+                                                        separator2,
+                                                        ampersand,
+                                                        separator3,
+                                                        secondOperator,
+                                                        separator4,
+                                                        right,
+                                                        trailing
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
-        }
-      }
-    }
-  }
-
-  private static long separatedSingleAmpersandCases() {
-    return product(
-        2,
-        LEFT_PIECES.size(),
-        COMMENT_SEPARATORS.size(),
-        AMPERSAND_PIECES.size(),
-        COMMENT_SEPARATORS.size(),
-        AMPERSAND_PIECES.size(),
-        nestedRights().size(),
-        RAW_AMPERSAND_CLOSE_TAILS.size());
-  }
-
-  private static void runSeparatedSingleAmpersandMatrix(SweepState state) {
-    for (boolean negated : List.of(false, true)) {
-      for (Piece left : LEFT_PIECES) {
-        for (Piece beforeFirstAmp : COMMENT_SEPARATORS) {
-          for (Piece firstAmp : AMPERSAND_PIECES) {
-            for (Piece betweenAmps : COMMENT_SEPARATORS) {
-              for (Piece secondAmp : AMPERSAND_PIECES) {
-                for (Piece nested : nestedRights()) {
-                  for (Piece tail : RAW_AMPERSAND_CLOSE_TAILS) {
-                    state.check7(
-                        "separated-single-ampersands-before-nested",
-                        true,
-                        negated,
-                        left,
-                        beforeFirstAmp,
-                        firstAmp,
-                        betweenAmps,
-                        secondAmp,
-                        nested,
-                        tail);
-                  }
+            for (left in LEFT_PIECES) {
+                for (separator1 in COMMENT_SEPARATORS) {
+                    for (firstOperator in OPERATORS) {
+                        for (separator2 in COMMENT_SEPARATORS) {
+                            for (nested in nestedRights()) {
+                                for (separator3 in COMMENT_SEPARATORS) {
+                                    for (secondOperator in SECOND_OPERATORS) {
+                                        for (separator4 in COMMENT_SEPARATORS) {
+                                            for (right in RIGHT_PIECES) {
+                                                state.check9(
+                                                    "chained-nested-rhs",
+                                                    true,
+                                                    negated!!,
+                                                    left,
+                                                    separator1,
+                                                    firstOperator,
+                                                    separator2,
+                                                    nested,
+                                                    separator3,
+                                                    secondOperator,
+                                                    separator4,
+                                                    right
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
         }
-      }
-    }
-  }
-
-  private static List<Piece> nestedRights() {
-    return NESTED_RIGHTS;
-  }
-
-  private static List<Piece> nonCommentSeparators() {
-    return SEPARATORS.stream().filter(separator -> !separator.isCommentsOnly()).toList();
-  }
-
-  private static Piece piece(String label, String text) {
-    return new Piece(label, text);
-  }
-
-  private static long product(long... factors) {
-    long result = 1;
-    for (long factor : factors) {
-      result = Math.multiplyExact(result, factor);
-    }
-    return result;
-  }
-
-  private static long sum(long... values) {
-    long result = 0;
-    for (long value : values) {
-      result = Math.addExact(result, value);
-    }
-    return result;
-  }
-
-  private static Outcome jdkOutcome(String regex) {
-    try {
-      return new Outcome(true, matches(java.util.regex.Pattern.compile(regex)), "");
-    } catch (PatternSyntaxException e) {
-      return new Outcome(false, "", e.getDescription());
-    } catch (RuntimeException e) {
-      return new Outcome(false, "", e.getClass().getSimpleName() + ": " + e.getMessage());
-    }
-  }
-
-  private static Outcome safeReOutcome(String regex) {
-    try {
-      return new Outcome(true, matches(org.safere.Pattern.compile(regex)), "");
-    } catch (PatternSyntaxException e) {
-      return new Outcome(false, "", e.getDescription());
-    } catch (RuntimeException e) {
-      return new Outcome(false, "", e.getClass().getSimpleName() + ": " + e.getMessage());
-    }
-  }
-
-  private static String matches(java.util.regex.Pattern pattern) {
-    StringBuilder result = new StringBuilder();
-    for (String input : INPUTS) {
-      if (pattern.matcher(input).matches()) {
-        appendInput(result, input);
-      }
-    }
-    return result.toString();
-  }
-
-  private static String matches(org.safere.Pattern pattern) {
-    StringBuilder result = new StringBuilder();
-    for (String input : INPUTS) {
-      if (pattern.matcher(input).matches()) {
-        appendInput(result, input);
-      }
-    }
-    return result.toString();
-  }
-
-  private static void appendInput(StringBuilder result, String input) {
-    if (result.length() > 0) {
-      result.append(',');
-    }
-    result.append(escape(input));
-  }
-
-  private static String escape(String value) {
-    return value
-        .replace("\\", "\\\\")
-        .replace("\n", "\\n")
-        .replace("\t", "\\t")
-        .replace("\"", "\\\"");
-  }
-
-  private static String bucketFor(CaseSpec spec, Outcome jdk, Outcome safere) {
-    String kind = jdk.accepted() != safere.accepted() ? "compile" : "membership";
-    String direction = direction(jdk, safere);
-    return String.join(
-        "|",
-        "kind=" + kind,
-        "direction=" + direction,
-        "template=" + spec.template(),
-        "comments=" + spec.comments(),
-        "negated=" + spec.negated(),
-        "ops=" + operatorLabels(spec),
-        "seps=" + separatorClass(spec),
-        "rawAmp=" + containsLabel(spec, "rawAmp"),
-        "escapedAmp=" + containsLabel(spec, "escapedAmp"),
-        "quoteEmpty=" + containsLabel(spec, "quoteEmpty"),
-        "nested=" + containsPrefix(spec, "nested"),
-        "rangeTail=" + containsRangeTail(spec),
-        "doubleClose=" + containsLabel(spec, "doubleClose"));
-  }
-
-  private static String direction(Outcome jdk, Outcome safere) {
-    if (jdk.accepted() && !safere.accepted()) {
-      return "jdk-accepts";
-    }
-    if (!jdk.accepted() && safere.accepted()) {
-      return "safere-accepts";
-    }
-    return "matches";
-  }
-
-  private static String operatorLabels(CaseSpec spec) {
-    List<String> labels = new ArrayList<>();
-    for (Piece piece : spec.pieces()) {
-      if (piece.text().startsWith("&&")) {
-        labels.add(piece.label());
-      }
-    }
-    return String.join(",", labels);
-  }
-
-  private static String separatorClass(CaseSpec spec) {
-    boolean hasComment = containsLabel(spec, "comment");
-    boolean hasSpace =
-        containsLabel(spec, "space")
-            || containsLabel(spec, "emptyQuoteSpace")
-            || containsLabel(spec, "spaceEmptyQuote");
-    boolean hasEmptyQuote =
-        containsLabel(spec, "emptyQuote")
-            || containsLabel(spec, "twoEmptyQuotes")
-            || containsLabel(spec, "emptyQuoteSpace")
-            || containsLabel(spec, "spaceEmptyQuote");
-    return (hasComment ? "comment" : "no-comment")
-        + ","
-        + (hasSpace ? "space" : "no-space")
-        + ","
-        + (hasEmptyQuote ? "emptyQuote" : "no-emptyQuote");
-  }
-
-  private static boolean containsLabel(CaseSpec spec, String label) {
-    return spec.pieces().stream().anyMatch(piece -> piece.label().equals(label));
-  }
-
-  private static boolean containsPrefix(CaseSpec spec, String prefix) {
-    return spec.pieces().stream().anyMatch(piece -> piece.label().startsWith(prefix));
-  }
-
-  private static boolean containsRangeTail(CaseSpec spec) {
-    return spec.pieces().stream()
-        .anyMatch(piece -> piece.label().contains("range") || piece.label().contains("Range"));
-  }
-
-  private record Piece(String label, String text) {
-    boolean isCommentsOnly() {
-      return text.contains(" ") || text.contains("#");
-    }
-  }
-
-  private record CaseSpec(String template, boolean comments, boolean negated, List<Piece> pieces) {
-    String regex() {
-      StringBuilder regex = new StringBuilder();
-      if (comments) {
-        regex.append("(?x)");
-      }
-      regex.append('[');
-      if (negated) {
-        regex.append('^');
-      }
-      for (Piece piece : pieces) {
-        regex.append(piece.text());
-      }
-      regex.append(']');
-      return regex.toString();
     }
 
-    String labels() {
-      List<String> labels = new ArrayList<>();
-      for (Piece piece : pieces) {
-        if (!piece.text().isEmpty()) {
-          labels.add(piece.label());
+    private fun grammarSequenceCases(): Long {
+        var cases: Long = 0
+        for (comments in mutableListOf<Boolean?>(false, true)) {
+            val trivia = (if (comments) GRAMMAR_ZERO_WIDTH_AND_TRIVIA.size else nonCommentSeparators().size).toLong()
+            cases =
+                Math.addExact(
+                    cases,
+                    product(
+                        2,
+                        GRAMMAR_LEFT_ATOMS.size.toLong(),
+                        OPERATORS.size.toLong(),
+                        GRAMMAR_RHS_ATOMS.size.toLong(),
+                        GRAMMAR_TAILS.size.toLong(),
+                        trivia,
+                        GRAMMAR_TAILS.size.toLong()
+                    )
+                )
         }
-      }
-      return String.join(",", labels);
-    }
-  }
-
-  private record Outcome(boolean accepted, String matches, String error) {}
-
-  private record Divergence(
-      CaseSpec spec, String regex, Outcome jdk, Outcome safere, String bucket, String reduced) {
-    String toJson() {
-      var object = SweepJson.object();
-      object.add("case", caseJson(spec));
-      object.addProperty("bucket", bucket);
-      object.addProperty("template", spec.template());
-      object.addProperty("labels", spec.labels());
-      object.addProperty("regex", regex);
-      object.addProperty("reduced", reduced);
-      object.addProperty("jdkAccepted", jdk.accepted());
-      object.addProperty("safeReAccepted", safere.accepted());
-      object.addProperty("jdkMatches", jdk.matches());
-      object.addProperty("safeReMatches", safere.matches());
-      object.addProperty("jdkError", jdk.error());
-      object.addProperty("safeReError", safere.error());
-      return SweepJson.toJson(object);
+        return cases
     }
 
-    private static JsonObject caseJson(CaseSpec spec) {
-      var object = SweepJson.object();
-      object.addProperty("template", spec.template());
-      object.addProperty("comments", spec.comments());
-      object.addProperty("negated", spec.negated());
-      var pieces = new JsonArray();
-      for (Piece piece : spec.pieces()) {
-        var pieceObject = SweepJson.object();
-        pieceObject.addProperty("label", piece.label());
-        pieceObject.addProperty("text", piece.text());
-        pieces.add(pieceObject);
-      }
-      object.add("pieces", pieces);
-      return object;
-    }
-  }
-
-  private static final class SweepState {
-    final SweepRunState runState;
-    final SweepOptions options;
-    final SweepWorkers.ProgressReporter progressReporter;
-    final int workerIndex;
-    final long targetCaseIndex;
-    final List<Long> targetCaseIndices;
-    final List<CaseSpec> locatedCases;
-    final BufferedWriter compactWriter;
-    final String compactClassification;
-    final DataInputStream compactIndices;
-    int targetPosition;
-    long nextCompactCaseIndex;
-    long generated;
-    long currentCaseIndex;
-
-    SweepState(SweepRunState runState, int workerIndex) {
-      this.runState = runState;
-      this.options = runState.options;
-      this.progressReporter = new SweepWorkers.ProgressReporter(runState, workerIndex);
-      this.workerIndex = workerIndex;
-      this.targetCaseIndex = -1;
-      this.targetCaseIndices = null;
-      this.locatedCases = null;
-      this.compactWriter = null;
-      this.compactClassification = null;
-      this.compactIndices = null;
+    private fun runGrammarSequenceMatrix(state: SweepState) {
+        for (comments in mutableListOf<Boolean?>(false, true)) {
+            for (negated in mutableListOf<Boolean?>(false, true)) {
+                val trivia = if (comments) GRAMMAR_ZERO_WIDTH_AND_TRIVIA else nonCommentSeparators()
+                for (left in GRAMMAR_LEFT_ATOMS) {
+                    for (operator in OPERATORS) {
+                        for (right in GRAMMAR_RHS_ATOMS) {
+                            for (tail1 in GRAMMAR_TAILS) {
+                                for (separator in trivia) {
+                                    for (tail2 in GRAMMAR_TAILS) {
+                                        state.check6(
+                                            "grammar-sequence",
+                                            comments!!,
+                                            negated!!,
+                                            left,
+                                            operator,
+                                            right,
+                                            tail1,
+                                            separator,
+                                            tail2
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    SweepState(long targetCaseIndex) {
-      this.runState = null;
-      this.options = null;
-      this.progressReporter = null;
-      this.workerIndex = -1;
-      this.targetCaseIndex = targetCaseIndex;
-      this.targetCaseIndices = null;
-      this.locatedCases = null;
-      this.compactWriter = null;
-      this.compactClassification = null;
-      this.compactIndices = null;
+    private fun rawAmpersandBeforeCloseCases(): Long {
+        return product(
+            2,
+            LEFT_PIECES.size.toLong(),
+            AMPERSAND_PIECES.size.toLong(),
+            COMMENT_SEPARATORS.size.toLong(),
+            OPERATORS.size.toLong(),
+            COMMENT_SEPARATORS.size.toLong(),
+            RAW_AMPERSAND_CLOSE_TAILS.size.toLong()
+        )
     }
 
-    SweepState(List<Long> targetCaseIndices) {
-      this.runState = null;
-      this.options = null;
-      this.progressReporter = null;
-      this.workerIndex = -1;
-      this.targetCaseIndex = -1;
-      this.targetCaseIndices = targetCaseIndices;
-      this.locatedCases = new ArrayList<>();
-      this.compactWriter = null;
-      this.compactClassification = null;
-      this.compactIndices = null;
+    private fun runRawAmpersandBeforeCloseMatrix(state: SweepState) {
+        for (negated in mutableListOf<Boolean?>(false, true)) {
+            for (left in LEFT_PIECES) {
+                for (ampersand in AMPERSAND_PIECES) {
+                    for (beforeOperator in COMMENT_SEPARATORS) {
+                        for (operator in OPERATORS) {
+                            for (afterOperator in COMMENT_SEPARATORS) {
+                                for (tail in RAW_AMPERSAND_CLOSE_TAILS) {
+                                    state.check6(
+                                        "raw-ampersand-before-close",
+                                        true,
+                                        negated!!,
+                                        left,
+                                        ampersand,
+                                        beforeOperator,
+                                        operator,
+                                        afterOperator,
+                                        tail
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    SweepState(
-        BufferedWriter compactWriter,
-        String compactClassification,
-        DataInputStream compactIndices) {
-      this.runState = null;
-      this.options = null;
-      this.progressReporter = null;
-      this.workerIndex = -1;
-      this.targetCaseIndex = -1;
-      this.targetCaseIndices = null;
-      this.locatedCases = null;
-      this.compactWriter = compactWriter;
-      this.compactClassification = compactClassification;
-      this.compactIndices = compactIndices;
-      advanceCompactCaseIndex();
+    private fun separatedSingleAmpersandCases(): Long {
+        return product(
+            2,
+            LEFT_PIECES.size.toLong(),
+            COMMENT_SEPARATORS.size.toLong(),
+            AMPERSAND_PIECES.size.toLong(),
+            COMMENT_SEPARATORS.size.toLong(),
+            AMPERSAND_PIECES.size.toLong(),
+            nestedRights().size.toLong(),
+            RAW_AMPERSAND_CLOSE_TAILS.size.toLong()
+        )
     }
 
-    void check5(
-        String template,
-        boolean comments,
-        boolean negated,
-        Piece p1,
-        Piece p2,
-        Piece p3,
-        Piece p4,
-        Piece p5) {
-      if (!beginCase()) {
-        return;
-      }
-      evaluateCase(new CaseSpec(template, comments, negated, List.of(p1, p2, p3, p4, p5)));
+    private fun runSeparatedSingleAmpersandMatrix(state: SweepState) {
+        for (negated in mutableListOf<Boolean?>(false, true)) {
+            for (left in LEFT_PIECES) {
+                for (beforeFirstAmp in COMMENT_SEPARATORS) {
+                    for (firstAmp in AMPERSAND_PIECES) {
+                        for (betweenAmps in COMMENT_SEPARATORS) {
+                            for (secondAmp in AMPERSAND_PIECES) {
+                                for (nested in nestedRights()) {
+                                    for (tail in RAW_AMPERSAND_CLOSE_TAILS) {
+                                        state.check7(
+                                            "separated-single-ampersands-before-nested",
+                                            true,
+                                            negated!!,
+                                            left,
+                                            beforeFirstAmp,
+                                            firstAmp,
+                                            betweenAmps,
+                                            secondAmp,
+                                            nested,
+                                            tail
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    void check6(
-        String template,
-        boolean comments,
-        boolean negated,
-        Piece p1,
-        Piece p2,
-        Piece p3,
-        Piece p4,
-        Piece p5,
-        Piece p6) {
-      if (!beginCase()) {
-        return;
-      }
-      evaluateCase(new CaseSpec(template, comments, negated, List.of(p1, p2, p3, p4, p5, p6)));
+    private fun nestedRights(): MutableList<Piece> {
+        return NESTED_RIGHTS
     }
 
-    void check7(
-        String template,
-        boolean comments,
-        boolean negated,
-        Piece p1,
-        Piece p2,
-        Piece p3,
-        Piece p4,
-        Piece p5,
-        Piece p6,
-        Piece p7) {
-      if (!beginCase()) {
-        return;
-      }
-      evaluateCase(new CaseSpec(template, comments, negated, List.of(p1, p2, p3, p4, p5, p6, p7)));
+    private fun nonCommentSeparators(): MutableList<Piece?> {
+        return SEPARATORS.stream().filter { separator: Piece? -> !separator!!.isCommentsOnly }.toList()
     }
 
-    void check9(
-        String template,
-        boolean comments,
-        boolean negated,
-        Piece p1,
-        Piece p2,
-        Piece p3,
-        Piece p4,
-        Piece p5,
-        Piece p6,
-        Piece p7,
-        Piece p8,
-        Piece p9) {
-      if (!beginCase()) {
-        return;
-      }
-      evaluateCase(
-          new CaseSpec(template, comments, negated, List.of(p1, p2, p3, p4, p5, p6, p7, p8, p9)));
+    private fun piece(label: String?, text: String?): Piece {
+        return Piece(label, text)
     }
 
-    void check10(
-        String template,
-        boolean comments,
-        boolean negated,
-        Piece p1,
-        Piece p2,
-        Piece p3,
-        Piece p4,
-        Piece p5,
-        Piece p6,
-        Piece p7,
-        Piece p8,
-        Piece p9,
-        Piece p10) {
-      if (!beginCase()) {
-        return;
-      }
-      evaluateCase(
-          new CaseSpec(
-              template, comments, negated, List.of(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)));
+    private fun product(vararg factors: Long): Long {
+        var result: Long = 1
+        for (factor in factors) {
+            result = Math.multiplyExact(result, factor)
+        }
+        return result
     }
 
-    boolean beginCase() {
-      if (compactIndices != null) {
-        currentCaseIndex = generated++;
-        return currentCaseIndex == nextCompactCaseIndex;
-      }
-      if (targetCaseIndices != null) {
-        currentCaseIndex = generated++;
-        return currentCaseIndex == targetCaseIndices.get(targetPosition);
-      }
-      if (targetCaseIndex >= 0) {
-        currentCaseIndex = generated++;
-        return currentCaseIndex == targetCaseIndex;
-      }
-      if (generated >= options.rangeEndExclusive()) {
-        return false;
-      }
-      long caseIndex = generated++;
-      currentCaseIndex = caseIndex;
-      if (caseIndex < options.rangeStartInclusive()) {
-        reportProgressIfNeeded();
-        return false;
-      }
-      if (caseIndex % options.threads() != workerIndex) {
-        return false;
-      }
-      progressReporter.checked();
-      return true;
+    private fun sum(vararg values: Long): Long {
+        var result: Long = 0
+        for (value in values) {
+            result = Math.addExact(result, value)
+        }
+        return result
     }
 
-    void evaluateCase(CaseSpec spec) {
-      if (compactIndices != null) {
+    private fun jdkOutcome(regex: String): Outcome {
         try {
-          compactWriter.write(compactReplayJson(currentCaseIndex, compactClassification, spec));
-          compactWriter.newLine();
-        } catch (IOException e) {
-          throw new CompactExpansionException(e);
+            return Outcome(true, matches(Pattern.compile(regex)), "")
+        } catch (e: PatternSyntaxException) {
+            return Outcome(false, "", e.getDescription())
+        } catch (e: RuntimeException) {
+            return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
-        advanceCompactCaseIndex();
-        return;
-      }
-      if (targetCaseIndices != null) {
-        locatedCases.add(spec);
-        targetPosition++;
-        if (targetPosition == targetCaseIndices.size()) {
-          throw new LocatedCasesComplete();
+    }
+
+    private fun safeReOutcome(regex: String?): Outcome {
+        try {
+            return Outcome(true, matches(org.safere.Pattern.compile(regex)), "")
+        } catch (e: PatternSyntaxException) {
+            return Outcome(false, "", e.getDescription())
+        } catch (e: RuntimeException) {
+            return Outcome(false, "", e.javaClass.getSimpleName() + ": " + e.message)
         }
-        return;
-      }
-      if (targetCaseIndex >= 0) {
-        throw new LocatedCase(spec);
-      }
-      CharacterClassDivergenceSweep.evaluateCase(runState, spec, workerIndex, currentCaseIndex);
-      reportProgressIfNeeded();
     }
 
-    void finish() {
-      runState.recordGenerated(generated);
-      runState.updateWorkerNextCaseIndex(workerIndex, generated);
-    }
-
-    void reportProgressIfNeeded() {
-      progressReporter.reportIfNeeded(generated);
-    }
-
-    // EOFException marks the normal end of the index file, and LocatedCasesComplete is a
-    // control-flow signal, so the EOFException carries nothing worth keeping as a cause.
-    @SuppressWarnings("UnusedException")
-    private void advanceCompactCaseIndex() {
-      try {
-        nextCompactCaseIndex = compactIndices.readLong();
-      } catch (EOFException e) {
-        throw new LocatedCasesComplete();
-      } catch (IOException e) {
-        throw new CompactExpansionException(e);
-      }
-    }
-  }
-
-  private static void evaluateCase(
-      SweepRunState runState, CaseSpec spec, int workerIndex, long caseIndex) {
-    String regex = spec.regex();
-    Outcome jdk = jdkOutcome(regex);
-    Outcome safere = safeReOutcome(regex);
-    if (semanticallyEqual(jdk, safere)) {
-      return;
-    }
-    String bucketName = bucketFor(spec, jdk, safere);
-    if (workerIndex >= 0) {
-      runState.recordCompactDivergence(workerIndex, caseIndex, 0);
-      return;
-    }
-    runState.recordDivergence();
-    Divergence divergence =
-        new Divergence(spec, regex, jdk, safere, bucketName, reduce(spec, jdk, safere));
-    runState.appendJsonl(divergence.toJson());
-  }
-
-  static String compactReplayJson(long caseIndex, String classification) {
-    return compactReplayJson(caseIndex, classification, locateCase(caseIndex));
-  }
-
-  static void writeCompactReplayJson(
-      BufferedWriter writer, String classification, List<Long> caseIndices) throws IOException {
-    List<CaseSpec> cases = locateCases(caseIndices);
-    for (int i = 0; i < caseIndices.size(); i++) {
-      writer.write(compactReplayJson(caseIndices.get(i), classification, cases.get(i)));
-      writer.newLine();
-    }
-  }
-
-  static void writeAllCompactReplayJson(
-      BufferedWriter writer, String classification, Path indicesPath) throws IOException {
-    try (DataInputStream input =
-        new DataInputStream(new BufferedInputStream(Files.newInputStream(indicesPath)))) {
-      try {
-        SweepState state = new SweepState(writer, classification, input);
-        runSeparatedSingleAmpersandMatrix(state);
-        runClassicMatrix(state);
-        runChainedAmpersandMatrix(state);
-        runGrammarSequenceMatrix(state);
-        runRawAmpersandBeforeCloseMatrix(state);
-      } catch (LocatedCasesComplete complete) {
-        return;
-      } catch (CompactExpansionException e) {
-        throw e.ioException;
-      }
-    }
-    throw new IllegalStateException("failed to locate all character-class cases");
-  }
-
-  private static String compactReplayJson(long caseIndex, String classification, CaseSpec spec) {
-    var object = SweepJson.object();
-    object.addProperty("caseIndex", caseIndex);
-    object.addProperty("classification", classification);
-    object.add("case", Divergence.caseJson(spec));
-    return SweepJson.toJson(object);
-  }
-
-  private static List<CaseSpec> locateCases(List<Long> caseIndices) {
-    if (caseIndices.isEmpty()) {
-      return List.of();
-    }
-    long previous = -1;
-    for (long caseIndex : caseIndices) {
-      if (caseIndex <= previous || caseIndex >= totalCases()) {
-        throw new IllegalArgumentException("case indices must be sorted, unique, and in range");
-      }
-      previous = caseIndex;
-    }
-    SweepState state = new SweepState(caseIndices);
-    try {
-      runSeparatedSingleAmpersandMatrix(state);
-      runClassicMatrix(state);
-      runChainedAmpersandMatrix(state);
-      runGrammarSequenceMatrix(state);
-      runRawAmpersandBeforeCloseMatrix(state);
-    } catch (LocatedCasesComplete complete) {
-      return state.locatedCases;
-    }
-    throw new IllegalStateException("failed to locate character-class cases");
-  }
-
-  private static CaseSpec locateCase(long caseIndex) {
-    if (caseIndex < 0 || caseIndex >= totalCases()) {
-      throw new IllegalArgumentException("case index out of range: " + caseIndex);
-    }
-    SweepState state = new SweepState(caseIndex);
-    try {
-      runSeparatedSingleAmpersandMatrix(state);
-      runClassicMatrix(state);
-      runChainedAmpersandMatrix(state);
-      runGrammarSequenceMatrix(state);
-      runRawAmpersandBeforeCloseMatrix(state);
-    } catch (LocatedCase located) {
-      return located.spec;
-    }
-    throw new IllegalStateException("failed to locate character-class case: " + caseIndex);
-  }
-
-  private static final class LocatedCase extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    final transient CaseSpec spec;
-
-    LocatedCase(CaseSpec spec) {
-      this.spec = spec;
-    }
-  }
-
-  private static final class LocatedCasesComplete extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-  }
-
-  private static final class CompactExpansionException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-
-    final transient IOException ioException;
-
-    CompactExpansionException(IOException ioException) {
-      this.ioException = ioException;
-    }
-  }
-
-  private static String reduce(CaseSpec spec, Outcome expectedJdk, Outcome expectedSafeRe) {
-    List<Piece> pieces = new ArrayList<>(spec.pieces());
-    boolean changed;
-    do {
-      changed = false;
-      for (int i = 0; i < pieces.size(); i++) {
-        if (pieces.get(i).text().isEmpty()) {
-          continue;
+    private fun matches(pattern: Pattern): String {
+        val result = StringBuilder()
+        for (input in INPUTS) {
+            if (pattern.matcher(input).matches()) {
+                appendInput(result, input)
+            }
         }
-        List<Piece> candidate = new ArrayList<>(pieces);
-        candidate.set(i, piece("removed", ""));
-        String regex =
-            new CaseSpec(spec.template(), spec.comments(), spec.negated(), candidate).regex();
-        Outcome jdk = jdkOutcome(regex);
-        Outcome safere = safeReOutcome(regex);
-        if (semanticallyEqual(expectedJdk, jdk) && semanticallyEqual(expectedSafeRe, safere)) {
-          pieces = candidate;
-          changed = true;
-          break;
-        }
-      }
-    } while (changed);
-    return new CaseSpec(spec.template(), spec.comments(), spec.negated(), pieces).regex();
-  }
-
-  private static boolean semanticallyEqual(Outcome left, Outcome right) {
-    if (left.accepted() != right.accepted()) {
-      return false;
+        return result.toString()
     }
-    return !left.accepted() || left.matches().equals(right.matches());
-  }
+
+    private fun matches(pattern: org.safere.Pattern): String {
+        val result = StringBuilder()
+        for (input in INPUTS) {
+            if (pattern.matcher(input).matches()) {
+                appendInput(result, input)
+            }
+        }
+        return result.toString()
+    }
+
+    private fun appendInput(result: StringBuilder, input: String) {
+        if (result.length > 0) {
+            result.append(',')
+        }
+        result.append(escape(input))
+    }
+
+    private fun escape(value: String): String {
+        return value
+            .replace("\\", "\\\\")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+            .replace("\"", "\\\"")
+    }
+
+    private fun bucketFor(spec: CaseSpec, jdk: Outcome, safere: Outcome): String {
+        val kind = if (jdk.accepted != safere.accepted) "compile" else "membership"
+        val direction = direction(jdk, safere)
+        return String.join(
+            "|",
+            "kind=" + kind,
+            "direction=" + direction,
+            "template=" + spec.template,
+            "comments=" + spec.comments,
+            "negated=" + spec.negated,
+            "ops=" + operatorLabels(spec),
+            "seps=" + separatorClass(spec),
+            "rawAmp=" + containsLabel(spec, "rawAmp"),
+            "escapedAmp=" + containsLabel(spec, "escapedAmp"),
+            "quoteEmpty=" + containsLabel(spec, "quoteEmpty"),
+            "nested=" + containsPrefix(spec, "nested"),
+            "rangeTail=" + containsRangeTail(spec),
+            "doubleClose=" + containsLabel(spec, "doubleClose")
+        )
+    }
+
+    private fun direction(jdk: Outcome, safere: Outcome): kotlin.String {
+        if (jdk.accepted && !safere.accepted) {
+            return "jdk-accepts"
+        }
+        if (!jdk.accepted && safere.accepted) {
+            return "safere-accepts"
+        }
+        return "matches"
+    }
+
+    private fun operatorLabels(spec: CaseSpec): kotlin.String {
+        val labels: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+        for (piece in spec.pieces!!) {
+            if (piece.text!!.startsWith("&&")) {
+                labels.add(piece.label)
+            }
+        }
+        return String.join(",", labels)
+    }
+
+    private fun separatorClass(spec: CaseSpec): kotlin.String {
+        val hasComment = containsLabel(spec, "comment")
+        val hasSpace =
+            containsLabel(spec, "space")
+                    || containsLabel(spec, "emptyQuoteSpace")
+                    || containsLabel(spec, "spaceEmptyQuote")
+        val hasEmptyQuote =
+            containsLabel(spec, "emptyQuote")
+                    || containsLabel(spec, "twoEmptyQuotes")
+                    || containsLabel(spec, "emptyQuoteSpace")
+                    || containsLabel(spec, "spaceEmptyQuote")
+        return ((if (hasComment) "comment" else "no-comment")
+                + ","
+                + (if (hasSpace) "space" else "no-space")
+                + ","
+                + (if (hasEmptyQuote) "emptyQuote" else "no-emptyQuote"))
+    }
+
+    private fun containsLabel(spec: CaseSpec, label: kotlin.String?): Boolean {
+        return spec.pieces!!.stream().anyMatch { piece: Piece? -> piece!!.label == label }
+    }
+
+    private fun containsPrefix(spec: CaseSpec, prefix: kotlin.String): Boolean {
+        return spec.pieces!!.stream().anyMatch { piece: Piece? -> piece!!.label!!.startsWith(prefix) }
+    }
+
+    private fun containsRangeTail(spec: CaseSpec): Boolean {
+        return spec.pieces!!.stream()
+            .anyMatch { piece: Piece? -> piece!!.label!!.contains("range") || piece.label.contains("Range") }
+    }
+
+    private fun evaluateCase(
+        runState: SweepRunState, spec: CaseSpec, workerIndex: Int, caseIndex: Long
+    ) {
+        val regex = spec.regex()
+        val jdk = jdkOutcome(regex)
+        val safere = safeReOutcome(regex)
+        if (semanticallyEqual(jdk, safere)) {
+            return
+        }
+        val bucketName = bucketFor(spec, jdk, safere)
+        if (workerIndex >= 0) {
+            runState.recordCompactDivergence(workerIndex, caseIndex, 0)
+            return
+        }
+        runState.recordDivergence()
+        val divergence =
+            Divergence(spec, regex, jdk, safere, bucketName, reduce(spec, jdk, safere))
+        runState.appendJsonl(divergence.toJson())
+    }
+
+    @JvmStatic
+    fun compactReplayJson(caseIndex: Long, classification: kotlin.String?): kotlin.String {
+        return CharacterClassDivergenceSweep.compactReplayJson(caseIndex, classification, locateCase(caseIndex)!!)
+    }
+
+    @Throws(IOException::class)
+    fun writeCompactReplayJson(
+        writer: BufferedWriter, classification: kotlin.String?, caseIndices: MutableList<Long?>
+    ) {
+        val cases = locateCases(caseIndices)
+        for (i in caseIndices.indices) {
+            writer.write(
+                CharacterClassDivergenceSweep.compactReplayJson(
+                    caseIndices.get(i)!!,
+                    classification,
+                    cases.get(i)!!
+                )
+            )
+            writer.newLine()
+        }
+    }
+
+    @Throws(IOException::class)
+    fun writeAllCompactReplayJson(
+        writer: BufferedWriter?, classification: kotlin.String?, indicesPath: Path
+    ) {
+        DataInputStream(BufferedInputStream(Files.newInputStream(indicesPath))).use { input ->
+            try {
+                val state = SweepState(writer, classification, input)
+                runSeparatedSingleAmpersandMatrix(state)
+                runClassicMatrix(state)
+                runChainedAmpersandMatrix(state)
+                runGrammarSequenceMatrix(state)
+                runRawAmpersandBeforeCloseMatrix(state)
+            } catch (complete: LocatedCasesComplete) {
+                return
+            } catch (e: CompactExpansionException) {
+                throw e.ioException
+            }
+        }
+        throw IllegalStateException("failed to locate all character-class cases")
+    }
+
+    private fun compactReplayJson(caseIndex: Long, classification: kotlin.String?, spec: CaseSpec): kotlin.String {
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("caseIndex", caseIndex)
+        `object`.addProperty("classification", classification)
+        `object`.add("case", Divergence.Companion.caseJson(spec))
+        return SweepJson.toJson(`object`)
+    }
+
+    private fun locateCases(caseIndices: MutableList<Long?>): MutableList<CaseSpec?> {
+        if (caseIndices.isEmpty()) {
+            return mutableListOf<CaseSpec?>()
+        }
+        var previous: Long = -1
+        for (caseIndex in caseIndices) {
+            require(!(caseIndex!! <= previous || caseIndex >= totalCases())) { "case indices must be sorted, unique, and in range" }
+            previous = caseIndex
+        }
+        val state = SweepState(caseIndices)
+        try {
+            runSeparatedSingleAmpersandMatrix(state)
+            runClassicMatrix(state)
+            runChainedAmpersandMatrix(state)
+            runGrammarSequenceMatrix(state)
+            runRawAmpersandBeforeCloseMatrix(state)
+        } catch (complete: LocatedCasesComplete) {
+            return state.locatedCases!!
+        }
+        throw IllegalStateException("failed to locate character-class cases")
+    }
+
+    private fun locateCase(caseIndex: Long): CaseSpec? {
+        require(!(caseIndex < 0 || caseIndex >= totalCases())) { "case index out of range: " + caseIndex }
+        val state = SweepState(caseIndex)
+        try {
+            runSeparatedSingleAmpersandMatrix(state)
+            runClassicMatrix(state)
+            runChainedAmpersandMatrix(state)
+            runGrammarSequenceMatrix(state)
+            runRawAmpersandBeforeCloseMatrix(state)
+        } catch (located: LocatedCase) {
+            return located.spec
+        }
+        throw IllegalStateException("failed to locate character-class case: " + caseIndex)
+    }
+
+    private fun reduce(spec: CaseSpec, expectedJdk: Outcome, expectedSafeRe: Outcome): kotlin.String {
+        var pieces: MutableList<Piece> = ArrayList<Piece>(spec.pieces)
+        var changed: Boolean
+        do {
+            changed = false
+            var i = 0
+            while (i < pieces.size) {
+                if (pieces.get(i).text!!.isEmpty()) {
+                    i++
+                    continue
+                }
+                val candidate: MutableList<Piece> = ArrayList<Piece>(pieces)
+                candidate.set(i, piece("removed", ""))
+                val regex =
+                    CaseSpec(spec.template, spec.comments, spec.negated, candidate).regex()
+                val jdk = jdkOutcome(regex)
+                val safere = safeReOutcome(regex)
+                if (semanticallyEqual(expectedJdk, jdk) && semanticallyEqual(expectedSafeRe, safere)) {
+                    pieces = candidate
+                    changed = true
+                    break
+                }
+                i++
+            }
+        } while (changed)
+        return CaseSpec(spec.template, spec.comments, spec.negated, pieces).regex()
+    }
+
+    private fun semanticallyEqual(left: Outcome, right: Outcome): Boolean {
+        if (left.accepted != right.accepted) {
+            return false
+        }
+        return !left.accepted || left.matches == right.matches
+    }
+
+    @JvmRecord
+    private data class Piece(val label: kotlin.String?, val text: kotlin.String?) {
+        val isCommentsOnly: Boolean
+            get() = text!!.contains(" ") || text.contains("#")
+    }
+
+    @JvmRecord
+    private data class CaseSpec(
+        val template: kotlin.String?,
+        val comments: Boolean,
+        val negated: Boolean,
+        val pieces: MutableList<Piece>?
+    ) {
+        fun regex(): kotlin.String {
+            val regex = StringBuilder()
+            if (comments) {
+                regex.append("(?x)")
+            }
+            regex.append('[')
+            if (negated) {
+                regex.append('^')
+            }
+            for (piece in pieces!!) {
+                regex.append(piece.text)
+            }
+            regex.append(']')
+            return regex.toString()
+        }
+
+        fun labels(): kotlin.String {
+            val labels: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
+            for (piece in pieces!!) {
+                if (!piece.text!!.isEmpty()) {
+                    labels.add(piece.label)
+                }
+            }
+            return String.join(",", labels)
+        }
+    }
+
+    @JvmRecord
+    private data class Outcome(val accepted: Boolean, val matches: kotlin.String?, val error: kotlin.String?)
+
+    @JvmRecord
+    private data class Divergence(
+        val spec: CaseSpec?,
+        val regex: kotlin.String?,
+        val jdk: Outcome?,
+        val safere: Outcome?,
+        val bucket: kotlin.String?,
+        val reduced: kotlin.String?
+    ) {
+        fun toJson(): kotlin.String {
+            val `object` = SweepJson.`object`()
+            `object`.add("case", Companion.caseJson(spec!!))
+            `object`.addProperty("bucket", bucket)
+            `object`.addProperty("template", spec.template)
+            `object`.addProperty("labels", spec.labels())
+            `object`.addProperty("regex", regex)
+            `object`.addProperty("reduced", reduced)
+            `object`.addProperty("jdkAccepted", jdk!!.accepted)
+            `object`.addProperty("safeReAccepted", safere!!.accepted)
+            `object`.addProperty("jdkMatches", jdk.matches)
+            `object`.addProperty("safeReMatches", safere.matches)
+            `object`.addProperty("jdkError", jdk.error)
+            `object`.addProperty("safeReError", safere.error)
+            return SweepJson.toJson(`object`)
+        }
+
+        companion object {
+            private fun caseJson(spec: CaseSpec): JsonObject {
+                val `object` = SweepJson.`object`()
+                `object`.addProperty("template", spec.template)
+                `object`.addProperty("comments", spec.comments)
+                `object`.addProperty("negated", spec.negated)
+                val pieces = JsonArray()
+                for (piece in spec.pieces!!) {
+                    val pieceObject = SweepJson.`object`()
+                    pieceObject.addProperty("label", piece.label)
+                    pieceObject.addProperty("text", piece.text)
+                    pieces.add(pieceObject)
+                }
+                `object`.add("pieces", pieces)
+                return `object`
+            }
+        }
+    }
+
+    private class SweepState {
+        val runState: SweepRunState?
+        val options: SweepOptions?
+        val progressReporter: ProgressReporter?
+        val workerIndex: Int
+        val targetCaseIndex: Long
+        val targetCaseIndices: MutableList<Long?>?
+        val locatedCases: MutableList<CaseSpec?>?
+        val compactWriter: BufferedWriter?
+        val compactClassification: kotlin.String?
+        val compactIndices: DataInputStream?
+        var targetPosition: Int = 0
+        var nextCompactCaseIndex: Long = 0
+        var generated: Long = 0
+        var currentCaseIndex: Long = 0
+
+        internal constructor(runState: SweepRunState, workerIndex: Int) {
+            this.runState = runState
+            this.options = runState.options
+            this.progressReporter = ProgressReporter(runState, workerIndex)
+            this.workerIndex = workerIndex
+            this.targetCaseIndex = -1
+            this.targetCaseIndices = null
+            this.locatedCases = null
+            this.compactWriter = null
+            this.compactClassification = null
+            this.compactIndices = null
+        }
+
+        internal constructor(targetCaseIndex: Long) {
+            this.runState = null
+            this.options = null
+            this.progressReporter = null
+            this.workerIndex = -1
+            this.targetCaseIndex = targetCaseIndex
+            this.targetCaseIndices = null
+            this.locatedCases = null
+            this.compactWriter = null
+            this.compactClassification = null
+            this.compactIndices = null
+        }
+
+        internal constructor(targetCaseIndices: MutableList<Long?>?) {
+            this.runState = null
+            this.options = null
+            this.progressReporter = null
+            this.workerIndex = -1
+            this.targetCaseIndex = -1
+            this.targetCaseIndices = targetCaseIndices
+            this.locatedCases = ArrayList<CaseSpec?>()
+            this.compactWriter = null
+            this.compactClassification = null
+            this.compactIndices = null
+        }
+
+        internal constructor(
+            compactWriter: BufferedWriter?,
+            compactClassification: kotlin.String?,
+            compactIndices: DataInputStream?
+        ) {
+            this.runState = null
+            this.options = null
+            this.progressReporter = null
+            this.workerIndex = -1
+            this.targetCaseIndex = -1
+            this.targetCaseIndices = null
+            this.locatedCases = null
+            this.compactWriter = compactWriter
+            this.compactClassification = compactClassification
+            this.compactIndices = compactIndices
+            advanceCompactCaseIndex()
+        }
+
+        fun check5(
+            template: kotlin.String?,
+            comments: Boolean,
+            negated: Boolean,
+            p1: Piece,
+            p2: Piece,
+            p3: Piece,
+            p4: Piece,
+            p5: Piece
+        ) {
+            if (!beginCase()) {
+                return
+            }
+            evaluateCase(CaseSpec(template, comments, negated, List.of<Piece?>(p1, p2, p3, p4, p5)))
+        }
+
+        fun check6(
+            template: kotlin.String?,
+            comments: Boolean,
+            negated: Boolean,
+            p1: Piece,
+            p2: Piece,
+            p3: Piece,
+            p4: Piece,
+            p5: Piece,
+            p6: Piece
+        ) {
+            if (!beginCase()) {
+                return
+            }
+            evaluateCase(CaseSpec(template, comments, negated, List.of<Piece?>(p1, p2, p3, p4, p5, p6)))
+        }
+
+        fun check7(
+            template: kotlin.String?,
+            comments: Boolean,
+            negated: Boolean,
+            p1: Piece,
+            p2: Piece,
+            p3: Piece,
+            p4: Piece,
+            p5: Piece,
+            p6: Piece,
+            p7: Piece
+        ) {
+            if (!beginCase()) {
+                return
+            }
+            evaluateCase(CaseSpec(template, comments, negated, List.of<Piece?>(p1, p2, p3, p4, p5, p6, p7)))
+        }
+
+        fun check9(
+            template: kotlin.String?,
+            comments: Boolean,
+            negated: Boolean,
+            p1: Piece,
+            p2: Piece,
+            p3: Piece,
+            p4: Piece,
+            p5: Piece,
+            p6: Piece,
+            p7: Piece,
+            p8: Piece,
+            p9: Piece
+        ) {
+            if (!beginCase()) {
+                return
+            }
+            evaluateCase(
+                CaseSpec(template, comments, negated, List.of<Piece?>(p1, p2, p3, p4, p5, p6, p7, p8, p9))
+            )
+        }
+
+        fun check10(
+            template: kotlin.String?,
+            comments: Boolean,
+            negated: Boolean,
+            p1: Piece,
+            p2: Piece,
+            p3: Piece,
+            p4: Piece,
+            p5: Piece,
+            p6: Piece,
+            p7: Piece,
+            p8: Piece,
+            p9: Piece,
+            p10: Piece
+        ) {
+            if (!beginCase()) {
+                return
+            }
+            evaluateCase(
+                CaseSpec(
+                    template, comments, negated, List.of<Piece?>(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
+                )
+            )
+        }
+
+        fun beginCase(): Boolean {
+            if (compactIndices != null) {
+                currentCaseIndex = generated++
+                return currentCaseIndex == nextCompactCaseIndex
+            }
+            if (targetCaseIndices != null) {
+                currentCaseIndex = generated++
+                return currentCaseIndex == targetCaseIndices.get(targetPosition)
+            }
+            if (targetCaseIndex >= 0) {
+                currentCaseIndex = generated++
+                return currentCaseIndex == targetCaseIndex
+            }
+            if (generated >= options!!.rangeEndExclusive) {
+                return false
+            }
+            val caseIndex = generated++
+            currentCaseIndex = caseIndex
+            if (caseIndex < options.rangeStartInclusive) {
+                reportProgressIfNeeded()
+                return false
+            }
+            if (caseIndex % options.threads != workerIndex.toLong()) {
+                return false
+            }
+            progressReporter!!.checked()
+            return true
+        }
+
+        fun evaluateCase(spec: CaseSpec) {
+            if (compactIndices != null) {
+                try {
+                    compactWriter!!.write(compactReplayJson(currentCaseIndex, compactClassification, spec))
+                    compactWriter.newLine()
+                } catch (e: IOException) {
+                    throw CompactExpansionException(e)
+                }
+                advanceCompactCaseIndex()
+                return
+            }
+            if (targetCaseIndices != null) {
+                locatedCases!!.add(spec)
+                targetPosition++
+                if (targetPosition == targetCaseIndices.size) {
+                    throw LocatedCasesComplete()
+                }
+                return
+            }
+            if (targetCaseIndex >= 0) {
+                throw LocatedCase(spec)
+            }
+            CharacterClassDivergenceSweep.evaluateCase(runState!!, spec, workerIndex, currentCaseIndex)
+            reportProgressIfNeeded()
+        }
+
+        fun finish() {
+            runState!!.recordGenerated(generated)
+            runState.updateWorkerNextCaseIndex(workerIndex, generated)
+        }
+
+        fun reportProgressIfNeeded() {
+            progressReporter!!.reportIfNeeded(generated)
+        }
+
+        // EOFException marks the normal end of the index file, and LocatedCasesComplete is a
+        // control-flow signal, so the EOFException carries nothing worth keeping as a cause.
+        fun advanceCompactCaseIndex() {
+            try {
+                nextCompactCaseIndex = compactIndices!!.readLong()
+            } catch (e: EOFException) {
+                throw LocatedCasesComplete()
+            } catch (e: IOException) {
+                throw CompactExpansionException(e)
+            }
+        }
+    }
+
+    private class LocatedCase(@field:Transient val spec: CaseSpec?) : RuntimeException() {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    private object LocatedCasesComplete : RuntimeException() {
+        private const val serialVersionUID = 1L
+    }
+
+    private class CompactExpansionException(@field:Transient val ioException: IOException) : RuntimeException() {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
 }

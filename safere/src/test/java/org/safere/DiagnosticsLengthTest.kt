@@ -2,197 +2,199 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.assertj.core.api.ThrowingConsumer
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.nio.charset.StandardCharsets
+import java.util.List
 
 @Isolated
 @DisabledForCrosscheck("SafeRE-specific diagnostics and deterministic work counters")
-class DiagnosticsLengthTest {
-  private final List<OperationDiagnostics> events = new ArrayList<>();
-  private final SafeReMatchDiagnostics listener =
-      new SafeReMatchDiagnostics() {
-        @Override
-        public void onOperationCompleted(OperationDiagnostics event) {
-          events.add(event);
+internal class DiagnosticsLengthTest {
+    private val events: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+    private val listener: SafeReMatchDiagnostics = object : SafeReMatchDiagnostics() {
+        override fun onOperationCompleted(event: OperationDiagnostics?) {
+            events.add(event)
         }
-      };
-
-  @AfterEach
-  void disableDiagnostics() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-  }
-
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "a{1000}",
-        "[ab]{1000}",
-        "[ab]{1000}\\z",
-        "^[ab]{1000}",
-        "([ab]){1000}",
-        "(?i)a{1000}",
-        "\\X[ab]{1000}"
-      })
-  void shortInputsReportLengthRejectionWithoutEngineWork(String regex) {
-    Pattern pattern = Pattern.compile(regex);
-    String text = "a".repeat(200);
-    Utf8Input input = Utf8Input.trusted(text.getBytes(UTF_8));
-    Pattern.setDiagnostics(listener);
-
-    assertThat(pattern.find(input)).isFalse();
-    assertThat(pattern.matcher(input).find()).isFalse();
-    assertThat(pattern.matcher(input).matches()).isFalse();
-    assertThat(pattern.matcher(input).lookingAt()).isFalse();
-    assertThat(pattern.matcher(text).find()).isFalse();
-    assertThat(pattern.matcher(text).matches()).isFalse();
-    assertThat(pattern.matcher(text).lookingAt()).isFalse();
-
-    assertThat(events).hasSize(7).allSatisfy(DiagnosticsLengthTest::assertLengthRejection);
-  }
-
-  @ParameterizedTest
-  @ValueSource(
-      strings = {"a{3}", "[ab]{3}", "[ab]{3}\\z", "^[ab]{3}", "([ab]){3}", "é{3}", "😀{3}"})
-  void minimumLengthAndMultibyteMatchesArePreserved(String regex) {
-    Pattern pattern = Pattern.compile(regex);
-    String unit = regex.startsWith("é") ? "é" : regex.startsWith("😀") ? "😀" : "a";
-    for (boolean enabled : List.of(false, true)) {
-      Pattern.setDiagnostics(enabled ? listener : SafeReMatchDiagnostics.NONE);
-      for (int size : List.of(2, 3, 4)) {
-        String text = unit.repeat(size);
-        byte[] storage = ("prefix" + text + "suffix").getBytes(UTF_8);
-        Utf8Input input = Utf8Input.trusted(storage, 6, text.getBytes(UTF_8).length);
-        boolean expected = size >= 3;
-        assertThat(pattern.find(input)).as(regex).isEqualTo(expected);
-        assertThat(pattern.matcher(input).find()).as(regex).isEqualTo(expected);
-        assertThat(pattern.matcher(text).find()).as(regex).isEqualTo(expected);
-      }
     }
-  }
 
-  @Test
-  void lengthRejectionUsesRegionAndRemainingSearchLengthAndFinalizesState() {
-    Pattern.setDiagnostics(listener);
-    Pattern pattern = Pattern.compile("([ab]{3})");
-    Matcher matcher = pattern.matcher("aaabbb");
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.find()).isTrue();
-    events.clear();
-
-    assertThat(matcher.find()).isFalse();
-    assertThatIllegalStateException().isThrownBy(matcher::start);
-    matcher.region(1, 3);
-    assertThat(matcher.find()).isFalse();
-    assertThat(matcher.matches()).isFalse();
-    assertThat(matcher.lookingAt()).isFalse();
-    assertThat(events).hasSize(4).allSatisfy(DiagnosticsLengthTest::assertLengthRejection);
-
-    matcher.reset();
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.group(1)).isEqualTo("aaa");
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"", "a?", "(?:[ab]{3})?", "\\z"})
-  void nullablePatternsStillMatchEmptyInput(String regex) {
-    Pattern.setDiagnostics(listener);
-    Pattern pattern = Pattern.compile(regex);
-    Utf8Input input = Utf8Input.trusted(new byte[0]);
-
-    assertThat(pattern.find(input)).isTrue();
-    assertThat(pattern.matcher(input).find()).isTrue();
-    assertThat(pattern.matcher("").find()).isTrue();
-    assertThat(events)
-        .hasSize(3)
-        .allSatisfy(event -> assertThat(event.outcome()).isEqualTo(MatchOutcome.MATCH));
-  }
-
-  @Test
-  void lengthRemainsBoundaryOnlyAlongsideEngineParticipationAndDecisions() {
-    Pattern.setDiagnostics(listener);
-    EnginePathOptions options =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .startAcceleration(false)
-            .onePass(false)
-            .bitState(false)
-            .build();
-    Pattern pattern = Pattern.compile("(?:(a)?)*X", 0, options);
-
-    assertThat(pattern.find(Utf8Input.trusted(new byte[0]))).isFalse();
-    assertThat(pattern.matcher("").find()).isFalse();
-    assertThat(pattern.matcher("aaaaX").find()).isTrue();
-    // Replacement aggregates an engine match and a terminal minimum-length rejection.
-    assertThat(pattern.matcher("aaaaX").replaceAll("done")).isEqualTo("done");
-
-    assertLengthRejection(events.get(0));
-    assertLengthRejection(events.get(1));
-    assertThat(events)
-        .hasSize(4)
-        .anySatisfy(event -> assertThat(event.auxiliaryStrategies()).isNotEmpty())
-        .anySatisfy(event -> assertThat(event.strategyDecisions()).isNotEmpty())
-        .allSatisfy(
-            event -> {
-              assertThat(event.captureStrategy()).isNotEqualTo(MatchStrategy.LENGTH);
-              assertThat(event.auxiliaryStrategies())
-                  .extracting(StrategyParticipation::strategy)
-                  .doesNotContain(MatchStrategy.LENGTH);
-              assertThat(event.strategyDecisions())
-                  .extracting(StrategyDecision::strategy)
-                  .doesNotContain(MatchStrategy.LENGTH);
-            });
-  }
-
-  @Tag("work-counter")
-  @ParameterizedTest
-  @ValueSource(strings = {"a{1000}", "[ab]{1000}", "[ab]{1000}\\z", "^[ab]{1000}"})
-  void diagnosticsPreserveConstantWorkForShortInputs(String regex) {
-    Pattern pattern = Pattern.compile(regex);
-    for (int size : List.of(200, 800)) {
-      String text = "a".repeat(size);
-      Utf8Input input = Utf8Input.trusted(text.getBytes(UTF_8));
-      for (Runnable search :
-          List.<Runnable>of(
-              () -> assertThat(pattern.find(input)).isFalse(),
-              () -> assertThat(pattern.matcher(input).find()).isFalse(),
-              () -> assertThat(pattern.matcher(text).find()).isFalse())) {
-        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-        search.run();
-        long withoutDiagnostics = WorkCounter.countForTesting(search);
-        Pattern.setDiagnostics(listener);
-        search.run();
-        long withDiagnostics = WorkCounter.countForTesting(search);
-        assertThat(withDiagnostics).as("%s, length %s", regex, size).isEqualTo(withoutDiagnostics);
-        assertThat(withDiagnostics).isZero();
-        events.clear();
-      }
+    @AfterEach
+    fun disableDiagnostics() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
     }
-  }
 
-  private static void assertLengthRejection(OperationDiagnostics event) {
-    assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-    assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LENGTH);
-    assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-    assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-    assertThat(event.matchCount()).isZero();
-    assertThat(event.forwardDfaSearchCount()).isZero();
-    assertThat(event.reverseDfaSearchCount()).isZero();
-    assertThat(event.auxiliaryStrategies()).isEmpty();
-    assertThat(event.strategyDecisions()).isEmpty();
-  }
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["a{1000}", "[ab]{1000}", "[ab]{1000}\\z", "^[ab]{1000}", "([ab]){1000}", "(?i)a{1000}", "\\X[ab]{1000}"
+        ]
+    )
+    fun shortInputsReportLengthRejectionWithoutEngineWork(regex: String?) {
+        val pattern = Pattern.compile(regex)
+        val text = "a".repeat(200)
+        val input = Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))
+        Pattern.setDiagnostics(listener)
+
+        Assertions.assertThat(pattern.find(input)).isFalse()
+        Assertions.assertThat(pattern.matcher(input).find()).isFalse()
+        Assertions.assertThat(pattern.matcher(input).matches()).isFalse()
+        Assertions.assertThat(pattern.matcher(input).lookingAt()).isFalse()
+        Assertions.assertThat(pattern.matcher(text).find()).isFalse()
+        Assertions.assertThat(pattern.matcher(text).matches()).isFalse()
+        Assertions.assertThat(pattern.matcher(text).lookingAt()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(events).hasSize(7)
+            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> Companion.assertLengthRejection(event!!) })
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["a{3}", "[ab]{3}", "[ab]{3}\\z", "^[ab]{3}", "([ab]){3}", "é{3}", "😀{3}"])
+    fun minimumLengthAndMultibyteMatchesArePreserved(regex: String) {
+        val pattern = Pattern.compile(regex)
+        val unit = if (regex.startsWith("é")) "é" else if (regex.startsWith("😀")) "😀" else "a"
+        for (enabled in mutableListOf<Boolean?>(false, true)) {
+            Pattern.setDiagnostics(if (enabled) listener else SafeReMatchDiagnostics.NONE)
+            for (size in mutableListOf<Int?>(2, 3, 4)) {
+                val text = unit.repeat(size!!)
+                val storage = ("prefix" + text + "suffix").toByteArray(StandardCharsets.UTF_8)
+                val input = Utf8Input.trusted(storage, 6, text.toByteArray(StandardCharsets.UTF_8).size)
+                val expected = size >= 3
+                Assertions.assertThat(pattern.find(input)).`as`(regex).isEqualTo(expected)
+                Assertions.assertThat(pattern.matcher(input).find()).`as`(regex).isEqualTo(expected)
+                Assertions.assertThat(pattern.matcher(text).find()).`as`(regex).isEqualTo(expected)
+            }
+        }
+    }
+
+    @Test
+    fun lengthRejectionUsesRegionAndRemainingSearchLengthAndFinalizesState() {
+        Pattern.setDiagnostics(listener)
+        val pattern = Pattern.compile("([ab]{3})")
+        val matcher = pattern.matcher("aaabbb")
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.find()).isTrue()
+        events.clear()
+
+        Assertions.assertThat(matcher.find()).isFalse()
+        Assertions.assertThatIllegalStateException().isThrownBy(ThrowingCallable { matcher.start() })
+        matcher.region(1, 3)
+        Assertions.assertThat(matcher.find()).isFalse()
+        Assertions.assertThat(matcher.matches()).isFalse()
+        Assertions.assertThat(matcher.lookingAt()).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(events).hasSize(4)
+            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? -> Companion.assertLengthRejection(event!!) })
+
+        matcher.reset()
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.group(1)).isEqualTo("aaa")
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["", "a?", "(?:[ab]{3})?", "\\z"])
+    fun nullablePatternsStillMatchEmptyInput(regex: String?) {
+        Pattern.setDiagnostics(listener)
+        val pattern = Pattern.compile(regex)
+        val input = Utf8Input.trusted(ByteArray(0))
+
+        Assertions.assertThat(pattern.find(input)).isTrue()
+        Assertions.assertThat(pattern.matcher(input).find()).isTrue()
+        Assertions.assertThat(pattern.matcher("").find()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(events)
+            .hasSize(3)
+            .allSatisfy(ThrowingConsumer { event: OperationDiagnostics? ->
+                Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.MATCH)
+            })
+    }
+
+    @Test
+    fun lengthRemainsBoundaryOnlyAlongsideEngineParticipationAndDecisions() {
+        Pattern.setDiagnostics(listener)
+        val options =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .startAcceleration(false)
+                .onePass(false)
+                .bitState(false)
+                .build()
+        val pattern = Pattern.compile("(?:(a)?)*X", 0, options)
+
+        Assertions.assertThat(pattern.find(Utf8Input.trusted(ByteArray(0)))).isFalse()
+        Assertions.assertThat(pattern.matcher("").find()).isFalse()
+        Assertions.assertThat(pattern.matcher("aaaaX").find()).isTrue()
+        // Replacement aggregates an engine match and a terminal minimum-length rejection.
+        Assertions.assertThat(pattern.matcher("aaaaX").replaceAll("done")).isEqualTo("done")
+
+        Companion.assertLengthRejection(events.get(0)!!)
+        Companion.assertLengthRejection(events.get(1)!!)
+        Assertions.assertThat<OperationDiagnostics?>(events)
+            .hasSize(4)
+            .anySatisfy(ThrowingConsumer { event: OperationDiagnostics? ->
+                Assertions.assertThat<StrategyParticipation?>(
+                    event!!.auxiliaryStrategies
+                ).isNotEmpty()
+            })
+            .anySatisfy(ThrowingConsumer { event: OperationDiagnostics? ->
+                Assertions.assertThat<StrategyDecision?>(
+                    event!!.strategyDecisions
+                ).isNotEmpty()
+            })
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.captureStrategy).isNotEqualTo(MatchStrategy.LENGTH)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .extracting<MatchStrategy?, RuntimeException?>(StrategyParticipation::strategy)
+                        .doesNotContain(MatchStrategy.LENGTH)
+                    Assertions.assertThat<StrategyDecision?>(event.strategyDecisions)
+                        .extracting<MatchStrategy?, RuntimeException?>(StrategyDecision::strategy)
+                        .doesNotContain(MatchStrategy.LENGTH)
+                })
+    }
+
+    @Tag("work-counter")
+    @ParameterizedTest
+    @ValueSource(strings = ["a{1000}", "[ab]{1000}", "[ab]{1000}\\z", "^[ab]{1000}"])
+    fun diagnosticsPreserveConstantWorkForShortInputs(regex: String?) {
+        val pattern = Pattern.compile(regex)
+        for (size in mutableListOf<Int?>(200, 800)) {
+            val text = "a".repeat(size!!)
+            val input = Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))
+            for (search in List.of<Runnable?>(
+                Runnable { Assertions.assertThat(pattern.find(input)).isFalse() },
+                Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
+                Runnable { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })) {
+                Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+                search.run()
+                val withoutDiagnostics = WorkCounter.countForTesting(search)
+                Pattern.setDiagnostics(listener)
+                search.run()
+                val withDiagnostics = WorkCounter.countForTesting(search)
+                Assertions.assertThat(withDiagnostics).`as`("%s, length %s", regex, size).isEqualTo(withoutDiagnostics)
+                Assertions.assertThat(withDiagnostics).isZero()
+                events.clear()
+            }
+        }
+    }
+
+    companion object {
+        private fun assertLengthRejection(event: OperationDiagnostics) {
+            Assertions.assertThat<MatchOutcome?>(event.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+            Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.LENGTH)
+            Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+            Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+            Assertions.assertThat(event.matchCount).isZero()
+            Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+            Assertions.assertThat(event.reverseDfaSearchCount).isZero()
+            Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies).isEmpty()
+            Assertions.assertThat<StrategyDecision?>(event.strategyDecisions).isEmpty()
+        }
+    }
 }

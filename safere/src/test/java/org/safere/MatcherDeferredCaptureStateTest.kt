@@ -2,275 +2,304 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.lang.reflect.Field
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.lang.reflect.Field;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-/** Tests internal deferred-capture lifecycle invariants for {@link Matcher}. */
+/** Tests internal deferred-capture lifecycle invariants for [Matcher].  */
 @DisabledForCrosscheck("uses package-private reflection to assert SafeRE matcher internals")
-class MatcherDeferredCaptureStateTest {
-  private static final String DEFERRED_CAPTURE_REGEX = "(?m)(?:^|,)(?:\"([^\"]*)\"|([^,\r\n]+))";
-  private static final String CSV = "id,name\n42,\"Ada Lovelace\"";
+internal class MatcherDeferredCaptureStateTest {
+    @Test
+    @DisplayName("reset clears stale deferred captures")
+    @Throws(ReflectiveOperationException::class)
+    fun resetClearsStaleDeferredCaptures() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
 
-  @Test
-  @DisplayName("reset clears stale deferred captures")
-  void resetClearsStaleDeferredCaptures() throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
+        matcher.reset()
 
-    matcher.reset();
-
-    assertDeferredCaptureStateClear(matcher);
-    assertThatThrownBy(matcher::group).isInstanceOf(IllegalStateException.class);
-  }
-
-  @Test
-  @DisplayName("reset(input) clears stale deferred captures")
-  void resetInputClearsStaleDeferredCaptures() throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
-
-    matcher.reset("name");
-
-    assertDeferredCaptureStateClear(matcher);
-    assertThatThrownBy(matcher::group).isInstanceOf(IllegalStateException.class);
-  }
-
-  @Test
-  @DisplayName("region clears stale deferred captures")
-  void regionClearsStaleDeferredCaptures() throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
-
-    matcher.region(0, 2);
-
-    assertDeferredCaptureStateClear(matcher);
-    assertThatThrownBy(matcher::group).isInstanceOf(IllegalStateException.class);
-  }
-
-  @Test
-  @DisplayName("failed find(start) clears stale deferred captures")
-  void failedFindStartClearsStaleDeferredCaptures() throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
-
-    assertThat(matcher.find(CSV.length())).isFalse();
-
-    assertDeferredCaptureStateClear(matcher);
-    assertThatThrownBy(matcher::group).isInstanceOf(IllegalStateException.class);
-  }
-
-  @Test
-  @DisplayName("usePattern clears stale deferred captures")
-  void usePatternClearsStaleDeferredCaptures() throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
-
-    matcher.usePattern(Pattern.compile("name"));
-
-    assertDeferredCaptureStateClear(matcher);
-    assertThat(matcher.hasMatch()).isTrue();
-    assertThat(matcher.group()).isEqualTo("id");
-  }
-
-  @Test
-  @DisplayName("cached NFA does not retain input context")
-  void cachedNfaDoesNotRetainInputContext() throws ReflectiveOperationException {
-    Pattern pattern =
-        Pattern.compile(
-            "([a-z]+)([0-9]+)",
-            0,
-            EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build());
-
-    assertThat(pattern.matcher("abc123").find()).isTrue();
-
-    Nfa nfa = pattern.borrowNfa();
-    assertThat(nfa).isNotNull();
-    assertThat(field(Nfa.class, "context").get(nfa)).isNull();
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void resetInputThenHandoffBorrowsEngineFromExecutingThread(boolean bitState) throws Exception {
-    Pattern pattern =
-        Pattern.compile(
-            "([a-z]+)([0-9]+)",
-            0,
-            EnginePathOptions.builder().dfa(false).onePass(false).bitState(bitState).build());
-    Field engineField = field(Matcher.class, bitState ? "cachedBitState" : "cachedNfa");
-    Matcher transferred = pattern.matcher("abc123");
-    assertThat(transferred.find()).isTrue();
-    Object initialEngine = engineField.get(transferred);
-    assertThat(initialEngine).isNotNull();
-    transferred.reset("xyz789");
-    assertThat(engineField.get(transferred)).isNull();
-
-    Matcher retained = pattern.matcher("abc123");
-    assertThat(retained.find()).isTrue();
-    assertThat(engineField.get(retained)).isSameAs(initialEngine);
-    try (ExecutorService worker = Executors.newSingleThreadExecutor()) {
-      Object workerEngine =
-          worker
-              .submit(
-                  () -> {
-                    assertThat(transferred.find()).isTrue();
-                    Object borrowedEngine = engineField.get(transferred);
-                    assertThat(transferred.group(2)).isEqualTo("789");
-                    return borrowedEngine;
-                  })
-              .get();
-      assertThat(workerEngine).isNotNull().isNotSameAs(engineField.get(retained));
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.group() })
+            .isInstanceOf(IllegalStateException::class.java)
     }
-  }
 
-  @Test
-  @DisplayName("inner capture demand makes later small full matches capture eagerly")
-  void innerCaptureDemandMakesLaterSmallFullMatchesCaptureEagerly()
-      throws ReflectiveOperationException {
-    Pattern pattern = Pattern.compile("^a\\s+-\\s+(.+)$");
-    Matcher first = pattern.matcher("a - value");
+    @Test
+    @DisplayName("reset(input) clears stale deferred captures")
+    @Throws(ReflectiveOperationException::class)
+    fun resetInputClearsStaleDeferredCaptures() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
 
-    assertThat(first.matches()).isTrue();
-    assertThat(booleanField(first, "capturesResolved")).isFalse();
-    assertThat(first.group(1)).isEqualTo("value");
+        matcher.reset("name")
 
-    Matcher second = pattern.matcher("a - another");
-    assertThat(second.matches()).isTrue();
-    assertThat(booleanField(second, "capturesResolved")).isTrue();
-    assertThat(second.group(1)).isEqualTo("another");
-  }
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.group() })
+            .isInstanceOf(IllegalStateException::class.java)
+    }
 
-  @Test
-  @DisplayName("group zero access keeps later full matches on deferred captures")
-  void groupZeroAccessKeepsLaterFullMatchesOnDeferredCaptures()
-      throws ReflectiveOperationException {
-    Pattern pattern = Pattern.compile("^a\\s+-\\s+(.+)$");
-    Matcher first = pattern.matcher("a - value");
+    @Test
+    @DisplayName("region clears stale deferred captures")
+    @Throws(ReflectiveOperationException::class)
+    fun regionClearsStaleDeferredCaptures() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
 
-    assertThat(first.matches()).isTrue();
-    assertThat(first.group()).isEqualTo("a - value");
+        matcher.region(0, 2)
 
-    Matcher second = pattern.matcher("a - another");
-    assertThat(second.matches()).isTrue();
-    assertThat(booleanField(second, "capturesResolved")).isFalse();
-  }
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.group() })
+            .isInstanceOf(IllegalStateException::class.java)
+    }
 
-  @Test
-  @DisplayName("inner capture demand keeps later small unanchored finds deferred")
-  void innerCaptureDemandKeepsLaterSmallUnanchoredFindsDeferred()
-      throws ReflectiveOperationException {
-    Pattern pattern = Pattern.compile("a\\s+(.+)");
-    Matcher first = pattern.matcher("prefix a value");
+    @Test
+    @DisplayName("failed find(start) clears stale deferred captures")
+    @Throws(ReflectiveOperationException::class)
+    fun failedFindStartClearsStaleDeferredCaptures() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
 
-    assertThat(first.find()).isTrue();
-    assertThat(booleanField(first, "capturesResolved")).isFalse();
-    assertThat(first.group(1)).isEqualTo("value");
+        Assertions.assertThat(matcher.find(CSV.length)).isFalse()
 
-    Matcher second = pattern.matcher("prefix a another");
-    assertThat(second.find()).isTrue();
-    assertThat(booleanField(second, "capturesResolved")).isFalse();
-    assertThat(second.group(1)).isEqualTo("another");
-  }
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.group() })
+            .isInstanceOf(IllegalStateException::class.java)
+    }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void innerCaptureDemandStillCollectsCapturesInRequiredExactFallback(boolean bitState)
-      throws ReflectiveOperationException {
-    Pattern pattern =
-        Pattern.compile(
-            "a\\s+(.+)",
-            0,
-            EnginePathOptions.builder().dfa(false).onePass(false).bitState(bitState).build());
-    Matcher first = pattern.matcher("a first");
-    assertThat(first.find()).isTrue();
-    assertThat(first.group(1)).isEqualTo("first");
+    @Test
+    @DisplayName("usePattern clears stale deferred captures")
+    @Throws(ReflectiveOperationException::class)
+    fun usePatternClearsStaleDeferredCaptures() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
 
-    Matcher second = pattern.matcher("prefix a another");
-    assertThat(second.find()).isTrue();
-    assertThat(booleanField(second, "capturesResolved")).isTrue();
-    assertThat(second.group(1)).isEqualTo("another");
-  }
+        matcher.usePattern(Pattern.compile("name"))
 
-  @Test
-  @DisplayName("capture-demand adaptation remains bounded to small inputs")
-  void captureDemandAdaptationRemainsBoundedToSmallInputs() throws ReflectiveOperationException {
-    Pattern pattern = Pattern.compile("a\\s+(.+)");
-    Matcher first = pattern.matcher("a first");
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThat(matcher.hasMatch()).isTrue()
+        Assertions.assertThat(matcher.group()).isEqualTo("id")
+    }
 
-    assertThat(first.find()).isTrue();
-    assertThat(first.group(1)).isEqualTo("first");
+    @Test
+    @DisplayName("cached NFA does not retain input context")
+    @Throws(ReflectiveOperationException::class)
+    fun cachedNfaDoesNotRetainInputContext() {
+        val pattern =
+            Pattern.compile(
+                "([a-z]+)([0-9]+)",
+                0,
+                EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
+            )
 
-    String capturedText = "x".repeat(600);
-    Matcher second = pattern.matcher("prefix a " + capturedText);
-    assertThat(second.find()).isTrue();
-    assertThat(booleanField(second, "capturesResolved")).isFalse();
-    assertThat(second.group(1)).isEqualTo(capturedText);
-  }
+        Assertions.assertThat(pattern.matcher("abc123").find()).isTrue()
 
-  @Test
-  @DisplayName("anchoring bounds change resolves stale deferred captures before clearing markers")
-  void anchoringBoundsChangeResolvesStaleDeferredCapturesBeforeClearingMarkers()
-      throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
+        val nfa = pattern.borrowNfa()
+        Assertions.assertThat<Nfa?>(nfa).isNotNull()
+        Assertions.assertThat<Any?>(field(Nfa::class.java, "context").get(nfa)).isNull()
+    }
 
-    matcher.useAnchoringBounds(false);
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    @Throws(Exception::class)
+    fun resetInputThenHandoffBorrowsEngineFromExecutingThread(bitState: Boolean) {
+        val pattern =
+            Pattern.compile(
+                "([a-z]+)([0-9]+)",
+                0,
+                EnginePathOptions.builder().dfa(false).onePass(false).bitState(bitState).build()
+            )
+        val engineField: Field = field(Matcher::class.java, if (bitState) "cachedBitState" else "cachedNfa")
+        val transferred = pattern.matcher("abc123")
+        Assertions.assertThat(transferred.find()).isTrue()
+        val initialEngine = engineField.get(transferred)
+        Assertions.assertThat<Any?>(initialEngine).isNotNull()
+        transferred.reset("xyz789")
+        Assertions.assertThat<Any?>(engineField.get(transferred)).isNull()
 
-    assertDeferredCaptureStateClear(matcher);
-    assertThat(matcher.group(1)).isNull();
-    assertThat(matcher.group(2)).isEqualTo("id");
-  }
+        val retained = pattern.matcher("abc123")
+        Assertions.assertThat(retained.find()).isTrue()
+        Assertions.assertThat<Any?>(engineField.get(retained)).isSameAs(initialEngine)
+        Executors.newSingleThreadExecutor().use { worker ->
+            val workerEngine =
+                worker
+                    .submit<Any?>(
+                        Callable {
+                            Assertions.assertThat(transferred.find()).isTrue()
+                            val borrowedEngine = engineField.get(transferred)
+                            Assertions.assertThat(transferred.group(2)).isEqualTo("789")
+                            borrowedEngine
+                        })
+                    .get()
+            Assertions.assertThat<Any?>(workerEngine).isNotNull().isNotSameAs(engineField.get(retained))
+        }
+    }
 
-  @Test
-  @DisplayName("transparent bounds change resolves stale deferred captures before clearing markers")
-  void transparentBoundsChangeResolvesStaleDeferredCapturesBeforeClearingMarkers()
-      throws ReflectiveOperationException {
-    Matcher matcher = matcherWithDeferredCaptures();
+    @Test
+    @DisplayName("inner capture demand makes later small full matches capture eagerly")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun innerCaptureDemandMakesLaterSmallFullMatchesCaptureEagerly() {
+        val pattern = Pattern.compile("^a\\s+-\\s+(.+)$")
+        val first = pattern.matcher("a - value")
 
-    matcher.useTransparentBounds(true);
+        Assertions.assertThat(first.matches()).isTrue()
+        Assertions.assertThat(booleanField(first, "capturesResolved")).isFalse()
+        Assertions.assertThat(first.group(1)).isEqualTo("value")
 
-    assertDeferredCaptureStateClear(matcher);
-    assertThat(matcher.group(1)).isNull();
-    assertThat(matcher.group(2)).isEqualTo("id");
-  }
+        val second = pattern.matcher("a - another")
+        Assertions.assertThat(second.matches()).isTrue()
+        Assertions.assertThat(booleanField(second, "capturesResolved")).isTrue()
+        Assertions.assertThat(second.group(1)).isEqualTo("another")
+    }
 
-  private static Matcher matcherWithDeferredCaptures() throws ReflectiveOperationException {
-    // Patterns retain consumption history, so each fixture needs an independent Pattern.
-    Matcher matcher = Pattern.compile(DEFERRED_CAPTURE_REGEX).matcher(CSV);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.group()).isEqualTo("id");
-    assertThat(booleanField(matcher, "capturesResolved")).isFalse();
-    return matcher;
-  }
+    @Test
+    @DisplayName("group zero access keeps later full matches on deferred captures")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun groupZeroAccessKeepsLaterFullMatchesOnDeferredCaptures() {
+        val pattern = Pattern.compile("^a\\s+-\\s+(.+)$")
+        val first = pattern.matcher("a - value")
 
-  private static void assertDeferredCaptureStateClear(Matcher matcher)
-      throws ReflectiveOperationException {
-    assertThat(booleanField(matcher, "capturesResolved")).isTrue();
-    assertThat(intField(matcher, "deferredMatchStart")).isZero();
-    assertThat(intField(matcher, "deferredMatchEnd")).isZero();
-    assertThat(booleanField(matcher, "deferredEndMatch")).isFalse();
-  }
+        Assertions.assertThat(first.matches()).isTrue()
+        Assertions.assertThat(first.group()).isEqualTo("a - value")
 
-  private static boolean booleanField(Matcher matcher, String name)
-      throws ReflectiveOperationException {
-    return (boolean) field(name).get(matcher);
-  }
+        val second = pattern.matcher("a - another")
+        Assertions.assertThat(second.matches()).isTrue()
+        Assertions.assertThat(booleanField(second, "capturesResolved")).isFalse()
+    }
 
-  private static int intField(Matcher matcher, String name) throws ReflectiveOperationException {
-    return (int) field(name).get(matcher);
-  }
+    @Test
+    @DisplayName("inner capture demand keeps later small unanchored finds deferred")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun innerCaptureDemandKeepsLaterSmallUnanchoredFindsDeferred() {
+        val pattern = Pattern.compile("a\\s+(.+)")
+        val first = pattern.matcher("prefix a value")
 
-  private static Field field(String name) throws ReflectiveOperationException {
-    return field(Matcher.class, name);
-  }
+        Assertions.assertThat(first.find()).isTrue()
+        Assertions.assertThat(booleanField(first, "capturesResolved")).isFalse()
+        Assertions.assertThat(first.group(1)).isEqualTo("value")
 
-  private static Field field(Class<?> type, String name) throws ReflectiveOperationException {
-    Field field = type.getDeclaredField(name);
-    field.setAccessible(true);
-    return field;
-  }
+        val second = pattern.matcher("prefix a another")
+        Assertions.assertThat(second.find()).isTrue()
+        Assertions.assertThat(booleanField(second, "capturesResolved")).isFalse()
+        Assertions.assertThat(second.group(1)).isEqualTo("another")
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    @Throws(ReflectiveOperationException::class)
+    fun innerCaptureDemandStillCollectsCapturesInRequiredExactFallback(bitState: Boolean) {
+        val pattern =
+            Pattern.compile(
+                "a\\s+(.+)",
+                0,
+                EnginePathOptions.builder().dfa(false).onePass(false).bitState(bitState).build()
+            )
+        val first = pattern.matcher("a first")
+        Assertions.assertThat(first.find()).isTrue()
+        Assertions.assertThat(first.group(1)).isEqualTo("first")
+
+        val second = pattern.matcher("prefix a another")
+        Assertions.assertThat(second.find()).isTrue()
+        Assertions.assertThat(booleanField(second, "capturesResolved")).isTrue()
+        Assertions.assertThat(second.group(1)).isEqualTo("another")
+    }
+
+    @Test
+    @DisplayName("capture-demand adaptation remains bounded to small inputs")
+    @Throws(ReflectiveOperationException::class)
+    fun captureDemandAdaptationRemainsBoundedToSmallInputs() {
+        val pattern = Pattern.compile("a\\s+(.+)")
+        val first = pattern.matcher("a first")
+
+        Assertions.assertThat(first.find()).isTrue()
+        Assertions.assertThat(first.group(1)).isEqualTo("first")
+
+        val capturedText = "x".repeat(600)
+        val second = pattern.matcher("prefix a " + capturedText)
+        Assertions.assertThat(second.find()).isTrue()
+        Assertions.assertThat(booleanField(second, "capturesResolved")).isFalse()
+        Assertions.assertThat(second.group(1)).isEqualTo(capturedText)
+    }
+
+    @Test
+    @DisplayName("anchoring bounds change resolves stale deferred captures before clearing markers")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun anchoringBoundsChangeResolvesStaleDeferredCapturesBeforeClearingMarkers() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
+
+        matcher.useAnchoringBounds(false)
+
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThat(matcher.group(1)).isNull()
+        Assertions.assertThat(matcher.group(2)).isEqualTo("id")
+    }
+
+    @Test
+    @DisplayName("transparent bounds change resolves stale deferred captures before clearing markers")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun transparentBoundsChangeResolvesStaleDeferredCapturesBeforeClearingMarkers() {
+        val matcher: Matcher = matcherWithDeferredCaptures()
+
+        matcher.useTransparentBounds(true)
+
+        assertDeferredCaptureStateClear(matcher)
+        Assertions.assertThat(matcher.group(1)).isNull()
+        Assertions.assertThat(matcher.group(2)).isEqualTo("id")
+    }
+
+    companion object {
+        private const val DEFERRED_CAPTURE_REGEX = "(?m)(?:^|,)(?:\"([^\"]*)\"|([^,\r\n]+))"
+        private const val CSV = "id,name\n42,\"Ada Lovelace\""
+
+        @Throws(ReflectiveOperationException::class)
+        private fun matcherWithDeferredCaptures(): Matcher {
+            // Patterns retain consumption history, so each fixture needs an independent Pattern.
+            val matcher: Matcher = Pattern.compile(DEFERRED_CAPTURE_REGEX).matcher(CSV)
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.group()).isEqualTo("id")
+            Assertions.assertThat(booleanField(matcher, "capturesResolved")).isFalse()
+            return matcher
+        }
+
+        @Throws(ReflectiveOperationException::class)
+        private fun assertDeferredCaptureStateClear(matcher: Matcher?) {
+            Assertions.assertThat(booleanField(matcher, "capturesResolved")).isTrue()
+            Assertions.assertThat(intField(matcher, "deferredMatchStart")).isZero()
+            Assertions.assertThat(intField(matcher, "deferredMatchEnd")).isZero()
+            Assertions.assertThat(booleanField(matcher, "deferredEndMatch")).isFalse()
+        }
+
+        @Throws(ReflectiveOperationException::class)
+        private fun booleanField(matcher: Matcher?, name: String): Boolean {
+            return field(name).get(matcher) as Boolean
+        }
+
+        @Throws(ReflectiveOperationException::class)
+        private fun intField(matcher: Matcher?, name: String): Int {
+            return field(name).get(matcher) as Int
+        }
+
+        @Throws(ReflectiveOperationException::class)
+        private fun field(name: String): Field {
+            return field(Matcher::class.java, name)
+        }
+
+        @Throws(ReflectiveOperationException::class)
+        private fun field(type: Class<*>, name: String): Field {
+            val field = type.getDeclaredField(name)
+            field.setAccessible(true)
+            return field
+        }
+    }
 }

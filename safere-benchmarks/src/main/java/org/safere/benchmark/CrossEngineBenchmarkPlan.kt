@@ -2,333 +2,345 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonElement
+import org.safere.benchmark.CrossEngineWorkload.TimingGroup
+import org.safere.benchmark.DeclarativeBenchmarkPlan.*
+import java.util.*
+import java.util.List
+import java.util.function.Consumer
+import java.util.function.Supplier
+import java.util.stream.Collectors
 
-import com.google.gson.JsonElement;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
+/** Expands and validates the declarative ordinary cross-engine workload matrix.  */
+internal class CrossEngineBenchmarkPlan private constructor(
+    workloads: MutableMap<String?, CrossEngineWorkload?>?,
+    trials: MutableMap<String?, Trial?>?,
+    exclusions: MutableList<MaterializedExecutionPlan.Entry?>
+) {
+    private val workloads: MutableMap<String?, CrossEngineWorkload>
+    private val trials: MutableMap<String?, Trial?>
+    private val exclusions: MutableList<MaterializedExecutionPlan.Entry>
 
-/** Expands and validates the declarative ordinary cross-engine workload matrix. */
-final class CrossEngineBenchmarkPlan {
-  private static final EnumSet<DeclarativeBenchmarkPlan.Operation> CROSS_ENGINE_OPERATIONS =
-      EnumSet.of(
-          DeclarativeBenchmarkPlan.Operation.MATCHES,
-          DeclarativeBenchmarkPlan.Operation.FIND,
-          DeclarativeBenchmarkPlan.Operation.LOOKING_AT,
-          DeclarativeBenchmarkPlan.Operation.FIND_ALL_COUNT,
-          DeclarativeBenchmarkPlan.Operation.MATCHES_CORPUS,
-          DeclarativeBenchmarkPlan.Operation.MATCHES_GROUP_LENGTH_SUM,
-          DeclarativeBenchmarkPlan.Operation.FIND_ALL_LENGTH_SUM,
-          DeclarativeBenchmarkPlan.Operation.FIND_ALL_GROUP_LENGTH_SUM,
-          DeclarativeBenchmarkPlan.Operation.CAPTURE_GROUPS,
-          DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST,
-          DeclarativeBenchmarkPlan.Operation.REPLACE_ALL,
-          DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM,
-          DeclarativeBenchmarkPlan.Operation.MANUAL_REPLACE_ALL,
-          DeclarativeBenchmarkPlan.Operation.SPLIT_LENGTH_SUM,
-          DeclarativeBenchmarkPlan.Operation.COMPILE,
-          DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND,
-          DeclarativeBenchmarkPlan.Operation.COMPILE_AND_MATCHES,
-          DeclarativeBenchmarkPlan.Operation.FIND_ROTATING_UTF16,
-          DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND_ROTATING_UTF16,
-          DeclarativeBenchmarkPlan.Operation.MATCHER_RESET_FIND,
-          DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_FIND,
-          DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_MATCHES,
-          DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_TOKENIZE,
-          DeclarativeBenchmarkPlan.Operation.FIND_SAMPLED_GROUP,
-          DeclarativeBenchmarkPlan.Operation.FIND_GROUP_PRESENT,
-          DeclarativeBenchmarkPlan.Operation.FIND_GROUP);
-  private final Map<String, CrossEngineWorkload> workloads;
-  private final Map<String, Trial> trials;
-  private final List<MaterializedExecutionPlan.Entry> exclusions;
-
-  private CrossEngineBenchmarkPlan(
-      Map<String, CrossEngineWorkload> workloads,
-      Map<String, Trial> trials,
-      List<MaterializedExecutionPlan.Entry> exclusions) {
-    this.workloads = Collections.unmodifiableMap(new LinkedHashMap<>(workloads));
-    this.trials = Collections.unmodifiableMap(new LinkedHashMap<>(trials));
-    this.exclusions = List.copyOf(exclusions);
-  }
-
-  static CrossEngineBenchmarkPlan load() {
-    return fromMaterialized(MaterializedExecutionPlan.load().entriesForRunner("java"));
-  }
-
-  static CrossEngineBenchmarkPlan fromMaterialized(List<MaterializedExecutionPlan.Entry> entries) {
-    Map<String, CrossEngineWorkload> workloads = new LinkedHashMap<>();
-    Map<String, Trial> trials = new LinkedHashMap<>();
-    List<MaterializedExecutionPlan.Entry> exclusions = new ArrayList<>();
-    for (MaterializedExecutionPlan.Entry entry : entries) {
-      if (!CROSS_ENGINE_OPERATIONS.contains(entry.operation())
-          || !entry.measurement().timingUnit().isTime()) {
-        continue;
-      }
-      if (!entry.runnable()) {
-        exclusions.add(entry);
-        continue;
-      }
-      CrossEngineWorkload workload = convert(entry.workload());
-      workloads.putIfAbsent(entry.workloadId(), workload);
-      RegexEngineVariant variant = RegexEngineVariant.fromId(entry.engineId());
-      Trial converted = new Trial(workload, variant);
-      if (trials.put(converted.id(), converted) != null) {
-        throw new IllegalArgumentException("Duplicate cross-engine trial ID: " + converted.id());
-      }
+    init {
+        this.workloads = Collections.unmodifiableMap<String?, CrossEngineWorkload?>(
+            LinkedHashMap<String?, CrossEngineWorkload?>(workloads)
+        )
+        this.trials = Collections.unmodifiableMap<String?, Trial?>(LinkedHashMap<String?, Trial?>(trials))
+        this.exclusions = List.copyOf<MaterializedExecutionPlan.Entry?>(exclusions)
     }
-    return new CrossEngineBenchmarkPlan(workloads, trials, exclusions);
-  }
 
-  List<Trial> trials(CrossEngineWorkload.TimingGroup timingGroup) {
-    return trials.values().stream()
-        .filter(trial -> trial.workload().timingGroup() == timingGroup)
-        .toList();
-  }
-
-  List<Trial> trials(
-      CrossEngineWorkload.TimingGroup timingGroup,
-      DeclarativeBenchmarkPlan.MeasurementMode mode,
-      boolean noFork) {
-    return trials(timingGroup).stream()
-        .filter(trial -> trial.workload().measurement().mode() == mode)
-        .filter(
-            trial ->
-                trial
-                        .workload()
-                        .measurement()
-                        .constraints()
-                        .contains(DeclarativeBenchmarkPlan.ExecutionConstraint.NO_FORK)
-                    == noFork)
-        .toList();
-  }
-
-  List<CrossEngineWorkload> workloads() {
-    return List.copyOf(workloads.values());
-  }
-
-  List<MaterializedExecutionPlan.Entry> exclusions() {
-    return exclusions;
-  }
-
-  Trial resolve(String trialId) {
-    int separator = trialId.lastIndexOf('@');
-    if (separator <= 0 || separator == trialId.length() - 1) {
-      throw new IllegalArgumentException(
-          "Cross-engine trial must be <workload-id>@<variant-id>: " + trialId);
+    fun trials(timingGroup: TimingGroup?): MutableList<Trial?> {
+        return trials.values.stream()
+            .filter { trial: Trial? -> trial!!.workload!!.timingGroup == timingGroup }
+            .toList()
     }
-    Trial trial = trials.get(trialId);
-    if (trial != null) {
-      return trial;
-    }
-    String workloadId = trialId.substring(0, separator);
-    String variantId = trialId.substring(separator + 1);
-    CrossEngineWorkload workload = workloads.get(workloadId);
-    if (workload == null) {
-      throw new IllegalArgumentException("Unknown cross-engine workload ID: " + workloadId);
-    }
-    RegexEngineVariant.fromId(variantId);
-    MaterializedExecutionPlan.Entry exclusion =
-        exclusions.stream()
-            .filter(
-                candidate ->
-                    candidate.workloadId().equals(workloadId)
-                        && candidate.engineId().equals(variantId))
-            .findFirst()
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "Unaccounted cross-engine combination: " + workloadId + "@" + variantId));
-    throw new IllegalArgumentException(
-        "Unsupported cross-engine combination: "
-            + trialId
-            + " uses "
-            + workload.operation()
-            + "; "
-            + exclusion.exclusion().kind()
-            + ": "
-            + exclusion.exclusion().reason());
-  }
 
-  public static void main(String[] args) {
-    boolean argumentFile = args.length > 0 && args[0].equals("--argument-file");
-    String[] queryArgs = argumentFile ? Arrays.copyOfRange(args, 1, args.length) : args;
-    if (queryArgs.length < 1) {
-      throw new IllegalArgumentException(
-          "Usage: CrossEngineBenchmarkPlan [--argument-file] "
-              + "<nanoseconds|microseconds|no-fork-microseconds|cold-start> "
-              + "[workload-prefix ...]");
+    fun trials(
+        timingGroup: TimingGroup?,
+        mode: MeasurementMode?,
+        noFork: Boolean
+    ): MutableList<Trial?> {
+        return trials(timingGroup).stream()
+            .filter { trial: Trial? -> trial!!.workload!!.measurement.mode == mode }
+            .filter { trial: Trial? ->
+                (trial!!
+                    .workload!!
+                    .measurement
+                    .constraints()
+                    .contains(ExecutionConstraint.NO_FORK)
+                        == noFork)
+            }
+            .toList()
     }
-    Query query =
-        switch (queryArgs[0]) {
-          case "nanoseconds" -> new Query(CrossEngineWorkload.TimingGroup.NANOSECONDS, null, false);
-          case "microseconds" ->
-              new Query(CrossEngineWorkload.TimingGroup.MICROSECONDS, null, false);
-          case "no-fork-microseconds" ->
-              new Query(
-                  CrossEngineWorkload.TimingGroup.MICROSECONDS,
-                  DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME,
-                  true);
-          case "cold-start" ->
-              new Query(
-                  CrossEngineWorkload.TimingGroup.MILLISECONDS,
-                  DeclarativeBenchmarkPlan.MeasurementMode.SINGLE_SHOT_COLD_START,
-                  false);
-          default ->
-              throw new IllegalArgumentException(
-                  "Unknown cross-engine timing group: " + queryArgs[0]);
-        };
-    CrossEngineBenchmarkPlan plan = load();
-    String trialIds =
-        plan.trials(query.timingGroup()).stream()
-            .filter(
-                trial ->
-                    System.getProperty("safere.benchmark.scanProvider") == null
-                        || BenchmarkCollectionPlan.matchesScanProvider(
-                            trial.id(), System.getProperty("safere.benchmark.scanProvider")))
-            .filter(
-                trial ->
-                    query.mode() == null || trial.workload().measurement().mode() == query.mode())
-            .filter(
-                trial ->
-                    trial
-                            .workload()
-                            .measurement()
+
+    fun workloads(): MutableList<CrossEngineWorkload?> {
+        return List.copyOf<CrossEngineWorkload?>(workloads.values)
+    }
+
+    fun exclusions(): MutableList<MaterializedExecutionPlan.Entry> {
+        return exclusions
+    }
+
+    fun resolve(trialId: String): Trial {
+        val separator = trialId.lastIndexOf('@')
+        require(!(separator <= 0 || separator == trialId.length - 1)) { "Cross-engine trial must be <workload-id>@<variant-id>: " + trialId }
+        val trial = trials.get(trialId)
+        if (trial != null) {
+            return trial
+        }
+        val workloadId = trialId.substring(0, separator)
+        val variantId = trialId.substring(separator + 1)
+        val workload: CrossEngineWorkload = workloads.get(workloadId)!!
+        requireNotNull(workload) { "Unknown cross-engine workload ID: " + workloadId }
+        RegexEngineVariant.Companion.fromId(variantId)
+        val exclusion =
+            exclusions.stream()
+                .filter { candidate: MaterializedExecutionPlan.Entry? ->
+                    candidate!!.workloadId == workloadId
+                            && candidate.engineId == variantId
+                }
+                .findFirst()
+                .orElseThrow<IllegalStateException?>(
+                    Supplier {
+                        IllegalStateException(
+                            "Unaccounted cross-engine combination: " + workloadId + "@" + variantId
+                        )
+                    })
+        throw IllegalArgumentException(
+            ("Unsupported cross-engine combination: "
+                    + trialId
+                    + " uses "
+                    + workload.operation
+                    + "; "
+                    + exclusion.exclusion.kind
+                    + ": "
+                    + exclusion.exclusion.reason)
+        )
+    }
+
+    @JvmRecord
+    private data class Query(
+        val timingGroup: TimingGroup?,
+        val mode: MeasurementMode?,
+        val noFork: Boolean
+    )
+
+    @JvmRecord
+    internal data class Trial(val workload: CrossEngineWorkload?, val variant: RegexEngineVariant?) {
+        fun id(): String {
+            return workload!!.id + "@" + variant!!.id()
+        }
+
+        fun validate(actual: Any?) {
+            require(!(workload!!.expected != null && workload.expected != actual)) {
+                (workload.id
+                        + " "
+                        + variant!!.id()
+                        + " expected "
+                        + workload.expected
+                        + " but was "
+                        + actual)
+            }
+        }
+
+        init {
+            Objects.requireNonNull<CrossEngineWorkload?>(workload)
+            Objects.requireNonNull<RegexEngineVariant?>(variant)
+        }
+    }
+
+    companion object {
+        private val CROSS_ENGINE_OPERATIONS: EnumSet<DeclarativeBenchmarkPlan.Operation?> =
+            EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
+                DeclarativeBenchmarkPlan.Operation.MATCHES,
+                DeclarativeBenchmarkPlan.Operation.FIND,
+                DeclarativeBenchmarkPlan.Operation.LOOKING_AT,
+                DeclarativeBenchmarkPlan.Operation.FIND_ALL_COUNT,
+                DeclarativeBenchmarkPlan.Operation.MATCHES_CORPUS,
+                DeclarativeBenchmarkPlan.Operation.MATCHES_GROUP_LENGTH_SUM,
+                DeclarativeBenchmarkPlan.Operation.FIND_ALL_LENGTH_SUM,
+                DeclarativeBenchmarkPlan.Operation.FIND_ALL_GROUP_LENGTH_SUM,
+                DeclarativeBenchmarkPlan.Operation.CAPTURE_GROUPS,
+                DeclarativeBenchmarkPlan.Operation.REPLACE_FIRST,
+                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL,
+                DeclarativeBenchmarkPlan.Operation.REPLACE_ALL_LENGTH_SUM,
+                DeclarativeBenchmarkPlan.Operation.MANUAL_REPLACE_ALL,
+                DeclarativeBenchmarkPlan.Operation.SPLIT_LENGTH_SUM,
+                DeclarativeBenchmarkPlan.Operation.COMPILE,
+                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND,
+                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_MATCHES,
+                DeclarativeBenchmarkPlan.Operation.FIND_ROTATING_UTF16,
+                DeclarativeBenchmarkPlan.Operation.COMPILE_AND_FIND_ROTATING_UTF16,
+                DeclarativeBenchmarkPlan.Operation.MATCHER_RESET_FIND,
+                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_FIND,
+                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_MATCHES,
+                DeclarativeBenchmarkPlan.Operation.MATCHER_REGION_TOKENIZE,
+                DeclarativeBenchmarkPlan.Operation.FIND_SAMPLED_GROUP,
+                DeclarativeBenchmarkPlan.Operation.FIND_GROUP_PRESENT,
+                DeclarativeBenchmarkPlan.Operation.FIND_GROUP
+            )
+
+        fun load(): CrossEngineBenchmarkPlan {
+            return fromMaterialized(MaterializedExecutionPlan.Companion.load().entriesForRunner("java"))
+        }
+
+        fun fromMaterialized(entries: MutableList<MaterializedExecutionPlan.Entry>): CrossEngineBenchmarkPlan {
+            val workloads: MutableMap<String?, CrossEngineWorkload?> = LinkedHashMap<String?, CrossEngineWorkload?>()
+            val trials: MutableMap<String?, Trial?> = LinkedHashMap<String?, Trial?>()
+            val exclusions: MutableList<MaterializedExecutionPlan.Entry?> =
+                ArrayList<MaterializedExecutionPlan.Entry?>()
+            for (entry in entries) {
+                if (!CROSS_ENGINE_OPERATIONS.contains(entry.operation)
+                    || !entry.measurement.timingUnit.isTime()
+                ) {
+                    continue
+                }
+                if (!entry.runnable()) {
+                    exclusions.add(entry)
+                    continue
+                }
+                val workload: CrossEngineWorkload = convert(entry.workload)
+                workloads.putIfAbsent(entry.workloadId, workload)
+                val variant: RegexEngineVariant = RegexEngineVariant.Companion.fromId(entry.engineId)
+                val converted = Trial(workload, variant)
+                require(
+                    trials.put(
+                        converted.id(),
+                        converted
+                    ) == null
+                ) { "Duplicate cross-engine trial ID: " + converted.id() }
+            }
+            return CrossEngineBenchmarkPlan(workloads, trials, exclusions)
+        }
+
+        @JvmStatic
+        fun main(args: Array<String>) {
+            val argumentFile = args.size > 0 && args[0] == "--argument-file"
+            val queryArgs = if (argumentFile) Arrays.copyOfRange<String?>(args, 1, args.size) else args
+            require(queryArgs.size >= 1) {
+                ("Usage: CrossEngineBenchmarkPlan [--argument-file] "
+                        + "<nanoseconds|microseconds|no-fork-microseconds|cold-start> "
+                        + "[workload-prefix ...]")
+            }
+            val query =
+                when (queryArgs[0]) {
+                    "nanoseconds" -> Query(TimingGroup.NANOSECONDS, null, false)
+                    "microseconds" -> Query(TimingGroup.MICROSECONDS, null, false)
+                    "no-fork-microseconds" -> Query(
+                        TimingGroup.MICROSECONDS,
+                        MeasurementMode.AVERAGE_TIME,
+                        true
+                    )
+
+                    "cold-start" -> Query(
+                        TimingGroup.MILLISECONDS,
+                        MeasurementMode.SINGLE_SHOT_COLD_START,
+                        false
+                    )
+
+                    else -> throw IllegalArgumentException(
+                        "Unknown cross-engine timing group: " + queryArgs[0]
+                    )
+                }
+            val plan: CrossEngineBenchmarkPlan = load()
+            val trialIds =
+                plan.trials(query.timingGroup).stream()
+                    .filter { trial: Trial? ->
+                        System.getProperty("safere.benchmark.scanProvider") == null
+                                || BenchmarkCollectionPlan.Companion.matchesScanProvider(
+                            trial!!.id(), System.getProperty("safere.benchmark.scanProvider")
+                        )
+                    }
+                    .filter { trial: Trial? -> query.mode == null || trial!!.workload!!.measurement.mode == query.mode }
+                    .filter { trial: Trial? ->
+                        (trial!!
+                            .workload!!
+                            .measurement
                             .constraints()
-                            .contains(DeclarativeBenchmarkPlan.ExecutionConstraint.NO_FORK)
-                        == query.noFork())
-            .filter(
-                trial ->
-                    queryArgs.length == 1
-                        || Arrays.stream(queryArgs, 1, queryArgs.length)
-                            .anyMatch(prefix -> trial.workload().id().startsWith(prefix)))
-            .map(Trial::id)
-            .collect(Collectors.joining(","));
-    if (trialIds.isEmpty()) {
-      throw new IllegalStateException("No cross-engine trials for " + queryArgs[0]);
+                            .contains(ExecutionConstraint.NO_FORK)
+                                == query.noFork)
+                    }
+                    .filter { trial: Trial? ->
+                        queryArgs.size == 1
+                                || Arrays.stream<String?>(queryArgs, 1, queryArgs.size)
+                            .anyMatch { prefix: String? -> trial!!.workload!!.id.startsWith(prefix!!) }
+                    }
+                    .map<String?> { obj: Trial? -> obj!!.id() }
+                    .collect(Collectors.joining(","))
+            check(!trialIds.isEmpty()) { "No cross-engine trials for " + queryArgs[0] }
+            if (argumentFile) {
+                val parameter =
+                    when (queryArgs[0]) {
+                        "nanoseconds" -> "crossEngineTrial"
+                        "microseconds" -> "crossEngineScalingTrial"
+                        "no-fork-microseconds" -> "crossEngineNoForkTrial"
+                        "cold-start" -> "crossEngineColdStartTrial"
+                        else -> throw IllegalArgumentException(queryArgs[0])
+                    }
+                println("-p")
+                println(BenchmarkCollectionPlan.Companion.argumentFileToken(parameter + "=" + trialIds))
+            } else {
+                println(trialIds)
+            }
+        }
+
+        private fun convert(workload: ExpandedWorkload): CrossEngineWorkload {
+            val groups: IntArray? = groups(workload.arguments)
+            val replacement: String? = stringArgument(workload.arguments, "replacement")
+            val limit: Int = integerArgument(workload.arguments, "limit", 0)
+            val timingGroup =
+                when (workload.measurement.timingUnit) {
+                    TimingUnit.NANOSECONDS -> TimingGroup.NANOSECONDS
+                    TimingUnit.MICROSECONDS -> TimingGroup.MICROSECONDS
+                    TimingUnit.MILLISECONDS -> TimingGroup.MILLISECONDS
+                    else -> throw IllegalArgumentException(
+                        workload.id + " is not a time-based cross-engine workload"
+                    )
+                }
+            return CrossEngineWorkload(
+                workload.id,
+                BenchmarkOperation.Companion.fromDeclarative(workload.operation),
+                workload.patterns,
+                workload.inputIds,
+                groups,
+                replacement,
+                expectedValue(workload.expected),
+                limit,
+                workload.lifecycle,
+                stringArgument(workload.arguments, "flagSet"),
+                integerArgument(workload.arguments, "seed", 0),
+                integerArgument(workload.arguments, "count", 0),
+                stringArgument(workload.arguments, "mode"),
+                workload.measurement,
+                timingGroup
+            )
+        }
+
+        private fun groups(arguments: MutableMap<String?, RecipeValue?>): IntArray? {
+            val groups = arguments.get("groups")
+            if (groups != null) {
+                return (groups as RecipeIntegerList)
+                    .values.stream().mapToInt { obj: Int? -> obj!!.toInt() }.toArray()
+            }
+            val group = arguments.get("group")
+            if (group != null) {
+                return intArrayOf((group as RecipeInteger).value)
+            }
+            return IntArray(0)
+        }
+
+        private fun stringArgument(
+            arguments: MutableMap<String?, RecipeValue?>, name: String?
+        ): String? {
+            val value = arguments.get(name)
+            return if (value == null) null else (value as RecipeString).value
+        }
+
+        private fun integerArgument(
+            arguments: MutableMap<String?, RecipeValue?>, name: String?, defaultValue: Int
+        ): Int {
+            val value = arguments.get(name)
+            return if (value == null) defaultValue else (value as RecipeInteger).value
+        }
+
+        private fun expectedValue(expected: ExpectedResult?): Any? {
+            if (expected == null) {
+                return null
+            }
+            val value = expected.value()
+            return when (expected.type) {
+                ResultType.BOOLEAN -> value!!.getAsBoolean()
+                ResultType.INTEGER -> value!!.getAsInt()
+                ResultType.STRING -> value!!.getAsString()
+                ResultType.STRING_LIST -> {
+                    val values: MutableList<String?> = ArrayList<String?>()
+                    value!!.getAsJsonArray()
+                        .forEach(Consumer { element: JsonElement? -> values.add(element!!.getAsString()) })
+                    List.copyOf<String?>(values)
+                }
+            }
+        }
     }
-    if (argumentFile) {
-      String parameter =
-          switch (queryArgs[0]) {
-            case "nanoseconds" -> "crossEngineTrial";
-            case "microseconds" -> "crossEngineScalingTrial";
-            case "no-fork-microseconds" -> "crossEngineNoForkTrial";
-            case "cold-start" -> "crossEngineColdStartTrial";
-            default -> throw new IllegalArgumentException(queryArgs[0]);
-          };
-      System.out.println("-p");
-      System.out.println(BenchmarkCollectionPlan.argumentFileToken(parameter + "=" + trialIds));
-    } else {
-      System.out.println(trialIds);
-    }
-  }
-
-  private record Query(
-      CrossEngineWorkload.TimingGroup timingGroup,
-      DeclarativeBenchmarkPlan.MeasurementMode mode,
-      boolean noFork) {}
-
-  private static CrossEngineWorkload convert(DeclarativeBenchmarkPlan.ExpandedWorkload workload) {
-    int[] groups = groups(workload.arguments());
-    String replacement = stringArgument(workload.arguments(), "replacement");
-    int limit = integerArgument(workload.arguments(), "limit", 0);
-    CrossEngineWorkload.TimingGroup timingGroup =
-        switch (workload.measurement().timingUnit()) {
-          case NANOSECONDS -> CrossEngineWorkload.TimingGroup.NANOSECONDS;
-          case MICROSECONDS -> CrossEngineWorkload.TimingGroup.MICROSECONDS;
-          case MILLISECONDS -> CrossEngineWorkload.TimingGroup.MILLISECONDS;
-          default ->
-              throw new IllegalArgumentException(
-                  workload.id() + " is not a time-based cross-engine workload");
-        };
-    return new CrossEngineWorkload(
-        workload.id(),
-        BenchmarkOperation.fromDeclarative(workload.operation()),
-        workload.patterns(),
-        workload.inputIds(),
-        groups,
-        replacement,
-        expectedValue(workload.expected()),
-        limit,
-        workload.lifecycle(),
-        stringArgument(workload.arguments(), "flagSet"),
-        integerArgument(workload.arguments(), "seed", 0),
-        integerArgument(workload.arguments(), "count", 0),
-        stringArgument(workload.arguments(), "mode"),
-        workload.measurement(),
-        timingGroup);
-  }
-
-  private static int[] groups(Map<String, DeclarativeBenchmarkPlan.RecipeValue> arguments) {
-    DeclarativeBenchmarkPlan.RecipeValue groups = arguments.get("groups");
-    if (groups != null) {
-      return ((DeclarativeBenchmarkPlan.RecipeIntegerList) groups)
-          .values().stream().mapToInt(Integer::intValue).toArray();
-    }
-    DeclarativeBenchmarkPlan.RecipeValue group = arguments.get("group");
-    if (group != null) {
-      return new int[] {((DeclarativeBenchmarkPlan.RecipeInteger) group).value()};
-    }
-    return new int[0];
-  }
-
-  private static String stringArgument(
-      Map<String, DeclarativeBenchmarkPlan.RecipeValue> arguments, String name) {
-    DeclarativeBenchmarkPlan.RecipeValue value = arguments.get(name);
-    return value == null ? null : ((DeclarativeBenchmarkPlan.RecipeString) value).value();
-  }
-
-  private static int integerArgument(
-      Map<String, DeclarativeBenchmarkPlan.RecipeValue> arguments, String name, int defaultValue) {
-    DeclarativeBenchmarkPlan.RecipeValue value = arguments.get(name);
-    return value == null ? defaultValue : ((DeclarativeBenchmarkPlan.RecipeInteger) value).value();
-  }
-
-  private static Object expectedValue(DeclarativeBenchmarkPlan.ExpectedResult expected) {
-    if (expected == null) {
-      return null;
-    }
-    JsonElement value = expected.value();
-    return switch (expected.type()) {
-      case BOOLEAN -> value.getAsBoolean();
-      case INTEGER -> value.getAsInt();
-      case STRING -> value.getAsString();
-      case STRING_LIST -> {
-        List<String> values = new ArrayList<>();
-        value.getAsJsonArray().forEach(element -> values.add(element.getAsString()));
-        yield List.copyOf(values);
-      }
-    };
-  }
-
-  record Trial(CrossEngineWorkload workload, RegexEngineVariant variant) {
-    Trial {
-      Objects.requireNonNull(workload);
-      Objects.requireNonNull(variant);
-    }
-
-    String id() {
-      return workload.id() + "@" + variant.id();
-    }
-
-    void validate(Object actual) {
-      if (workload.expected() != null && !Objects.equals(workload.expected(), actual)) {
-        throw new IllegalArgumentException(
-            workload.id()
-                + " "
-                + variant.id()
-                + " expected "
-                + workload.expected()
-                + " but was "
-                + actual);
-      }
-    }
-  }
 }

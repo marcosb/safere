@@ -2,145 +2,150 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import java.io.DataInputStream
+import java.io.IOException
+import java.net.URISyntaxException
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-/** Tests for deterministic work accounting. */
+/** Tests for deterministic work accounting.  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-class WorkCounterTest {
-  @Test
-  @DisplayName("countForTesting throws when work counters are disabled")
-  void countForTestingThrowsWhenCountersAreDisabled() {
-    assertThatThrownBy(() -> WorkCounter.countForTesting(() -> {}))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("WorkCounter is disabled");
-  }
-
-  @Test
-  @DisplayName("production bytecode has no work counter method or field references when disabled")
-  void productionBytecodeHasNoWorkCounterMethodOrFieldReferencesWhenDisabled()
-      throws IOException, URISyntaxException {
-    Path classesRoot =
-        Path.of(WorkCounter.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-
-    if (Files.isRegularFile(classesRoot)) {
-      try (FileSystem jarFileSystem = FileSystems.newFileSystem(classesRoot)) {
-        assertNoWorkCounterReferences(jarFileSystem.getPath("/"));
-      }
-    } else {
-      assertNoWorkCounterReferences(classesRoot);
+internal class WorkCounterTest {
+    @Test
+    @DisplayName("countForTesting throws when work counters are disabled")
+    fun countForTestingThrowsWhenCountersAreDisabled() {
+        Assertions.assertThatThrownBy(ThrowingCallable { WorkCounter.countForTesting(Runnable {}) })
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("WorkCounter is disabled")
     }
-  }
 
-  private static void assertNoWorkCounterReferences(Path classesRoot) throws IOException {
-    List<String> references = new ArrayList<>();
+    @Test
+    @DisplayName("production bytecode has no work counter method or field references when disabled")
+    @Throws(IOException::class, URISyntaxException::class)
+    fun productionBytecodeHasNoWorkCounterMethodOrFieldReferencesWhenDisabled() {
+        val classesRoot =
+            Path.of(WorkCounter::class.java.getProtectionDomain().getCodeSource().getLocation().toURI())
 
-    try (var classFiles = Files.walk(classesRoot)) {
-      List<Path> compiledClasses =
-          classFiles.filter(path -> path.toString().endsWith(".class")).toList();
-      for (Path classFile : compiledClasses) {
-        String classFileName = classFile.getFileName().toString();
-        if (classFileName.startsWith("WorkCounter")) {
-          continue;
+        if (Files.isRegularFile(classesRoot)) {
+            FileSystems.newFileSystem(classesRoot).use { jarFileSystem ->
+                assertNoWorkCounterReferences(jarFileSystem.getPath("/"))
+            }
+        } else {
+            assertNoWorkCounterReferences(classesRoot)
         }
-        references.addAll(workCounterMethodOrFieldReferences(classFile));
-      }
     }
 
-    assertThat(references).isEmpty();
-  }
+    private class ConstantPool(size: Int) {
+        private val refs: MutableList<Ref> = ArrayList<Ref>()
+        private val utf8s: Array<String>
+        private val classNameIndexes: IntArray
+        private val nameAndTypeNameIndexes: IntArray
 
-  private static List<String> workCounterMethodOrFieldReferences(Path classFile)
-      throws IOException {
-    try (InputStream input = Files.newInputStream(classFile);
-        DataInputStream data = new DataInputStream(input)) {
-      int magic = data.readInt();
-      assertThat(magic).isEqualTo(0xCAFEBABE);
-      data.readUnsignedShort();
-      data.readUnsignedShort();
-
-      ConstantPool constantPool = ConstantPool.read(data);
-      List<String> references = new ArrayList<>();
-      for (ConstantPool.Ref ref : constantPool.refs) {
-        String owner = constantPool.className(ref.classIndex);
-        if (!owner.equals("org/safere/WorkCounter")
-            && !owner.equals("org/safere/WorkCounterConfig")) {
-          continue;
+        init {
+            utf8s = arrayOfNulls<String>(size)
+            classNameIndexes = IntArray(size)
+            nameAndTypeNameIndexes = IntArray(size)
         }
-        references.add(
-            classFile.getFileName() + " references " + owner + "." + constantPool.name(ref));
-      }
-      return references;
-    }
-  }
 
-  private static final class ConstantPool {
-    private final List<Ref> refs = new ArrayList<>();
-    private final String[] utf8s;
-    private final int[] classNameIndexes;
-    private final int[] nameAndTypeNameIndexes;
-
-    private ConstantPool(int size) {
-      utf8s = new String[size];
-      classNameIndexes = new int[size];
-      nameAndTypeNameIndexes = new int[size];
-    }
-
-    private static ConstantPool read(DataInputStream data) throws IOException {
-      int constantPoolCount = data.readUnsignedShort();
-      ConstantPool constantPool = new ConstantPool(constantPoolCount);
-      for (int index = 1; index < constantPoolCount; index++) {
-        int tag = data.readUnsignedByte();
-        switch (tag) {
-          case 1 -> constantPool.utf8s[index] = data.readUTF();
-          case 3, 4 -> data.skipBytes(4);
-          case 5, 6 -> {
-            data.skipBytes(8);
-            index++;
-          }
-          case 7 -> constantPool.classNameIndexes[index] = data.readUnsignedShort();
-          case 8, 16, 19, 20 -> data.skipBytes(2);
-          case 9, 10, 11 -> {
-            int classIndex = data.readUnsignedShort();
-            int nameAndTypeIndex = data.readUnsignedShort();
-            constantPool.refs.add(new Ref(classIndex, nameAndTypeIndex));
-          }
-          case 12 -> {
-            constantPool.nameAndTypeNameIndexes[index] = data.readUnsignedShort();
-            data.readUnsignedShort();
-          }
-          case 15 -> data.skipBytes(3);
-          case 17, 18 -> data.skipBytes(4);
-          default -> throw new IOException("Unsupported constant pool tag " + tag);
+        fun className(classIndex: Int): String {
+            return utf8s[classNameIndexes[classIndex]]
         }
-      }
-      return constantPool;
+
+        fun name(ref: Ref): String? {
+            return utf8s[nameAndTypeNameIndexes[ref.nameAndTypeIndex]]
+        }
+
+        @JvmRecord
+        private data class Ref(val classIndex: Int, val nameAndTypeIndex: Int)
+        companion object {
+            @Throws(IOException::class)
+            private fun read(data: DataInputStream): ConstantPool {
+                val constantPoolCount = data.readUnsignedShort()
+                val constantPool = ConstantPool(constantPoolCount)
+                var index = 1
+                while (index < constantPoolCount) {
+                    val tag = data.readUnsignedByte()
+                    when (tag) {
+                        1 -> constantPool.utf8s[index] = data.readUTF()
+                        3, 4 -> data.skipBytes(4)
+                        5, 6 -> {
+                            data.skipBytes(8)
+                            index++
+                        }
+
+                        7 -> constantPool.classNameIndexes[index] = data.readUnsignedShort()
+                        8, 16, 19, 20 -> data.skipBytes(2)
+                        9, 10, 11 -> {
+                            val classIndex = data.readUnsignedShort()
+                            val nameAndTypeIndex = data.readUnsignedShort()
+                            constantPool.refs.add(Ref(classIndex, nameAndTypeIndex))
+                        }
+
+                        12 -> {
+                            constantPool.nameAndTypeNameIndexes[index] = data.readUnsignedShort()
+                            data.readUnsignedShort()
+                        }
+
+                        15 -> data.skipBytes(3)
+                        17, 18 -> data.skipBytes(4)
+                        else -> throw IOException("Unsupported constant pool tag " + tag)
+                    }
+                    index++
+                }
+                return constantPool
+            }
+        }
     }
 
-    private String className(int classIndex) {
-      return utf8s[classNameIndexes[classIndex]];
-    }
+    companion object {
+        @Throws(IOException::class)
+        private fun assertNoWorkCounterReferences(classesRoot: Path) {
+            val references: MutableList<String?> = ArrayList<String?>()
 
-    private String name(Ref ref) {
-      return utf8s[nameAndTypeNameIndexes[ref.nameAndTypeIndex]];
-    }
+            Files.walk(classesRoot).use { classFiles ->
+                val compiledClasses =
+                    classFiles.filter { path: Path -> path.toString().endsWith(".class") }.toList()
+                for (classFile in compiledClasses) {
+                    val classFileName = classFile.getFileName().toString()
+                    if (classFileName.startsWith("WorkCounter")) {
+                        continue
+                    }
+                    references.addAll(workCounterMethodOrFieldReferences(classFile))
+                }
+            }
+            Assertions.assertThat<String?>(references).isEmpty()
+        }
 
-    private record Ref(int classIndex, int nameAndTypeIndex) {}
-  }
+        @Throws(IOException::class)
+        private fun workCounterMethodOrFieldReferences(classFile: Path): MutableList<String?> {
+            Files.newInputStream(classFile).use { input ->
+                DataInputStream(input).use { data ->
+                    val magic = data.readInt()
+                    Assertions.assertThat(magic).isEqualTo(-0x35014542)
+                    data.readUnsignedShort()
+                    data.readUnsignedShort()
+
+                    val constantPool: ConstantPool = ConstantPool.Companion.read(data)
+                    val references: MutableList<String?> = ArrayList<String?>()
+                    for (ref in constantPool.refs) {
+                        val owner = constantPool.className(ref.classIndex)
+                        if (owner != "org/safere/WorkCounter" && owner != "org/safere/WorkCounterConfig") {
+                            continue
+                        }
+                        references.add(
+                            classFile.getFileName().toString() + " references " + owner + "." + constantPool.name(ref)
+                        )
+                    }
+                    return references
+                }
+            }
+        }
+    }
 }

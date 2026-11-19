@@ -2,298 +2,297 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.nio.charset.StandardCharsets
+import java.util.regex.Pattern
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
+internal class TeddyTest {
+    @Test
+    fun smallMultiLiteralStringMatch() {
+        val p = Pattern.compile("INFO|WARN|ERROR")
+        val text = "2026-08-18 [WARN] system running normally, no ERROR reported"
 
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-class TeddyTest {
-
-  private static final String US_STATES =
-      "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ"
-          + "|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY";
-
-  @Test
-  void smallMultiLiteralStringMatch() {
-    Pattern p = Pattern.compile("INFO|WARN|ERROR");
-    String text = "2026-08-18 [WARN] system running normally, no ERROR reported";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    List<Integer> starts = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-      starts.add(m.start());
-    }
-
-    assertThat(matches).containsExactly("WARN", "ERROR");
-    assertThat(starts).containsExactly(12, 46);
-  }
-
-  @Test
-  void smallMultiLiteralUtf16Match() {
-    Pattern p = Pattern.compile("東京|大阪|京都|福岡");
-    String text = "日本の都市: 東京と京都と大阪を訪問しました。";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    List<Integer> starts = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-      starts.add(m.start());
-    }
-
-    assertThat(matches).containsExactly("東京", "京都", "大阪");
-    assertThat(starts).containsExactly(7, 10, 13);
-  }
-
-  @Test
-  void smallMultiLiteralUtf8Match() {
-    Pattern p = Pattern.compile("cat|dog|bird");
-    byte[] text = "the quick brown dog jumped over the lazy bird".getBytes(UTF_8);
-
-    Utf8Matcher m = p.matcher(Utf8Input.validated(text));
-    List<String> matches = new ArrayList<>();
-    while (m.find()) {
-      matches.add(new String(text, m.start(), m.end() - m.start(), UTF_8));
-    }
-
-    assertThat(matches).containsExactly("dog", "bird");
-  }
-
-  @Test
-  void smallMultiLiteralAbsent() {
-    Pattern p = Pattern.compile("true|false");
-    String text = "none of the boolean values are present in this long sentence of text";
-
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isFalse();
-
-    Utf8Matcher utf8Matcher = p.matcher(Utf8Input.validated(text.getBytes(UTF_8)));
-    assertThat(utf8Matcher.find()).isFalse();
-  }
-
-  @ParameterizedTest
-  @ValueSource(ints = {0, 1, 14, 15, 16, 31, 32, 63, 64, 127, 128, 255})
-  void smallMultiLiteralAtVariableOffsets(int padding) {
-    Pattern p = Pattern.compile("INFO|WARN|ERROR");
-    String pad = "x".repeat(padding);
-    String text = pad + "ERROR" + pad + "WARN";
-
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding);
-    assertThat(m.group()).isEqualTo("ERROR");
-
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding + 5 + padding);
-    assertThat(m.group()).isEqualTo("WARN");
-
-    assertThat(m.find()).isFalse();
-  }
-
-  @Test
-  void teddyUsStatesMatch() {
-    Pattern p = Pattern.compile(US_STATES);
-    String text = "Packages shipped from CA and NY arrived in TX safely.";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    List<Integer> starts = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-      starts.add(m.start());
-    }
-
-    assertThat(matches).containsExactly("CA", "NY", "TX");
-    assertThat(starts).containsExactly(22, 29, 43);
-  }
-
-  @Test
-  void teddyUsStatesUtf8Match() {
-    Pattern p = Pattern.compile(US_STATES);
-    byte[] text = "Orders processed in WA, OR, and NV yesterday.".getBytes(UTF_8);
-
-    Utf8Matcher m = p.matcher(Utf8Input.validated(text));
-    List<String> matches = new ArrayList<>();
-    while (m.find()) {
-      matches.add(new String(text, m.start(), m.end() - m.start(), UTF_8));
-    }
-
-    assertThat(matches).containsExactly("WA", "OR", "NV");
-  }
-
-  @Test
-  void teddyHttpVerbsLongText() {
-    Pattern p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE");
-    String text = "200 OK after receiving POST /api/v1/resource followed by GET /api/v1/resource";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-    }
-
-    assertThat(matches).containsExactly("POST", "GET");
-  }
-
-  @Test
-  void sevenAlternationsMatch() {
-    Pattern p = Pattern.compile("MON|TUE|WED|THU|FRI|SAT|SUN");
-    String text = "Schedule: MON at 9am, WED at 2pm, and SUN at 8pm";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    List<Integer> starts = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-      starts.add(m.start());
-    }
-
-    assertThat(matches).containsExactly("MON", "WED", "SUN");
-    assertThat(starts).containsExactly(10, 22, 38);
-
-    byte[] bytes = text.getBytes(UTF_8);
-    Utf8Matcher utf8Matcher = p.matcher(Utf8Input.validated(bytes));
-    List<String> utf8Matches = new ArrayList<>();
-    while (utf8Matcher.find()) {
-      utf8Matches.add(
-          new String(bytes, utf8Matcher.start(), utf8Matcher.end() - utf8Matcher.start(), UTF_8));
-    }
-    assertThat(utf8Matches).containsExactly("MON", "WED", "SUN");
-  }
-
-  @ParameterizedTest
-  @ValueSource(ints = {0, 1, 15, 16, 31, 32, 63, 64, 127, 128, 255})
-  void teddyMatchAtVariableOffsets(int padding) {
-    Pattern p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE");
-    String pad = "-".repeat(padding);
-    String text = pad + "DELETE" + pad + "POST";
-
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding);
-    assertThat(m.group()).isEqualTo("DELETE");
-
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding + 6 + padding);
-    assertThat(m.group()).isEqualTo("POST");
-
-    assertThat(m.find()).isFalse();
-
-    byte[] bytes = text.getBytes(UTF_8);
-    Utf8Matcher utf8Matcher = p.matcher(Utf8Input.validated(bytes));
-    assertThat(utf8Matcher.find()).isTrue();
-    assertThat(utf8Matcher.start()).isEqualTo(padding);
-    assertThat(utf8Matcher.find()).isTrue();
-    assertThat(utf8Matcher.start()).isEqualTo(padding + 6 + padding);
-    assertThat(utf8Matcher.find()).isFalse();
-  }
-
-  @Test
-  void teddyAbsentLongText() {
-    Pattern p = Pattern.compile(US_STATES);
-    String text = "abcdefghijklmnopqrstuvwxyz ".repeat(100);
-
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isFalse();
-
-    Utf8Matcher utf8Matcher = p.matcher(Utf8Input.validated(text.getBytes(UTF_8)));
-    assertThat(utf8Matcher.find()).isFalse();
-  }
-
-  @Test
-  void teddyEquivalenceWithJdk() {
-    String[] testPatterns = {
-      "cat|dog|bird",
-      "INFO|WARN|ERROR",
-      "GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH",
-      "foo|foobar|foot|foothold|football",
-      US_STATES
-    };
-
-    String[] testInputs = {
-      "hello world CA and NY are states",
-      "POST /index.html HTTP/1.1",
-      "nothing matching here whatsoever",
-      "cat dog bird",
-      "12345 ERROR at line 42 with WARN warning",
-      "playing football on foot with a foothold"
-    };
-
-    for (String pat : testPatterns) {
-      Pattern safeRe = Pattern.compile(pat);
-      java.util.regex.Pattern jdk = java.util.regex.Pattern.compile(pat);
-
-      for (String input : testInputs) {
-        Matcher m1 = safeRe.matcher(input);
-        java.util.regex.Matcher m2 = jdk.matcher(input);
-
-        while (m1.find()) {
-          assertThat(m2.find()).isTrue();
-          assertThat(m1.group()).isEqualTo(m2.group());
-          assertThat(m1.start()).isEqualTo(m2.start());
-          assertThat(m1.end()).isEqualTo(m2.end());
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        val starts: MutableList<Int?> = ArrayList<Int?>()
+        while (m.find()) {
+            matches.add(m.group())
+            starts.add(m.start())
         }
-        assertThat(m2.find()).isFalse();
-      }
-    }
-  }
 
-  @Test
-  void teddyUtf16NonLatin1StringMatch() {
-    Pattern p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE");
-    // Non-Latin-1 string (UTF-16 coder = 1) containing Japanese text and emojis
-    String text = "リクエストログ: POST /api/v1/user 📦 レスポンス受信後に GET /api/v1/user 🚀 完了";
-
-    Matcher m = p.matcher(text);
-    List<String> matches = new ArrayList<>();
-    List<Integer> starts = new ArrayList<>();
-    while (m.find()) {
-      matches.add(m.group());
-      starts.add(m.start());
+        Assertions.assertThat<String?>(matches).containsExactly("WARN", "ERROR")
+        Assertions.assertThat<Int?>(starts).containsExactly(12, 46)
     }
 
-    assertThat(matches).containsExactly("POST", "GET");
-    assertThat(starts).containsExactly(9, 40);
-  }
+    @Test
+    fun smallMultiLiteralUtf16Match() {
+        val p = Pattern.compile("東京|大阪|京都|福岡")
+        val text = "日本の都市: 東京と京都と大阪を訪問しました。"
 
-  @ParameterizedTest
-  @ValueSource(ints = {0, 1, 15, 16, 31, 32, 63, 64, 127, 128})
-  void teddyUtf16WithNonAsciiPadding(int padding) {
-    Pattern p = Pattern.compile(US_STATES);
-    String nonAsciiPad = "あ".repeat(padding);
-    String text = nonAsciiPad + "CA" + nonAsciiPad + "NY" + nonAsciiPad + "TX";
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        val starts: MutableList<Int?> = ArrayList<Int?>()
+        while (m.find()) {
+            matches.add(m.group())
+            starts.add(m.start())
+        }
 
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding);
-    assertThat(m.group()).isEqualTo("CA");
+        Assertions.assertThat<String?>(matches).containsExactly("東京", "京都", "大阪")
+        Assertions.assertThat<Int?>(starts).containsExactly(7, 10, 13)
+    }
 
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding + 2 + padding);
-    assertThat(m.group()).isEqualTo("NY");
+    @Test
+    fun smallMultiLiteralUtf8Match() {
+        val p = Pattern.compile("cat|dog|bird")
+        val text = "the quick brown dog jumped over the lazy bird".toByteArray(StandardCharsets.UTF_8)
 
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(padding + 2 + padding + 2 + padding);
-    assertThat(m.group()).isEqualTo("TX");
+        val m = p.matcher(Utf8Input.validated(text))
+        val matches: MutableList<String?> = ArrayList<String?>()
+        while (m.find()) {
+            matches.add(String(text, m.start(), m.end() - m.start(), StandardCharsets.UTF_8))
+        }
 
-    assertThat(m.find()).isFalse();
-  }
+        Assertions.assertThat<String?>(matches).containsExactly("dog", "bird")
+    }
 
-  @Test
-  void teddyUtf16AbsentWithNonAsciiText() {
-    Pattern p = Pattern.compile(US_STATES);
-    String text = "こんにちは世界！これは日本語のテキストです。".repeat(50);
+    @Test
+    fun smallMultiLiteralAbsent() {
+        val p = Pattern.compile("true|false")
+        val text = "none of the boolean values are present in this long sentence of text"
 
-    Matcher m = p.matcher(text);
-    assertThat(m.find()).isFalse();
-  }
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isFalse()
+
+        val utf8Matcher = p.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(utf8Matcher.find()).isFalse()
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, 1, 14, 15, 16, 31, 32, 63, 64, 127, 128, 255])
+    fun smallMultiLiteralAtVariableOffsets(padding: Int) {
+        val p = Pattern.compile("INFO|WARN|ERROR")
+        val pad = "x".repeat(padding)
+        val text = pad + "ERROR" + pad + "WARN"
+
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding)
+        Assertions.assertThat(m.group()).isEqualTo("ERROR")
+
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding + 5 + padding)
+        Assertions.assertThat(m.group()).isEqualTo("WARN")
+
+        Assertions.assertThat(m.find()).isFalse()
+    }
+
+    @Test
+    fun teddyUsStatesMatch() {
+        val p = Pattern.compile(US_STATES)
+        val text = "Packages shipped from CA and NY arrived in TX safely."
+
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        val starts: MutableList<Int?> = ArrayList<Int?>()
+        while (m.find()) {
+            matches.add(m.group())
+            starts.add(m.start())
+        }
+
+        Assertions.assertThat<String?>(matches).containsExactly("CA", "NY", "TX")
+        Assertions.assertThat<Int?>(starts).containsExactly(22, 29, 43)
+    }
+
+    @Test
+    fun teddyUsStatesUtf8Match() {
+        val p = Pattern.compile(US_STATES)
+        val text = "Orders processed in WA, OR, and NV yesterday.".toByteArray(StandardCharsets.UTF_8)
+
+        val m = p.matcher(Utf8Input.validated(text))
+        val matches: MutableList<String?> = ArrayList<String?>()
+        while (m.find()) {
+            matches.add(String(text, m.start(), m.end() - m.start(), StandardCharsets.UTF_8))
+        }
+
+        Assertions.assertThat<String?>(matches).containsExactly("WA", "OR", "NV")
+    }
+
+    @Test
+    fun teddyHttpVerbsLongText() {
+        val p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE")
+        val text = "200 OK after receiving POST /api/v1/resource followed by GET /api/v1/resource"
+
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        while (m.find()) {
+            matches.add(m.group())
+        }
+
+        Assertions.assertThat<String?>(matches).containsExactly("POST", "GET")
+    }
+
+    @Test
+    fun sevenAlternationsMatch() {
+        val p = Pattern.compile("MON|TUE|WED|THU|FRI|SAT|SUN")
+        val text = "Schedule: MON at 9am, WED at 2pm, and SUN at 8pm"
+
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        val starts: MutableList<Int?> = ArrayList<Int?>()
+        while (m.find()) {
+            matches.add(m.group())
+            starts.add(m.start())
+        }
+
+        Assertions.assertThat<String?>(matches).containsExactly("MON", "WED", "SUN")
+        Assertions.assertThat<Int?>(starts).containsExactly(10, 22, 38)
+
+        val bytes = text.toByteArray(StandardCharsets.UTF_8)
+        val utf8Matcher = p.matcher(Utf8Input.validated(bytes))
+        val utf8Matches: MutableList<String?> = ArrayList<String?>()
+        while (utf8Matcher.find()) {
+            utf8Matches.add(
+                String(bytes, utf8Matcher.start(), utf8Matcher.end() - utf8Matcher.start(), StandardCharsets.UTF_8)
+            )
+        }
+        Assertions.assertThat<String?>(utf8Matches).containsExactly("MON", "WED", "SUN")
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, 1, 15, 16, 31, 32, 63, 64, 127, 128, 255])
+    fun teddyMatchAtVariableOffsets(padding: Int) {
+        val p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE")
+        val pad = "-".repeat(padding)
+        val text = pad + "DELETE" + pad + "POST"
+
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding)
+        Assertions.assertThat(m.group()).isEqualTo("DELETE")
+
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding + 6 + padding)
+        Assertions.assertThat(m.group()).isEqualTo("POST")
+
+        Assertions.assertThat(m.find()).isFalse()
+
+        val bytes = text.toByteArray(StandardCharsets.UTF_8)
+        val utf8Matcher = p.matcher(Utf8Input.validated(bytes))
+        Assertions.assertThat(utf8Matcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.start()).isEqualTo(padding)
+        Assertions.assertThat(utf8Matcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.start()).isEqualTo(padding + 6 + padding)
+        Assertions.assertThat(utf8Matcher.find()).isFalse()
+    }
+
+    @Test
+    fun teddyAbsentLongText() {
+        val p = Pattern.compile(US_STATES)
+        val text = "abcdefghijklmnopqrstuvwxyz ".repeat(100)
+
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isFalse()
+
+        val utf8Matcher = p.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
+        Assertions.assertThat(utf8Matcher.find()).isFalse()
+    }
+
+    @Test
+    fun teddyEquivalenceWithJdk() {
+        val testPatterns = arrayOf<String?>(
+            "cat|dog|bird",
+            "INFO|WARN|ERROR",
+            "GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH",
+            "foo|foobar|foot|foothold|football",
+            US_STATES
+        )
+
+        val testInputs = arrayOf<String?>(
+            "hello world CA and NY are states",
+            "POST /index.html HTTP/1.1",
+            "nothing matching here whatsoever",
+            "cat dog bird",
+            "12345 ERROR at line 42 with WARN warning",
+            "playing football on foot with a foothold"
+        )
+
+        for (pat in testPatterns) {
+            val safeRe = Pattern.compile(pat)
+            val jdk = Pattern.compile(pat)
+
+            for (input in testInputs) {
+                val m1 = safeRe.matcher(input)
+                val m2 = jdk.matcher(input)
+
+                while (m1.find()) {
+                    Assertions.assertThat(m2.find()).isTrue()
+                    Assertions.assertThat(m1.group()).isEqualTo(m2.group())
+                    Assertions.assertThat(m1.start()).isEqualTo(m2.start())
+                    Assertions.assertThat(m1.end()).isEqualTo(m2.end())
+                }
+                Assertions.assertThat(m2.find()).isFalse()
+            }
+        }
+    }
+
+    @Test
+    fun teddyUtf16NonLatin1StringMatch() {
+        val p = org.safere.Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE")
+        // Non-Latin-1 string (UTF-16 coder = 1) containing Japanese text and emojis
+        val text = "リクエストログ: POST /api/v1/user 📦 レスポンス受信後に GET /api/v1/user 🚀 完了"
+
+        val m = p.matcher(text)
+        val matches: MutableList<String?> = ArrayList<String?>()
+        val starts: MutableList<Int?> = ArrayList<Int?>()
+        while (m.find()) {
+            matches.add(m.group())
+            starts.add(m.start())
+        }
+
+        Assertions.assertThat<String?>(matches).containsExactly("POST", "GET")
+        Assertions.assertThat<Int?>(starts).containsExactly(9, 40)
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, 1, 15, 16, 31, 32, 63, 64, 127, 128])
+    fun teddyUtf16WithNonAsciiPadding(padding: Int) {
+        val p = org.safere.Pattern.compile(US_STATES)
+        val nonAsciiPad = "あ".repeat(padding)
+        val text = nonAsciiPad + "CA" + nonAsciiPad + "NY" + nonAsciiPad + "TX"
+
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding)
+        Assertions.assertThat(m.group()).isEqualTo("CA")
+
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding + 2 + padding)
+        Assertions.assertThat(m.group()).isEqualTo("NY")
+
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(padding + 2 + padding + 2 + padding)
+        Assertions.assertThat(m.group()).isEqualTo("TX")
+
+        Assertions.assertThat(m.find()).isFalse()
+    }
+
+    @Test
+    fun teddyUtf16AbsentWithNonAsciiText() {
+        val p = org.safere.Pattern.compile(US_STATES)
+        val text = "こんにちは世界！これは日本語のテキストです。".repeat(50)
+
+        val m = p.matcher(text)
+        Assertions.assertThat(m.find()).isFalse()
+    }
+
+    companion object {
+        private val US_STATES =
+            ("AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ"
+                    + "|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY")
+    }
 }

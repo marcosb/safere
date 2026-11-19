@@ -2,528 +2,557 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static jdk.incubator.vector.VectorOperators.EQ;
-import static jdk.incubator.vector.VectorOperators.GE;
-import static jdk.incubator.vector.VectorOperators.LE;
-import static org.safere.ByteScanBounds.lastLoadStart;
-import static org.safere.ByteScanBounds.lastMatchStart;
-
-import jdk.incubator.vector.ByteVector;
-import jdk.incubator.vector.VectorMask;
-import jdk.incubator.vector.VectorSpecies;
+import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.VectorMask
+import jdk.incubator.vector.VectorOperators
+import jdk.incubator.vector.VectorSpecies
 
 /**
  * Stateless SIMD kernels using the incubating Vector API for 1-byte sequences (UTF-8 and Latin-1).
  */
-final class ByteVectorScan {
-  private static final VectorSpecies<Byte> SPECIES = ByteVector.SPECIES_PREFERRED;
+internal object ByteVectorScan {
+    private val SPECIES: VectorSpecies<Byte?> = ByteVector.SPECIES_PREFERRED
 
-  static int indexOfAsciiClass(byte[] bytes, int offset, int length, int[] ranges, int start) {
-    return indexOfAsciiClass(SPECIES, bytes, offset, length, ranges, start);
-  }
+    fun indexOfAsciiClass(bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int): Int {
+        return indexOfAsciiClass(SPECIES, bytes, offset, length, ranges, start)
+    }
 
-  static int indexOfAsciiClass(
-      VectorSpecies<Byte> species, byte[] bytes, int offset, int length, int[] ranges, int start) {
-    if (!Swar.supportsAsciiRanges(ranges, 4)) {
-      return VectorScanProvider.UNSUPPORTED;
-    }
-    int position = Math.max(0, start);
-    int limit = position + species.loopBound(length - position);
-    for (; position < limit; position += species.length()) {
-      ByteVector values = ByteVector.fromArray(species, bytes, offset + position);
-      VectorMask<Byte> matches = matches(values, ranges);
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      if (matches(bytes[offset + position], ranges)) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  static int indexOfByte(byte[] bytes, int offset, int length, byte target, int start) {
-    return indexOfByte(SPECIES, bytes, offset, length, target, start);
-  }
-
-  static int indexOfByte(
-      VectorSpecies<Byte> species, byte[] bytes, int offset, int length, byte target, int start) {
-    int position = Math.max(0, start);
-    int limit = position + species.loopBound(length - position);
-    ByteVector targetVec = ByteVector.broadcast(species, target);
-    for (; position < limit; position += species.length()) {
-      ByteVector values = ByteVector.fromArray(species, bytes, offset + position);
-      VectorMask<Byte> matches = values.compare(EQ, targetVec);
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      if (bytes[offset + position] == target) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  static int indexOfBytePair(byte[] bytes, int offset, int length, byte b0, byte b1, int start) {
-    int position = Math.max(0, start);
-    int limit = position + SPECIES.loopBound(length - position);
-    ByteVector v0 = ByteVector.broadcast(SPECIES, b0);
-    ByteVector v1 = ByteVector.broadcast(SPECIES, b1);
-    for (; position < limit; position += SPECIES.length()) {
-      ByteVector values = ByteVector.fromArray(SPECIES, bytes, offset + position);
-      VectorMask<Byte> matches = values.compare(EQ, v0).or(values.compare(EQ, v1));
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      byte val = bytes[offset + position];
-      if (val == b0 || val == b1) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  static int indexOfByteTriple(
-      byte[] bytes, int offset, int length, byte b0, byte b1, byte b2, int start) {
-    int position = Math.max(0, start);
-    int limit = position + SPECIES.loopBound(length - position);
-    ByteVector v0 = ByteVector.broadcast(SPECIES, b0);
-    ByteVector v1 = ByteVector.broadcast(SPECIES, b1);
-    ByteVector v2 = ByteVector.broadcast(SPECIES, b2);
-    for (; position < limit; position += SPECIES.length()) {
-      ByteVector values = ByteVector.fromArray(SPECIES, bytes, offset + position);
-      VectorMask<Byte> matches =
-          values.compare(EQ, v0).or(values.compare(EQ, v1)).or(values.compare(EQ, v2));
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      byte val = bytes[offset + position];
-      if (val == b0 || val == b1 || val == b2) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  private static VectorMask<Byte> matches(ByteVector values, int[] ranges) {
-    VectorMask<Byte> matches = matches(values, ranges[0], ranges[1]);
-    if (ranges.length >= 4) {
-      matches = matches.or(matches(values, ranges[2], ranges[3]));
-    }
-    if (ranges.length >= 6) {
-      matches = matches.or(matches(values, ranges[4], ranges[5]));
-    }
-    if (ranges.length == 8) {
-      matches = matches.or(matches(values, ranges[6], ranges[7]));
-    }
-    return matches;
-  }
-
-  private static VectorMask<Byte> matches(ByteVector values, int lowBound, int highBound) {
-    byte low = (byte) lowBound;
-    byte high = (byte) highBound;
-    if (low == high) {
-      return values.eq(low);
-    }
-    if (highBound == lowBound + 1) {
-      return values.eq(low).or(values.eq(high));
-    }
-    return values.compare(GE, low).and(values.compare(LE, high));
-  }
-
-  private static boolean matches(byte value, int[] ranges) {
-    for (int index = 0; index < ranges.length; index += 2) {
-      if (value >= (byte) ranges[index] && value <= (byte) ranges[index + 1]) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  public static int indexOfIgnoreCase(
-      byte[] bytes,
-      int offset,
-      int length,
-      String prefix,
-      int prefixLen,
-      int anchorOffset,
-      byte low,
-      byte high,
-      int start) {
-    return indexOfIgnoreCase(
-        SPECIES, bytes, offset, length, prefix, prefixLen, anchorOffset, low, high, start);
-  }
-
-  public static int indexOfIgnoreCase(
-      VectorSpecies<Byte> species,
-      byte[] bytes,
-      int offset,
-      int length,
-      String prefix,
-      int prefixLen,
-      int anchorOffset,
-      byte low,
-      byte high,
-      int start) {
-    if (prefixLen == 0) {
-      return Math.min(Math.max(0, start), length);
-    }
-    int pos = Math.max(0, start);
-    long verificationWork = 0;
-    long workLimit = WorkLimit.forRemaining(length - pos);
-
-    // Fast scalar prologue to catch immediate matches without SIMD setup
-    int scalarPrologueLimit = Math.min(lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES);
-    for (; pos < scalarPrologueLimit; pos++) {
-      int b = bytes[offset + pos + anchorOffset] & 0xFF;
-      if ((b == (low & 0xFF) || b == (high & 0xFF))
-          && Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)) {
-        return pos;
-      }
-      if (b == (low & 0xFF) || b == (high & 0xFF)) {
-        verificationWork += prefixLen;
-        if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-          return VectorScanProvider.UNSUPPORTED;
+    fun indexOfAsciiClass(
+        species: VectorSpecies<Byte?>, bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int
+    ): Int {
+        if (!Swar.supportsAsciiRanges(ranges, 4)) {
+            return VectorScanProvider.Companion.UNSUPPORTED
         }
-      }
-    }
-
-    int vectorLen = species.length();
-    int limit = lastLoadStart(length, 0, vectorLen);
-    if (pos > limit) {
-      int limitScalar = lastMatchStart(length, prefixLen);
-      for (int p = Math.max(start, pos - anchorOffset); p <= limitScalar; p++) {
-        int b = bytes[offset + p + anchorOffset] & 0xFF;
-        if (b != (low & 0xFF) && b != (high & 0xFF)) {
-          continue;
-        }
-        if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
-          return p;
-        }
-        verificationWork += prefixLen;
-        if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-          return VectorScanProvider.UNSUPPORTED;
-        }
-      }
-      return -1;
-    }
-
-    ByteVector lowVec = ByteVector.broadcast(species, low);
-    ByteVector highVec = ByteVector.broadcast(species, high);
-
-    for (; pos <= limit; pos += vectorLen) {
-      ByteVector inputVec = ByteVector.fromArray(species, bytes, offset + pos);
-      VectorMask<Byte> matchMask = inputVec.compare(EQ, lowVec).or(inputVec.compare(EQ, highVec));
-
-      if (matchMask.anyTrue()) {
-        long activeLanes = matchMask.toLong();
-        while (activeLanes != 0) {
-          int bit = Long.numberOfTrailingZeros(activeLanes);
-          int candidatePos = pos + bit - anchorOffset;
-          if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)
-              && Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)) {
-            return candidatePos;
-          }
-          if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)) {
-            verificationWork += prefixLen;
-            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-              return VectorScanProvider.UNSUPPORTED;
+        var position = Math.max(0, start)
+        val limit = position + species.loopBound(length - position)
+        while (position < limit) {
+            val values = ByteVector.fromArray(species, bytes, offset + position)
+            val matches = matches(values, ranges)
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
             }
-          }
-          activeLanes &= activeLanes - 1;
+            position += species.length()
         }
-      }
-    }
-
-    int limitScalar = lastMatchStart(length, prefixLen);
-    for (int p = Math.max(start, pos - anchorOffset); p <= limitScalar; p++) {
-      int b = bytes[offset + p + anchorOffset] & 0xFF;
-      if (b != (low & 0xFF) && b != (high & 0xFF)) {
-        continue;
-      }
-      if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
-        return p;
-      }
-      verificationWork += prefixLen;
-      if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-        return VectorScanProvider.UNSUPPORTED;
-      }
-    }
-    return -1;
-  }
-
-  public static int indexOfPairIgnoreCase(
-      byte[] bytes,
-      int offset,
-      int length,
-      String prefix,
-      int prefixLen,
-      int offset1,
-      byte low1,
-      byte high1,
-      int offset2,
-      byte low2,
-      byte high2,
-      int start) {
-    if (prefixLen == 0) {
-      return Math.min(Math.max(0, start), length);
-    }
-    int pos = Math.max(0, start);
-    long verificationWork = 0;
-    long workLimit = WorkLimit.forRemaining(length - pos);
-
-    int maxAnchorOffset = Math.max(offset1, offset2);
-    int scalarPrologueLimit = Math.min(lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES);
-    for (; pos < scalarPrologueLimit; pos++) {
-      int b1 = bytes[offset + pos + offset1] & 0xFF;
-      if ((b1 == (low1 & 0xFF) || b1 == (high1 & 0xFF))) {
-        int b2 = bytes[offset + pos + offset2] & 0xFF;
-        if ((b2 == (low2 & 0xFF) || b2 == (high2 & 0xFF))) {
-          if (Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)) {
-            return pos;
-          }
-          verificationWork += prefixLen;
-          if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-            return VectorScanProvider.UNSUPPORTED;
-          }
+        while (position < length) {
+            if (matches(bytes[offset + position], ranges)) {
+                return position
+            }
+            position++
         }
-      }
+        return -1
     }
 
-    int vectorLen = SPECIES.length();
-    int limit = lastLoadStart(length, maxAnchorOffset, vectorLen);
-    if (pos > limit) {
-      int limitScalar = lastMatchStart(length, prefixLen);
-      for (int p = pos; p <= limitScalar; p++) {
-        int b1 = bytes[offset + p + offset1] & 0xFF;
-        if (b1 == (low1 & 0xFF) || b1 == (high1 & 0xFF)) {
-          int b2 = bytes[offset + p + offset2] & 0xFF;
-          if (b2 == (low2 & 0xFF) || b2 == (high2 & 0xFF)) {
+    fun indexOfByte(bytes: ByteArray, offset: Int, length: Int, target: Byte, start: Int): Int {
+        return indexOfByte(SPECIES, bytes, offset, length, target, start)
+    }
+
+    fun indexOfByte(
+        species: VectorSpecies<Byte?>, bytes: ByteArray, offset: Int, length: Int, target: Byte, start: Int
+    ): Int {
+        var position = Math.max(0, start)
+        val limit = position + species.loopBound(length - position)
+        val targetVec = ByteVector.broadcast(species, target)
+        while (position < limit) {
+            val values = ByteVector.fromArray(species, bytes, offset + position)
+            val matches = values.compare(VectorOperators.EQ, targetVec)
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += species.length()
+        }
+        while (position < length) {
+            if (bytes[offset + position] == target) {
+                return position
+            }
+            position++
+        }
+        return -1
+    }
+
+    fun indexOfBytePair(bytes: ByteArray, offset: Int, length: Int, b0: Byte, b1: Byte, start: Int): Int {
+        var position = Math.max(0, start)
+        val limit = position + SPECIES.loopBound(length - position)
+        val v0 = ByteVector.broadcast(SPECIES, b0)
+        val v1 = ByteVector.broadcast(SPECIES, b1)
+        while (position < limit) {
+            val values = ByteVector.fromArray(SPECIES, bytes, offset + position)
+            val matches = values.compare(VectorOperators.EQ, v0).or(values.compare(VectorOperators.EQ, v1))
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += SPECIES.length()
+        }
+        while (position < length) {
+            val `val` = bytes[offset + position]
+            if (`val` == b0 || `val` == b1) {
+                return position
+            }
+            position++
+        }
+        return -1
+    }
+
+    fun indexOfByteTriple(
+        bytes: ByteArray, offset: Int, length: Int, b0: Byte, b1: Byte, b2: Byte, start: Int
+    ): Int {
+        var position = Math.max(0, start)
+        val limit = position + SPECIES.loopBound(length - position)
+        val v0 = ByteVector.broadcast(SPECIES, b0)
+        val v1 = ByteVector.broadcast(SPECIES, b1)
+        val v2 = ByteVector.broadcast(SPECIES, b2)
+        while (position < limit) {
+            val values = ByteVector.fromArray(SPECIES, bytes, offset + position)
+            val matches =
+                values.compare(VectorOperators.EQ, v0).or(values.compare(VectorOperators.EQ, v1))
+                    .or(values.compare(VectorOperators.EQ, v2))
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += SPECIES.length()
+        }
+        while (position < length) {
+            val `val` = bytes[offset + position]
+            if (`val` == b0 || `val` == b1 || `val` == b2) {
+                return position
+            }
+            position++
+        }
+        return -1
+    }
+
+    private fun matches(values: ByteVector, ranges: IntArray): VectorMask<Byte?> {
+        var matches = matches(values, ranges[0], ranges[1])
+        if (ranges.length >= 4) {
+            matches = matches.or(matches(values, ranges[2], ranges[3]))
+        }
+        if (ranges.length >= 6) {
+            matches = matches.or(matches(values, ranges[4], ranges[5]))
+        }
+        if (ranges.length == 8) {
+            matches = matches.or(matches(values, ranges[6], ranges[7]))
+        }
+        return matches
+    }
+
+    private fun matches(values: ByteVector, lowBound: Int, highBound: Int): VectorMask<Byte?> {
+        val low = lowBound.toByte()
+        val high = highBound.toByte()
+        if (low == high) {
+            return values.eq(low)
+        }
+        if (highBound == lowBound + 1) {
+            return values.eq(low).or(values.eq(high))
+        }
+        return values.compare(VectorOperators.GE, low).and(values.compare(VectorOperators.LE, high))
+    }
+
+    private fun matches(value: Byte, ranges: IntArray): Boolean {
+        var index = 0
+        while (index < ranges.length) {
+            if (value >= ranges[index].toByte() && value <= ranges[index + 1].toByte()) {
+                return true
+            }
+            index += 2
+        }
+        return false
+    }
+
+    fun indexOfIgnoreCase(
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        anchorOffset: Int,
+        low: Byte,
+        high: Byte,
+        start: Int
+    ): Int {
+        return indexOfIgnoreCase(
+            SPECIES, bytes, offset, length, prefix, prefixLen, anchorOffset, low, high, start
+        )
+    }
+
+    fun indexOfIgnoreCase(
+        species: VectorSpecies<Byte?>,
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        anchorOffset: Int,
+        low: Byte,
+        high: Byte,
+        start: Int
+    ): Int {
+        if (prefixLen == 0) {
+            return Math.min(Math.max(0, start), length)
+        }
+        var pos = Math.max(0, start)
+        var verificationWork: Long = 0
+        val workLimit = WorkLimit.forRemaining(length - pos)
+
+        // Fast scalar prologue to catch immediate matches without SIMD setup
+        val scalarPrologueLimit = Math.min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
+        while (pos < scalarPrologueLimit) {
+            val b = bytes[offset + pos + anchorOffset].toInt() and 0xFF
+            if ((b == (low.toInt() and 0xFF) || b == (high.toInt() and 0xFF))
+                && Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)
+            ) {
+                return pos
+            }
+            if (b == (low.toInt() and 0xFF) || b == (high.toInt() and 0xFF)) {
+                verificationWork += prefixLen.toLong()
+                if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                    return VectorScanProvider.Companion.UNSUPPORTED
+                }
+            }
+            pos++
+        }
+
+        val vectorLen = species.length()
+        val limit = ByteScanBounds.lastLoadStart(length, 0, vectorLen)
+        if (pos > limit) {
+            val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
+            for (p in Math.max(start, pos - anchorOffset)..limitScalar) {
+                val b = bytes[offset + p + anchorOffset].toInt() and 0xFF
+                if (b != (low.toInt() and 0xFF) && b != (high.toInt() and 0xFF)) {
+                    continue
+                }
+                if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
+                    return p
+                }
+                verificationWork += prefixLen.toLong()
+                if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                    return VectorScanProvider.Companion.UNSUPPORTED
+                }
+            }
+            return -1
+        }
+
+        val lowVec = ByteVector.broadcast(species, low)
+        val highVec = ByteVector.broadcast(species, high)
+
+        while (pos <= limit) {
+            val inputVec = ByteVector.fromArray(species, bytes, offset + pos)
+            val matchMask =
+                inputVec.compare(VectorOperators.EQ, lowVec).or(inputVec.compare(VectorOperators.EQ, highVec))
+
+            if (matchMask.anyTrue()) {
+                var activeLanes = matchMask.toLong()
+                while (activeLanes != 0L) {
+                    val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                    val candidatePos = pos + bit - anchorOffset
+                    if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)
+                        && Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)
+                    ) {
+                        return candidatePos
+                    }
+                    if (WorkLimit.candidateInBounds(candidatePos, start, length, prefixLen)) {
+                        verificationWork += prefixLen.toLong()
+                        if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                            return VectorScanProvider.Companion.UNSUPPORTED
+                        }
+                    }
+                    activeLanes = activeLanes and activeLanes - 1
+                }
+            }
+            pos += vectorLen
+        }
+
+        val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
+        for (p in Math.max(start, pos - anchorOffset)..limitScalar) {
+            val b = bytes[offset + p + anchorOffset].toInt() and 0xFF
+            if (b != (low.toInt() and 0xFF) && b != (high.toInt() and 0xFF)) {
+                continue
+            }
             if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
-              return p;
+                return p
             }
-            verificationWork += prefixLen;
+            verificationWork += prefixLen.toLong()
             if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-              return VectorScanProvider.UNSUPPORTED;
+                return VectorScanProvider.Companion.UNSUPPORTED
             }
-          }
         }
-      }
-      return -1;
+        return -1
     }
 
-    ByteVector lowVec1 = ByteVector.broadcast(SPECIES, low1);
-    ByteVector highVec1 = ByteVector.broadcast(SPECIES, high1);
-    ByteVector lowVec2 = ByteVector.broadcast(SPECIES, low2);
-    ByteVector highVec2 = ByteVector.broadcast(SPECIES, high2);
-    int baseOffset1 = offset + offset1;
-    int baseOffset2 = offset + offset2;
-    boolean hasHigh1 = (low1 != high1);
-    boolean hasHigh2 = (low2 != high2);
-
-    if (hasHigh1 && hasHigh2) {
-      for (; pos <= limit; pos += vectorLen) {
-        ByteVector inputVec1 = ByteVector.fromArray(SPECIES, bytes, baseOffset1 + pos);
-        VectorMask<Byte> mask1 = inputVec1.compare(EQ, lowVec1).or(inputVec1.compare(EQ, highVec1));
-        if (!mask1.anyTrue()) {
-          continue;
+    fun indexOfPairIgnoreCase(
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        offset1: Int,
+        low1: Byte,
+        high1: Byte,
+        offset2: Int,
+        low2: Byte,
+        high2: Byte,
+        start: Int
+    ): Int {
+        if (prefixLen == 0) {
+            return Math.min(Math.max(0, start), length)
         }
-        ByteVector inputVec2 = ByteVector.fromArray(SPECIES, bytes, baseOffset2 + pos);
-        VectorMask<Byte> mask2 = inputVec2.compare(EQ, lowVec2).or(inputVec2.compare(EQ, highVec2));
-        VectorMask<Byte> matchMask = mask1.and(mask2);
+        var pos = Math.max(0, start)
+        var verificationWork: Long = 0
+        val workLimit = WorkLimit.forRemaining(length - pos)
 
-        if (matchMask.anyTrue()) {
-          long activeLanes = matchMask.toLong();
-          while (activeLanes != 0) {
-            int bit = Long.numberOfTrailingZeros(activeLanes);
-            int candidatePos = pos + bit;
-            if (candidatePos <= lastMatchStart(length, prefixLen)) {
-              if (Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)) {
-                return candidatePos;
-              }
-              verificationWork += prefixLen;
-              if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-                return VectorScanProvider.UNSUPPORTED;
-              }
+        val maxAnchorOffset = Math.max(offset1, offset2)
+        val scalarPrologueLimit = Math.min(ByteScanBounds.lastMatchStart(length, prefixLen) + 1, pos + Integer.BYTES)
+        while (pos < scalarPrologueLimit) {
+            val b1 = bytes[offset + pos + offset1].toInt() and 0xFF
+            if ((b1 == (low1.toInt() and 0xFF) || b1 == (high1.toInt() and 0xFF))) {
+                val b2 = bytes[offset + pos + offset2].toInt() and 0xFF
+                if ((b2 == (low2.toInt() and 0xFF) || b2 == (high2.toInt() and 0xFF))) {
+                    if (Ascii.regionMatchesIgnoreCase(bytes, offset + pos, prefix, prefixLen)) {
+                        return pos
+                    }
+                    verificationWork += prefixLen.toLong()
+                    if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                        return VectorScanProvider.Companion.UNSUPPORTED
+                    }
+                }
             }
-            activeLanes &= activeLanes - 1;
-          }
+            pos++
         }
-      }
-    } else {
-      for (; pos <= limit; pos += vectorLen) {
-        ByteVector inputVec1 = ByteVector.fromArray(SPECIES, bytes, baseOffset1 + pos);
-        VectorMask<Byte> mask1 =
-            hasHigh1
-                ? inputVec1.compare(EQ, lowVec1).or(inputVec1.compare(EQ, highVec1))
-                : inputVec1.compare(EQ, lowVec1);
-        if (!mask1.anyTrue()) {
-          continue;
-        }
-        ByteVector inputVec2 = ByteVector.fromArray(SPECIES, bytes, baseOffset2 + pos);
-        VectorMask<Byte> mask2 =
-            hasHigh2
-                ? inputVec2.compare(EQ, lowVec2).or(inputVec2.compare(EQ, highVec2))
-                : inputVec2.compare(EQ, lowVec2);
-        VectorMask<Byte> matchMask = mask1.and(mask2);
 
-        if (matchMask.anyTrue()) {
-          long activeLanes = matchMask.toLong();
-          while (activeLanes != 0) {
-            int bit = Long.numberOfTrailingZeros(activeLanes);
-            int candidatePos = pos + bit;
-            if (candidatePos <= lastMatchStart(length, prefixLen)) {
-              if (Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)) {
-                return candidatePos;
-              }
-              verificationWork += prefixLen;
-              if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-                return VectorScanProvider.UNSUPPORTED;
-              }
+        val vectorLen = SPECIES.length()
+        val limit = ByteScanBounds.lastLoadStart(length, maxAnchorOffset, vectorLen)
+        if (pos > limit) {
+            val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
+            for (p in pos..limitScalar) {
+                val b1 = bytes[offset + p + offset1].toInt() and 0xFF
+                if (b1 == (low1.toInt() and 0xFF) || b1 == (high1.toInt() and 0xFF)) {
+                    val b2 = bytes[offset + p + offset2].toInt() and 0xFF
+                    if (b2 == (low2.toInt() and 0xFF) || b2 == (high2.toInt() and 0xFF)) {
+                        if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
+                            return p
+                        }
+                        verificationWork += prefixLen.toLong()
+                        if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                            return VectorScanProvider.Companion.UNSUPPORTED
+                        }
+                    }
+                }
             }
-            activeLanes &= activeLanes - 1;
-          }
+            return -1
         }
-      }
-    }
 
-    int limitScalar = lastMatchStart(length, prefixLen);
-    for (int p = pos; p <= limitScalar; p++) {
-      int b1 = bytes[offset + p + offset1] & 0xFF;
-      if (b1 == (low1 & 0xFF) || b1 == (high1 & 0xFF)) {
-        int b2 = bytes[offset + p + offset2] & 0xFF;
-        if (b2 == (low2 & 0xFF) || b2 == (high2 & 0xFF)) {
-          if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
-            return p;
-          }
-          verificationWork += prefixLen;
-          if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-            return VectorScanProvider.UNSUPPORTED;
-          }
-        }
-      }
-    }
-    return -1;
-  }
+        val lowVec1 = ByteVector.broadcast(SPECIES, low1)
+        val highVec1 = ByteVector.broadcast(SPECIES, high1)
+        val lowVec2 = ByteVector.broadcast(SPECIES, low2)
+        val highVec2 = ByteVector.broadcast(SPECIES, high2)
+        val baseOffset1 = offset + offset1
+        val baseOffset2 = offset + offset2
+        val hasHigh1 = (low1 != high1)
+        val hasHigh2 = (low2 != high2)
 
-  static int indexOfMultiLiteral(
-      byte[] bytes,
-      int offset,
-      int length,
-      String[] literals,
-      char[] anchorChars,
-      int[] anchorOffsets,
-      int[] anchorRanges,
-      int minLength,
-      int start) {
-    return indexOfMultiLiteral(
-        bytes,
-        offset,
-        length,
-        literals,
-        anchorChars,
-        anchorOffsets,
-        anchorRanges,
-        minLength,
-        null,
-        start);
-  }
+        if (hasHigh1 && hasHigh2) {
+            while (pos <= limit) {
+                val inputVec1 = ByteVector.fromArray(SPECIES, bytes, baseOffset1 + pos)
+                val mask1 =
+                    inputVec1.compare(VectorOperators.EQ, lowVec1).or(inputVec1.compare(VectorOperators.EQ, highVec1))
+                if (!mask1.anyTrue()) {
+                    pos += vectorLen
+                    continue
+                }
+                val inputVec2 = ByteVector.fromArray(SPECIES, bytes, baseOffset2 + pos)
+                val mask2 =
+                    inputVec2.compare(VectorOperators.EQ, lowVec2).or(inputVec2.compare(VectorOperators.EQ, highVec2))
+                val matchMask = mask1.and(mask2)
 
-  static int indexOfMultiLiteral(
-      byte[] bytes,
-      int offset,
-      int length,
-      String[] literals,
-      char[] anchorChars,
-      int[] anchorOffsets,
-      int[] anchorRanges,
-      int minLength,
-      TeddyModel teddyModel,
-      int start) {
-    int numLits = literals.length;
-    if (numLits == 0 || length < minLength) {
-      return -1;
-    }
-    int pos = Math.max(0, start);
-    long verificationWork = 0;
-    long workLimit = WorkLimit.forRemaining(length - pos);
-    int observedBytes = 0;
-    long estimatedVerificationBytes = 0;
-    int vectorLen = SPECIES.length();
-    int limit = lastLoadStart(length, 0, vectorLen);
-
-    for (; pos <= limit; pos += vectorLen) {
-      ByteVector inputVec = ByteVector.fromArray(SPECIES, bytes, offset + pos);
-      VectorMask<Byte> matchMask = matches(inputVec, anchorRanges);
-
-      if (teddyModel != null && MultiLiteralSelectionPolicy.shouldObserve(observedBytes)) {
-        observedBytes += vectorLen;
-        estimatedVerificationBytes += (long) matchMask.trueCount() * minLength;
-        if (MultiLiteralSelectionPolicy.prefersTeddy(estimatedVerificationBytes, observedBytes)) {
-          return TeddyVectorScan.indexOfTeddyUtf8(bytes, offset, length, teddyModel, pos);
-        }
-      }
-
-      if (matchMask.anyTrue()) {
-        long activeLanes = matchMask.toLong();
-        while (activeLanes != 0) {
-          int bit = Long.numberOfTrailingZeros(activeLanes);
-          int matchIndex = pos + bit;
-          for (int i = 0; i < numLits; i++) {
-            int candidatePos = matchIndex - anchorOffsets[i];
-            String lit = literals[i];
-            if (candidatePos >= start
-                && candidatePos + lit.length() <= length
-                && (bytes[offset + matchIndex] & 0xFF) == (anchorChars[i] & 0xFF)) {
-              if (WorkCounterConfig.ENABLED) {
-                WorkCounter.record(lit.length());
-              }
-              if (Ascii.regionMatches(bytes, offset + candidatePos, lit, lit.length())) {
-                return candidatePos;
-              }
-              verificationWork += lit.length();
-              if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-                return VectorScanProvider.UNSUPPORTED;
-              }
+                if (matchMask.anyTrue()) {
+                    var activeLanes = matchMask.toLong()
+                    while (activeLanes != 0L) {
+                        val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                        val candidatePos = pos + bit
+                        if (candidatePos <= ByteScanBounds.lastMatchStart(length, prefixLen)) {
+                            if (Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)) {
+                                return candidatePos
+                            }
+                            verificationWork += prefixLen.toLong()
+                            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                                return VectorScanProvider.Companion.UNSUPPORTED
+                            }
+                        }
+                        activeLanes = activeLanes and activeLanes - 1
+                    }
+                }
+                pos += vectorLen
             }
-          }
-          activeLanes &= activeLanes - 1;
+        } else {
+            while (pos <= limit) {
+                val inputVec1 = ByteVector.fromArray(SPECIES, bytes, baseOffset1 + pos)
+                val mask1 =
+                    if (hasHigh1)
+                        inputVec1.compare(VectorOperators.EQ, lowVec1)
+                            .or(inputVec1.compare(VectorOperators.EQ, highVec1))
+                    else
+                        inputVec1.compare(VectorOperators.EQ, lowVec1)
+                if (!mask1.anyTrue()) {
+                    pos += vectorLen
+                    continue
+                }
+                val inputVec2 = ByteVector.fromArray(SPECIES, bytes, baseOffset2 + pos)
+                val mask2 =
+                    if (hasHigh2)
+                        inputVec2.compare(VectorOperators.EQ, lowVec2)
+                            .or(inputVec2.compare(VectorOperators.EQ, highVec2))
+                    else
+                        inputVec2.compare(VectorOperators.EQ, lowVec2)
+                val matchMask = mask1.and(mask2)
+
+                if (matchMask.anyTrue()) {
+                    var activeLanes = matchMask.toLong()
+                    while (activeLanes != 0L) {
+                        val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                        val candidatePos = pos + bit
+                        if (candidatePos <= ByteScanBounds.lastMatchStart(length, prefixLen)) {
+                            if (Ascii.regionMatchesIgnoreCase(bytes, offset + candidatePos, prefix, prefixLen)) {
+                                return candidatePos
+                            }
+                            verificationWork += prefixLen.toLong()
+                            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                                return VectorScanProvider.Companion.UNSUPPORTED
+                            }
+                        }
+                        activeLanes = activeLanes and activeLanes - 1
+                    }
+                }
+                pos += vectorLen
+            }
         }
-      }
+
+        val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
+        for (p in pos..limitScalar) {
+            val b1 = bytes[offset + p + offset1].toInt() and 0xFF
+            if (b1 == (low1.toInt() and 0xFF) || b1 == (high1.toInt() and 0xFF)) {
+                val b2 = bytes[offset + p + offset2].toInt() and 0xFF
+                if (b2 == (low2.toInt() and 0xFF) || b2 == (high2.toInt() and 0xFF)) {
+                    if (Ascii.regionMatchesIgnoreCase(bytes, offset + p, prefix, prefixLen)) {
+                        return p
+                    }
+                    verificationWork += prefixLen.toLong()
+                    if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                        return VectorScanProvider.Companion.UNSUPPORTED
+                    }
+                }
+            }
+        }
+        return -1
     }
 
-    int scalarLimit = lastMatchStart(length, minLength);
-    for (; pos <= scalarLimit; pos++) {
-      int value = bytes[offset + pos] & 0xFF;
-      for (int i = 0; i < numLits; i++) {
-        String lit = literals[i];
-        if (value == anchorChars[i] && pos + lit.length() <= length) {
-          if (WorkCounterConfig.ENABLED) {
-            WorkCounter.record(lit.length());
-          }
-          if (Ascii.regionMatches(bytes, offset + pos, lit, lit.length())) {
-            return pos;
-          }
-        }
-      }
-      verificationWork += minLength;
-      if (WorkLimit.isExhausted(verificationWork, workLimit)) {
-        return VectorScanProvider.UNSUPPORTED;
-      }
+    fun indexOfMultiLiteral(
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        literals: Array<String>,
+        anchorChars: CharArray,
+        anchorOffsets: IntArray,
+        anchorRanges: IntArray,
+        minLength: Int,
+        start: Int
+    ): Int {
+        return indexOfMultiLiteral(
+            bytes,
+            offset,
+            length,
+            literals,
+            anchorChars,
+            anchorOffsets,
+            anchorRanges,
+            minLength,
+            null,
+            start
+        )
     }
-    return -1;
-  }
 
-  private ByteVectorScan() {}
+    fun indexOfMultiLiteral(
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        literals: Array<String>,
+        anchorChars: CharArray,
+        anchorOffsets: IntArray,
+        anchorRanges: IntArray,
+        minLength: Int,
+        teddyModel: TeddyModel?,
+        start: Int
+    ): Int {
+        val numLits: Int = literals.length
+        if (numLits == 0 || length < minLength) {
+            return -1
+        }
+        var pos = Math.max(0, start)
+        var verificationWork: Long = 0
+        val workLimit = WorkLimit.forRemaining(length - pos)
+        var observedBytes = 0
+        var estimatedVerificationBytes: Long = 0
+        val vectorLen = SPECIES.length()
+        val limit = ByteScanBounds.lastLoadStart(length, 0, vectorLen)
+
+        while (pos <= limit) {
+            val inputVec = ByteVector.fromArray(SPECIES, bytes, offset + pos)
+            val matchMask = matches(inputVec, anchorRanges)
+
+            if (teddyModel != null && MultiLiteralSelectionPolicy.shouldObserve(observedBytes)) {
+                observedBytes += vectorLen
+                estimatedVerificationBytes += matchMask.trueCount().toLong() * minLength
+                if (MultiLiteralSelectionPolicy.prefersTeddy(estimatedVerificationBytes, observedBytes)) {
+                    return TeddyVectorScan.indexOfTeddyUtf8(bytes, offset, length, teddyModel, pos)
+                }
+            }
+
+            if (matchMask.anyTrue()) {
+                var activeLanes = matchMask.toLong()
+                while (activeLanes != 0L) {
+                    val bit = java.lang.Long.numberOfTrailingZeros(activeLanes)
+                    val matchIndex = pos + bit
+                    for (i in 0..<numLits) {
+                        val candidatePos = matchIndex - anchorOffsets[i]
+                        val lit = literals[i]
+                        if (candidatePos >= start && candidatePos + lit.length() <= length && (bytes[offset + matchIndex].toInt() and 0xFF) == (anchorChars[i].code and 0xFF)) {
+                            if (WorkCounterConfig.ENABLED) {
+                                WorkCounter.record(lit.length().toLong())
+                            }
+                            if (Ascii.regionMatches(bytes, offset + candidatePos, lit, lit.length())) {
+                                return candidatePos
+                            }
+                            verificationWork += lit.length().toLong()
+                            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                                return VectorScanProvider.Companion.UNSUPPORTED
+                            }
+                        }
+                    }
+                    activeLanes = activeLanes and activeLanes - 1
+                }
+            }
+            pos += vectorLen
+        }
+
+        val scalarLimit = ByteScanBounds.lastMatchStart(length, minLength)
+        while (pos <= scalarLimit) {
+            val value = bytes[offset + pos].toInt() and 0xFF
+            for (i in 0..<numLits) {
+                val lit = literals[i]
+                if (value == anchorChars[i].code && pos + lit.length() <= length) {
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record(lit.length().toLong())
+                    }
+                    if (Ascii.regionMatches(bytes, offset + pos, lit, lit.length())) {
+                        return pos
+                    }
+                }
+            }
+            verificationWork += minLength.toLong()
+            if (WorkLimit.isExhausted(verificationWork, workLimit)) {
+                return VectorScanProvider.Companion.UNSUPPORTED
+            }
+            pos++
+        }
+        return -1
+    }
 }

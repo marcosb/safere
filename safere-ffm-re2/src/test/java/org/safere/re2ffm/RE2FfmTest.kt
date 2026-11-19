@@ -2,151 +2,151 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.re2ffm
 
-package org.safere.re2ffm;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
+import org.safere.crosscheck.Pattern.Companion.compile
+import org.safere.crosscheck.Pattern.matcher
+import java.util.regex.Pattern
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.junit.jupiter.api.Test;
-
-final class RE2FfmTest {
-
-  @Test
-  void testSimpleSplit() {
-    RE2FfmPattern p = RE2FfmPattern.compile(",");
-    String[] parts = p.split("a,b,c");
-    assertThat(parts).isEqualTo(new String[] {"a", "b", "c"});
-  }
-
-  @Test
-  void testSplitLimit() {
-    RE2FfmPattern p = RE2FfmPattern.compile(",");
-    String[] parts = p.split("a,b,c", 2);
-    assertThat(parts).isEqualTo(new String[] {"a", "b,c"});
-  }
-
-  @Test
-  void testNonAsciiMapping() {
-    // "hello, \u4e16\u754c" ("hello, 世界")
-    // "世界" starts at char offset 7.
-    // "世" in UTF-8 is 3 bytes: \xE4\xB8\x96.
-    // "界" in UTF-8 is 3 bytes: \xE5\x85\x8C.
-    RE2FfmPattern p = RE2FfmPattern.compile("世界");
-    RE2FfmMatcher m = p.matcher("hello, 世界!");
-
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(7);
-    assertThat(m.end()).isEqualTo(9);
-    assertThat(m.group()).isEqualTo("世界");
-  }
-
-  @Test
-  void testSurrogatePairs() {
-    // \uD83D\uDE00 is the emoji grinning face 😀 (1 character point, 2 Java chars, 4 UTF-8 bytes)
-    String text = "hello \uD83D\uDE00 world";
-    RE2FfmPattern p = RE2FfmPattern.compile("\uD83D\uDE00");
-    RE2FfmMatcher m = p.matcher(text);
-
-    assertThat(m.find()).isTrue();
-    assertThat(m.start()).isEqualTo(6);
-    assertThat(m.end()).isEqualTo(8);
-    assertThat(m.group()).isEqualTo("\uD83D\uDE00");
-
-    // Split around surrogate
-    String[] parts = p.split(text);
-    assertThat(parts).isEqualTo(new String[] {"hello ", " world"});
-  }
-
-  @Test
-  void testReplaceAll() {
-    RE2FfmPattern p = RE2FfmPattern.compile("(\\w+)");
-    assertThat(p.matcher("hello world").replaceAll("X")).isEqualTo("X X");
-    assertThat(p.matcher("hello world").replaceAll("[$1]")).isEqualTo("[hello] [world]");
-  }
-
-  @Test
-  void testReplaceFirst() {
-    RE2FfmPattern p = RE2FfmPattern.compile("(\\w+)");
-    assertThat(p.matcher("hello world").replaceFirst("X")).isEqualTo("X world");
-    assertThat(p.matcher("hello world").replaceFirst("[$1]")).isEqualTo("[hello] world");
-  }
-
-  @Test
-  void testReplaceAllMultiDigitGroup() {
-    RE2FfmPattern p = RE2FfmPattern.compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)");
-    assertThat(p.matcher("xabcdefghijy").replaceAll("$10")).isEqualTo("xjy");
-  }
-
-  @Test
-  void testReplaceFirstMultiDigitGroup() {
-    RE2FfmPattern p = RE2FfmPattern.compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)");
-    assertThat(p.matcher("xabcdefghijy").replaceFirst("$10")).isEqualTo("xjy");
-  }
-
-  @Test
-  void testReplaceAllStateDiscrepancy() {
-    RE2FfmPattern p = RE2FfmPattern.compile("a");
-    RE2FfmMatcher m = p.matcher("aba");
-    assertThat(m.find()).isTrue();
-    assertThat(m.group()).isEqualTo("a");
-
-    assertThat(m.replaceAll("x")).isEqualTo("xbx");
-
-    assertThatThrownBy(m::group).isInstanceOf(IllegalStateException.class);
-
-    assertThat(m.find()).isFalse();
-  }
-
-  @Test
-  void testReplaceAllStateDiscrepancyJavaFallback() {
-    RE2FfmPattern p = RE2FfmPattern.compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)");
-    RE2FfmMatcher m = p.matcher("xabcdefghijy");
-    assertThat(m.find()).isTrue();
-    assertThat(m.group()).isEqualTo("abcdefghij");
-
-    assertThat(m.replaceAll("x")).isEqualTo("xxy");
-
-    assertThatThrownBy(m::group).isInstanceOf(IllegalStateException.class);
-
-    assertThat(m.find()).isFalse();
-  }
-
-  @Test
-  void testReplacementReferencesMatchJdk() {
-    String regex = "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)";
-    String input = "abcdefghij-abcdefghij";
-    String[] replacements = {"$10", "$11", "$101", "$00", "$01", "$09", "\\$1", "\\\\$1"};
-    RE2FfmPattern actualPattern = RE2FfmPattern.compile(regex);
-    java.util.regex.Pattern expectedPattern = java.util.regex.Pattern.compile(regex);
-
-    for (String replacement : replacements) {
-      assertThat(actualPattern.matcher(input).replaceFirst(replacement))
-          .as(replacement)
-          .isEqualTo(expectedPattern.matcher(input).replaceFirst(replacement));
-      assertThat(actualPattern.matcher(input).replaceAll(replacement))
-          .as(replacement)
-          .isEqualTo(expectedPattern.matcher(input).replaceAll(replacement));
+internal class RE2FfmTest {
+    @Test
+    fun testSimpleSplit() {
+        val p: RE2FfmPattern = compile(",")
+        val parts = p.split("a,b,c")
+        Assertions.assertThat<String?>(parts).isEqualTo(arrayOf<String>("a", "b", "c"))
     }
-  }
 
-  @Test
-  void testZeroWidthUnicodeReplacementMatchesJdk() {
-    String regex = "()()()()()()()()()()";
-    String input = "é";
-    RE2FfmPattern actualPattern = RE2FfmPattern.compile(regex);
-    java.util.regex.Pattern expectedPattern = java.util.regex.Pattern.compile(regex);
+    @Test
+    fun testSplitLimit() {
+        val p: RE2FfmPattern = compile(",")
+        val parts = p.split("a,b,c", 2)
+        Assertions.assertThat<String?>(parts).isEqualTo(arrayOf<String>("a", "b,c"))
+    }
 
-    assertThat(actualPattern.matcher(input).replaceAll("x"))
-        .isEqualTo(expectedPattern.matcher(input).replaceAll("x"));
-  }
+    @Test
+    fun testNonAsciiMapping() {
+        // "hello, \u4e16\u754c" ("hello, 世界")
+        // "世界" starts at char offset 7.
+        // "世" in UTF-8 is 3 bytes: \xE4\xB8\x96.
+        // "界" in UTF-8 is 3 bytes: \xE5\x85\x8C.
+        val p: RE2FfmPattern = compile("世界")
+        val m = p.matcher("hello, 世界!")
 
-  @Test
-  void testReplaceAllExhaustsTerminalEmptyMatch() {
-    RE2FfmMatcher matcher = RE2FfmPattern.compile("$").matcher("text");
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(7)
+        Assertions.assertThat(m.end()).isEqualTo(9)
+        Assertions.assertThat(m.group()).isEqualTo("世界")
+    }
 
-    assertThat(matcher.replaceAll("x")).isEqualTo("textx");
+    @Test
+    fun testSurrogatePairs() {
+        // \uD83D\uDE00 is the emoji grinning face 😀 (1 character point, 2 Java chars, 4 UTF-8 bytes)
+        val text = "hello \uD83D\uDE00 world"
+        val p: RE2FfmPattern = compile("\uD83D\uDE00")
+        val m = p.matcher(text)
 
-    assertThat(matcher.find()).isFalse();
-  }
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.start()).isEqualTo(6)
+        Assertions.assertThat(m.end()).isEqualTo(8)
+        Assertions.assertThat(m.group()).isEqualTo("\uD83D\uDE00")
+
+        // Split around surrogate
+        val parts = p.split(text)
+        Assertions.assertThat<String?>(parts).isEqualTo(arrayOf<String>("hello ", " world"))
+    }
+
+    @Test
+    fun testReplaceAll() {
+        val p: RE2FfmPattern = compile("(\\w+)")
+        Assertions.assertThat(p.matcher("hello world").replaceAll("X")).isEqualTo("X X")
+        Assertions.assertThat(p.matcher("hello world").replaceAll("[$1]")).isEqualTo("[hello] [world]")
+    }
+
+    @Test
+    fun testReplaceFirst() {
+        val p: RE2FfmPattern = compile("(\\w+)")
+        Assertions.assertThat(p.matcher("hello world").replaceFirst("X")).isEqualTo("X world")
+        Assertions.assertThat(p.matcher("hello world").replaceFirst("[$1]")).isEqualTo("[hello] world")
+    }
+
+    @Test
+    fun testReplaceAllMultiDigitGroup() {
+        val p: RE2FfmPattern = compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)")
+        Assertions.assertThat(p.matcher("xabcdefghijy").replaceAll("$10")).isEqualTo("xjy")
+    }
+
+    @Test
+    fun testReplaceFirstMultiDigitGroup() {
+        val p: RE2FfmPattern = compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)")
+        Assertions.assertThat(p.matcher("xabcdefghijy").replaceFirst("$10")).isEqualTo("xjy")
+    }
+
+    @Test
+    fun testReplaceAllStateDiscrepancy() {
+        val p: RE2FfmPattern = compile("a")
+        val m = p.matcher("aba")
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.group()).isEqualTo("a")
+
+        Assertions.assertThat(m.replaceAll("x")).isEqualTo("xbx")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { m.group() }).isInstanceOf(IllegalStateException::class.java)
+
+        Assertions.assertThat(m.find()).isFalse()
+    }
+
+    @Test
+    fun testReplaceAllStateDiscrepancyJavaFallback() {
+        val p: RE2FfmPattern = compile("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)")
+        val m = p.matcher("xabcdefghijy")
+        Assertions.assertThat(m.find()).isTrue()
+        Assertions.assertThat(m.group()).isEqualTo("abcdefghij")
+
+        Assertions.assertThat(m.replaceAll("x")).isEqualTo("xxy")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { m.group() }).isInstanceOf(IllegalStateException::class.java)
+
+        Assertions.assertThat(m.find()).isFalse()
+    }
+
+    @Test
+    fun testReplacementReferencesMatchJdk() {
+        val regex = "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)"
+        val input = "abcdefghij-abcdefghij"
+        val replacements = arrayOf<String?>("$10", "$11", "$101", "$00", "$01", "$09", "\\$1", "\\\\$1")
+        val actualPattern: RE2FfmPattern = compile(regex)
+        val expectedPattern = Pattern.compile(regex)
+
+        for (replacement in replacements) {
+            Assertions.assertThat(actualPattern.matcher(input).replaceFirst(replacement))
+                .`as`(replacement)
+                .isEqualTo(expectedPattern.matcher(input).replaceFirst(replacement))
+            Assertions.assertThat(actualPattern.matcher(input).replaceAll(replacement))
+                .`as`(replacement)
+                .isEqualTo(expectedPattern.matcher(input).replaceAll(replacement))
+        }
+    }
+
+    @Test
+    fun testZeroWidthUnicodeReplacementMatchesJdk() {
+        val regex = "()()()()()()()()()()"
+        val input = "é"
+        val actualPattern: RE2FfmPattern = compile(regex)
+        val expectedPattern = Pattern.compile(regex)
+
+        Assertions.assertThat(actualPattern.matcher(input).replaceAll("x"))
+            .isEqualTo(expectedPattern.matcher(input).replaceAll("x"))
+    }
+
+    @Test
+    fun testReplaceAllExhaustsTerminalEmptyMatch() {
+        val matcher: RE2FfmMatcher = compile("$").matcher("text")
+
+        Assertions.assertThat(matcher.replaceAll("x")).isEqualTo("textx")
+
+        Assertions.assertThat(matcher.find()).isFalse()
+    }
 }

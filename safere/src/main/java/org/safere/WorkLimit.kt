@@ -2,40 +2,36 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
-
-package org.safere;
+package org.safere
 
 /**
  * Bounds checking and work-budget accounting for candidate-filtering string search kernels.
- *
- * <p>Enforces SafeRE's linear-time guarantee by bounding candidate verification work to {@code 2 *
- * remaining} bytes, falling back to linear Knuth-Morris-Pratt when false-candidate density exceeds
+ * 
+ * 
+ * Enforces SafeRE's linear-time guarantee by bounding candidate verification work to `2 * remaining` bytes, falling back to linear Knuth-Morris-Pratt when false-candidate density exceeds
  * the budget.
  */
-final class WorkLimit {
+internal object WorkLimit {
+    /** Computes the maximum verification work allowed for a search over `remaining` bytes.  */
+    fun forRemaining(remaining: Int): Long {
+        return Math.max(1L, remaining.toLong() * 2)
+    }
 
-  /** Computes the maximum verification work allowed for a search over {@code remaining} bytes. */
-  static long forRemaining(int remaining) {
-    return Math.max(1L, (long) remaining * 2);
-  }
+    /** Checks whether candidate work has exhausted the budget.  */
+    fun isExhausted(work: Long, workLimit: Long): Boolean {
+        return work >= workLimit
+    }
 
-  /** Checks whether candidate work has exhausted the budget. */
-  static boolean isExhausted(long work, long workLimit) {
-    return work >= workLimit;
-  }
+    /** Accumulates verification work and returns the updated total.  */
+    fun addCandidateWork(currentWork: Long, candidateCount: Int, matchLength: Int): Long {
+        return currentWork + candidateCount.toLong() * matchLength + java.lang.Long.BYTES
+    }
 
-  /** Accumulates verification work and returns the updated total. */
-  static long addCandidateWork(long currentWork, int candidateCount, int matchLength) {
-    return currentWork + (long) candidateCount * matchLength + Long.BYTES;
-  }
-
-  /**
-   * Checks whether a candidate match starting at {@code candidate} is within search bounds.
-   * Overflow-safe for inputs approaching {@link Integer#MAX_VALUE}.
-   */
-  static boolean candidateInBounds(int candidate, int start, int length, int matchLength) {
-    return candidate >= start && candidate <= length - matchLength;
-  }
-
-  private WorkLimit() {}
+    /**
+     * Checks whether a candidate match starting at `candidate` is within search bounds.
+     * Overflow-safe for inputs approaching [Integer.MAX_VALUE].
+     */
+    fun candidateInBounds(candidate: Int, start: Int, length: Int, matchLength: Int): Boolean {
+        return candidate >= start && candidate <= length - matchLength
+    }
 }

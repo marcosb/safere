@@ -2,12 +2,11 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-/** How a strategy was excluded from or left the authoritative execution path. */
-public enum StrategyDisposition {
-  INAPPLICABLE,
-  BYPASSED,
-  FALLBACK
+/** How a strategy was excluded from or left the authoritative execution path.  */
+enum class StrategyDisposition {
+    INAPPLICABLE,
+    BYPASSED,
+    FALLBACK
 }

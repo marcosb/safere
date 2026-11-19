@@ -4,946 +4,915 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import org.openjdk.jmh.infra.Blackhole
+import org.safere.*
+import org.safere.benchmark.DeclarativeBenchmarkPlan.EngineDeclaration
+import org.safere.benchmark.RegexEngineVariant.Companion.string
+import org.safere.benchmark.RegexEngineVariant.Companion.utf8
+import org.safere.crosscheck.Pattern.Companion.compile
+import org.safere.re2ffm.RE2FfmPattern
+import java.lang.AutoCloseable
+import java.nio.charset.StandardCharsets
+import java.util.*
+import java.util.List
+import java.util.Map
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.openjdk.jmh.infra.Blackhole;
-import org.safere.Utf8Sink;
+/** Java-side regex execution variants and their representation/timing boundaries.  */
+internal enum class RegexEngineVariant(
+    private val id: String,
+    reportEngine: String,
+    patternProfile: String,
+    inputRepresentation: InputRepresentation,
+    capabilities: EnumSet<EngineCapability>
+) {
+    SAFERE_STRING(
+        "safere-string",
+        "safere",
+        "java",
+        InputRepresentation.JAVA_STRING,
+        RegexEngineVariant.Companion.allCapabilities()
+    ) {
+        override fun compile(regex: String?): CompiledRegex {
+            val pattern: Pattern = compile(regex)
+            return object : CompiledRegex {
+                override fun find(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).find()
+                }
 
-/** Java-side regex execution variants and their representation/timing boundaries. */
-enum RegexEngineVariant {
-  SAFERE_STRING(
-      "safere-string", "safere", "java", InputRepresentation.JAVA_STRING, allCapabilities()) {
-    @Override
-    CompiledRegex compile(String regex) {
-      org.safere.Pattern pattern = org.safere.Pattern.compile(regex);
-      return new CompiledRegex() {
-        @Override
-        public boolean find(RegexInput input) {
-          return pattern.matcher(string(input)).find();
+                override fun matches(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).matches()
+                }
+
+                override fun matcher(input: RegexInput): MatchCursor {
+                    val matcher: Matcher = pattern.matcher(RegexEngineVariant.Companion.string(input))
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return matcher.find()
+                        }
+
+                        override fun matches(): Boolean {
+                            return matcher.matches()
+                        }
+
+                        override fun lookingAt(): Boolean {
+                            return matcher.lookingAt()
+                        }
+
+                        override fun group(group: Int): String? {
+                            return matcher.group(group)
+                        }
+
+                        override fun start(group: Int): Int {
+                            return matcher.start(group)
+                        }
+
+                        override fun end(group: Int): Int {
+                            return matcher.end(group)
+                        }
+
+                        override fun reset() {
+                            matcher.reset()
+                        }
+
+                        override fun region(start: Int, end: Int) {
+                            matcher.region(start, end)
+                        }
+
+                        override fun appendReplacement(result: StringBuilder, replacement: String?) {
+                            matcher.appendReplacement(result, replacement)
+                        }
+
+                        override fun appendTail(result: StringBuilder) {
+                            matcher.appendTail(result)
+                        }
+                    }
+                }
+
+                override fun replaceFirst(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceFirst(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun replaceAll(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceAll(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun split(input: RegexInput, limit: Int): Array<String?>? {
+                    return pattern.split(RegexEngineVariant.Companion.string(input), limit)
+                }
+            }
         }
+    },
+    SAFERE_UTF8(
+        "safere-utf8",
+        "safere_utf8",
+        "java",
+        InputRepresentation.PREEXISTING_UTF8,
+        EnumSet.of<EngineCapability?>(
+            EngineCapability.FIND,
+            EngineCapability.MATCHES,
+            EngineCapability.LOOKING_AT,
+            EngineCapability.GROUP_PARTICIPATION,
+            EngineCapability.GROUP_TEXT,
+            EngineCapability.REPLACE,
+            EngineCapability.APPEND_REPLACEMENT,
+            EngineCapability.MATCHER_RESET,
+            EngineCapability.REGIONS
+        )
+    ) {
+        override fun compile(regex: String?): CompiledRegex {
+            val pattern: Pattern = compile(regex)
+            return object : CompiledRegex {
+                override fun find(input: RegexInput): Boolean {
+                    return pattern.find(RegexEngineVariant.Companion.utf8(input))
+                }
 
-        @Override
-        public boolean matches(RegexInput input) {
-          return pattern.matcher(string(input)).matches();
+                override fun matches(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.utf8(input)).matches()
+                }
+
+                override fun matcher(input: RegexInput): MatchCursor {
+                    val matcher: Utf8Matcher = pattern.matcher(RegexEngineVariant.Companion.utf8(input))
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return matcher.find()
+                        }
+
+                        override fun matches(): Boolean {
+                            return matcher.matches()
+                        }
+
+                        override fun lookingAt(): Boolean {
+                            return matcher.lookingAt()
+                        }
+
+                        override fun group(group: Int): String? {
+                            val start = matcher.start(group)
+                            if (start < 0) {
+                                return null
+                            }
+                            val source: Utf8RegexInput = input as Utf8RegexInput
+                            return String(
+                                source.bytes,
+                                source.offset + start,
+                                matcher.end(group) - start,
+                                StandardCharsets.UTF_8
+                            )
+                        }
+
+                        override fun start(group: Int): Int {
+                            return matcher.start(group)
+                        }
+
+                        override fun end(group: Int): Int {
+                            return matcher.end(group)
+                        }
+
+                        override fun reset() {
+                            matcher.reset()
+                        }
+
+                        override fun region(start: Int, end: Int) {
+                            matcher.region(start, end)
+                        }
+                    }
+                }
+
+                override fun replaceFirst(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    val sink = ByteArraySink()
+                    pattern.matcher(RegexEngineVariant.Companion.utf8(input))
+                        .replaceFirst(sink, RegexEngineVariant.Companion.utf8(replacement))
+                    return sink.output()
+                }
+
+                override fun replaceAll(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    val sink = ByteArraySink()
+                    pattern.matcher(RegexEngineVariant.Companion.utf8(input))
+                        .replaceAll(sink, RegexEngineVariant.Companion.utf8(replacement))
+                    return sink.output()
+                }
+
+                override fun manualReplaceAll(
+                    input: RegexInput, replacement: PreparedReplacement
+                ): ReplacementOutput {
+                    return RegexEngineVariant.Companion.manualReplaceUtf8(
+                        pattern.matcher(
+                            RegexEngineVariant.Companion.utf8(
+                                input
+                            )
+                        ), RegexEngineVariant.Companion.utf8(replacement)
+                    )
+                }
+            }
         }
-
-        @Override
-        public MatchCursor matcher(RegexInput input) {
-          org.safere.Matcher matcher = pattern.matcher(string(input));
-          return new MatchCursor() {
-            @Override
-            public boolean find() {
-              return matcher.find();
-            }
-
-            @Override
-            public boolean matches() {
-              return matcher.matches();
-            }
-
-            @Override
-            public boolean lookingAt() {
-              return matcher.lookingAt();
-            }
-
-            @Override
-            public String group(int group) {
-              return matcher.group(group);
-            }
-
-            @Override
-            public int start(int group) {
-              return matcher.start(group);
-            }
-
-            @Override
-            public int end(int group) {
-              return matcher.end(group);
-            }
-
-            @Override
-            public void reset() {
-              matcher.reset();
-            }
-
-            @Override
-            public void region(int start, int end) {
-              matcher.region(start, end);
-            }
-
-            @Override
-            public void appendReplacement(StringBuilder result, String replacement) {
-              matcher.appendReplacement(result, replacement);
-            }
-
-            @Override
-            public void appendTail(StringBuilder result) {
-              matcher.appendTail(result);
-            }
-          };
+    },
+    SAFERE_UTF8_VECTOR(
+        "safere-utf8-vector",
+        "safere_utf8_vector",
+        "java",
+        InputRepresentation.PREEXISTING_UTF8,
+        RegexEngineVariant.SAFERE_UTF8.capabilities()
+    ) {
+        override fun compile(regex: String?): CompiledRegex? {
+            return RegexEngineVariant.SAFERE_UTF8.compile(regex)
         }
+    },
+    JDK_STRING(
+        "jdk-string",
+        "jdk",
+        "java",
+        InputRepresentation.JAVA_STRING,
+        RegexEngineVariant.Companion.allCapabilities()
+    ) {
+        override fun compile(regex: String): CompiledRegex {
+            val pattern = java.util.regex.Pattern.compile(regex)
+            return object : CompiledRegex {
+                override fun find(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).find()
+                }
 
-        @Override
-        public ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceFirst(string(replacement)));
+                override fun matches(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).matches()
+                }
+
+                override fun matcher(input: RegexInput): MatchCursor {
+                    val matcher = pattern.matcher(RegexEngineVariant.Companion.string(input))
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return matcher.find()
+                        }
+
+                        override fun matches(): Boolean {
+                            return matcher.matches()
+                        }
+
+                        override fun lookingAt(): Boolean {
+                            return matcher.lookingAt()
+                        }
+
+                        override fun group(group: Int): String? {
+                            return matcher.group(group)
+                        }
+
+                        override fun start(group: Int): Int {
+                            return matcher.start(group)
+                        }
+
+                        override fun end(group: Int): Int {
+                            return matcher.end(group)
+                        }
+
+                        override fun reset() {
+                            matcher.reset()
+                        }
+
+                        override fun region(start: Int, end: Int) {
+                            matcher.region(start, end)
+                        }
+
+                        override fun appendReplacement(result: StringBuilder, replacement: String) {
+                            matcher.appendReplacement(result, replacement)
+                        }
+
+                        override fun appendTail(result: StringBuilder) {
+                            matcher.appendTail(result)
+                        }
+                    }
+                }
+
+                override fun replaceFirst(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceFirst(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun replaceAll(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceAll(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun split(input: RegexInput, limit: Int): Array<String?>? {
+                    return pattern.split(RegexEngineVariant.Companion.string(input), limit)
+                }
+            }
         }
+    },
+    RE2J_STRING(
+        "re2j-string",
+        "re2j",
+        "re2",
+        InputRepresentation.JAVA_STRING,
+        RegexEngineVariant.Companion.re2jCapabilities()
+    ) {
+        override fun compile(regex: String): CompiledRegex {
+            val pattern = com.google.re2j.Pattern.compile(regex)
+            return object : CompiledRegex {
+                override fun find(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).find()
+                }
 
-        @Override
-        public ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceAll(string(replacement)));
+                override fun matches(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).matches()
+                }
+
+                override fun matcher(input: RegexInput): MatchCursor {
+                    val matcher: com.google.re2j.Matcher = pattern.matcher(RegexEngineVariant.Companion.string(input))
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return matcher.find()
+                        }
+
+                        override fun matches(): Boolean {
+                            return matcher.matches()
+                        }
+
+                        override fun lookingAt(): Boolean {
+                            return matcher.lookingAt()
+                        }
+
+                        override fun group(group: Int): String? {
+                            return matcher.group(group)
+                        }
+
+                        override fun start(group: Int): Int {
+                            return matcher.start(group)
+                        }
+
+                        override fun end(group: Int): Int {
+                            return matcher.end(group)
+                        }
+
+                        override fun reset() {
+                            matcher.reset()
+                        }
+
+                        override fun appendReplacement(result: StringBuilder?, replacement: String) {
+                            matcher.appendReplacement(result, replacement)
+                        }
+
+                        override fun appendTail(result: StringBuilder) {
+                            matcher.appendTail(result)
+                        }
+                    }
+                }
+
+                override fun replaceFirst(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceFirst(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun replaceAll(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceAll(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun split(input: RegexInput, limit: Int): Array<String?>? {
+                    return pattern.split(RegexEngineVariant.Companion.string(input), limit)
+                }
+            }
         }
+    },
+    RE2_FFM_STRING_CONVERSION(
+        "re2-ffm-string-conversion",
+        "re2_ffm",
+        "re2",
+        InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
+        RegexEngineVariant.Companion.ffmCapabilities()
+    ) {
+        override fun compile(regex: String?): CompiledRegex {
+            val pattern: RE2FfmPattern = compile(regex)
+            return object : CompiledRegex {
+                override fun find(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).find()
+                }
 
-        @Override
-        public String[] split(RegexInput input, int limit) {
-          return pattern.split(string(input), limit);
+                override fun matches(input: RegexInput): Boolean {
+                    return pattern.matcher(RegexEngineVariant.Companion.string(input)).matches()
+                }
+
+                override fun matcher(input: RegexInput): MatchCursor {
+                    val matcher = pattern.matcher(RegexEngineVariant.Companion.string(input))
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return matcher.find()
+                        }
+
+                        override fun matches(): Boolean {
+                            return matcher.matches()
+                        }
+
+                        override fun lookingAt(): Boolean {
+                            return matcher.lookingAt()
+                        }
+
+                        override fun region(start: Int, end: Int) {
+                            matcher.region(start, end)
+                        }
+
+                        override fun group(group: Int): String? {
+                            return matcher.group(group)
+                        }
+
+                        override fun start(group: Int): Int {
+                            return matcher.start(group)
+                        }
+
+                        override fun end(group: Int): Int {
+                            return matcher.end(group)
+                        }
+
+                        override fun reset() {
+                            matcher.reset()
+                        }
+                    }
+                }
+
+                override fun replaceFirst(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceFirst(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun replaceAll(input: RegexInput, replacement: PreparedReplacement): ReplacementOutput {
+                    return StringReplacementOutput(
+                        pattern.matcher(RegexEngineVariant.Companion.string(input))
+                            .replaceAll(RegexEngineVariant.Companion.string(replacement))
+                    )
+                }
+
+                override fun split(input: RegexInput, limit: Int): Array<String?> {
+                    return pattern.split(RegexEngineVariant.Companion.string(input), limit)
+                }
+            }
         }
-      };
-    }
-  },
-  SAFERE_UTF8(
-      "safere-utf8",
-      "safere_utf8",
-      "java",
-      InputRepresentation.PREEXISTING_UTF8,
-      EnumSet.of(
-          EngineCapability.FIND,
-          EngineCapability.MATCHES,
-          EngineCapability.LOOKING_AT,
-          EngineCapability.GROUP_PARTICIPATION,
-          EngineCapability.GROUP_TEXT,
-          EngineCapability.REPLACE,
-          EngineCapability.APPEND_REPLACEMENT,
-          EngineCapability.MATCHER_RESET,
-          EngineCapability.REGIONS)) {
-    @Override
-    CompiledRegex compile(String regex) {
-      org.safere.Pattern pattern = org.safere.Pattern.compile(regex);
-      return new CompiledRegex() {
-        @Override
-        public boolean find(RegexInput input) {
-          return pattern.find(utf8(input));
-        }
-
-        @Override
-        public boolean matches(RegexInput input) {
-          return pattern.matcher(utf8(input)).matches();
-        }
-
-        @Override
-        public MatchCursor matcher(RegexInput input) {
-          org.safere.Utf8Matcher matcher = pattern.matcher(utf8(input));
-          return new MatchCursor() {
-            @Override
-            public boolean find() {
-              return matcher.find();
-            }
-
-            @Override
-            public boolean matches() {
-              return matcher.matches();
-            }
-
-            @Override
-            public boolean lookingAt() {
-              return matcher.lookingAt();
-            }
-
-            @Override
-            public String group(int group) {
-              int start = matcher.start(group);
-              if (start < 0) {
-                return null;
-              }
-              Utf8RegexInput source = (Utf8RegexInput) input;
-              return new String(
-                  source.bytes,
-                  source.offset + start,
-                  matcher.end(group) - start,
-                  StandardCharsets.UTF_8);
-            }
-
-            @Override
-            public int start(int group) {
-              return matcher.start(group);
-            }
-
-            @Override
-            public int end(int group) {
-              return matcher.end(group);
-            }
-
-            @Override
-            public void reset() {
-              matcher.reset();
-            }
-
-            @Override
-            public void region(int start, int end) {
-              matcher.region(start, end);
-            }
-          };
-        }
-
-        @Override
-        public ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-          ByteArraySink sink = new ByteArraySink();
-          pattern.matcher(utf8(input)).replaceFirst(sink, utf8(replacement));
-          return sink.output();
-        }
-
-        @Override
-        public ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-          ByteArraySink sink = new ByteArraySink();
-          pattern.matcher(utf8(input)).replaceAll(sink, utf8(replacement));
-          return sink.output();
-        }
-
-        @Override
-        public ReplacementOutput manualReplaceAll(
-            RegexInput input, PreparedReplacement replacement) {
-          return manualReplaceUtf8(pattern.matcher(utf8(input)), utf8(replacement));
-        }
-      };
-    }
-  },
-  SAFERE_UTF8_VECTOR(
-      "safere-utf8-vector",
-      "safere_utf8_vector",
-      "java",
-      InputRepresentation.PREEXISTING_UTF8,
-      SAFERE_UTF8.capabilities()) {
-    @Override
-    CompiledRegex compile(String regex) {
-      return SAFERE_UTF8.compile(regex);
-    }
-  },
-  JDK_STRING("jdk-string", "jdk", "java", InputRepresentation.JAVA_STRING, allCapabilities()) {
-    @Override
-    CompiledRegex compile(String regex) {
-      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);
-      return new CompiledRegex() {
-        @Override
-        public boolean find(RegexInput input) {
-          return pattern.matcher(string(input)).find();
-        }
-
-        @Override
-        public boolean matches(RegexInput input) {
-          return pattern.matcher(string(input)).matches();
-        }
-
-        @Override
-        public MatchCursor matcher(RegexInput input) {
-          java.util.regex.Matcher matcher = pattern.matcher(string(input));
-          return new MatchCursor() {
-            @Override
-            public boolean find() {
-              return matcher.find();
-            }
-
-            @Override
-            public boolean matches() {
-              return matcher.matches();
-            }
-
-            @Override
-            public boolean lookingAt() {
-              return matcher.lookingAt();
-            }
-
-            @Override
-            public String group(int group) {
-              return matcher.group(group);
-            }
-
-            @Override
-            public int start(int group) {
-              return matcher.start(group);
-            }
-
-            @Override
-            public int end(int group) {
-              return matcher.end(group);
-            }
-
-            @Override
-            public void reset() {
-              matcher.reset();
-            }
-
-            @Override
-            public void region(int start, int end) {
-              matcher.region(start, end);
-            }
-
-            @Override
-            public void appendReplacement(StringBuilder result, String replacement) {
-              matcher.appendReplacement(result, replacement);
-            }
-
-            @Override
-            public void appendTail(StringBuilder result) {
-              matcher.appendTail(result);
-            }
-          };
-        }
-
-        @Override
-        public ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceFirst(string(replacement)));
-        }
-
-        @Override
-        public ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceAll(string(replacement)));
-        }
-
-        @Override
-        public String[] split(RegexInput input, int limit) {
-          return pattern.split(string(input), limit);
-        }
-      };
-    }
-  },
-  RE2J_STRING("re2j-string", "re2j", "re2", InputRepresentation.JAVA_STRING, re2jCapabilities()) {
-    @Override
-    CompiledRegex compile(String regex) {
-      com.google.re2j.Pattern pattern = com.google.re2j.Pattern.compile(regex);
-      return new CompiledRegex() {
-        @Override
-        public boolean find(RegexInput input) {
-          return pattern.matcher(string(input)).find();
-        }
-
-        @Override
-        public boolean matches(RegexInput input) {
-          return pattern.matcher(string(input)).matches();
-        }
-
-        @Override
-        public MatchCursor matcher(RegexInput input) {
-          com.google.re2j.Matcher matcher = pattern.matcher(string(input));
-          return new MatchCursor() {
-            @Override
-            public boolean find() {
-              return matcher.find();
-            }
-
-            @Override
-            public boolean matches() {
-              return matcher.matches();
-            }
-
-            @Override
-            public boolean lookingAt() {
-              return matcher.lookingAt();
-            }
-
-            @Override
-            public String group(int group) {
-              return matcher.group(group);
-            }
-
-            @Override
-            public int start(int group) {
-              return matcher.start(group);
-            }
-
-            @Override
-            public int end(int group) {
-              return matcher.end(group);
-            }
-
-            @Override
-            public void reset() {
-              matcher.reset();
-            }
-
-            @Override
-            public void appendReplacement(StringBuilder result, String replacement) {
-              matcher.appendReplacement(result, replacement);
-            }
-
-            @Override
-            public void appendTail(StringBuilder result) {
-              matcher.appendTail(result);
-            }
-          };
-        }
-
-        @Override
-        public ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceFirst(string(replacement)));
-        }
-
-        @Override
-        public ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceAll(string(replacement)));
-        }
-
-        @Override
-        public String[] split(RegexInput input, int limit) {
-          return pattern.split(string(input), limit);
-        }
-      };
-    }
-  },
-  RE2_FFM_STRING_CONVERSION(
-      "re2-ffm-string-conversion",
-      "re2_ffm",
-      "re2",
-      InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION,
-      ffmCapabilities()) {
-    @Override
-    CompiledRegex compile(String regex) {
-      org.safere.re2ffm.RE2FfmPattern pattern = org.safere.re2ffm.RE2FfmPattern.compile(regex);
-      return new CompiledRegex() {
-        @Override
-        public boolean find(RegexInput input) {
-          return pattern.matcher(string(input)).find();
-        }
-
-        @Override
-        public boolean matches(RegexInput input) {
-          return pattern.matcher(string(input)).matches();
-        }
-
-        @Override
-        public MatchCursor matcher(RegexInput input) {
-          org.safere.re2ffm.RE2FfmMatcher matcher = pattern.matcher(string(input));
-          return new MatchCursor() {
-            @Override
-            public boolean find() {
-              return matcher.find();
-            }
-
-            @Override
-            public boolean matches() {
-              return matcher.matches();
-            }
-
-            @Override
-            public boolean lookingAt() {
-              return matcher.lookingAt();
-            }
-
-            @Override
-            public void region(int start, int end) {
-              matcher.region(start, end);
-            }
-
-            @Override
-            public String group(int group) {
-              return matcher.group(group);
-            }
-
-            @Override
-            public int start(int group) {
-              return matcher.start(group);
-            }
-
-            @Override
-            public int end(int group) {
-              return matcher.end(group);
-            }
-
-            @Override
-            public void reset() {
-              matcher.reset();
-            }
-          };
-        }
-
-        @Override
-        public ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceFirst(string(replacement)));
-        }
-
-        @Override
-        public ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-          return new StringReplacementOutput(
-              pattern.matcher(string(input)).replaceAll(string(replacement)));
-        }
-
-        @Override
-        public String[] split(RegexInput input, int limit) {
-          return pattern.split(string(input), limit);
-        }
-      };
-    }
-  };
-
-  private static final Map<String, Integer> RE2J_COMPILE_FLAGS =
-      Map.of(
-          "0", 0,
-          "CASE_INSENSITIVE", com.google.re2j.Pattern.CASE_INSENSITIVE,
-          "CASE_INSENSITIVE_UNICODE_CASE", com.google.re2j.Pattern.CASE_INSENSITIVE,
-          "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS", com.google.re2j.Pattern.CASE_INSENSITIVE);
-
-  private final String id;
-  private final String reportEngine;
-  private final String patternProfile;
-  private final InputRepresentation inputRepresentation;
-  private final long capabilities;
-
-  RegexEngineVariant(
-      String id,
-      String reportEngine,
-      String patternProfile,
-      InputRepresentation inputRepresentation,
-      EnumSet<EngineCapability> capabilities) {
-    this.id = id;
-    this.reportEngine = reportEngine;
-    this.patternProfile = patternProfile;
-    this.inputRepresentation = inputRepresentation;
-    long capabilityBits = 0;
-    for (EngineCapability capability : capabilities) {
-      capabilityBits |= capability.bit();
-    }
-    this.capabilities = capabilityBits;
-  }
-
-  String id() {
-    return id;
-  }
-
-  String reportEngine() {
-    return reportEngine;
-  }
-
-  String scanProvider() {
-    return this == SAFERE_UTF8_VECTOR ? "vector" : "default";
-  }
-
-  void validateScanProvider() {
-    if (this != SAFERE_UTF8 && this != SAFERE_UTF8_VECTOR) {
-      return;
-    }
-    String property = "org.safere.experimental.vectorScanProvider";
-    String requested = System.getProperty(property, "").trim();
-    boolean matches = this == SAFERE_UTF8_VECTOR ? requested.equals("vector") : requested.isEmpty();
-    if (!matches) {
-      throw new IllegalStateException(
-          this == SAFERE_UTF8_VECTOR
-              ? id + " requires -D" + property + "=vector"
-              : id + " requires default provider selection; leave -D" + property + " unset");
-    }
-  }
-
-  String patternProfile() {
-    return patternProfile;
-  }
-
-  InputRepresentation inputRepresentation() {
-    return inputRepresentation;
-  }
-
-  EnumSet<EngineCapability> capabilities() {
-    EnumSet<EngineCapability> result = EnumSet.noneOf(EngineCapability.class);
-    for (EngineCapability capability : EngineCapability.values()) {
-      if ((capabilities & capability.bit()) != 0) {
-        result.add(capability);
-      }
-    }
-    return result;
-  }
-
-  DeclarativeBenchmarkPlan.EngineDeclaration declaration() {
-    EnumSet<DeclarativeBenchmarkPlan.Feature> features =
-        EnumSet.noneOf(DeclarativeBenchmarkPlan.Feature.class);
-    for (EngineCapability capability : capabilities()) {
-      switch (capability) {
-        case COMPILE -> {}
-        case FIND -> features.add(DeclarativeBenchmarkPlan.Feature.FIND);
-        case MATCHES -> features.add(DeclarativeBenchmarkPlan.Feature.MATCHES);
-        case LOOKING_AT -> features.add(DeclarativeBenchmarkPlan.Feature.LOOKING_AT);
-        case GROUP_PARTICIPATION ->
-            features.add(DeclarativeBenchmarkPlan.Feature.CAPTURE_PARTICIPATION);
-        case GROUP_TEXT -> features.add(DeclarativeBenchmarkPlan.Feature.CAPTURE_TEXT);
-        case REPLACE -> {
-          features.add(DeclarativeBenchmarkPlan.Feature.REPLACE);
-          features.add(DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT);
-        }
-        case APPEND_REPLACEMENT -> {
-          features.add(DeclarativeBenchmarkPlan.Feature.APPEND_REPLACEMENT);
-          features.add(DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT);
-        }
-        case SPLIT -> features.add(DeclarativeBenchmarkPlan.Feature.SPLIT);
-        case MATCHER_RESET -> features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE);
-        case REGIONS -> {
-          features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE);
-          features.add(DeclarativeBenchmarkPlan.Feature.REGIONS);
-        }
-      }
-    }
-    switch (this) {
-      case SAFERE_STRING -> {
-        features.add(DeclarativeBenchmarkPlan.Feature.DFA_CACHE);
-        features.add(DeclarativeBenchmarkPlan.Feature.DIAGNOSTICS);
-        features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE);
-        features.add(DeclarativeBenchmarkPlan.Feature.JAVA_CHARACTER_CLASS);
-        features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME);
-        features.add(DeclarativeBenchmarkPlan.Feature.PATTERN_SET);
-        features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP);
-      }
-      case SAFERE_UTF8, SAFERE_UTF8_VECTOR -> {
-        features.add(DeclarativeBenchmarkPlan.Feature.DIAGNOSTICS);
-        features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME);
-        features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE);
-        features.add(DeclarativeBenchmarkPlan.Feature.REGIONS);
-        features.add(DeclarativeBenchmarkPlan.Feature.UTF8_INPUT);
-        features.add(DeclarativeBenchmarkPlan.Feature.UTF8_REPLACEMENT);
-      }
-      case JDK_STRING -> {
-        features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE);
-        features.add(DeclarativeBenchmarkPlan.Feature.JAVA_CHARACTER_CLASS);
-        features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP);
-      }
-      case RE2J_STRING -> {
-        features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE);
-        features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME);
-        features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP);
-      }
-      case RE2_FFM_STRING_CONVERSION -> features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME);
-    }
-    DeclarativeBenchmarkPlan.InputRepresentation representation =
-        switch (inputRepresentation) {
-          case JAVA_STRING -> DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING;
-          case PREEXISTING_UTF8 -> DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8;
-          case JAVA_STRING_WITH_TIMED_UTF8_CONVERSION ->
-              DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION;
-        };
-    return new DeclarativeBenchmarkPlan.EngineDeclaration(
-        id, representation, features, EnumSet.noneOf(DeclarativeBenchmarkPlan.Flag.class), true);
-  }
-
-  List<RegexInput> prepareInputs(BenchmarkData data, List<String> inputKeys) {
-    List<RegexInput> inputs = new ArrayList<>(inputKeys.size());
-    for (String inputKey : inputKeys) {
-      if (inputRepresentation == InputRepresentation.PREEXISTING_UTF8) {
-        inputs.add(utf8Input(data.getInputBytes(inputKey)));
-      } else {
-        inputs.add(new StringRegexInput(data.getInputString(inputKey)));
-      }
-    }
-    return List.copyOf(inputs);
-  }
-
-  PreparedReplacement prepareReplacement(String replacement) {
-    if (replacement == null) {
-      return null;
-    }
-    if (inputRepresentation == InputRepresentation.PREEXISTING_UTF8) {
-      return new Utf8Replacement(
-          org.safere.Utf8Input.trusted(replacement.getBytes(StandardCharsets.UTF_8)));
-    }
-    return new StringReplacement(replacement);
-  }
-
-  abstract CompiledRegex compile(String regex);
-
-  static Set<String> re2jCompileFlagSets() {
-    return RE2J_COMPILE_FLAGS.keySet();
-  }
-
-  Object compileForBenchmark(String regex, String flagSet) {
-    int flags = flagSet == null ? 0 : BenchmarkFlags.parse(flagSet);
-    return switch (this) {
-      case SAFERE_STRING, SAFERE_UTF8, SAFERE_UTF8_VECTOR ->
-          org.safere.Pattern.compile(regex, flags);
-      case JDK_STRING -> java.util.regex.Pattern.compile(regex, flags);
-      case RE2J_STRING -> {
-        // The plan excludes rows whose Java flag semantics differ from RE2/J. Map identities,
-        // never Java integer flags: Java CASE_INSENSITIVE has RE2/J's DOTALL value.
-        Integer re2jFlags = RE2J_COMPILE_FLAGS.get(flagSet == null ? "0" : flagSet);
-        if (re2jFlags == null) {
-          throw new UnsupportedOperationException("RE2/J does not support flag set " + flagSet);
-        }
-        yield com.google.re2j.Pattern.compile(regex, re2jFlags);
-      }
-      case RE2_FFM_STRING_CONVERSION -> {
-        if (flags != 0) {
-          throw new UnsupportedOperationException("RE2-FFM flagged compilation is unsupported");
-        }
-        yield org.safere.re2ffm.RE2FfmPattern.compile(regex);
-      }
     };
-  }
 
-  static RegexEngineVariant fromId(String id) {
-    for (RegexEngineVariant variant : values()) {
-      if (variant.id.equals(id)) {
-        return variant;
-      }
-    }
-    throw new IllegalArgumentException("Unknown cross-engine execution variant: " + id);
-  }
+    private val reportEngine: String?
+    private val patternProfile: String?
+    private val inputRepresentation: InputRepresentation?
+    private val capabilities: Long
 
-  private static EnumSet<EngineCapability> allCapabilities() {
-    return EnumSet.allOf(EngineCapability.class);
-  }
-
-  private static EnumSet<EngineCapability> ffmCapabilities() {
-    return EnumSet.of(
-        EngineCapability.COMPILE,
-        EngineCapability.FIND,
-        EngineCapability.MATCHES,
-        EngineCapability.LOOKING_AT,
-        EngineCapability.REGIONS,
-        EngineCapability.GROUP_PARTICIPATION,
-        EngineCapability.GROUP_TEXT,
-        EngineCapability.REPLACE,
-        EngineCapability.SPLIT,
-        EngineCapability.MATCHER_RESET);
-  }
-
-  private static EnumSet<EngineCapability> re2jCapabilities() {
-    EnumSet<EngineCapability> capabilities = allCapabilities();
-    capabilities.remove(EngineCapability.REGIONS);
-    return capabilities;
-  }
-
-  private static String string(RegexInput input) {
-    return ((StringRegexInput) input).value();
-  }
-
-  private static org.safere.Utf8Input utf8(RegexInput input) {
-    return ((Utf8RegexInput) input).value();
-  }
-
-  private static String string(PreparedReplacement replacement) {
-    return ((StringReplacement) replacement).value();
-  }
-
-  private static org.safere.Utf8Input utf8(PreparedReplacement replacement) {
-    return ((Utf8Replacement) replacement).value();
-  }
-
-  private static ReplacementOutput manualReplaceUtf8(
-      org.safere.Utf8Matcher matcher, org.safere.Utf8Input replacement) {
-    ByteArraySink sink = new ByteArraySink();
-    while (matcher.find()) {
-      matcher.appendReplacement(sink, replacement);
-    }
-    matcher.appendTail(sink);
-    return sink.output();
-  }
-
-  sealed interface RegexInput permits StringRegexInput, Utf8RegexInput {
-    default int nativeLength() {
-      return switch (this) {
-        case StringRegexInput string -> string.value().length();
-        case Utf8RegexInput utf8 -> utf8.value().length();
-      };
-    }
-  }
-
-  record StringRegexInput(String value) implements RegexInput {}
-
-  static RegexInput utf8Input(byte[] bytes) {
-    return utf8Input(bytes, 0, bytes.length);
-  }
-
-  static RegexInput utf8Input(byte[] bytes, int offset, int length) {
-    return new Utf8RegexInput(bytes, offset, length);
-  }
-
-  private static final class Utf8RegexInput implements RegexInput {
-    // Borrow immutable fixture storage; keep native view offsets for timed capture decoding.
-    private final byte[] bytes;
-    private final int offset;
-    private final org.safere.Utf8Input value;
-
-    private Utf8RegexInput(byte[] bytes, int offset, int length) {
-      this.bytes = bytes;
-      this.offset = offset;
-      this.value = org.safere.Utf8Input.trusted(bytes, offset, length);
+    init {
+        this.reportEngine = reportEngine
+        this.patternProfile = patternProfile
+        this.inputRepresentation = inputRepresentation
+        var capabilityBits: Long = 0
+        for (capability in capabilities) {
+            capabilityBits = capabilityBits or capability.bit().toLong()
+        }
+        this.capabilities = capabilityBits
     }
 
-    org.safere.Utf8Input value() {
-      return value;
-    }
-  }
-
-  sealed interface PreparedReplacement permits StringReplacement, Utf8Replacement {}
-
-  record StringReplacement(String value) implements PreparedReplacement {}
-
-  record Utf8Replacement(org.safere.Utf8Input value) implements PreparedReplacement {}
-
-  sealed interface ReplacementOutput permits StringReplacementOutput, Utf8ReplacementOutput {
-    int nativeLength();
-
-    String validationValue();
-
-    void consume(Blackhole blackhole);
-  }
-
-  record StringReplacementOutput(String value) implements ReplacementOutput {
-    @Override
-    public int nativeLength() {
-      return value.length();
+    fun id(): String {
+        return id
     }
 
-    @Override
-    public String validationValue() {
-      return value;
+    fun reportEngine(): String? {
+        return reportEngine
     }
 
-    @Override
-    public void consume(Blackhole blackhole) {
-      blackhole.consume(value);
-    }
-  }
-
-  private static final class Utf8ReplacementOutput implements ReplacementOutput {
-    private final byte[] bytes;
-    private final int length;
-
-    Utf8ReplacementOutput(byte[] bytes, int length) {
-      this.bytes = bytes;
-      this.length = length;
+    fun scanProvider(): String {
+        return if (this === RegexEngineVariant.SAFERE_UTF8_VECTOR) "vector" else "default"
     }
 
-    @Override
-    public int nativeLength() {
-      return length;
+    fun validateScanProvider() {
+        if (this !== RegexEngineVariant.SAFERE_UTF8 && this !== RegexEngineVariant.SAFERE_UTF8_VECTOR) {
+            return
+        }
+        val property = "org.safere.experimental.vectorScanProvider"
+        val requested = System.getProperty(property, "").trim { it <= ' ' }
+        val matches =
+            if (this === RegexEngineVariant.SAFERE_UTF8_VECTOR) (requested == "vector") else requested.isEmpty()
+        check(matches) {
+            if (this === RegexEngineVariant.SAFERE_UTF8_VECTOR)
+                id + " requires -D" + property + "=vector"
+            else
+                id + " requires default provider selection; leave -D" + property + " unset"
+        }
     }
 
-    @Override
-    public String validationValue() {
-      return new String(bytes, 0, length, StandardCharsets.UTF_8);
+    fun patternProfile(): String? {
+        return patternProfile
     }
 
-    @Override
-    public void consume(Blackhole blackhole) {
-      blackhole.consume(bytes);
-      blackhole.consume(length);
-    }
-  }
-
-  interface MatchCursor {
-    default boolean find() {
-      throw new UnsupportedOperationException();
+    fun inputRepresentation(): InputRepresentation? {
+        return inputRepresentation
     }
 
-    default boolean matches() {
-      throw new UnsupportedOperationException();
+    fun capabilities(): EnumSet<EngineCapability> {
+        val result = EnumSet.noneOf<EngineCapability?>(EngineCapability::class.java)
+        for (capability in EngineCapability.entries) {
+            if ((capabilities and capability.bit().toLong()) != 0L) {
+                result.add(capability)
+            }
+        }
+        return result
     }
 
-    default boolean lookingAt() {
-      throw new UnsupportedOperationException();
+    fun declaration(): EngineDeclaration {
+        val features =
+            EnumSet.noneOf<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature::class.java)
+        for (capability in capabilities()) {
+            when (capability) {
+                EngineCapability.COMPILE -> {}
+                EngineCapability.FIND -> features.add(DeclarativeBenchmarkPlan.Feature.FIND)
+                EngineCapability.MATCHES -> features.add(DeclarativeBenchmarkPlan.Feature.MATCHES)
+                EngineCapability.LOOKING_AT -> features.add(DeclarativeBenchmarkPlan.Feature.LOOKING_AT)
+                EngineCapability.GROUP_PARTICIPATION -> features.add(DeclarativeBenchmarkPlan.Feature.CAPTURE_PARTICIPATION)
+                EngineCapability.GROUP_TEXT -> features.add(DeclarativeBenchmarkPlan.Feature.CAPTURE_TEXT)
+                EngineCapability.REPLACE -> {
+                    features.add(DeclarativeBenchmarkPlan.Feature.REPLACE)
+                    features.add(DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT)
+                }
+
+                EngineCapability.APPEND_REPLACEMENT -> {
+                    features.add(DeclarativeBenchmarkPlan.Feature.APPEND_REPLACEMENT)
+                    features.add(DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT)
+                }
+
+                EngineCapability.SPLIT -> features.add(DeclarativeBenchmarkPlan.Feature.SPLIT)
+                EngineCapability.MATCHER_RESET -> features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE)
+                EngineCapability.REGIONS -> {
+                    features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE)
+                    features.add(DeclarativeBenchmarkPlan.Feature.REGIONS)
+                }
+            }
+        }
+        when (this) {
+            RegexEngineVariant.SAFERE_STRING -> {
+                features.add(DeclarativeBenchmarkPlan.Feature.DFA_CACHE)
+                features.add(DeclarativeBenchmarkPlan.Feature.DIAGNOSTICS)
+                features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE)
+                features.add(DeclarativeBenchmarkPlan.Feature.JAVA_CHARACTER_CLASS)
+                features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME)
+                features.add(DeclarativeBenchmarkPlan.Feature.PATTERN_SET)
+                features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP)
+            }
+
+            RegexEngineVariant.SAFERE_UTF8, RegexEngineVariant.SAFERE_UTF8_VECTOR -> {
+                features.add(DeclarativeBenchmarkPlan.Feature.DIAGNOSTICS)
+                features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME)
+                features.add(DeclarativeBenchmarkPlan.Feature.MATCHER_STATE)
+                features.add(DeclarativeBenchmarkPlan.Feature.REGIONS)
+                features.add(DeclarativeBenchmarkPlan.Feature.UTF8_INPUT)
+                features.add(DeclarativeBenchmarkPlan.Feature.UTF8_REPLACEMENT)
+            }
+
+            RegexEngineVariant.JDK_STRING -> {
+                features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE)
+                features.add(DeclarativeBenchmarkPlan.Feature.JAVA_CHARACTER_CLASS)
+                features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP)
+            }
+
+            RegexEngineVariant.RE2J_STRING -> {
+                features.add(DeclarativeBenchmarkPlan.Feature.FLAGGED_COMPILE)
+                features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME)
+                features.add(DeclarativeBenchmarkPlan.Feature.RETAINED_HEAP)
+            }
+
+            RegexEngineVariant.RE2_FFM_STRING_CONVERSION -> features.add(DeclarativeBenchmarkPlan.Feature.LINEAR_TIME)
+        }
+        val representation =
+            when (inputRepresentation) {
+                InputRepresentation.JAVA_STRING -> DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING
+                InputRepresentation.PREEXISTING_UTF8 -> DeclarativeBenchmarkPlan.InputRepresentation.PREEXISTING_UTF8
+                InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION -> DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION
+            }
+        return EngineDeclaration(
+            id,
+            representation,
+            features,
+            EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+            true
+        )
     }
 
-    default String group(int group) {
-      throw new UnsupportedOperationException();
+    fun prepareInputs(data: BenchmarkData, inputKeys: MutableList<String?>): MutableList<RegexInput?> {
+        val inputs: MutableList<RegexInput?> = ArrayList<RegexInput?>(inputKeys.size)
+        for (inputKey in inputKeys) {
+            if (inputRepresentation == InputRepresentation.PREEXISTING_UTF8) {
+                inputs.add(utf8Input(data.getInputBytes(inputKey)))
+            } else {
+                inputs.add(StringRegexInput(data.getInputString(inputKey)))
+            }
+        }
+        return List.copyOf<RegexInput?>(inputs)
     }
 
-    default int start(int group) {
-      throw new UnsupportedOperationException();
+    fun prepareReplacement(replacement: String?): PreparedReplacement? {
+        if (replacement == null) {
+            return null
+        }
+        if (inputRepresentation == InputRepresentation.PREEXISTING_UTF8) {
+            return Utf8Replacement(
+                Utf8Input.Companion.trusted(replacement.toByteArray(StandardCharsets.UTF_8))
+            )
+        }
+        return StringReplacement(replacement)
     }
 
-    default int end(int group) {
-      throw new UnsupportedOperationException();
+    abstract fun compile(regex: String?): CompiledRegex?
+
+    fun compileForBenchmark(regex: String, flagSet: String?): Any {
+        val flags = if (flagSet == null) 0 else BenchmarkFlags.parse(flagSet)
+        return when (this) {
+            RegexEngineVariant.SAFERE_STRING, RegexEngineVariant.SAFERE_UTF8, RegexEngineVariant.SAFERE_UTF8_VECTOR -> Pattern.Companion.compile(
+                regex,
+                flags
+            )
+
+            RegexEngineVariant.JDK_STRING -> java.util.regex.Pattern.compile(regex, flags)
+            RegexEngineVariant.RE2J_STRING -> {
+                // The plan excludes rows whose Java flag semantics differ from RE2/J. Map identities,
+                // never Java integer flags: Java CASE_INSENSITIVE has RE2/J's DOTALL value.
+                val re2jFlags: Int =
+                    RegexEngineVariant.Companion.RE2J_COMPILE_FLAGS.get(if (flagSet == null) "0" else flagSet)
+                if (re2jFlags == null) {
+                    throw java.lang.UnsupportedOperationException("RE2/J does not support flag set " + flagSet)
+                }
+                com.google.re2j.Pattern.compile(regex, re2jFlags)
+            }
+
+            RegexEngineVariant.RE2_FFM_STRING_CONVERSION -> {
+                if (flags != 0) {
+                    throw java.lang.UnsupportedOperationException("RE2-FFM flagged compilation is unsupported")
+                }
+                compile(regex)
+            }
+        }!!
     }
 
-    default boolean groupParticipated(int group) {
-      return start(group) >= 0;
+    internal interface RegexInput {
+        fun nativeLength(): Int {
+            return when (this) {
+                -> string.value.length
+                -> utf8.value().length()
+            }
+        }
     }
 
-    default void reset() {
-      throw new UnsupportedOperationException();
+    @JvmRecord
+    internal data class StringRegexInput(val value: String?) : RegexInput
+
+    private class Utf8RegexInput(// Borrow immutable fixture storage; keep native view offsets for timed capture decoding.
+        private val bytes: ByteArray, private val offset: Int, length: Int
+    ) : RegexInput {
+        private val value: Utf8Input
+
+        init {
+            this.value = Utf8Input.Companion.trusted(bytes, offset, length)
+        }
+
+        fun value(): Utf8Input {
+            return value
+        }
     }
 
-    default void region(int start, int end) {
-      throw new UnsupportedOperationException();
+    internal interface PreparedReplacement
+
+    @JvmRecord
+    internal data class StringReplacement(val value: String?) : PreparedReplacement
+
+    @JvmRecord
+    internal data class Utf8Replacement(val value: Utf8Input?) : PreparedReplacement
+
+    internal interface ReplacementOutput {
+        fun nativeLength(): Int
+
+        fun validationValue(): String?
+
+        fun consume(blackhole: Blackhole?)
     }
 
-    default void appendReplacement(StringBuilder result, String replacement) {
-      throw new UnsupportedOperationException();
+    @JvmRecord
+    internal data class StringReplacementOutput(val value: String?) : ReplacementOutput {
+        override fun nativeLength(): Int {
+            return value.length()
+        }
+
+        override fun validationValue(): String? {
+            return value
+        }
+
+        override fun consume(blackhole: Blackhole) {
+            blackhole.consume(value)
+        }
     }
 
-    default void appendTail(StringBuilder result) {
-      throw new UnsupportedOperationException();
-    }
-  }
+    private class Utf8ReplacementOutput(private val bytes: ByteArray, private val length: Int) : ReplacementOutput {
+        override fun nativeLength(): Int {
+            return length
+        }
 
-  interface CompiledRegex extends AutoCloseable {
-    default boolean find(RegexInput input) {
-      throw new UnsupportedOperationException();
-    }
+        override fun validationValue(): String {
+            return String(bytes, 0, length, StandardCharsets.UTF_8)
+        }
 
-    default boolean matches(RegexInput input) {
-      throw new UnsupportedOperationException();
-    }
-
-    default MatchCursor matcher(RegexInput input) {
-      throw new UnsupportedOperationException();
+        override fun consume(blackhole: Blackhole) {
+            blackhole.consume(bytes)
+            blackhole.consume(length)
+        }
     }
 
-    default ReplacementOutput replaceAll(RegexInput input, PreparedReplacement replacement) {
-      throw new UnsupportedOperationException();
+    internal interface MatchCursor {
+        fun find(): Boolean {
+            throw UnsupportedOperationException()
+        }
+
+        fun matches(): Boolean {
+            throw UnsupportedOperationException()
+        }
+
+        fun lookingAt(): Boolean {
+            throw UnsupportedOperationException()
+        }
+
+        fun group(group: Int): String? {
+            throw UnsupportedOperationException()
+        }
+
+        fun start(group: Int): Int {
+            throw UnsupportedOperationException()
+        }
+
+        fun end(group: Int): Int {
+            throw UnsupportedOperationException()
+        }
+
+        fun groupParticipated(group: Int): Boolean {
+            return start(group) >= 0
+        }
+
+        fun reset() {
+            throw UnsupportedOperationException()
+        }
+
+        fun region(start: Int, end: Int) {
+            throw UnsupportedOperationException()
+        }
+
+        fun appendReplacement(result: StringBuilder?, replacement: String?) {
+            throw UnsupportedOperationException()
+        }
+
+        fun appendTail(result: StringBuilder?) {
+            throw UnsupportedOperationException()
+        }
     }
 
-    default ReplacementOutput replaceFirst(RegexInput input, PreparedReplacement replacement) {
-      throw new UnsupportedOperationException();
+    internal interface CompiledRegex : AutoCloseable {
+        fun find(input: RegexInput?): Boolean {
+            throw UnsupportedOperationException()
+        }
+
+        fun matches(input: RegexInput?): Boolean {
+            throw UnsupportedOperationException()
+        }
+
+        fun matcher(input: RegexInput?): MatchCursor {
+            throw UnsupportedOperationException()
+        }
+
+        fun replaceAll(input: RegexInput?, replacement: PreparedReplacement?): ReplacementOutput? {
+            throw UnsupportedOperationException()
+        }
+
+        fun replaceFirst(input: RegexInput?, replacement: PreparedReplacement?): ReplacementOutput? {
+            throw UnsupportedOperationException()
+        }
+
+        fun manualReplaceAll(input: RegexInput?, replacement: PreparedReplacement): ReplacementOutput {
+            val matcher = matcher(input)
+            val result = StringBuilder()
+            while (matcher.find()) {
+                matcher.appendReplacement(result, string(replacement))
+            }
+            matcher.appendTail(result)
+            return StringReplacementOutput(result.toString())
+        }
+
+        fun split(input: RegexInput?, limit: Int): Array<String?>? {
+            throw UnsupportedOperationException()
+        }
+
+        override fun close() {}
     }
 
-    default ReplacementOutput manualReplaceAll(RegexInput input, PreparedReplacement replacement) {
-      MatchCursor matcher = matcher(input);
-      StringBuilder result = new StringBuilder();
-      while (matcher.find()) {
-        matcher.appendReplacement(result, string(replacement));
-      }
-      matcher.appendTail(result);
-      return new StringReplacementOutput(result.toString());
+    internal enum class InputRepresentation {
+        JAVA_STRING,
+        PREEXISTING_UTF8,
+        JAVA_STRING_WITH_TIMED_UTF8_CONVERSION
     }
 
-    default String[] split(RegexInput input, int limit) {
-      throw new UnsupportedOperationException();
+    private class ByteArraySink : Utf8Sink {
+        private var bytes = ByteArray(256)
+        private var length = 0
+
+        override fun append(source: ByteArray, offset: Int, rangeLength: Int) {
+            val requiredLength = length + rangeLength
+            if (requiredLength > bytes.length) {
+                bytes = Arrays.copyOf(bytes, Math.max(requiredLength, bytes.length * 2))
+            }
+            System.arraycopy(source, offset, bytes, length, rangeLength)
+            length = requiredLength
+        }
+
+        fun output(): ReplacementOutput {
+            return Utf8ReplacementOutput(bytes, length)
+        }
     }
 
-    @Override
-    default void close() {}
-  }
+    companion object {
+        private val RE2J_COMPILE_FLAGS: MutableMap<String?, Int> = Map.of<String?, Int?>(
+            "0", 0,
+            "CASE_INSENSITIVE", com.google.re2j.Pattern.CASE_INSENSITIVE,
+            "CASE_INSENSITIVE_UNICODE_CASE", com.google.re2j.Pattern.CASE_INSENSITIVE,
+            "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS", com.google.re2j.Pattern.CASE_INSENSITIVE
+        )
 
-  enum InputRepresentation {
-    JAVA_STRING,
-    PREEXISTING_UTF8,
-    JAVA_STRING_WITH_TIMED_UTF8_CONVERSION
-  }
+        fun re2jCompileFlagSets(): MutableSet<String?> {
+            return RE2J_COMPILE_FLAGS.keySet()
+        }
 
-  private static final class ByteArraySink implements Utf8Sink {
-    private byte[] bytes = new byte[256];
-    private int length;
+        fun fromId(id: String?): RegexEngineVariant {
+            for (variant in entries) {
+                if (variant.id == id) {
+                    return variant
+                }
+            }
+            throw IllegalArgumentException("Unknown cross-engine execution variant: " + id)
+        }
 
-    @Override
-    public void append(byte[] source, int offset, int rangeLength) {
-      int requiredLength = length + rangeLength;
-      if (requiredLength > bytes.length) {
-        bytes = Arrays.copyOf(bytes, Math.max(requiredLength, bytes.length * 2));
-      }
-      System.arraycopy(source, offset, bytes, length, rangeLength);
-      length = requiredLength;
+        private fun allCapabilities(): EnumSet<EngineCapability?> {
+            return EnumSet.allOf<EngineCapability?>(EngineCapability::class.java)
+        }
+
+        private fun ffmCapabilities(): EnumSet<EngineCapability?> {
+            return EnumSet.of<EngineCapability?>(
+                EngineCapability.COMPILE,
+                EngineCapability.FIND,
+                EngineCapability.MATCHES,
+                EngineCapability.LOOKING_AT,
+                EngineCapability.REGIONS,
+                EngineCapability.GROUP_PARTICIPATION,
+                EngineCapability.GROUP_TEXT,
+                EngineCapability.REPLACE,
+                EngineCapability.SPLIT,
+                EngineCapability.MATCHER_RESET
+            )
+        }
+
+        private fun re2jCapabilities(): EnumSet<EngineCapability?> {
+            val capabilities: EnumSet<EngineCapability?> = allCapabilities()
+            capabilities.remove(EngineCapability.REGIONS)
+            return capabilities
+        }
+
+        private fun string(input: RegexInput): String? {
+            return (input as StringRegexInput).value
+        }
+
+        private fun utf8(input: RegexInput): Utf8Input {
+            return (input as Utf8RegexInput).value()
+        }
+
+        private fun string(replacement: PreparedReplacement): String? {
+            return (replacement as StringReplacement).value
+        }
+
+        private fun utf8(replacement: PreparedReplacement): Utf8Input? {
+            return (replacement as Utf8Replacement).value
+        }
+
+        private fun manualReplaceUtf8(
+            matcher: Utf8Matcher, replacement: Utf8Input?
+        ): ReplacementOutput {
+            val sink = ByteArraySink()
+            while (matcher.find()) {
+                matcher.appendReplacement(sink, replacement)
+            }
+            matcher.appendTail(sink)
+            return sink.output()
+        }
+
+        @JvmOverloads
+        fun utf8Input(bytes: ByteArray, offset: Int = 0, length: Int = bytes.length): RegexInput {
+            return Utf8RegexInput(bytes, offset, length)
+        }
     }
-
-    ReplacementOutput output() {
-      return new Utf8ReplacementOutput(bytes, length);
-    }
-  }
 }

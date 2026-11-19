@@ -2,265 +2,280 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import com.code_intelligence.jazzer.junit.FuzzTest
+import org.safere.Pattern
+import java.util.regex.PatternSyntaxException
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import com.code_intelligence.jazzer.junit.FuzzTest;
-import java.util.List;
-import java.util.Objects;
-import org.safere.Matcher;
-import org.safere.Pattern;
-
-public final class ParserCompatibilityFuzzer {
-
-  private static final String[] ATOMS = {
-    "",
-    "a",
-    ".",
-    "\\d",
-    "\\D",
-    "\\w",
-    "\\W",
-    "\\s",
-    "\\S",
-    "\\p{Lower}",
-    "\\P{Lower}",
-    "\\Q\\E",
-    "\\Q\\E\\Q\\E",
-    "\\Q*\\E",
-    "^",
-    "$",
-    "\\b",
-    "\\B",
-    "\\b{g}",
-    "a\\Q\\E",
-    "[a]",
-    "[^a]",
-    "[a-z]",
-    "[a-z&&[def]]",
-    "()",
-    "(?)",
-    "(a)",
-    "(?:a)",
-    "(?<name>a)",
-    "a\u001C\\^]",
-    "a\u001D\\^]",
-    "a\u001E\\^]",
-    "a\u001F\\^]",
-    "[a\u001Cb]",
-    "[a\u001Db]",
-    "[a\u001Eb]",
-    "[a\u001Fb]"
-  };
-  private static final String[] PREFIXES = {"", "^", "(?i)", "(?x)", "(?m)", "(?s)"};
-  private static final String[] CONNECTORS = {
-    "",
-    "",
-    "|",
-    "?",
-    "??",
-    "*",
-    "*?",
-    "* #q\n ?",
-    "* #q\n +",
-    "* #q\n + +",
-    "+",
-    "+?",
-    "+ #q\n ?",
-    "+ #q\n +",
-    "+ #q\n + +",
-    "{0}",
-    "{00}",
-    "{1,3}",
-    "{01,03}",
-    "{1}",
-    "{01}",
-    "{2}+",
-    "{0,2}+",
-    "{1} #q\n ?",
-    "{1} #q\n +",
-    "{1} #q\n + +",
-    "??{1,3}",
-    "??{01,03}",
-    "?{1,3}",
-    "?{01,03}",
-    "*{1,3}",
-    "*{01,03}",
-    "+{1,3}",
-    "+{0}?+",
-    "+{0}?+{1}",
-    "+{1}{0}?+?",
-    "+++",
-    "++?{0,2}?",
-    "+{01,03}",
-    "{1,3}{1,3}",
-    "{01,03}{02}"
-  };
-  private static final String[] SUFFIXES = {"", "$", "?", "*", "+", "{2}", "{02}", "{1,3}"};
-  private static final String[] LEADING_COUNTED_REPEATS = {
-    "{0}",
-    "{00}",
-    "{1}",
-    "{01}",
-    "{1,3}",
-    "{01,03}",
-    "{1,}",
-    "{01,}",
-    "{1,3}?",
-    "{01,03}?",
-    "{1,3}$",
-    "{01,03}$",
-    "^{1,3}",
-    "^{01,03}",
-    "a|{1,3}",
-    "a|{01,03}",
-    "({1,3})",
-    "({01,03})"
-  };
-  private static final String[] COMMENT_TERMINATED_PREFIXES = {
-    "a#\0", "a#\n", "a#\r", "a#\u0085", "a#\u2028", "a#\u2029"
-  };
-  private static final String[] MALFORMED_GROUP_SUFFIXES = {"(", "|(", "b|(", "(?:b)|("};
-  private static final List<String> INPUTS =
-      List.of(
-          "",
-          "a",
-          "aa",
-          "abc",
-          "def",
-          "0",
-          " ",
-          "\n",
-          "*",
-          "name",
-          "a\u001C^]",
-          "a\u001D^]",
-          "a\u001E^]",
-          "a\u001F^]",
-          "a^]",
-          "\u001C",
-          "\u001D",
-          "\u001E",
-          "\u001F");
-
-  @FuzzTest(maxDuration = "30s")
-  void parserCompatibility(FuzzedDataProvider data) {
-    fuzzerTestOneInput(data);
-  }
-
-  public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    int flags = FuzzSupport.consumeParserFlags(data);
-    String regex;
-    if (data.consumeBoolean()) {
-      flags |= Pattern.COMMENTS;
-      regex =
-          data.pickValue(COMMENT_TERMINATED_PREFIXES) + data.pickValue(MALFORMED_GROUP_SUFFIXES);
-    } else if (data.consumeBoolean()) {
-      regex = data.pickValue(PREFIXES) + data.pickValue(LEADING_COUNTED_REPEATS);
-    } else {
-      regex =
-          data.pickValue(PREFIXES)
-              + data.pickValue(ATOMS)
-              + data.pickValue(CONNECTORS)
-              + data.pickValue(ATOMS)
-              + data.pickValue(SUFFIXES);
+class ParserCompatibilityFuzzer {
+    @FuzzTest(maxDuration = "30s")
+    fun parserCompatibility(data: FuzzedDataProvider) {
+        fuzzerTestOneInput(data)
     }
-    FuzzSupport.assertFullMatchesJdk(regex, flags, INPUTS);
-    // Append consumers to preserve the interpretation of the existing corpus.
-    assertOperandFreePossessiveCountedRepeatMatchesJdk(data);
-    assertQuantifierBoundaryFindsMatchJdk(data);
-    assertCountedRepeatQuoteGapsMatchJdk(data);
-  }
 
-  private static void assertCountedRepeatQuoteGapsMatchJdk(FuzzedDataProvider data) {
-    // Generate gaps inside the token, rather than only between a quantifier and its modifier.
-    String count =
-        data.pickValue(List.of("{1}", "{01,03}", "{1,}", "{0}", "{12}", "{,2}", "{2,1}", "{1,2"));
-    String gap = data.pickValue(List.of("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n", "\\Q1\\E"));
-    int gapPosition = data.consumeInt(1, count.length() - 1);
-    boolean allGaps = data.consumeBoolean();
-    StringBuilder quotedCount = new StringBuilder("{");
-    for (int i = 1; i < count.length(); i++) {
-      if (allGaps || i == gapPosition) quotedCount.append(gap);
-      quotedCount.append(count.charAt(i));
-    }
-    String operand = data.pickValue(List.of("a", "(a)", "[a]", "😀", "()", ""));
-    String modifier = data.pickValue(List.of("", "?", "\\Q\\E?", "?+"));
-    int flags = data.consumeBoolean() ? Pattern.COMMENTS : 0;
-    String regex = operand + quotedCount + modifier;
-    FuzzSupport.CompiledPattern compiled = FuzzSupport.compileCompatibleOrSkip(regex, flags);
-    if (compiled == null) return;
-    for (String input : List.of("", "a", "aa", "aaa", "baaaabaaa", "😀😀😀")) {
-      compiled.matcher(input).matches();
-      var pair = compiled.matcher(input);
-      while (pair.find()) {
-        // find() compares bounds and every capture on each successful step.
-      }
-    }
-  }
+    companion object {
+        private val ATOMS = arrayOf<String?>(
+            "",
+            "a",
+            ".",
+            "\\d",
+            "\\D",
+            "\\w",
+            "\\W",
+            "\\s",
+            "\\S",
+            "\\p{Lower}",
+            "\\P{Lower}",
+            "\\Q\\E",
+            "\\Q\\E\\Q\\E",
+            "\\Q*\\E",
+            "^",
+            "$",
+            "\\b",
+            "\\B",
+            "\\b{g}",
+            "a\\Q\\E",
+            "[a]",
+            "[^a]",
+            "[a-z]",
+            "[a-z&&[def]]",
+            "()",
+            "(?)",
+            "(a)",
+            "(?:a)",
+            "(?<name>a)",
+            "a\u001C\\^]",
+            "a\u001D\\^]",
+            "a\u001E\\^]",
+            "a\u001F\\^]",
+            "[a\u001Cb]",
+            "[a\u001Db]",
+            "[a\u001Eb]",
+            "[a\u001Fb]"
+        )
+        private val PREFIXES = arrayOf<String?>("", "^", "(?i)", "(?x)", "(?m)", "(?s)")
+        private val CONNECTORS = arrayOf<String?>(
+            "",
+            "",
+            "|",
+            "?",
+            "??",
+            "*",
+            "*?",
+            "* #q\n ?",
+            "* #q\n +",
+            "* #q\n + +",
+            "+",
+            "+?",
+            "+ #q\n ?",
+            "+ #q\n +",
+            "+ #q\n + +",
+            "{0}",
+            "{00}",
+            "{1,3}",
+            "{01,03}",
+            "{1}",
+            "{01}",
+            "{2}+",
+            "{0,2}+",
+            "{1} #q\n ?",
+            "{1} #q\n +",
+            "{1} #q\n + +",
+            "??{1,3}",
+            "??{01,03}",
+            "?{1,3}",
+            "?{01,03}",
+            "*{1,3}",
+            "*{01,03}",
+            "+{1,3}",
+            "+{0}?+",
+            "+{0}?+{1}",
+            "+{1}{0}?+?",
+            "+++",
+            "++?{0,2}?",
+            "+{01,03}",
+            "{1,3}{1,3}",
+            "{01,03}{02}"
+        )
+        private val SUFFIXES = arrayOf<String?>("", "$", "?", "*", "+", "{2}", "{02}", "{1,3}")
+        private val LEADING_COUNTED_REPEATS = arrayOf<String?>(
+            "{0}",
+            "{00}",
+            "{1}",
+            "{01}",
+            "{1,3}",
+            "{01,03}",
+            "{1,}",
+            "{01,}",
+            "{1,3}?",
+            "{01,03}?",
+            "{1,3}$",
+            "{01,03}$",
+            "^{1,3}",
+            "^{01,03}",
+            "a|{1,3}",
+            "a|{01,03}",
+            "({1,3})",
+            "({01,03})"
+        )
+        private val COMMENT_TERMINATED_PREFIXES = arrayOf<String?>(
+            "a#\u0000", "a#\n", "a#\r", "a#\u0085", "a#\u2028", "a#\u2029"
+        )
+        private val MALFORMED_GROUP_SUFFIXES = arrayOf<String?>("(", "|(", "b|(", "(?:b)|(")
+        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+            "",
+            "a",
+            "aa",
+            "abc",
+            "def",
+            "0",
+            " ",
+            "\n",
+            "*",
+            "name",
+            "a\u001C^]",
+            "a\u001D^]",
+            "a\u001E^]",
+            "a\u001F^]",
+            "a^]",
+            "\u001C",
+            "\u001D",
+            "\u001E",
+            "\u001F"
+        )
 
-  private static void assertQuantifierBoundaryFindsMatchJdk(FuzzedDataProvider data) {
-    String operand = data.pickValue(List.of("a", "(a)", "(a?)", "()", "(?i)"));
-    String repeat = data.pickValue(List.of("?", "*", "+", "{0}", "{1,3}"));
-    String gap = data.pickValue(List.of("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n"));
-    String modifier = data.pickValue(List.of("?", "?+", "??"));
-    String regex = operand + repeat + gap + modifier;
-    int flags = Pattern.COMMENTS;
-    FuzzSupport.assertFullMatchesJdk(regex, flags, INPUTS);
-    java.util.regex.Pattern expected;
-    try {
-      expected = java.util.regex.Pattern.compile(regex, flags);
-    } catch (java.util.regex.PatternSyntaxException rejected) {
-      return; // Compile agreement was already checked above.
-    }
-    Pattern actual = Pattern.compile(regex, flags);
-    for (String input : INPUTS) {
-      java.util.regex.Matcher jdk = expected.matcher(input);
-      Matcher safe = actual.matcher(input);
-      while (true) {
-        boolean found = jdk.find();
-        if (safe.find() != found) throw new AssertionError("find disagreement: " + regex);
-        if (!found) break;
-        for (int group = 0; group <= jdk.groupCount(); group++) {
-          if (safe.start(group) != jdk.start(group)
-              || safe.end(group) != jdk.end(group)
-              || !Objects.equals(safe.group(group), jdk.group(group))) {
-            throw new AssertionError("find capture disagreement: " + regex + " on " + input);
-          }
+        fun fuzzerTestOneInput(data: FuzzedDataProvider) {
+            var flags = FuzzSupport.consumeParserFlags(data)
+            val regex: String?
+            if (data.consumeBoolean()) {
+                flags = flags or Pattern.COMMENTS
+                regex =
+                    data.pickValue<String?>(COMMENT_TERMINATED_PREFIXES) + data.pickValue<String?>(
+                        MALFORMED_GROUP_SUFFIXES
+                    )
+            } else if (data.consumeBoolean()) {
+                regex = data.pickValue<String?>(PREFIXES) + data.pickValue<String?>(LEADING_COUNTED_REPEATS)
+            } else {
+                regex =
+                    (data.pickValue<String?>(PREFIXES)
+                            + data.pickValue<String?>(ATOMS)
+                            + data.pickValue<String?>(CONNECTORS)
+                            + data.pickValue<String?>(ATOMS)
+                            + data.pickValue<String?>(SUFFIXES))
+            }
+            FuzzSupport.assertFullMatchesJdk(regex, flags, INPUTS)
+            // Append consumers to preserve the interpretation of the existing corpus.
+            assertOperandFreePossessiveCountedRepeatMatchesJdk(data)
+            assertQuantifierBoundaryFindsMatchJdk(data)
+            assertCountedRepeatQuoteGapsMatchJdk(data)
         }
-      }
-    }
-  }
 
-  private static void assertOperandFreePossessiveCountedRepeatMatchesJdk(FuzzedDataProvider data) {
-    String prefix = data.pickValue(List.of("", "\\Q\\E", "(?i)", "a*", "a*?", "a{2}", "x|"));
-    String count = data.pickValue(List.of("{0}", "{1}", "{1,2}", "{1,}"));
-    boolean comments = data.consumeBoolean();
-    String modifier = comments && data.consumeBoolean() ? " #q\n +" : "+";
-    String suffix = data.pickValue(List.of("a", "", "[ab]"));
-    String expression = prefix + count + modifier + suffix;
-    String regex = data.consumeBoolean() ? "(" + expression + ")" : expression;
-    int flags = comments ? Pattern.COMMENTS : 0;
-    java.util.regex.Pattern jdk = java.util.regex.Pattern.compile(regex, flags);
-    // These generated forms all have an implicit empty operand. Compare them directly, including
-    // captures, alongside broad parser generation.
-    Pattern safeRe = Pattern.compile(regex, flags);
-    for (String input : List.of("", "a", "aa", "A", "ab", "x", "xa", "b")) {
-      java.util.regex.Matcher expected = jdk.matcher(input);
-      Matcher actual = safeRe.matcher(input);
-      boolean expectedMatch = expected.matches();
-      if (actual.matches() != expectedMatch) {
-        throw new AssertionError("Operand-free possessive count divergence for /" + regex + "/");
-      }
-      if (expectedMatch) {
-        for (int group = 0; group <= expected.groupCount(); group++) {
-          if (!Objects.equals(actual.group(group), expected.group(group))) {
-            throw new AssertionError(
-                "Operand-free possessive capture divergence for /" + regex + "/");
-          }
+        private fun assertCountedRepeatQuoteGapsMatchJdk(data: FuzzedDataProvider) {
+            // Generate gaps inside the token, rather than only between a quantifier and its modifier.
+            val count =
+                data.pickValue<String>(
+                    mutableListOf<String?>(
+                        "{1}",
+                        "{01,03}",
+                        "{1,}",
+                        "{0}",
+                        "{12}",
+                        "{,2}",
+                        "{2,1}",
+                        "{1,2"
+                    )
+                )
+            val gap =
+                data.pickValue<String?>(mutableListOf<String?>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n", "\\Q1\\E"))
+            val gapPosition = data.consumeInt(1, count.length - 1)
+            val allGaps = data.consumeBoolean()
+            val quotedCount = StringBuilder("{")
+            for (i in 1..<count.length) {
+                if (allGaps || i == gapPosition) quotedCount.append(gap)
+                quotedCount.append(count.get(i))
+            }
+            val operand = data.pickValue<String?>(mutableListOf<String?>("a", "(a)", "[a]", "😀", "()", ""))
+            val modifier = data.pickValue<String>(mutableListOf<String?>("", "?", "\\Q\\E?", "?+"))
+            val flags = if (data.consumeBoolean()) Pattern.COMMENTS else 0
+            val regex = operand + quotedCount + modifier
+            val compiled = FuzzSupport.compileCompatibleOrSkip(regex, flags)
+            if (compiled == null) return
+            for (input in mutableListOf<String?>("", "a", "aa", "aaa", "baaaabaaa", "😀😀😀")) {
+                compiled.matcher(input).matches()
+                val pair = compiled.matcher(input)
+                while (pair.find()) {
+                    // find() compares bounds and every capture on each successful step.
+                }
+            }
         }
-      }
+
+        private fun assertQuantifierBoundaryFindsMatchJdk(data: FuzzedDataProvider) {
+            val operand = data.pickValue<String?>(mutableListOf<String?>("a", "(a)", "(a?)", "()", "(?i)"))
+            val repeat = data.pickValue<String>(mutableListOf<String?>("?", "*", "+", "{0}", "{1,3}"))
+            val gap = data.pickValue<String?>(mutableListOf<String?>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n"))
+            val modifier = data.pickValue<String?>(mutableListOf<String?>("?", "?+", "??"))
+            val regex = operand + repeat + gap + modifier
+            val flags = Pattern.COMMENTS
+            FuzzSupport.assertFullMatchesJdk(regex, flags, INPUTS)
+            val expected: java.util.regex.Pattern?
+            try {
+                expected = java.util.regex.Pattern.compile(regex, flags)
+            } catch (rejected: PatternSyntaxException) {
+                return  // Compile agreement was already checked above.
+            }
+            val actual = Pattern.compile(regex, flags)
+            for (input in INPUTS) {
+                val jdk = expected.matcher(input)
+                val safe = actual.matcher(input)
+                while (true) {
+                    val found = jdk.find()
+                    if (safe.find() != found) throw AssertionError("find disagreement: " + regex)
+                    if (!found) break
+                    for (group in 0..jdk.groupCount()) {
+                        if (safe.start(group) != jdk.start(group) || safe.end(group) != jdk.end(group) || (safe.group(
+                                group
+                            ) != jdk.group(group))
+                        ) {
+                            throw AssertionError("find capture disagreement: " + regex + " on " + input)
+                        }
+                    }
+                }
+            }
+        }
+
+        private fun assertOperandFreePossessiveCountedRepeatMatchesJdk(data: FuzzedDataProvider) {
+            val prefix =
+                data.pickValue<String?>(mutableListOf<String?>("", "\\Q\\E", "(?i)", "a*", "a*?", "a{2}", "x|"))
+            val count = data.pickValue<String>(mutableListOf<String?>("{0}", "{1}", "{1,2}", "{1,}"))
+            val comments = data.consumeBoolean()
+            val modifier = if (comments && data.consumeBoolean()) " #q\n +" else "+"
+            val suffix = data.pickValue<String?>(mutableListOf<String?>("a", "", "[ab]"))
+            val expression = prefix + count + modifier + suffix
+            val regex = if (data.consumeBoolean()) "(" + expression + ")" else expression
+            val flags = if (comments) Pattern.COMMENTS else 0
+            val jdk = java.util.regex.Pattern.compile(regex, flags)
+            // These generated forms all have an implicit empty operand. Compare them directly, including
+            // captures, alongside broad parser generation.
+            val safeRe = Pattern.compile(regex, flags)
+            for (input in mutableListOf<String?>("", "a", "aa", "A", "ab", "x", "xa", "b")) {
+                val expected = jdk.matcher(input)
+                val actual = safeRe.matcher(input)
+                val expectedMatch = expected.matches()
+                if (actual.matches() != expectedMatch) {
+                    throw AssertionError("Operand-free possessive count divergence for /" + regex + "/")
+                }
+                if (expectedMatch) {
+                    for (group in 0..expected.groupCount()) {
+                        if (actual.group(group) != expected.group(group)) {
+                            throw AssertionError(
+                                "Operand-free possessive capture divergence for /" + regex + "/"
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
-  }
 }

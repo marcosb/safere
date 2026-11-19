@@ -2,37 +2,41 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.safere.MultiAnchorDescriptor.RejectPlan;
-import org.safere.MultiAnchorDescriptor.StartPlan;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.assertj.core.api.iterable.ThrowingExtractor
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
+import org.safere.MultiAnchorCompiler.AsciiWidthRange
+import org.safere.MultiAnchorDescriptor.RejectPlan
+import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredCharClass
+import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
+import org.safere.MultiAnchorDescriptor.StartPlan
+import org.safere.Pattern.EndAnchoredCharClassInfo
+import org.safere.Pattern.SuffixInfo
+import java.nio.charset.StandardCharsets
+import java.util.*
+import java.util.List
+import java.util.function.Consumer
+import java.util.function.Predicate
+import java.util.regex.Pattern
+import java.util.stream.Stream
+import kotlin.math.max
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
 @Isolated
-class MultiAnchorCompilerTest {
-
-  @Test
-  void cachedWidthsMatchTheStandaloneWalkerAcrossParsedAndSimplifiedTrees() {
-    EnumSet<RegexpOp> visited = EnumSet.noneOf(RegexpOp.class);
-    for (String regex :
-        List.of(
+internal class MultiAnchorCompilerTest {
+    @Test
+    fun cachedWidthsMatchTheStandaloneWalkerAcrossParsedAndSimplifiedTrees() {
+        val visited = EnumSet.noneOf<RegexpOp?>(RegexpOp::class.java)
+        for (regex in mutableListOf<String?>(
             "hello.*world",
             "foo.*bar.*baz",
             "(?s)foo.*bar.*baz",
@@ -51,928 +55,971 @@ class MultiAnchorCompilerTest {
             "(?s).needle",
             "[^\\s\\S]needle",
             "(?:)needle",
-            "\\Xneedle")) {
-      Regexp parsed = Parser.parse(regex, Pattern.toParseFlags(0));
-      for (Regexp tree : List.of(parsed, Simplifier.simplify(parsed))) {
-        var pending = new ArrayDeque<Regexp>();
-        pending.push(tree);
-        while (!pending.isEmpty()) {
-          Regexp node = pending.pop();
-          visited.add(node.op);
-          assertThat(MultiAnchorCompiler.analyze(node).width())
-              .as("%s: %s", regex, node.op)
-              .usingRecursiveComparison()
-              .isEqualTo(MultiAnchorCompiler.computeAsciiWidthRange(node));
-          if (node.subs != null) {
-            for (Regexp child : node.subs) pending.push(child);
-          }
+            "\\Xneedle"
+        )) {
+            val parsed = Parser.parse(regex, Pattern.toParseFlags(0))
+            for (tree in List.of<Regexp>(parsed, Simplifier.simplify(parsed))) {
+                val pending = ArrayDeque<Regexp>()
+                pending.push(tree)
+                while (!pending.isEmpty()) {
+                    val node = pending.pop()
+                    visited.add(node.op)
+                    Assertions.assertThat<AsciiWidthRange?>(MultiAnchorCompiler.analyze(node).width)
+                        .`as`("%s: %s", regex, node.op)
+                        .usingRecursiveComparison()
+                        .isEqualTo(MultiAnchorCompiler.computeAsciiWidthRange(node))
+                    if (node.subs != null) {
+                        for (child in node.subs) pending.push(child)
+                    }
+                }
+            }
         }
-      }
+        // Full and empty classes simplify to these operators, so the unknown-width cases are reachable.
+        Assertions.assertThat<RegexpOp?>(visited).contains(RegexpOp.ANY_CHAR, RegexpOp.NO_MATCH)
     }
-    // Full and empty classes simplify to these operators, so the unknown-width cases are reachable.
-    assertThat(visited).contains(RegexpOp.ANY_CHAR, RegexpOp.NO_MATCH);
-  }
 
-  @Test
-  void nullAstReturnsNull() {
-    assertThat(MultiAnchorCompiler.compile(null, 0)).isNull();
-    assertThat(MultiAnchorCompiler.extractStartPlan(null))
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.None.class);
-    assertThat(MultiAnchorCompiler.extractRejectPlan(null, 0, null, false))
-        .isInstanceOf(MultiAnchorDescriptor.RejectPlan.None.class);
-  }
+    @Test
+    fun nullAstReturnsNull() {
+        Assertions.assertThat<MultiAnchorDescriptor?>(MultiAnchorCompiler.compile(null, 0)).isNull()
+        Assertions.assertThat<StartPlan?>(MultiAnchorCompiler.extractStartPlan(null))
+            .isInstanceOf(StartPlan.None::class.java)
+        Assertions.assertThat<RejectPlan?>(MultiAnchorCompiler.extractRejectPlan(null, 0, null, false))
+            .isInstanceOf(RejectPlan.None::class.java)
+    }
 
-  @Test
-  void simplePrefixCompiledCorrectly() {
-    Regexp ast = Parser.parse("hello.*world", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actual = MultiAnchorCompiler.compile(ast, 0);
+    @Test
+    fun simplePrefixCompiledCorrectly() {
+        val ast = Parser.parse("hello.*world", Pattern.toParseFlags(0))
+        val actual = MultiAnchorCompiler.compile(ast, 0)
 
-    assertThat(actual.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("hello", false));
-    assertThat(actual.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new RejectPlan.RequiredLiteral("world"));
-  }
+        Assertions.assertThat<StartPlan?>(actual.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("hello", false))
+        Assertions.assertThat<RejectPlan?>(actual.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(RequiredLiteral("world"))
+    }
 
-  @Test
-  void multiAnchorPatternPrefersTheRarestRequiredLiteral() {
-    Regexp ast = Parser.parse("foo.*bar.*baz", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actual = MultiAnchorCompiler.compile(ast, 0);
+    @Test
+    fun multiAnchorPatternPrefersTheRarestRequiredLiteral() {
+        val ast = Parser.parse("foo.*bar.*baz", Pattern.toParseFlags(0))
+        val actual = MultiAnchorCompiler.compile(ast, 0)
 
-    assertThat(actual.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("foo", false));
-    assertThat(actual.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new RejectPlan.RequiredLiteral("baz"));
-  }
+        Assertions.assertThat<StartPlan?>(actual.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("foo", false))
+        Assertions.assertThat<RejectPlan?>(actual.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(RequiredLiteral("baz"))
+    }
 
-  @Test
-  void dotallDoesNotChangeTheExtractedPlans() {
-    Regexp ast = Parser.parse("(?s)foo.*bar.*baz", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actual = MultiAnchorCompiler.compile(ast, 0);
+    @Test
+    fun dotallDoesNotChangeTheExtractedPlans() {
+        val ast = Parser.parse("(?s)foo.*bar.*baz", Pattern.toParseFlags(0))
+        val actual = MultiAnchorCompiler.compile(ast, 0)
 
-    assertThat(actual.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("foo", false));
-    assertThat(actual.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new RejectPlan.RequiredLiteral("baz"));
-  }
+        Assertions.assertThat<StartPlan?>(actual.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("foo", false))
+        Assertions.assertThat<RejectPlan?>(actual.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(RequiredLiteral("baz"))
+    }
 
-  @Test
-  void boundaryAnchoredPatternStructure() {
-    Regexp textBoundaryAst = Parser.parse("^foo.*bar$", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actualText = MultiAnchorCompiler.compile(textBoundaryAst, 0);
+    @Test
+    fun boundaryAnchoredPatternStructure() {
+        val textBoundaryAst = Parser.parse("^foo.*bar$", Pattern.toParseFlags(0))
+        val actualText = MultiAnchorCompiler.compile(textBoundaryAst, 0)
 
-    assertThat(actualText.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("foo", false));
-    assertThat(actualText.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(
-            new RejectPlan.EndAnchoredSuffix(new Pattern.SuffixInfo("bar", true, false, false)));
-    assertThat(actualText.anchoredPrefix()).isEqualTo("foo");
-    assertThat(actualText.anchoredCharClassPrefix())
-        .usingRecursiveComparison()
-        .isEqualTo(CharClassScanInfo.fromCharClass(new CharClassBuilder().addRune('f').build()));
+        Assertions.assertThat<StartPlan?>(actualText.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("foo", false))
+        Assertions.assertThat<RejectPlan?>(actualText.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(
+                RejectPlan.EndAnchoredSuffix(SuffixInfo("bar", true, false, false))
+            )
+        Assertions.assertThat(actualText.anchoredPrefix()).isEqualTo("foo")
+        Assertions.assertThat<CharClassScanInfo?>(actualText.anchoredCharClassPrefix())
+            .usingRecursiveComparison()
+            .isEqualTo(CharClassScanInfo.fromCharClass(CharClassBuilder().addRune('f'.code).build()))
 
-    Regexp wordBoundaryAst = Parser.parse("\\bfoo.*bar", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actualWord = MultiAnchorCompiler.compile(wordBoundaryAst, 0);
+        val wordBoundaryAst = Parser.parse("\\bfoo.*bar", Pattern.toParseFlags(0))
+        val actualWord = MultiAnchorCompiler.compile(wordBoundaryAst, 0)
 
-    assertThat(actualWord.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("foo", false));
-    assertThat(actualWord.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new RejectPlan.RequiredLiteral("bar"));
-    assertThat(actualWord.anchoredPrefix()).isNull();
-  }
+        Assertions.assertThat<StartPlan?>(actualWord.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("foo", false))
+        Assertions.assertThat<RejectPlan?>(actualWord.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(RequiredLiteral("bar"))
+        Assertions.assertThat(actualWord.anchoredPrefix()).isNull()
+    }
 
-  @Test
-  void caseFoldedAnchorsStructure() {
-    Regexp ast = Parser.parse("(?i)foo.*bar", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor actual = MultiAnchorCompiler.compile(ast, 0);
+    @Test
+    fun caseFoldedAnchorsStructure() {
+        val ast = Parser.parse("(?i)foo.*bar", Pattern.toParseFlags(0))
+        val actual = MultiAnchorCompiler.compile(ast, 0)
 
-    assertThat(actual.startPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new StartPlan.Literal("foo", true));
-    assertThat(actual.rejectPlan())
-        .usingRecursiveComparison()
-        .isEqualTo(new RejectPlan.RequiredLiteral("bar"));
-  }
+        Assertions.assertThat<StartPlan?>(actual.startPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(StartPlan.Literal("foo", true))
+        Assertions.assertThat<RejectPlan?>(actual.rejectPlan())
+            .usingRecursiveComparison()
+            .isEqualTo(RequiredLiteral("bar"))
+    }
 
-  @Test
-  void unicodeFoldClassCardinalityPreservesEveryEligiblePrefix() {
-    // Include every code point, including members reached only through inverse casing links.
-    // This pins the cardinality bound against both the JDK's casing data and SafeRE's fold table.
-    int largestClosure = 0;
-    for (int cp = 0; cp <= Character.MAX_CODE_POINT; cp++) {
-      CharClassBuilder builder = new CharClassBuilder();
-      UnicodeCaseFolding.addUnicodeFoldedRange(builder, cp, cp);
-      CharClass closure = builder.build();
-      largestClosure = Math.max(largestClosure, closure.numRunes());
+    @Test
+    fun unicodeFoldClassCardinalityPreservesEveryEligiblePrefix() {
+        // Include every code point, including members reached only through inverse casing links.
+        // This pins the cardinality bound against both the JDK's casing data and SafeRE's fold table.
+        var largestClosure = 0
+        for (cp in 0..Character.MAX_CODE_POINT) {
+            val builder = CharClassBuilder()
+            UnicodeCaseFolding.addUnicodeFoldedRange(builder, cp, cp)
+            val closure = builder.build()
+            largestClosure = max(largestClosure, closure.numRunes())
 
-      int representative = closure.lo(0);
-      if (Inst.simpleFold(representative) == representative) {
-        continue;
-      }
-      int width = Character.toString(representative).getBytes(UTF_8).length;
-      boolean sameWidth = true;
-      for (int range = 0; range < closure.numRanges(); range++) {
-        if (Character.toString(closure.lo(range)).getBytes(UTF_8).length != width
-            || Character.toString(closure.hi(range)).getBytes(UTF_8).length != width) {
-          sameWidth = false;
-          break;
+            val representative = closure.lo(0)
+            if (Inst.simpleFold(representative) == representative) {
+                continue
+            }
+            val width = Character.toString(representative).toByteArray(StandardCharsets.UTF_8).size
+            var sameWidth = true
+            for (range in 0..<closure.numRanges()) {
+                if (Character.toString(closure.lo(range)).toByteArray(StandardCharsets.UTF_8).size != width
+                    || Character.toString(closure.hi(range)).toByteArray(StandardCharsets.UTF_8).size != width
+                ) {
+                    sameWidth = false
+                    break
+                }
+            }
+            if (sameWidth) {
+                val ast = Regexp(RegexpOp.CHAR_CLASS, 0)
+                ast.charClass = closure
+                val prefix =
+                    MultiAnchorCompiler.extractUnicodeFoldedPrefix(ast)
+                Assertions.assertThat(prefix.prefix).`as`("fold prefix for %s", closure).isNotNull()
+                Assertions.assertThat(prefix.foldCase).`as`("fold prefix for %s", closure).isTrue()
+            }
         }
-      }
-      if (sameWidth) {
-        Regexp ast = new Regexp(RegexpOp.CHAR_CLASS, 0);
-        ast.charClass = closure;
-        MultiAnchorCompiler.PrefixResult prefix =
-            MultiAnchorCompiler.extractUnicodeFoldedPrefix(ast);
-        assertThat(prefix.prefix()).as("fold prefix for %s", closure).isNotNull();
-        assertThat(prefix.foldCase()).as("fold prefix for %s", closure).isTrue();
-      }
+        Assertions.assertThat(largestClosure).isEqualTo(4)
     }
-    assertThat(largestClosure).isEqualTo(4);
-  }
 
-  @Test
-  void fixedOffsetLiteralExtracted() {
-    Regexp ast = Parser.parse("[0-9]{4}-[0-9]{2}-target", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor.StartPlan start = MultiAnchorCompiler.extractStartPlan(ast);
+    @Test
+    fun fixedOffsetLiteralExtracted() {
+        val ast = Parser.parse("[0-9]{4}-[0-9]{2}-target", Pattern.toParseFlags(0))
+        val start = MultiAnchorCompiler.extractStartPlan(ast)
 
-    assertThat(start).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    MultiAnchorDescriptor.StartPlan.FixedOffset fo =
-        (MultiAnchorDescriptor.StartPlan.FixedOffset) start;
-    assertThat(fo.fol()).isNotNull();
-    assertThat(fo.fol().literal()).isEqualTo("-target");
-    assertThat(fo.fol().minOffset()).isEqualTo(7);
-    assertThat(fo.fol().maxOffset()).isEqualTo(7);
-  }
+        Assertions.assertThat<StartPlan?>(start).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val fo =
+            start as StartPlan.FixedOffset
+        Assertions.assertThat<Pattern.FixedOffsetLiteral?>(fo.fol).isNotNull()
+        Assertions.assertThat(fo.fol.literal()).isEqualTo("-target")
+        Assertions.assertThat(fo.fol.minOffset()).isEqualTo(7)
+        Assertions.assertThat(fo.fol.maxOffset()).isEqualTo(7)
+    }
 
-  @ParameterizedTest
-  @MethodSource("boundedWidthPrefixes")
-  void fixedOffsetsPreserveDiscreteWidthBudgets(String prefix, int min, int max, int[] offsets) {
-    Regexp ast = Parser.parse(prefix + "needle", Pattern.toParseFlags(0));
-    MultiAnchorCompiler.FixedOffsetLiteral standalone =
-        MultiAnchorCompiler.extractFixedOffsetLiteral(ast);
-    assertThat(standalone).isNotNull();
-    assertThat(standalone.literal()).isEqualTo("needle");
-    assertThat(standalone.minOffset()).isEqualTo(min);
-    assertThat(standalone.maxOffset()).isEqualTo(max);
-    assertThat(standalone.discreteOffsets()).isEqualTo(offsets);
-    assertThat(MultiAnchorCompiler.analyze(ast).start().fixedOffsetLiteral())
-        .usingRecursiveComparison()
-        .isEqualTo(standalone);
-  }
+    @ParameterizedTest
+    @MethodSource("boundedWidthPrefixes")
+    fun fixedOffsetsPreserveDiscreteWidthBudgets(prefix: String?, min: Int, max: Int, offsets: IntArray?) {
+        val ast = Parser.parse(prefix + "needle", Pattern.toParseFlags(0))
+        val standalone =
+            MultiAnchorCompiler.extractFixedOffsetLiteral(ast)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(standalone).isNotNull()
+        Assertions.assertThat(standalone.literal).isEqualTo("needle")
+        Assertions.assertThat(standalone.minOffset).isEqualTo(min)
+        Assertions.assertThat(standalone.maxOffset).isEqualTo(max)
+        Assertions.assertThat(standalone.discreteOffsets).isEqualTo(offsets)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+            .usingRecursiveComparison()
+            .isEqualTo(standalone)
+    }
 
-  private static Stream<Arguments> boundedWidthPrefixes() {
-    return Stream.of(
-        Arguments.of("[ab]{2}", 2, 2, new int[] {2}),
-        Arguments.of("([ab]{2})", 2, 2, new int[] {2}),
-        Arguments.of("[ab]?", 0, 1, new int[] {0, 1}),
-        Arguments.of("[ab]{0,8}", 0, 8, new int[] {0, 1, 2, 3, 4, 5, 6, 7, 8}),
-        Arguments.of("[ab]{0,9}", 0, 9, null),
-        Arguments.of("[ab]{0,3}[cd]{0,3}", 0, 6, new int[] {0, 1, 2, 3, 4, 5, 6}),
-        Arguments.of("[ab]{0,4}[cd]{0,3}", 0, 7, null),
-        Arguments.of("[0-9].", 2, 2, null),
-        Arguments.of(
-            "(?:a|bb|ccc|dddd|eeeee|ffffff|ggggggg|hhhhhhhh)",
-            1,
-            8,
-            new int[] {1, 2, 3, 4, 5, 6, 7, 8}),
-        Arguments.of("(?:a|bb|ccc|dddd|eeeee|ffffff|ggggggg|hhhhhhhh|iiiiiiiii)", 1, 9, null),
-        Arguments.of("[éê]{2}", 2, 2, null));
-  }
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["[0-9]\\Xneedle", "[0-9]\\b{g}needle", "[0-9][^\\s\\S]needle", "[0-9](?i:a)needle", "[0-9]😀needle"
+        ]
+    )
+    fun unsupportedWidthStopsFixedOffsetAnalysis(regex: String?) {
+        val ast = Parser.parse(regex, Pattern.toParseFlags(0))
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
+            .isNull()
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+            .isNull()
+    }
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "[0-9]\\Xneedle",
-        "[0-9]\\b{g}needle",
-        "[0-9][^\\s\\S]needle",
-        "[0-9](?i:a)needle",
-        "[0-9]😀needle"
-      })
-  void unsupportedWidthStopsFixedOffsetAnalysis(String regex) {
-    Regexp ast = Parser.parse(regex, Pattern.toParseFlags(0));
-    assertThat(MultiAnchorCompiler.extractFixedOffsetLiteral(ast)).isNull();
-    assertThat(MultiAnchorCompiler.analyze(ast).start().fixedOffsetLiteral()).isNull();
-  }
+    @Test
+    fun zeroWidthRepetitionsDeduplicateOffsets() {
+        val emptyRepeat = Regexp.repeat(Regexp.emptyMatch(0), 0, 0, 8)
+        val ast =
+            Regexp.concat(
+                List.of<Regexp?>(
+                    emptyRepeat,
+                    Regexp.repeat(Regexp.literal('x'.code, 0), 0, 2, 2),
+                    Regexp.literalString("needle".codePoints().toArray(), 0)
+                ),
+                0
+            )
+        Assertions.assertThat(MultiAnchorCompiler.extractFixedOffsetLiteral(ast).discreteOffsets)
+            .containsExactly(2)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+            .usingRecursiveComparison()
+            .isEqualTo(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
+    }
 
-  @Test
-  void zeroWidthRepetitionsDeduplicateOffsets() {
-    Regexp emptyRepeat = Regexp.repeat(Regexp.emptyMatch(0), 0, 0, 8);
-    Regexp ast =
-        Regexp.concat(
-            List.of(
-                emptyRepeat,
-                Regexp.repeat(Regexp.literal('x', 0), 0, 2, 2),
-                Regexp.literalString("needle".codePoints().toArray(), 0)),
-            0);
-    assertThat(MultiAnchorCompiler.extractFixedOffsetLiteral(ast).discreteOffsets())
-        .containsExactly(2);
-    assertThat(MultiAnchorCompiler.analyze(ast).start().fixedOffsetLiteral())
-        .usingRecursiveComparison()
-        .isEqualTo(MultiAnchorCompiler.extractFixedOffsetLiteral(ast));
-  }
-
-  @ParameterizedTest
-  @MethodSource("zeroWidthRepeatBounds")
-  void zeroWidthRepeatsHaveOneDiscreteWidth(int min, int max) {
-    var expected = MultiAnchorCompiler.analyze(Regexp.emptyMatch(0)).width();
-    for (Regexp operand :
-        List.of(
+    @ParameterizedTest
+    @MethodSource("zeroWidthRepeatBounds")
+    fun zeroWidthRepeatsHaveOneDiscreteWidth(min: Int, max: Int) {
+        val expected = MultiAnchorCompiler.analyze(Regexp.emptyMatch(0)).width
+        for (operand in List.of<Regexp?>(
             Regexp.emptyMatch(0),
-            Regexp.literalString(new int[0], 0),
+            Regexp.literalString(IntArray(0), 0),
             Regexp.capture(Regexp.emptyMatch(0), 0, 1, null),
-            Regexp.rawQuantifier(RegexpOp.QUEST, Regexp.emptyMatch(0), 0))) {
-      Regexp repeat = Regexp.repeat(operand, 0, min, max);
-      assertThat(MultiAnchorCompiler.analyze(repeat).width())
-          .as("cached width for %s{%s,%s}", operand.op, min, max)
-          .usingRecursiveComparison()
-          .isEqualTo(expected);
-      assertThat(MultiAnchorCompiler.computeAsciiWidthRange(repeat))
-          .as("standalone width for %s{%s,%s}", operand.op, min, max)
-          .usingRecursiveComparison()
-          .isEqualTo(expected);
-    }
-  }
-
-  private static Stream<Arguments> zeroWidthRepeatBounds() {
-    return Stream.of(
-        Arguments.of(0, 0),
-        Arguments.of(0, 2),
-        Arguments.of(2, 2),
-        Arguments.of(1, 8),
-        Arguments.of(17, 25),
-        Arguments.of(Integer.MAX_VALUE - 2, Integer.MAX_VALUE));
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"[0-9]{2}needle.*tail", "[ab]{0,4}[cd]{0,3}needle.*tail"})
-  void rootCaptureWrappersPreserveStartAndRejectPlans(String regex) {
-    MultiAnchorDescriptor expected =
-        MultiAnchorCompiler.compile(Parser.parse(regex, Pattern.toParseFlags(0)), 0);
-    for (String wrapped : List.of("(" + regex + ")", "(?:(" + regex + "))")) {
-      assertThat(MultiAnchorCompiler.compile(Parser.parse(wrapped, Pattern.toParseFlags(0)), 0))
-          .usingRecursiveComparison()
-          .isEqualTo(expected);
-    }
-  }
-
-  @Test
-  void overflowingSuffixDoesNotWrapFixedOffsets() {
-    Regexp large = Regexp.repeat(Regexp.literal('x', 0), 0, Integer.MAX_VALUE, Integer.MAX_VALUE);
-    Regexp ast =
-        Regexp.concat(
-            List.of(
-                large,
-                Regexp.literal('y', 0),
-                Regexp.literalString("needle".codePoints().toArray(), 0)),
-            0);
-    // The literal run starts at a valid offset, but consuming it would overflow the next offset.
-    MultiAnchorCompiler.FixedOffsetLiteral literal =
-        MultiAnchorCompiler.extractFixedOffsetLiteral(ast);
-    assertThat(literal.minOffset()).isEqualTo(Integer.MAX_VALUE);
-    assertThat(literal.maxOffset()).isEqualTo(Integer.MAX_VALUE);
-    assertThat(MultiAnchorCompiler.analyze(ast).start().fixedOffsetLiteral())
-        .usingRecursiveComparison()
-        .isEqualTo(literal);
-  }
-
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "^(?:prefixOne|prefixTwo)", "\\b(?:prefixOne|prefixTwo)",
-        "(?:prefixOne|prefixTwo)$", "(?:prefixOne|prefixTwo)(capture)"
-      })
-  void capturesAndAssertionsPreventFactoringAcrossTheWholeTree(String regex) {
-    Regexp ast = Parser.parse(regex, Pattern.toParseFlags(0));
-    assertThat(MultiAnchorCompiler.factorAlternations(ast)).isSameAs(ast);
-  }
-
-  @Test
-  void rejectDescriptorRequiredLiteral() {
-    Regexp ast = Parser.parse(".*(important_keyword).*", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor.RejectPlan reject =
-        MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false);
-
-    assertThat(reject).isNotNull();
-    MultiAnchorDescriptor.RejectPlan.RequiredLiteral lit = null;
-    if (reject instanceof MultiAnchorDescriptor.RejectPlan.RequiredLiteral l) {
-      lit = l;
-    } else if (reject instanceof MultiAnchorDescriptor.RejectPlan.Composite comp) {
-      for (MultiAnchorDescriptor.RejectPlan p : comp.plans()) {
-        if (p instanceof MultiAnchorDescriptor.RejectPlan.RequiredLiteral l) {
-          lit = l;
-          break;
+            Regexp.rawQuantifier(RegexpOp.QUEST, Regexp.emptyMatch(0), 0)
+        )) {
+            val repeat = Regexp.repeat(operand, 0, min, max)
+            Assertions.assertThat<AsciiWidthRange?>(MultiAnchorCompiler.analyze(repeat).width)
+                .`as`("cached width for %s{%s,%s}", operand.op, min, max)
+                .usingRecursiveComparison()
+                .isEqualTo(expected)
+            Assertions.assertThat<AsciiWidthRange?>(MultiAnchorCompiler.computeAsciiWidthRange(repeat))
+                .`as`("standalone width for %s{%s,%s}", operand.op, min, max)
+                .usingRecursiveComparison()
+                .isEqualTo(expected)
         }
-      }
     }
-    assertThat(lit).isNotNull();
-    assertThat(lit.literal()).isEqualTo("important_keyword");
-  }
 
-  @Test
-  void rejectDescriptorEndAnchoredSuffix() {
-    Regexp ast = Parser.parse(".*\\.json$", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor.RejectPlan reject =
-        MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false);
-
-    assertThat(reject).isNotNull();
-    MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix s = null;
-    if (reject instanceof MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix suf) {
-      s = suf;
-    } else if (reject instanceof MultiAnchorDescriptor.RejectPlan.Composite comp) {
-      for (MultiAnchorDescriptor.RejectPlan p : comp.plans()) {
-        if (p instanceof MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix suf) {
-          s = suf;
-          break;
+    @ParameterizedTest
+    @ValueSource(strings = ["[0-9]{2}needle.*tail", "[ab]{0,4}[cd]{0,3}needle.*tail"])
+    fun rootCaptureWrappersPreserveStartAndRejectPlans(regex: String?) {
+        val expected =
+            MultiAnchorCompiler.compile(Parser.parse(regex, Pattern.toParseFlags(0)), 0)
+        for (wrapped in List.of<String?>("(" + regex + ")", "(?:(" + regex + "))")) {
+            Assertions.assertThat<MultiAnchorDescriptor?>(
+                MultiAnchorCompiler.compile(
+                    Parser.parse(
+                        wrapped,
+                        Pattern.toParseFlags(0)
+                    ), 0
+                )
+            )
+                .usingRecursiveComparison()
+                .isEqualTo(expected)
         }
-      }
-    }
-    assertThat(s).isNotNull();
-    assertThat(s.suffix()).isNotNull();
-    assertThat(s.suffix().suffix()).isEqualTo(".json");
-  }
-
-  @Test
-  void rejectDescriptorRequiredCharClass() {
-    Regexp ast = Parser.parse(".*\\d+.*", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor.RejectPlan reject =
-        MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false);
-
-    assertThat(reject).isInstanceOf(MultiAnchorDescriptor.RejectPlan.RequiredCharClass.class);
-  }
-
-  @Test
-  void rejectDescriptorDisjointRequiredLiterals() {
-    Regexp ast = Parser.parse("(apple.*|banana.*|cherry.*)", Pattern.toParseFlags(0));
-    MultiAnchorDescriptor.RejectPlan reject =
-        MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false);
-
-    assertThat(reject).isInstanceOf(MultiAnchorDescriptor.RejectPlan.DisjointLiterals.class);
-    MultiAnchorDescriptor.RejectPlan.DisjointLiterals d =
-        (MultiAnchorDescriptor.RejectPlan.DisjointLiterals) reject;
-    assertThat(d.literals()).containsExactly("apple", "banana", "cherry");
-  }
-
-  @Test
-  @Tag("work-counter")
-  void nestedConcatenationAnalysisScalesLinearly() {
-    Regexp smaller = nestedConcatenation(1_000);
-    Regexp larger = nestedConcatenation(2_000);
-    MultiAnchorCompiler.analyze(smaller);
-    MultiAnchorCompiler.analyze(larger);
-
-    long smallerWork = analysisWork(smaller);
-    long largerWork = analysisWork(larger);
-
-    assertThat(smallerWork).isPositive();
-    assertThat(largerWork)
-        .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
-        .isLessThan(smallerWork * 3);
-  }
-
-  @Test
-  @Tag("work-counter")
-  void nestedAlternationAnalysisScalesLinearly() {
-    Regexp smaller = nestedAlternation(1_000);
-    Regexp larger = nestedAlternation(2_000);
-    MultiAnchorCompiler.analyze(smaller);
-    MultiAnchorCompiler.analyze(larger);
-
-    long smallerWork = analysisWork(smaller);
-    long largerWork = analysisWork(larger);
-
-    assertThat(smallerWork).isPositive();
-    assertThat(largerWork)
-        .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
-        .isLessThan(smallerWork * 3);
-  }
-
-  @Test
-  @Tag("work-counter")
-  void nestedRequiredLiteralAnalysisScalesLinearly() {
-    Regexp smaller = nestedRequiredLiteral(8_000);
-    Regexp larger = nestedRequiredLiteral(16_000);
-    MultiAnchorCompiler.analyze(smaller);
-    MultiAnchorCompiler.analyze(larger);
-
-    long smallerWork = analysisWork(smaller);
-    long largerWork = analysisWork(larger);
-
-    assertThat(smallerWork).isPositive();
-    assertThat(largerWork)
-        .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
-        .isLessThan(smallerWork * 3);
-  }
-
-  @Test
-  void endRejectPlansRetainUnixLinesMode() {
-    MultiAnchorDescriptor.RejectPlan suffix =
-        Pattern.compile(".*needle$", Pattern.UNIX_LINES).rejectPlan();
-    MultiAnchorDescriptor.RejectPlan characterClass =
-        Pattern.compile(".*[0-9]$", Pattern.UNIX_LINES).rejectPlan();
-
-    assertThat(endAnchoredSuffixes(suffix))
-        .singleElement()
-        .extracting(Pattern.SuffixInfo::unixLines)
-        .isEqualTo(true);
-    assertThat(endAnchoredCharacterClasses(characterClass))
-        .singleElement()
-        .extracting(Pattern.EndAnchoredCharClassInfo::unixLines)
-        .isEqualTo(true);
-  }
-
-  private static List<Pattern.SuffixInfo> endAnchoredSuffixes(
-      MultiAnchorDescriptor.RejectPlan plan) {
-    return rejectPlans(plan)
-        .filter(MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix.class::isInstance)
-        .map(MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix.class::cast)
-        .map(MultiAnchorDescriptor.RejectPlan.EndAnchoredSuffix::suffix)
-        .toList();
-  }
-
-  private static List<Pattern.EndAnchoredCharClassInfo> endAnchoredCharacterClasses(
-      MultiAnchorDescriptor.RejectPlan plan) {
-    return rejectPlans(plan)
-        .filter(MultiAnchorDescriptor.RejectPlan.EndAnchoredCharClass.class::isInstance)
-        .map(MultiAnchorDescriptor.RejectPlan.EndAnchoredCharClass.class::cast)
-        .map(MultiAnchorDescriptor.RejectPlan.EndAnchoredCharClass::charClass)
-        .toList();
-  }
-
-  private static Stream<MultiAnchorDescriptor.RejectPlan> rejectPlans(
-      MultiAnchorDescriptor.RejectPlan plan) {
-    if (plan instanceof MultiAnchorDescriptor.RejectPlan.Composite composite) {
-      return Arrays.stream(composite.plans());
-    }
-    return Stream.of(plan);
-  }
-
-  private static Regexp nestedConcatenation(int depth) {
-    Regexp nested = Regexp.literal('z', 0);
-    for (int index = 0; index < depth; index++) {
-      nested =
-          Regexp.concat(
-              List.of(Regexp.literal('a', 0), Regexp.capture(nested, 0, index + 1, null)), 0);
-    }
-    return nested;
-  }
-
-  private static Regexp nestedAlternation(int depth) {
-    Regexp nested = Regexp.literal(0x100, 0);
-    for (int index = 0; index < depth; index++) {
-      nested =
-          Regexp.alternate(
-              List.of(
-                  Regexp.literal(0x102 + index * 2, 0), Regexp.capture(nested, 0, index + 1, null)),
-              0);
-    }
-    return nested;
-  }
-
-  private static Regexp nestedRequiredLiteral(int size) {
-    Regexp nested = Regexp.literalString("q".repeat(size).codePoints().toArray(), 0);
-    for (int index = 0; index < size; index++) {
-      nested =
-          Regexp.concat(
-              List.of(
-                  Regexp.capture(nested, 0, index + 1, null),
-                  Regexp.quest(Regexp.literal('x', 0), 0)),
-              0);
-    }
-    return nested;
-  }
-
-  private static long analysisWork(Regexp regexp) {
-    return WorkCounter.countForTesting(() -> MultiAnchorCompiler.analyze(regexp));
-  }
-
-  @Test
-  void factorAlternationsWithSurroundingPrefixCoalescesLiteral() {
-    Pattern p =
-        Pattern.compile(
-            "/(?:api/v1/checkout|api/v1/payment|api/v1/orders)/[0-9a-f]{8} status=[0-9]+");
-    assertThat(p.multiAnchor()).isNotNull();
-    assertThat(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.Literal.class);
-    StartPlan.Literal literal = (StartPlan.Literal) p.multiAnchor().startPlan();
-    assertThat(literal.prefix()).isEqualTo("/api/v1/");
-  }
-
-  @Test
-  void factorAlternationsStandalonePrefixExtractsCommonPrefix() {
-    // No literal follows the alternation, so the factored prefix is the only candidate and
-    // this asserts the factoring itself rather than the outcome of a later comparison.
-    Pattern p = Pattern.compile("(?:https://api|https://stage|https://prod)[a-z0-9.]+");
-    assertThat(p.multiAnchor()).isNotNull();
-    assertThat(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.Literal.class);
-    StartPlan.Literal literal = (StartPlan.Literal) p.multiAnchor().startPlan();
-    assertThat(literal.prefix()).isEqualTo("https://");
-  }
-
-  @Test
-  void factoredPrefixLosesToAMoreSelectiveFixedOffsetLiteral() {
-    // The factored prefix is `https://`, but `.example.com/` is the rarer literal and wins.
-    // Before the prefix-length gate was removed the comparison never ran, because the gate
-    // only admitted leading prefixes of two characters or fewer.
-    Pattern p =
-        Pattern.compile("(?:https://api|https://stage|https://prod)\\.example\\.com/[a-z0-9]+");
-    assertThat(p.multiAnchor()).isNotNull();
-    assertThat(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.FixedOffset.class);
-    StartPlan.FixedOffset fixedOffset = (StartPlan.FixedOffset) p.multiAnchor().startPlan();
-    assertThat(fixedOffset.fol().literal()).isEqualTo(".example.com/");
-  }
-
-  @Test
-  void selectedFixedOffsetLiteralPreservesStringAndUtf8FindBounds() {
-    String regex = "(?:https://api|https://stage|https://prod)\\.example\\.com/[a-z0-9]+";
-    String text = "é https://api.example.com/x! https://prod.example.com/y";
-    Pattern pattern = Pattern.compile(regex);
-    assertThat(pattern.multiAnchor().startPlan()).isInstanceOf(StartPlan.FixedOffset.class);
-
-    java.util.regex.Matcher expected = java.util.regex.Pattern.compile(regex).matcher(text);
-    Matcher stringMatcher = pattern.matcher(text);
-    Utf8Matcher utf8Matcher = pattern.matcher(Utf8Input.validated(text.getBytes(UTF_8)));
-    while (expected.find()) {
-      assertThat(stringMatcher.find()).isTrue();
-      assertThat(stringMatcher.start()).isEqualTo(expected.start());
-      assertThat(stringMatcher.end()).isEqualTo(expected.end());
-      assertThat(utf8Matcher.find()).isTrue();
-      assertThat(utf8Matcher.start())
-          .isEqualTo(text.substring(0, expected.start()).getBytes(UTF_8).length);
-      assertThat(utf8Matcher.end())
-          .isEqualTo(text.substring(0, expected.end()).getBytes(UTF_8).length);
-    }
-    assertThat(stringMatcher.find()).isFalse();
-    assertThat(utf8Matcher.find()).isFalse();
-  }
-
-  @Test
-  void alternationFactoringIsStackSafeForDeepQuantifiers() {
-    Regexp nested = Regexp.literal('a', 0);
-    for (int index = 0; index < 100_000; index++) {
-      RegexpOp op = index % 2 == 0 ? RegexpOp.QUEST : RegexpOp.PLUS;
-      nested = Regexp.rawQuantifier(op, nested, 0);
     }
 
-    Regexp input = nested;
-    assertThatCode(() -> MultiAnchorCompiler.factorAlternations(input)).doesNotThrowAnyException();
-  }
-
-  @Test
-  void homogeneousGapExtractionIsStackSafeForDeepQuantifiers() {
-    assertThatCode(() -> Pattern.compile(deepHomogeneousGap("[ab]", 5_000)))
-        .doesNotThrowAnyException();
-    assertThatCode(() -> Pattern.compile(deepHomogeneousGap(".", 5_000)))
-        .doesNotThrowAnyException();
-  }
-
-  @Test
-  void poisonousSingleCharacterPrefixGatedFromLiteralStartPlan() {
-    // Single space is poisonous; should not be emitted as StartPlan.Literal
-    Pattern spacePattern = Pattern.compile(" [0-9]+");
-    assertThat(spacePattern.startPlan())
-        .isNotInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-
-    // Single 'e' is high-frequency / poisonous; should not be emitted as StartPlan.Literal
-    Pattern ePattern = Pattern.compile("e[0-9]+");
-    assertThat(ePattern.startPlan()).isNotInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-
-    // Single-character class matching space is unselective / poisonous
-    Pattern spaceClassPattern = Pattern.compile("[ ]\\d+");
-    assertThat(spaceClassPattern.startPlan())
-        .isInstanceOfSatisfying(
-            StartPlan.FixedOffsetClass.class,
-            plan -> {
-              assertThat(plan.leadingClass().isSelective()).isFalse();
-              assertThat(plan.offset()).isEqualTo(1);
-            });
-    assertThat(spaceClassPattern.stringStartAccelerator()).isNotNull();
-
-    // Multi-character prefix containing space is not poisonous (e.g. "  " or "id: ")
-    Pattern multiSpace = Pattern.compile("  [0-9]+");
-    assertThat(multiSpace.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-    assertThat(((MultiAnchorDescriptor.StartPlan.Literal) multiSpace.startPlan()).prefix())
-        .isEqualTo("  ");
-
-    Pattern exactUppercase = Pattern.compile("E[0-9]+");
-    assertThat(exactUppercase.startPlan())
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-    assertThat(exactUppercase.stringStartAccelerator()).isNotNull();
-    assertThat(exactUppercase.utf8StartAccelerator()).isNotNull();
-
-    Pattern foldedCommonLetter = Pattern.compile("(?i:E)[0-9]+");
-    assertThat(foldedCommonLetter.startPlan())
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.None.class);
-    assertThat(foldedCommonLetter.stringStartAccelerator()).isNull();
-    assertThat(foldedCommonLetter.utf8StartAccelerator()).isNull();
-
-    Pattern foldedRareLetter = Pattern.compile("(?i:Q)[0-9]+");
-    assertThat(foldedRareLetter.startPlan())
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-    assertThat(foldedRareLetter.stringStartAccelerator()).isNotNull();
-    assertThat(foldedRareLetter.utf8StartAccelerator()).isNotNull();
-
-    Pattern latin1Singleton = Pattern.compile("é+(?:ab|cd)?");
-    assertThat(latin1Singleton.startPlan())
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.CharClass.class);
-    assertThat(latin1Singleton.stringStartAccelerator()).isNotNull();
-    assertThat(latin1Singleton.utf8StartAccelerator()).isNotNull();
-
-    Pattern unicodeSingleton = Pattern.compile("Ā+(?:ab|cd)?");
-    assertThat(unicodeSingleton.startPlan())
-        .isInstanceOf(MultiAnchorDescriptor.StartPlan.CharClass.class);
-    assertThat(unicodeSingleton.stringStartAccelerator()).isNotNull();
-    assertThat(unicodeSingleton.utf8StartAccelerator()).isNotNull();
-  }
-
-  @Test
-  void competitiveSelectivityPrefersFixedOffsetOverPoisonousOrWeakPrefix() {
-    // Case 1: Poisonous leading space prefix eclipsed by selective fixed-offset literal
-    Pattern p1 = Pattern.compile(" [0-9]{2}404_NOT_FOUND");
-    assertThat(p1.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    MultiAnchorDescriptor.StartPlan.FixedOffset fo1 =
-        (MultiAnchorDescriptor.StartPlan.FixedOffset) p1.startPlan();
-    assertThat(fo1.fol().literal()).isEqualTo("404_NOT_FOUND");
-    assertThat(fo1.fol().minOffset()).isEqualTo(3);
-
-    // Case 2: Short 2-character weak prefix eclipsed by much more selective fixed-offset literal
-    Pattern p2 = Pattern.compile("ab[0-9]{2}ERROR_CRITICAL_PAYLOAD");
-    assertThat(p2.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    MultiAnchorDescriptor.StartPlan.FixedOffset fo2 =
-        (MultiAnchorDescriptor.StartPlan.FixedOffset) p2.startPlan();
-    assertThat(fo2.fol().literal()).isEqualTo("ERROR_CRITICAL_PAYLOAD");
-
-    // Case 3: Long selective prefix retains priority over fixed-offset literal
-    Pattern p3 = Pattern.compile("Content-Type:[0-9]{2}json");
-    assertThat(p3.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.Literal.class);
-    assertThat(((MultiAnchorDescriptor.StartPlan.Literal) p3.startPlan()).prefix())
-        .isEqualTo("Content-Type:");
-  }
-
-  @Test
-  void fixedOffsetLiteralSubsumedFromRejectPlan() {
-    // Single fixed-offset literal drives startPlan; should not be duplicated in rejectPlan
-    Pattern p1 = Pattern.compile("[0-9]{2}404_NOT_FOUND");
-    assertThat(p1.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    MultiAnchorDescriptor.StartPlan.FixedOffset fo =
-        (MultiAnchorDescriptor.StartPlan.FixedOffset) p1.startPlan();
-    assertThat(fo.fol().literal()).isEqualTo("404_NOT_FOUND");
-
-    // The required literal "404_NOT_FOUND" is subsumed and excluded from rejectPlan
-    Stream<MultiAnchorDescriptor.RejectPlan.RequiredLiteral> reqLits1 =
-        rejectPlans(p1.rejectPlan())
-            .filter(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::isInstance)
-            .map(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::cast);
-    assertThat(reqLits1).noneMatch(l -> l.literal().equals("404_NOT_FOUND"));
-
-    // Multiple required literals: fixed-offset literal is excluded, but downstream required literal
-    // is preserved
-    Pattern p2 = Pattern.compile("[0-9]{2}404_NOT_FOUND.*EXCEPTION_LOG");
-    assertThat(p2.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    Stream<MultiAnchorDescriptor.RejectPlan.RequiredLiteral> reqLits2 =
-        rejectPlans(p2.rejectPlan())
-            .filter(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::isInstance)
-            .map(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::cast);
-    assertThat(reqLits2).anyMatch(l -> l.literal().equals("EXCEPTION_LOG"));
-
-    // Multiple literals in fixed-offset prefix: all prefix literals subsumed, none leaked to
-    // rejectPlan
-    Pattern p3 = Pattern.compile("[0-9]{2}____[a-z]zq[a-z]");
-    assertThat(p3.startPlan()).isInstanceOf(MultiAnchorDescriptor.StartPlan.FixedOffset.class);
-    Stream<MultiAnchorDescriptor.RejectPlan.RequiredLiteral> reqLits3 =
-        rejectPlans(p3.rejectPlan())
-            .filter(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::isInstance)
-            .map(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::cast);
-    assertThat(reqLits3).isEmpty();
-
-    Pattern variableWidthBoundary = Pattern.compile("[0-9]{2}____(?:ALPHABET)+");
-    Stream<MultiAnchorDescriptor.RejectPlan.RequiredLiteral> boundaryLiterals =
-        rejectPlans(variableWidthBoundary.rejectPlan())
-            .filter(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::isInstance)
-            .map(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::cast);
-    assertThat(boundaryLiterals)
-        .extracting(MultiAnchorDescriptor.RejectPlan.RequiredLiteral::literal)
-        .contains("ALPHABET");
-
-    Pattern repeatedPrefixToken = Pattern.compile("[0-9]{2}zz.*zzRARE");
-    Stream<MultiAnchorDescriptor.RejectPlan.RequiredLiteral> repeatedTokenLiterals =
-        rejectPlans(repeatedPrefixToken.rejectPlan())
-            .filter(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::isInstance)
-            .map(MultiAnchorDescriptor.RejectPlan.RequiredLiteral.class::cast);
-    assertThat(repeatedTokenLiterals)
-        .extracting(MultiAnchorDescriptor.RejectPlan.RequiredLiteral::literal)
-        .contains("zzRARE");
-  }
-
-  @Test
-  void leadingExpansionKeepsItsRequiredCharClass() {
-    // `\s*# noqa` is driven by the inner literal "# ", but the required class `['#']` is still
-    // scanned for. The reject prefilter runs before the match machinery is set up, so it pays for
-    // itself even though the accelerator would go on to find the same literal. Dropping it
-    // regressed the UTF-8 arm of rebar's 04-ruff-noqa by 1.70x.
-    Pattern p =
-        Pattern.compile("(\\s*)((?:# [Nn][Oo][Qq][Aa])(?::\\s?(([A-Z]+[0-9]+(?:[,\\s]+)?)+))?)");
-    assertThat(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion.class);
-    StartPlan.LeadingExpansion le = (StartPlan.LeadingExpansion) p.startPlan();
-    assertThat(le.innerPlan()).isInstanceOf(StartPlan.Literal.class);
-    assertThat(p.rejectPlan()).isInstanceOf(RejectPlan.RequiredCharClass.class);
-  }
-
-  @Test
-  void leadingExpansionOverFixedOffsetKeepsItsRequiredCharClass() {
-    Pattern p = Pattern.compile("\\s+[0-9]{2}404_NOT_FOUND");
-    assertThat(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion.class);
-    StartPlan.LeadingExpansion le = (StartPlan.LeadingExpansion) p.startPlan();
-    assertThat(le.innerPlan()).isInstanceOf(StartPlan.FixedOffset.class);
-    assertThat(rejectPlans(p.rejectPlan()))
-        .hasAtLeastOneElementOfType(RejectPlan.RequiredCharClass.class);
-  }
-
-  @Test
-  void leadingExpansionWithDownstreamRequiredLiteralPreservesRequiredLiteral() {
-    Pattern p = Pattern.compile("\\s*foo.*RARE_KEYWORD");
-    assertThat(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion.class);
-    StartPlan.LeadingExpansion le = (StartPlan.LeadingExpansion) p.startPlan();
-    assertThat(((StartPlan.Literal) le.innerPlan()).prefix()).isEqualTo("foo");
-    assertThat(rejectPlans(p.rejectPlan()))
-        .filteredOn(RejectPlan.RequiredLiteral.class::isInstance)
-        .extracting(plan -> ((RejectPlan.RequiredLiteral) plan).literal())
-        .contains("RARE_KEYWORD");
-  }
-
-  @Test
-  void multiLiteralFallbackClassCompetesWithRequiredCharClass() {
-    // `.*\d+.*` has a mandatory `\d` (10 runes) and no start plan of its own.
-    Regexp ast = Parser.parse(".*\\d+.*", Pattern.toParseFlags(0));
-    String[] literals = {"apple", "banana"};
-
-    // A MultiLiteral with no fallback class behaves like any plan without a driving character
-    // class: the mandatory `\d` is scanned for.
-    StartPlan.MultiLiteral noFallback = new StartPlan.MultiLiteral(literals, null);
-    assertThat(MultiAnchorCompiler.extractRejectPlan(ast, 0, noFallback, false))
-        .isInstanceOf(RejectPlan.RequiredCharClass.class);
-
-    // With a fallback class narrower than `\d`, the MultiLiteral accelerator's own scan is the
-    // more selective of the two, so the redundant reject scan is dropped.
-    StartPlan.MultiLiteral narrowFallback =
-        new StartPlan.MultiLiteral(literals, charClassOf("a-c"));
-    assertThat(MultiAnchorCompiler.extractRejectPlan(ast, 0, narrowFallback, false))
-        .isInstanceOf(RejectPlan.None.class);
-
-    // With a fallback class wider than `\d`, the reject scan filters better and is kept.
-    StartPlan.MultiLiteral wideFallback = new StartPlan.MultiLiteral(literals, charClassOf("a-z"));
-    assertThat(MultiAnchorCompiler.extractRejectPlan(ast, 0, wideFallback, false))
-        .isInstanceOf(RejectPlan.RequiredCharClass.class);
-  }
-
-  @Test
-  void requiredCharClassSelectionUsesAsciiMembersAndFallsBackToRuneCount() {
-    // Mixed [\[\uFF3B] and [\]\uFF3D] are scored by their ASCII members, beating `.` and `\d`.
-    Pattern citation = Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]");
-    assertThat(citation.rejectPlan()).isInstanceOf(RejectPlan.RequiredCharClass.class);
-    RejectPlan.RequiredCharClass citationReject =
-        (RejectPlan.RequiredCharClass) citation.rejectPlan();
-    assertThat(citationReject.scanInfo().ranges()).containsExactly(']', ']', 0xFF3D, 0xFF3D);
-
-    // Purely non-ASCII classes fall back to rune count rather than claiming to be rarer than ASCII.
-    Pattern nonAsciiPairVsSingleAscii = Pattern.compile("[\uFF3B\uFF3D]+(?:a|aa)+");
-    assertThat(nonAsciiPairVsSingleAscii.rejectPlan())
-        .isInstanceOf(RejectPlan.RequiredCharClass.class);
-    RejectPlan.RequiredCharClass singleAsciiReject =
-        (RejectPlan.RequiredCharClass) nonAsciiPairVsSingleAscii.rejectPlan();
-    assertThat(singleAsciiReject.scanInfo().ranges()).containsExactly('a', 'a');
-
-    // A 1-rune non-ASCII class still beats a 10-rune ASCII digit class by rune count.
-    Pattern singleNonAsciiVsDigits = Pattern.compile(".*[\uFF3B]+\\d+");
-    assertThat(singleNonAsciiVsDigits.rejectPlan())
-        .isInstanceOf(RejectPlan.RequiredCharClass.class);
-    RejectPlan.RequiredCharClass singleNonAsciiReject =
-        (RejectPlan.RequiredCharClass) singleNonAsciiVsDigits.rejectPlan();
-    assertThat(singleNonAsciiReject.scanInfo().ranges()).containsExactly(0xFF3B, 0xFF3B);
-
-    // A mixed class with a large non-ASCII range is not scored by its ASCII member, so it does not
-    // claim to be rarer than a digit on text in the language it covers.
-    Pattern digitsThenCjk = Pattern.compile("\\d+[\\-\u4E00-\u9FFF]+");
-    assertThat(digitsThenCjk.rejectPlan()).isInstanceOf(RejectPlan.RequiredCharClass.class);
-    RejectPlan.RequiredCharClass digitsReject =
-        (RejectPlan.RequiredCharClass) digitsThenCjk.rejectPlan();
-    assertThat(digitsReject.scanInfo().ranges()).containsExactly('0', '9');
-  }
-
-  @Test
-  void optionalCharBeforeCommonClassKeepsRejectPrefilter() {
-    // No start accelerator scans for a class this common, so a leading expansion would only drop
-    // the reject that makes input without the class cheap.
-    for (String regex : List.of("-?\\d+", "[+-]?\\d+", "#?[0-9A-Fa-f]{6}")) {
-      Pattern pattern = Pattern.compile(regex);
-      assertThat(pattern.startPlan()).as(regex).isNotInstanceOf(StartPlan.LeadingExpansion.class);
-      assertThat(pattern.rejectPlan()).as(regex).isNotEqualTo(RejectPlan.None.INSTANCE);
+    @Test
+    fun overflowingSuffixDoesNotWrapFixedOffsets() {
+        val large = Regexp.repeat(Regexp.literal('x'.code, 0), 0, Int.Companion.MAX_VALUE, Int.Companion.MAX_VALUE)
+        val ast =
+            Regexp.concat(
+                List.of<Regexp?>(
+                    large,
+                    Regexp.literal('y'.code, 0),
+                    Regexp.literalString("needle".codePoints().toArray(), 0)
+                ),
+                0
+            )
+        // The literal run starts at a valid offset, but consuming it would overflow the next offset.
+        val literal =
+            MultiAnchorCompiler.extractFixedOffsetLiteral(ast)
+        Assertions.assertThat(literal.minOffset).isEqualTo(Int.Companion.MAX_VALUE)
+        Assertions.assertThat(literal.maxOffset).isEqualTo(Int.Companion.MAX_VALUE)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+            .usingRecursiveComparison()
+            .isEqualTo(literal)
     }
-    // A selective inner class still gets the expansion.
-    assertThat(Pattern.compile(" ?[\\[\uFF3B]\\d+").startPlan())
-        .isInstanceOf(StartPlan.LeadingExpansion.class);
-  }
 
-  @Test
-  void leadingClassExcludingFewCodePointsGetsLeadingExpansion() {
-    // Non-DOTALL `.` excludes the five line terminators (only `\n` with UNIX_LINES), and `[^;]`
-    // excludes one character. Walking back over such a class stops at the nearest excluded code
-    // point, so the inner literal can drive the start plan.
-    for (String regex :
-        List.of(
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["^(?:prefixOne|prefixTwo)", "\\b(?:prefixOne|prefixTwo)", "(?:prefixOne|prefixTwo)$", "(?:prefixOne|prefixTwo)(capture)"
+        ]
+    )
+    fun capturesAndAssertionsPreventFactoringAcrossTheWholeTree(regex: String?) {
+        val ast = Parser.parse(regex, Pattern.toParseFlags(0))
+        Assertions.assertThat<Regexp?>(MultiAnchorCompiler.factorAlternations(ast)).isSameAs(ast)
+    }
+
+    @Test
+    fun rejectDescriptorRequiredLiteral() {
+        val ast = Parser.parse(".*(important_keyword).*", Pattern.toParseFlags(0))
+        val reject =
+            MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false)
+
+        Assertions.assertThat<RejectPlan?>(reject).isNotNull()
+        var lit: RequiredLiteral? = null
+        if (reject is RequiredLiteral) {
+            lit = reject
+        } else if (reject is RejectPlan.Composite) {
+            for (p in reject.plans) {
+                if (p is RequiredLiteral) {
+                    lit = p
+                    break
+                }
+            }
+        }
+        Assertions.assertThat<RequiredLiteral?>(lit).isNotNull()
+        Assertions.assertThat(lit!!.literal).isEqualTo("important_keyword")
+    }
+
+    @Test
+    fun rejectDescriptorEndAnchoredSuffix() {
+        val ast = Parser.parse(".*\\.json$", Pattern.toParseFlags(0))
+        val reject =
+            MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false)
+
+        Assertions.assertThat<RejectPlan?>(reject).isNotNull()
+        var s: RejectPlan.EndAnchoredSuffix? = null
+        if (reject is RejectPlan.EndAnchoredSuffix) {
+            s = reject
+        } else if (reject is RejectPlan.Composite) {
+            for (p in reject.plans) {
+                if (p is RejectPlan.EndAnchoredSuffix) {
+                    s = p
+                    break
+                }
+            }
+        }
+        Assertions.assertThat<RejectPlan.EndAnchoredSuffix?>(s).isNotNull()
+        Assertions.assertThat<SuffixInfo?>(s!!.suffix).isNotNull()
+        Assertions.assertThat(s.suffix.suffix).isEqualTo(".json")
+    }
+
+    @Test
+    fun rejectDescriptorRequiredCharClass() {
+        val ast = Parser.parse(".*\\d+.*", Pattern.toParseFlags(0))
+        val reject =
+            MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false)
+
+        Assertions.assertThat<RejectPlan?>(reject).isInstanceOf(RequiredCharClass::class.java)
+    }
+
+    @Test
+    fun rejectDescriptorDisjointRequiredLiterals() {
+        val ast = Parser.parse("(apple.*|banana.*|cherry.*)", Pattern.toParseFlags(0))
+        val reject =
+            MultiAnchorCompiler.extractRejectPlan(ast, 0, null, false)
+
+        Assertions.assertThat<RejectPlan?>(reject).isInstanceOf(RejectPlan.DisjointLiterals::class.java)
+        val d =
+            reject as RejectPlan.DisjointLiterals
+        Assertions.assertThat<String?>(d.literals).containsExactly("apple", "banana", "cherry")
+    }
+
+    @Test
+    @Tag("work-counter")
+    fun nestedConcatenationAnalysisScalesLinearly() {
+        val smaller: Regexp = nestedConcatenation(1000)
+        val larger: Regexp = nestedConcatenation(2000)
+        MultiAnchorCompiler.analyze(smaller)
+        MultiAnchorCompiler.analyze(larger)
+
+        val smallerWork: Long = analysisWork(smaller)
+        val largerWork: Long = analysisWork(larger)
+
+        Assertions.assertThat(smallerWork).isPositive()
+        Assertions.assertThat(largerWork)
+            .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
+            .isLessThan(smallerWork * 3)
+    }
+
+    @Test
+    @Tag("work-counter")
+    fun nestedAlternationAnalysisScalesLinearly() {
+        val smaller: Regexp = nestedAlternation(1000)
+        val larger: Regexp = nestedAlternation(2000)
+        MultiAnchorCompiler.analyze(smaller)
+        MultiAnchorCompiler.analyze(larger)
+
+        val smallerWork: Long = analysisWork(smaller)
+        val largerWork: Long = analysisWork(larger)
+
+        Assertions.assertThat(smallerWork).isPositive()
+        Assertions.assertThat(largerWork)
+            .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
+            .isLessThan(smallerWork * 3)
+    }
+
+    @Test
+    @Tag("work-counter")
+    fun nestedRequiredLiteralAnalysisScalesLinearly() {
+        val smaller: Regexp = nestedRequiredLiteral(8000)
+        val larger: Regexp = nestedRequiredLiteral(16000)
+        MultiAnchorCompiler.analyze(smaller)
+        MultiAnchorCompiler.analyze(larger)
+
+        val smallerWork: Long = analysisWork(smaller)
+        val largerWork: Long = analysisWork(larger)
+
+        Assertions.assertThat(smallerWork).isPositive()
+        Assertions.assertThat(largerWork)
+            .withFailMessage("smallerWork=%s largerWork=%s", smallerWork, largerWork)
+            .isLessThan(smallerWork * 3)
+    }
+
+    @Test
+    fun endRejectPlansRetainUnixLinesMode() {
+        val suffix =
+            Pattern.compile(".*needle$", Pattern.UNIX_LINES).rejectPlan()
+        val characterClass =
+            Pattern.compile(".*[0-9]$", Pattern.UNIX_LINES).rejectPlan()
+
+        Assertions.assertThat<SuffixInfo?>(endAnchoredSuffixes(suffix))
+            .singleElement()
+            .extracting<Boolean?>(SuffixInfo::unixLines)
+            .isEqualTo(true)
+        Assertions.assertThat<EndAnchoredCharClassInfo?>(endAnchoredCharacterClasses(characterClass))
+            .singleElement()
+            .extracting<Boolean?>(EndAnchoredCharClassInfo::unixLines)
+            .isEqualTo(true)
+    }
+
+    @Test
+    fun factorAlternationsWithSurroundingPrefixCoalescesLiteral() {
+        val p =
+            Pattern.compile(
+                "/(?:api/v1/checkout|api/v1/payment|api/v1/orders)/[0-9a-f]{8} status=[0-9]+"
+            )
+        Assertions.assertThat<MultiAnchorDescriptor?>(p.multiAnchor()).isNotNull()
+        Assertions.assertThat<StartPlan?>(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.Literal::class.java)
+        val literal = p.multiAnchor().startPlan() as StartPlan.Literal
+        Assertions.assertThat(literal.prefix).isEqualTo("/api/v1/")
+    }
+
+    @Test
+    fun factorAlternationsStandalonePrefixExtractsCommonPrefix() {
+        // No literal follows the alternation, so the factored prefix is the only candidate and
+        // this asserts the factoring itself rather than the outcome of a later comparison.
+        val p = Pattern.compile("(?:https://api|https://stage|https://prod)[a-z0-9.]+")
+        Assertions.assertThat<MultiAnchorDescriptor?>(p.multiAnchor()).isNotNull()
+        Assertions.assertThat<StartPlan?>(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.Literal::class.java)
+        val literal = p.multiAnchor().startPlan() as StartPlan.Literal
+        Assertions.assertThat(literal.prefix).isEqualTo("https://")
+    }
+
+    @Test
+    fun factoredPrefixLosesToAMoreSelectiveFixedOffsetLiteral() {
+        // The factored prefix is `https://`, but `.example.com/` is the rarer literal and wins.
+        // Before the prefix-length gate was removed the comparison never ran, because the gate
+        // only admitted leading prefixes of two characters or fewer.
+        val p =
+            Pattern.compile("(?:https://api|https://stage|https://prod)\\.example\\.com/[a-z0-9]+")
+        Assertions.assertThat<MultiAnchorDescriptor?>(p.multiAnchor()).isNotNull()
+        Assertions.assertThat<StartPlan?>(p.multiAnchor().startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val fixedOffset = p.multiAnchor().startPlan() as StartPlan.FixedOffset
+        Assertions.assertThat(fixedOffset.fol.literal()).isEqualTo(".example.com/")
+    }
+
+    @Test
+    fun selectedFixedOffsetLiteralPreservesStringAndUtf8FindBounds() {
+        val regex = "(?:https://api|https://stage|https://prod)\\.example\\.com/[a-z0-9]+"
+        val text = "é https://api.example.com/x! https://prod.example.com/y"
+        val pattern = Pattern.compile(regex)
+        Assertions.assertThat<StartPlan?>(pattern.multiAnchor().startPlan())
+            .isInstanceOf(StartPlan.FixedOffset::class.java)
+
+        val expected = Pattern.compile(regex).matcher(text)
+        val stringMatcher = pattern.matcher(text)
+        val utf8Matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
+        while (expected.find()) {
+            Assertions.assertThat(stringMatcher.find()).isTrue()
+            Assertions.assertThat(stringMatcher.start()).isEqualTo(expected.start())
+            Assertions.assertThat(stringMatcher.end()).isEqualTo(expected.end())
+            Assertions.assertThat(utf8Matcher.find()).isTrue()
+            Assertions.assertThat(utf8Matcher.start())
+                .isEqualTo(text.substring(0, expected.start()).toByteArray(StandardCharsets.UTF_8).size)
+            Assertions.assertThat(utf8Matcher.end())
+                .isEqualTo(text.substring(0, expected.end()).toByteArray(StandardCharsets.UTF_8).size)
+        }
+        Assertions.assertThat(stringMatcher.find()).isFalse()
+        Assertions.assertThat(utf8Matcher.find()).isFalse()
+    }
+
+    @Test
+    fun alternationFactoringIsStackSafeForDeepQuantifiers() {
+        var nested = Regexp.literal('a'.code, 0)
+        for (index in 0..100000 - 1) {
+            val op = if (index % 2 == 0) RegexpOp.QUEST else RegexpOp.PLUS
+            nested = Regexp.rawQuantifier(op, nested, 0)
+        }
+
+        val input = nested
+        Assertions.assertThatCode(ThrowingCallable { MultiAnchorCompiler.factorAlternations(input) })
+            .doesNotThrowAnyException()
+    }
+
+    @Test
+    fun homogeneousGapExtractionIsStackSafeForDeepQuantifiers() {
+        Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(deepHomogeneousGap("[ab]", 5000)) })
+            .doesNotThrowAnyException()
+        Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(deepHomogeneousGap(".", 5000)) })
+            .doesNotThrowAnyException()
+    }
+
+    @Test
+    fun poisonousSingleCharacterPrefixGatedFromLiteralStartPlan() {
+        // Single space is poisonous; should not be emitted as StartPlan.Literal
+        val spacePattern = org.safere.Pattern.compile(" [0-9]+")
+        Assertions.assertThat<StartPlan?>(spacePattern.startPlan())
+            .isNotInstanceOf(StartPlan.Literal::class.java)
+
+        // Single 'e' is high-frequency / poisonous; should not be emitted as StartPlan.Literal
+        val ePattern = org.safere.Pattern.compile("e[0-9]+")
+        Assertions.assertThat<StartPlan?>(ePattern.startPlan()).isNotInstanceOf(StartPlan.Literal::class.java)
+
+        // Single-character class matching space is unselective / poisonous
+        val spaceClassPattern = org.safere.Pattern.compile("[ ]\\d+")
+        Assertions.assertThat<StartPlan?>(spaceClassPattern.startPlan())
+            .isInstanceOfSatisfying<StartPlan.FixedOffsetClass?>(
+                StartPlan.FixedOffsetClass::class.java,
+                Consumer { plan: StartPlan.FixedOffsetClass? ->
+                    Assertions.assertThat(plan!!.leadingClass.isSelective()).isFalse()
+                    Assertions.assertThat(plan.offset).isEqualTo(1)
+                })
+        Assertions.assertThat<StringStartAccelerator?>(spaceClassPattern.stringStartAccelerator()).isNotNull()
+
+        // Multi-character prefix containing space is not poisonous (e.g. "  " or "id: ")
+        val multiSpace = org.safere.Pattern.compile("  [0-9]+")
+        Assertions.assertThat<StartPlan?>(multiSpace.startPlan()).isInstanceOf(StartPlan.Literal::class.java)
+        Assertions.assertThat((multiSpace.startPlan() as StartPlan.Literal).prefix)
+            .isEqualTo("  ")
+
+        val exactUppercase = org.safere.Pattern.compile("E[0-9]+")
+        Assertions.assertThat<StartPlan?>(exactUppercase.startPlan())
+            .isInstanceOf(StartPlan.Literal::class.java)
+        Assertions.assertThat<StringStartAccelerator?>(exactUppercase.stringStartAccelerator()).isNotNull()
+        Assertions.assertThat<Utf8StartAccelerator?>(exactUppercase.utf8StartAccelerator()).isNotNull()
+
+        val foldedCommonLetter = org.safere.Pattern.compile("(?i:E)[0-9]+")
+        Assertions.assertThat<StartPlan?>(foldedCommonLetter.startPlan())
+            .isInstanceOf(StartPlan.None::class.java)
+        Assertions.assertThat<StringStartAccelerator?>(foldedCommonLetter.stringStartAccelerator()).isNull()
+        Assertions.assertThat<Utf8StartAccelerator?>(foldedCommonLetter.utf8StartAccelerator()).isNull()
+
+        val foldedRareLetter = org.safere.Pattern.compile("(?i:Q)[0-9]+")
+        Assertions.assertThat<StartPlan?>(foldedRareLetter.startPlan())
+            .isInstanceOf(StartPlan.Literal::class.java)
+        Assertions.assertThat<StringStartAccelerator?>(foldedRareLetter.stringStartAccelerator()).isNotNull()
+        Assertions.assertThat<Utf8StartAccelerator?>(foldedRareLetter.utf8StartAccelerator()).isNotNull()
+
+        val latin1Singleton = org.safere.Pattern.compile("é+(?:ab|cd)?")
+        Assertions.assertThat<StartPlan?>(latin1Singleton.startPlan())
+            .isInstanceOf(StartPlan.CharClass::class.java)
+        Assertions.assertThat<StringStartAccelerator?>(latin1Singleton.stringStartAccelerator()).isNotNull()
+        Assertions.assertThat<Utf8StartAccelerator?>(latin1Singleton.utf8StartAccelerator()).isNotNull()
+
+        val unicodeSingleton = org.safere.Pattern.compile("Ā+(?:ab|cd)?")
+        Assertions.assertThat<StartPlan?>(unicodeSingleton.startPlan())
+            .isInstanceOf(StartPlan.CharClass::class.java)
+        Assertions.assertThat<StringStartAccelerator?>(unicodeSingleton.stringStartAccelerator()).isNotNull()
+        Assertions.assertThat<Utf8StartAccelerator?>(unicodeSingleton.utf8StartAccelerator()).isNotNull()
+    }
+
+    @Test
+    fun competitiveSelectivityPrefersFixedOffsetOverPoisonousOrWeakPrefix() {
+        // Case 1: Poisonous leading space prefix eclipsed by selective fixed-offset literal
+        val p1 = org.safere.Pattern.compile(" [0-9]{2}404_NOT_FOUND")
+        Assertions.assertThat<StartPlan?>(p1.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val fo1 =
+            p1.startPlan() as StartPlan.FixedOffset
+        Assertions.assertThat(fo1.fol.literal()).isEqualTo("404_NOT_FOUND")
+        Assertions.assertThat(fo1.fol.minOffset()).isEqualTo(3)
+
+        // Case 2: Short 2-character weak prefix eclipsed by much more selective fixed-offset literal
+        val p2 = org.safere.Pattern.compile("ab[0-9]{2}ERROR_CRITICAL_PAYLOAD")
+        Assertions.assertThat<StartPlan?>(p2.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val fo2 =
+            p2.startPlan() as StartPlan.FixedOffset
+        Assertions.assertThat(fo2.fol.literal()).isEqualTo("ERROR_CRITICAL_PAYLOAD")
+
+        // Case 3: Long selective prefix retains priority over fixed-offset literal
+        val p3 = org.safere.Pattern.compile("Content-Type:[0-9]{2}json")
+        Assertions.assertThat<StartPlan?>(p3.startPlan()).isInstanceOf(StartPlan.Literal::class.java)
+        Assertions.assertThat((p3.startPlan() as StartPlan.Literal).prefix)
+            .isEqualTo("Content-Type:")
+    }
+
+    @Test
+    fun fixedOffsetLiteralSubsumedFromRejectPlan() {
+        // Single fixed-offset literal drives startPlan; should not be duplicated in rejectPlan
+        val p1 = org.safere.Pattern.compile("[0-9]{2}404_NOT_FOUND")
+        Assertions.assertThat<StartPlan?>(p1.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val fo =
+            p1.startPlan() as StartPlan.FixedOffset
+        Assertions.assertThat(fo.fol.literal()).isEqualTo("404_NOT_FOUND")
+
+        // The required literal "404_NOT_FOUND" is subsumed and excluded from rejectPlan
+        val reqLits1: Stream<RequiredLiteral?>? =
+            rejectPlans(p1.rejectPlan())
+                .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
+                .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
+        Assertions.assertThat<RequiredLiteral?>(reqLits1)
+            .noneMatch(Predicate { l: RequiredLiteral? -> l!!.literal == "404_NOT_FOUND" })
+
+        // Multiple required literals: fixed-offset literal is excluded, but downstream required literal
+        // is preserved
+        val p2 = org.safere.Pattern.compile("[0-9]{2}404_NOT_FOUND.*EXCEPTION_LOG")
+        Assertions.assertThat<StartPlan?>(p2.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val reqLits2: Stream<RequiredLiteral?>? =
+            rejectPlans(p2.rejectPlan())
+                .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
+                .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
+        Assertions.assertThat<RequiredLiteral?>(reqLits2)
+            .anyMatch(Predicate { l: RequiredLiteral? -> l!!.literal == "EXCEPTION_LOG" })
+
+        // Multiple literals in fixed-offset prefix: all prefix literals subsumed, none leaked to
+        // rejectPlan
+        val p3 = org.safere.Pattern.compile("[0-9]{2}____[a-z]zq[a-z]")
+        Assertions.assertThat<StartPlan?>(p3.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
+        val reqLits3: Stream<RequiredLiteral?>? =
+            rejectPlans(p3.rejectPlan())
+                .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
+                .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
+        Assertions.assertThat<RequiredLiteral?>(reqLits3).isEmpty()
+
+        val variableWidthBoundary = org.safere.Pattern.compile("[0-9]{2}____(?:ALPHABET)+")
+        val boundaryLiterals: Stream<RequiredLiteral?>? =
+            rejectPlans(variableWidthBoundary.rejectPlan())
+                .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
+                .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
+        Assertions.assertThat<RequiredLiteral?>(boundaryLiterals)
+            .extracting<String?, RuntimeException?>(RequiredLiteral::literal)
+            .contains("ALPHABET")
+
+        val repeatedPrefixToken = org.safere.Pattern.compile("[0-9]{2}zz.*zzRARE")
+        val repeatedTokenLiterals: Stream<RequiredLiteral?>? =
+            rejectPlans(repeatedPrefixToken.rejectPlan())
+                .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
+                .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
+        Assertions.assertThat<RequiredLiteral?>(repeatedTokenLiterals)
+            .extracting<String?, RuntimeException?>(RequiredLiteral::literal)
+            .contains("zzRARE")
+    }
+
+    @Test
+    fun leadingExpansionKeepsItsRequiredCharClass() {
+        // `\s*# noqa` is driven by the inner literal "# ", but the required class `['#']` is still
+        // scanned for. The reject prefilter runs before the match machinery is set up, so it pays for
+        // itself even though the accelerator would go on to find the same literal. Dropping it
+        // regressed the UTF-8 arm of rebar's 04-ruff-noqa by 1.70x.
+        val p =
+            org.safere.Pattern.compile("(\\s*)((?:# [Nn][Oo][Qq][Aa])(?::\\s?(([A-Z]+[0-9]+(?:[,\\s]+)?)+))?)")
+        Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
+        val le = p.startPlan() as StartPlan.LeadingExpansion
+        Assertions.assertThat<StartPlan?>(le.innerPlan).isInstanceOf(StartPlan.Literal::class.java)
+        Assertions.assertThat<RejectPlan?>(p.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
+    }
+
+    @Test
+    fun leadingExpansionOverFixedOffsetKeepsItsRequiredCharClass() {
+        val p = org.safere.Pattern.compile("\\s+[0-9]{2}404_NOT_FOUND")
+        Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
+        val le = p.startPlan() as StartPlan.LeadingExpansion
+        Assertions.assertThat<StartPlan?>(le.innerPlan).isInstanceOf(StartPlan.FixedOffset::class.java)
+        Assertions.assertThat<RejectPlan?>(rejectPlans(p.rejectPlan()))
+            .hasAtLeastOneElementOfType(RequiredCharClass::class.java)
+    }
+
+    @Test
+    fun leadingExpansionWithDownstreamRequiredLiteralPreservesRequiredLiteral() {
+        val p = org.safere.Pattern.compile("\\s*foo.*RARE_KEYWORD")
+        Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
+        val le = p.startPlan() as StartPlan.LeadingExpansion
+        Assertions.assertThat((le.innerPlan as StartPlan.Literal).prefix).isEqualTo("foo")
+        Assertions.assertThat<RejectPlan?>(rejectPlans(p.rejectPlan()))
+            .filteredOn(Predicate { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) })
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { plan: RejectPlan? -> (plan as RequiredLiteral).literal })
+            .contains("RARE_KEYWORD")
+    }
+
+    @Test
+    fun multiLiteralFallbackClassCompetesWithRequiredCharClass() {
+        // `.*\d+.*` has a mandatory `\d` (10 runes) and no start plan of its own.
+        val ast = Parser.parse(".*\\d+.*", org.safere.Pattern.toParseFlags(0))
+        val literals = arrayOf<String?>("apple", "banana")
+
+        // A MultiLiteral with no fallback class behaves like any plan without a driving character
+        // class: the mandatory `\d` is scanned for.
+        val noFallback = StartPlan.MultiLiteral(literals, null)
+        Assertions.assertThat<RejectPlan?>(MultiAnchorCompiler.extractRejectPlan(ast, 0, noFallback, false))
+            .isInstanceOf(RequiredCharClass::class.java)
+
+        // With a fallback class narrower than `\d`, the MultiLiteral accelerator's own scan is the
+        // more selective of the two, so the redundant reject scan is dropped.
+        val narrowFallback =
+            StartPlan.MultiLiteral(literals, charClassOf("a-c"))
+        Assertions.assertThat<RejectPlan?>(MultiAnchorCompiler.extractRejectPlan(ast, 0, narrowFallback, false))
+            .isInstanceOf(RejectPlan.None::class.java)
+
+        // With a fallback class wider than `\d`, the reject scan filters better and is kept.
+        val wideFallback = StartPlan.MultiLiteral(literals, charClassOf("a-z"))
+        Assertions.assertThat<RejectPlan?>(MultiAnchorCompiler.extractRejectPlan(ast, 0, wideFallback, false))
+            .isInstanceOf(RequiredCharClass::class.java)
+    }
+
+    @Test
+    fun requiredCharClassSelectionUsesAsciiMembersAndFallsBackToRuneCount() {
+        // Mixed [\[\uFF3B] and [\]\uFF3D] are scored by their ASCII members, beating `.` and `\d`.
+        val citation = org.safere.Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]")
+        Assertions.assertThat<RejectPlan?>(citation.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
+        val citationReject =
+            citation.rejectPlan() as RequiredCharClass
+        Assertions.assertThat(citationReject.scanInfo.ranges()).containsExactly(']'.code, ']'.code, 0xFF3D, 0xFF3D)
+
+        // Purely non-ASCII classes fall back to rune count rather than claiming to be rarer than ASCII.
+        val nonAsciiPairVsSingleAscii = org.safere.Pattern.compile("[\uFF3B\uFF3D]+(?:a|aa)+")
+        Assertions.assertThat<RejectPlan?>(nonAsciiPairVsSingleAscii.rejectPlan())
+            .isInstanceOf(RequiredCharClass::class.java)
+        val singleAsciiReject =
+            nonAsciiPairVsSingleAscii.rejectPlan() as RequiredCharClass
+        Assertions.assertThat(singleAsciiReject.scanInfo.ranges()).containsExactly('a'.code, 'a'.code)
+
+        // A 1-rune non-ASCII class still beats a 10-rune ASCII digit class by rune count.
+        val singleNonAsciiVsDigits = org.safere.Pattern.compile(".*[\uFF3B]+\\d+")
+        Assertions.assertThat<RejectPlan?>(singleNonAsciiVsDigits.rejectPlan())
+            .isInstanceOf(RequiredCharClass::class.java)
+        val singleNonAsciiReject =
+            singleNonAsciiVsDigits.rejectPlan() as RequiredCharClass
+        Assertions.assertThat(singleNonAsciiReject.scanInfo.ranges()).containsExactly(0xFF3B, 0xFF3B)
+
+        // A mixed class with a large non-ASCII range is not scored by its ASCII member, so it does not
+        // claim to be rarer than a digit on text in the language it covers.
+        val digitsThenCjk = org.safere.Pattern.compile("\\d+[\\-\u4E00-\u9FFF]+")
+        Assertions.assertThat<RejectPlan?>(digitsThenCjk.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
+        val digitsReject =
+            digitsThenCjk.rejectPlan() as RequiredCharClass
+        Assertions.assertThat(digitsReject.scanInfo.ranges()).containsExactly('0'.code, '9'.code)
+    }
+
+    @Test
+    fun optionalCharBeforeCommonClassKeepsRejectPrefilter() {
+        // No start accelerator scans for a class this common, so a leading expansion would only drop
+        // the reject that makes input without the class cheap.
+        for (regex in mutableListOf<String?>("-?\\d+", "[+-]?\\d+", "#?[0-9A-Fa-f]{6}")) {
+            val pattern = org.safere.Pattern.compile(regex)
+            Assertions.assertThat<StartPlan?>(pattern.startPlan()).`as`(regex)
+                .isNotInstanceOf(StartPlan.LeadingExpansion::class.java)
+            Assertions.assertThat<RejectPlan?>(pattern.rejectPlan()).`as`(regex).isNotEqualTo(RejectPlan.None.INSTANCE)
+        }
+        // A selective inner class still gets the expansion.
+        Assertions.assertThat<StartPlan?>(org.safere.Pattern.compile(" ?[\\[\uFF3B]\\d+").startPlan())
+            .isInstanceOf(StartPlan.LeadingExpansion::class.java)
+    }
+
+    @Test
+    fun leadingClassExcludingFewCodePointsGetsLeadingExpansion() {
+        // Non-DOTALL `.` excludes the five line terminators (only `\n` with UNIX_LINES), and `[^;]`
+        // excludes one character. Walking back over such a class stops at the nearest excluded code
+        // point, so the inner literal can drive the start plan.
+        for (regex in mutableListOf<String?>(
             ".*error: \\w+",
             ".+error: \\w+",
             "[^\\n]*error: \\w+",
             "(?d).*error: \\w+",
             "(.*)(error): (\\w+)",
             ".*?error",
-            "[^;]*error")) {
-      Pattern pattern = Pattern.compile(regex);
-      assertThat(pattern.startPlan()).as(regex).isInstanceOf(StartPlan.LeadingExpansion.class);
-      StartPlan.LeadingExpansion le = (StartPlan.LeadingExpansion) pattern.startPlan();
-      assertThat(le.innerPlan()).as(regex).isInstanceOf(StartPlan.Literal.class);
+            "[^;]*error"
+        )) {
+            val pattern = org.safere.Pattern.compile(regex)
+            Assertions.assertThat<StartPlan?>(pattern.startPlan()).`as`(regex)
+                .isInstanceOf(StartPlan.LeadingExpansion::class.java)
+            val le = pattern.startPlan() as StartPlan.LeadingExpansion
+            Assertions.assertThat<StartPlan?>(le.innerPlan).`as`(regex).isInstanceOf(StartPlan.Literal::class.java)
+        }
+        // DOTALL `.` never stops before the search start, and a class excluding more than a handful
+        // of code points is still too large to walk.
+        for (regex in mutableListOf<String?>("(?s).*error", "[^\\n\\r\\u0085\\u2028\\u2029abcd]*error")) {
+            Assertions.assertThat<StartPlan?>(org.safere.Pattern.compile(regex).startPlan())
+                .`as`(regex)
+                .isNotInstanceOf(StartPlan.LeadingExpansion::class.java)
+        }
     }
-    // DOTALL `.` never stops before the search start, and a class excluding more than a handful
-    // of code points is still too large to walk.
-    for (String regex : List.of("(?s).*error", "[^\\n\\r\\u0085\\u2028\\u2029abcd]*error")) {
-      assertThat(Pattern.compile(regex).startPlan())
-          .as(regex)
-          .isNotInstanceOf(StartPlan.LeadingExpansion.class);
+
+    @Test
+    fun wideLeadingExpansionSubsumesFindRejectWhenItsLiteralImpliesThePlan() {
+        Assertions.assertThat(startSubsumesFindReject(".*error: \\w+")).isTrue()
+        Assertions.assertThat(startSubsumesFindReject("[^\\n]*\\bSCRUB:strip_line\\b[^\\n]*\\n?")).isTrue()
+        // The reject plan requires a different literal, which still filters on its own.
+        Assertions.assertThat(startSubsumesFindReject(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")).isFalse()
+        // Narrow leading classes and DOTALL keep the reject prefilter.
+        Assertions.assertThat(startSubsumesFindReject("[a-z]+error")).isFalse()
+        Assertions.assertThat(startSubsumesFindReject("(?s).*error: \\w+")).isFalse()
     }
-  }
 
-  @Test
-  void wideLeadingExpansionSubsumesFindRejectWhenItsLiteralImpliesThePlan() {
-    assertThat(startSubsumesFindReject(".*error: \\w+")).isTrue();
-    assertThat(startSubsumesFindReject("[^\\n]*\\bSCRUB:strip_line\\b[^\\n]*\\n?")).isTrue();
-    // The reject plan requires a different literal, which still filters on its own.
-    assertThat(startSubsumesFindReject(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")).isFalse();
-    // Narrow leading classes and DOTALL keep the reject prefilter.
-    assertThat(startSubsumesFindReject("[a-z]+error")).isFalse();
-    assertThat(startSubsumesFindReject("(?s).*error: \\w+")).isFalse();
-  }
+    @Test
+    fun excludedCodePointsOfWideLeadingClasses() {
+        Assertions.assertThat(excludedCodePoints(".*error")).containsExactly('\n'.code, '\r'.code, 0x85, 0x2028, 0x2029)
+        Assertions.assertThat(excludedCodePoints("(?d).*error")).containsExactly('\n'.code)
+        Assertions.assertThat(excludedCodePoints("[^;]*error")).containsExactly(';'.code)
+        Assertions.assertThat(excludedCodePoints("\\S+error"))
+            .containsExactly('\t'.code, '\n'.code, 0x0B, '\f'.code, '\r'.code, ' '.code)
+        // A narrow leading class is walked as before and has no excluded set.
+        Assertions.assertThat(excludedCodePoints("[a-z]+error")).isNull()
+    }
 
-  private static boolean startSubsumesFindReject(String regex) {
-    return Pattern.compile(regex).multiAnchor().startSubsumesFindReject();
-  }
-
-  @Test
-  void excludedCodePointsOfWideLeadingClasses() {
-    assertThat(excludedCodePoints(".*error")).containsExactly('\n', '\r', 0x85, 0x2028, 0x2029);
-    assertThat(excludedCodePoints("(?d).*error")).containsExactly('\n');
-    assertThat(excludedCodePoints("[^;]*error")).containsExactly(';');
-    assertThat(excludedCodePoints("\\S+error")).containsExactly('\t', '\n', 0x0B, '\f', '\r', ' ');
-    // A narrow leading class is walked as before and has no excluded set.
-    assertThat(excludedCodePoints("[a-z]+error")).isNull();
-  }
-
-  private static int[] excludedCodePoints(String regex) {
-    StartPlan.LeadingExpansion le = (StartPlan.LeadingExpansion) Pattern.compile(regex).startPlan();
-    return MultiAnchorCompiler.excludedCodePoints(le.leadingClass());
-  }
-
-  @Test
-  void surrogateLiteralsDoNotProduceStringFastPaths() {
-    for (String regex :
-        List.of(
+    @Test
+    fun surrogateLiteralsDoNotProduceStringFastPaths() {
+        for (regex in mutableListOf<String?>(
             "\"\\uDBFB",
             "\\uDBFB",
             "\\x{D800}\\x{DC00}",
             "\\uD800(?:\\uDC00)",
             "\\uDC00[a-z]",
             "[a-z]+\\x{D800}\\x{DC00}[a-z]+",
-            ".*a\\uDBFB$")) {
-      Pattern pattern = Pattern.compile(regex);
-      assertThat(pattern.matchDescriptor().literalMatch()).as(regex).isNull();
-      assertThat(pattern.prefix()).as(regex).isNull();
-      assertThat(pattern.anchoredPrefix()).as(regex).isNull();
-      assertThat(pattern.startPlan()).as(regex).isNotInstanceOf(StartPlan.Literal.class);
-      assertThat(pattern.rejectPlan())
-          .as(regex)
-          .isNotInstanceOfAny(RejectPlan.RequiredLiteral.class, RejectPlan.EndAnchoredSuffix.class);
+            ".*a\\uDBFB$"
+        )) {
+            val pattern = org.safere.Pattern.compile(regex)
+            Assertions.assertThat(pattern.matchDescriptor().literalMatch).`as`(regex).isNull()
+            Assertions.assertThat(pattern.prefix()).`as`(regex).isNull()
+            Assertions.assertThat(pattern.anchoredPrefix()).`as`(regex).isNull()
+            Assertions.assertThat<StartPlan?>(pattern.startPlan()).`as`(regex)
+                .isNotInstanceOf(StartPlan.Literal::class.java)
+            Assertions.assertThat<RejectPlan?>(pattern.rejectPlan())
+                .`as`(regex)
+                .isNotInstanceOfAny(RequiredLiteral::class.java, RejectPlan.EndAnchoredSuffix::class.java)
+        }
+
+        Assertions.assertThat<RejectPlan?>(
+            org.safere.Pattern.compile("(?:a\\x{D800}\\x{DC00}|za\uD800\uDC00|banana)").rejectPlan()
+        )
+            .isNotInstanceOf(RejectPlan.DisjointLiterals::class.java)
     }
 
-    assertThat(Pattern.compile("(?:a\\x{D800}\\x{DC00}|za\uD800\uDC00|banana)").rejectPlan())
-        .isNotInstanceOf(RejectPlan.DisjointLiterals.class);
-  }
+    companion object {
+        private fun boundedWidthPrefixes(): Stream<Arguments?> {
+            return Stream.of<Arguments?>(
+                Arguments.of("[ab]{2}", 2, 2, intArrayOf(2)),
+                Arguments.of("([ab]{2})", 2, 2, intArrayOf(2)),
+                Arguments.of("[ab]?", 0, 1, intArrayOf(0, 1)),
+                Arguments.of("[ab]{0,8}", 0, 8, intArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8)),
+                Arguments.of("[ab]{0,9}", 0, 9, null),
+                Arguments.of("[ab]{0,3}[cd]{0,3}", 0, 6, intArrayOf(0, 1, 2, 3, 4, 5, 6)),
+                Arguments.of("[ab]{0,4}[cd]{0,3}", 0, 7, null),
+                Arguments.of("[0-9].", 2, 2, null),
+                Arguments.of(
+                    "(?:a|bb|ccc|dddd|eeeee|ffffff|ggggggg|hhhhhhhh)",
+                    1,
+                    8,
+                    intArrayOf(1, 2, 3, 4, 5, 6, 7, 8)
+                ),
+                Arguments.of("(?:a|bb|ccc|dddd|eeeee|ffffff|ggggggg|hhhhhhhh|iiiiiiiii)", 1, 9, null),
+                Arguments.of("[éê]{2}", 2, 2, null)
+            )
+        }
 
-  /**
-   * Returns the {@link CharClassScanInfo} a leading {@code [ranges]} character class compiles to.
-   */
-  private static CharClassScanInfo charClassOf(String ranges) {
-    StartPlan plan = Pattern.compile("[" + ranges + "].*ZZQQ").startPlan();
-    assertThat(plan).isInstanceOf(StartPlan.CharClass.class);
-    return ((StartPlan.CharClass) plan).scanInfo();
-  }
+        private fun zeroWidthRepeatBounds(): Stream<Arguments?> {
+            return Stream.of<Arguments?>(
+                Arguments.of(0, 0),
+                Arguments.of(0, 2),
+                Arguments.of(2, 2),
+                Arguments.of(1, 8),
+                Arguments.of(17, 25),
+                Arguments.of(Int.Companion.MAX_VALUE - 2, Int.Companion.MAX_VALUE)
+            )
+        }
 
-  private static String deepHomogeneousGap(String atom, int depth) {
-    return "foo" + "(?:".repeat(depth) + atom + (")?" + atom).repeat(depth) + "bar";
-  }
+        private fun endAnchoredSuffixes(
+            plan: RejectPlan?
+        ): MutableList<SuffixInfo?> {
+            return rejectPlans(plan)
+                .filter { obj: RejectPlan? -> RejectPlan.EndAnchoredSuffix::class.java.isInstance(obj) }
+                .map<RejectPlan.EndAnchoredSuffix?> { obj: RejectPlan? ->
+                    RejectPlan.EndAnchoredSuffix::class.java.cast(
+                        obj
+                    )
+                }
+                .map<SuffixInfo?>(RejectPlan.EndAnchoredSuffix::suffix)
+                .toList()
+        }
+
+        private fun endAnchoredCharacterClasses(
+            plan: RejectPlan?
+        ): MutableList<EndAnchoredCharClassInfo?> {
+            return rejectPlans(plan)
+                .filter { obj: RejectPlan? -> RejectPlan.EndAnchoredCharClass::class.java.isInstance(obj) }
+                .map<RejectPlan.EndAnchoredCharClass?> { obj: RejectPlan? ->
+                    RejectPlan.EndAnchoredCharClass::class.java.cast(
+                        obj
+                    )
+                }
+                .map<EndAnchoredCharClassInfo?>(RejectPlan.EndAnchoredCharClass::charClass)
+                .toList()
+        }
+
+        private fun rejectPlans(
+            plan: RejectPlan?
+        ): Stream<RejectPlan?> {
+            if (plan is RejectPlan.Composite) {
+                return Arrays.stream<RejectPlan?>(plan.plans)
+            }
+            return Stream.of<RejectPlan?>(plan)
+        }
+
+        private fun nestedConcatenation(depth: Int): Regexp {
+            var nested = Regexp.literal('z'.code, 0)
+            for (index in 0..<depth) {
+                nested =
+                    Regexp.concat(
+                        List.of<Regexp?>(Regexp.literal('a'.code, 0), Regexp.capture(nested, 0, index + 1, null)), 0
+                    )
+            }
+            return nested
+        }
+
+        private fun nestedAlternation(depth: Int): Regexp {
+            var nested = Regexp.literal(0x100, 0)
+            for (index in 0..<depth) {
+                nested =
+                    Regexp.alternate(
+                        List.of<Regexp?>(
+                            Regexp.literal(0x102 + index * 2, 0), Regexp.capture(nested, 0, index + 1, null)
+                        ),
+                        0
+                    )
+            }
+            return nested
+        }
+
+        private fun nestedRequiredLiteral(size: Int): Regexp {
+            var nested = Regexp.literalString("q".repeat(size).codePoints().toArray(), 0)
+            for (index in 0..<size) {
+                nested =
+                    Regexp.concat(
+                        List.of<Regexp?>(
+                            Regexp.capture(nested, 0, index + 1, null),
+                            Regexp.quest(Regexp.literal('x'.code, 0), 0)
+                        ),
+                        0
+                    )
+            }
+            return nested
+        }
+
+        private fun analysisWork(regexp: Regexp?): Long {
+            return WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.analyze(regexp) })
+        }
+
+        private fun startSubsumesFindReject(regex: String?): Boolean {
+            return org.safere.Pattern.compile(regex).multiAnchor().startSubsumesFindReject()
+        }
+
+        private fun excludedCodePoints(regex: String?): IntArray? {
+            val le = org.safere.Pattern.compile(regex).startPlan() as StartPlan.LeadingExpansion
+            return MultiAnchorCompiler.excludedCodePoints(le.leadingClass)
+        }
+
+        /**
+         * Returns the [CharClassScanInfo] a leading `[ranges]` character class compiles to.
+         */
+        private fun charClassOf(ranges: String?): CharClassScanInfo? {
+            val plan = org.safere.Pattern.compile("[" + ranges + "].*ZZQQ").startPlan()
+            Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.CharClass::class.java)
+            return (plan as StartPlan.CharClass).scanInfo
+        }
+
+        private fun deepHomogeneousGap(atom: String?, depth: Int): String {
+            return "foo" + "(?:".repeat(depth) + atom + (")?" + atom).repeat(depth) + "bar"
+        }
+    }
 }

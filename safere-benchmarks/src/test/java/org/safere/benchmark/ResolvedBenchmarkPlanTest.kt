@@ -2,364 +2,425 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowingConsumer
+import org.assertj.core.api.iterable.ThrowingExtractor
+import org.junit.jupiter.api.Test
+import org.safere.benchmark.CrossEngineWorkload.TimingGroup
+import org.safere.benchmark.DeclarativeBenchmarkPlan.EngineDeclaration
+import org.safere.benchmark.DeclarativeBenchmarkPlan.MeasurementMode
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.List
+import java.util.Set
+import java.util.function.Function
+import java.util.function.Predicate
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
-import org.junit.jupiter.api.Test;
-
-class ResolvedBenchmarkPlanTest {
-
-  @Test
-  void ffmMatcherOperationsPreserveConversionTimingAndUnsupportedExclusions() throws IOException {
-    Path source =
-        Files.exists(Path.of("benchmark-data.json"))
-            ? Path.of("benchmark-data.json")
-            : Path.of("safere-benchmarks", "benchmark-data.json");
-    JsonObject plan =
-        ResolvedBenchmarkPlan.create(
-            PatternProfiles.normalizeInline(
-                JsonParser.parseString(Files.readString(source)).getAsJsonObject()));
-    for (String workload :
-        List.of(
+internal class ResolvedBenchmarkPlanTest {
+    @Test
+    @Throws(IOException::class)
+    fun ffmMatcherOperationsPreserveConversionTimingAndUnsupportedExclusions() {
+        val source =
+            if (Files.exists(Path.of("benchmark-data.json")))
+                Path.of("benchmark-data.json")
+            else
+                Path.of("safere-benchmarks", "benchmark-data.json")
+        val plan: JsonObject =
+            create(
+                PatternProfiles.Companion.normalizeInline(
+                    JsonParser.parseString(Files.readString(source)).getAsJsonObject()
+                )
+            )
+        for (workload in List.of<String?>(
             "MatcherApiBenchmark.lookingAt",
             "MatcherApiBenchmark.newMatcherRegionFind",
-            "MatcherApiBenchmark.newMatcherRegionMatches")) {
-      JsonObject row = entry(plan, workload + "@re2-ffm-string-conversion");
-      assertThat(row.get("status").getAsString()).as(workload).isEqualTo("runnable");
-      assertThat(row.get("inputRepresentation").getAsString())
-          .isEqualTo("javaStringWithTimedUtf8Conversion");
-      assertThat(row.getAsJsonObject("lifecycle").get("matcher").getAsString())
-          .isEqualTo("newPerInvocation");
-    }
-    for (String workload :
-        List.of(
+            "MatcherApiBenchmark.newMatcherRegionMatches"
+        )) {
+            val row: JsonObject = entry(plan, workload + "@re2-ffm-string-conversion")
+            Assertions.assertThat(row.get("status").getAsString()).`as`(workload).isEqualTo("runnable")
+            Assertions.assertThat(row.get("inputRepresentation").getAsString())
+                .isEqualTo("javaStringWithTimedUtf8Conversion")
+            Assertions.assertThat(row.getAsJsonObject("lifecycle").get("matcher").getAsString())
+                .isEqualTo("newPerInvocation")
+        }
+        for (workload in List.of<String?>(
             "MatcherApiBenchmark.regionFind",
             "MatcherApiBenchmark.regionTokenize.16384",
-            "MatcherApiBenchmark.resetAndFind")) {
-      JsonObject row = entry(plan, workload + "@re2-ffm-string-conversion");
-      assertThat(row.get("status").getAsString()).as(workload).isEqualTo("excluded");
-      assertThat(row.getAsJsonObject("exclusion").get("kind").getAsString())
-          .isEqualTo("unsupportedTimingBoundary");
-      assertThat(row.getAsJsonObject("exclusion").get("reason").getAsString())
-          .contains("conversion", "setup");
+            "MatcherApiBenchmark.resetAndFind"
+        )) {
+            val row: JsonObject = entry(plan, workload + "@re2-ffm-string-conversion")
+            Assertions.assertThat(row.get("status").getAsString()).`as`(workload).isEqualTo("excluded")
+            Assertions.assertThat(row.getAsJsonObject("exclusion").get("kind").getAsString())
+                .isEqualTo("unsupportedTimingBoundary")
+            Assertions.assertThat(row.getAsJsonObject("exclusion").get("reason").getAsString())
+                .contains("conversion", "setup")
+        }
+        val append: JsonObject = entry(plan, "ReplaceBenchmark.manualReplaceAll@re2-ffm-string-conversion")
+        Assertions.assertThat(append.get("status").getAsString()).isEqualTo("excluded")
+        Assertions.assertThat(append.getAsJsonObject("exclusion").get("reason").getAsString())
+            .contains("appendReplacement")
     }
-    JsonObject append = entry(plan, "ReplaceBenchmark.manualReplaceAll@re2-ffm-string-conversion");
-    assertThat(append.get("status").getAsString()).isEqualTo("excluded");
-    assertThat(append.getAsJsonObject("exclusion").get("reason").getAsString())
-        .contains("appendReplacement");
-  }
 
-  @Test
-  void nativeColdUnicodeRowsKeepExactSyntaxAndExcludeUnsupportedOptions() throws IOException {
-    Path benchmarkDirectory =
-        Files.exists(Path.of("benchmark-data.json")) ? Path.of(".") : Path.of("safere-benchmarks");
-    JsonObject data =
-        JsonParser.parseString(Files.readString(benchmarkDirectory.resolve("benchmark-data.json")))
-            .getAsJsonObject();
-    JsonObject plan = ResolvedBenchmarkPlan.create(PatternProfiles.normalizeInline(data));
-    for (String engine : List.of("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
-      List<JsonObject> rows =
-          plan.getAsJsonArray("entries").asList().stream()
-              .map(JsonObject.class::cast)
-              .filter(row -> row.get("engineId").getAsString().equals(engine))
-              .filter(
-                  row ->
-                      row.get("workloadId")
-                          .getAsString()
-                          .startsWith("UnicodeFirstCompileBenchmark.firstCompile."))
-              .toList();
-      assertThat(rows).hasSize(36);
-      assertThat(rows.stream().filter(row -> row.get("status").getAsString().equals("runnable")))
-          .hasSize(engine.equals("pcre2_jit") || engine.equals("rust_regex") ? 12 : 9)
-          .allSatisfy(
-              row -> {
-                assertThat(row.getAsJsonObject("measurement").get("mode").getAsString())
-                    .isEqualTo("singleShotColdStart");
-                assertThat(row.getAsJsonObject("measurement").get("timingUnit").getAsString())
-                    .isEqualTo("milliseconds");
-                assertThat(row.getAsJsonArray("options")).isEmpty();
-              });
-      assertThat(
-              entry(
-                      plan,
-                      "UnicodeFirstCompileBenchmark.firstCompile.letter."
-                          + "CASE_INSENSITIVE_UNICODE_CASE@"
-                          + engine)
-                  .getAsJsonObject("exclusion")
-                  .get("kind")
-                  .getAsString())
-          .isEqualTo("unsupportedOptions");
-      assertThat(
-              entry(
-                      plan,
-                      "UnicodeFirstCompileBenchmark.firstCompile.word.UNICODE_CHARACTER_CLASS@"
-                          + engine)
-                  .getAsJsonObject("exclusion")
-                  .get("kind")
-                  .getAsString())
-          .isEqualTo("unsupportedOptions");
-      assertThat(
-              entry(plan, "UnicodeCompileBenchmark.compile.letter.0@" + engine)
-                  .getAsJsonObject("exclusion")
-                  .get("kind")
-                  .getAsString())
-          .isEqualTo("unsupportedFeature");
-      if (engine.equals("re2_cpp") || engine.equals("go_regexp")) {
-        assertThat(
-                entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
+    @Test
+    @Throws(IOException::class)
+    fun nativeColdUnicodeRowsKeepExactSyntaxAndExcludeUnsupportedOptions() {
+        val benchmarkDirectory =
+            if (Files.exists(Path.of("benchmark-data.json"))) Path.of(".") else Path.of("safere-benchmarks")
+        val data =
+            JsonParser.parseString(Files.readString(benchmarkDirectory.resolve("benchmark-data.json")))
+                .getAsJsonObject()
+        val plan: JsonObject = create(PatternProfiles.Companion.normalizeInline(data))
+        for (engine in List.of<String?>("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
+            val rows =
+                plan.getAsJsonArray("entries").asList().stream()
+                    .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
+                    .filter(Predicate { row: JsonObject? -> row!!.get("engineId").getAsString() == engine })
+                    .filter(
+                        Predicate { row: JsonObject? ->
+                            row!!.get("workloadId")
+                                .getAsString()
+                                .startsWith("UnicodeFirstCompileBenchmark.firstCompile.")
+                        })
+                    .toList()
+            Assertions.assertThat<JsonObject?>(rows).hasSize(36)
+            Assertions.assertThat<JsonObject?>(
+                rows.stream().filter(Predicate { row: JsonObject? -> row!!.get("status").getAsString() == "runnable" })
+            )
+                .hasSize(if (engine == "pcre2_jit" || engine == "rust_regex") 12 else 9)
+                .allSatisfy(
+                    ThrowingConsumer { row: JsonObject? ->
+                        Assertions.assertThat(row!!.getAsJsonObject("measurement").get("mode").getAsString())
+                            .isEqualTo("singleShotColdStart")
+                        Assertions.assertThat(row.getAsJsonObject("measurement").get("timingUnit").getAsString())
+                            .isEqualTo("milliseconds")
+                        Assertions.assertThat<JsonElement?>(row.getAsJsonArray("options")).isEmpty()
+                    })
+            Assertions.assertThat(
+                entry(
+                    plan,
+                    ("UnicodeFirstCompileBenchmark.firstCompile.letter."
+                            + "CASE_INSENSITIVE_UNICODE_CASE@"
+                            + engine)
+                )
                     .getAsJsonObject("exclusion")
                     .get("kind")
-                    .getAsString())
-            .isEqualTo("unsupportedSyntax");
-      } else {
-        assertThat(
-                entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
-                    .getAsJsonArray("patterns")
-                    .get(0)
-                    .getAsString())
-            .isEqualTo("\\p{Alphabetic}+");
-      }
-    }
-    assertThat(
+                    .getAsString()
+            )
+                .isEqualTo("unsupportedOptions")
+            Assertions.assertThat(
+                entry(
+                    plan,
+                    "UnicodeFirstCompileBenchmark.firstCompile.word.UNICODE_CHARACTER_CLASS@"
+                            + engine
+                )
+                    .getAsJsonObject("exclusion")
+                    .get("kind")
+                    .getAsString()
+            )
+                .isEqualTo("unsupportedOptions")
+            Assertions.assertThat(
+                entry(plan, "UnicodeCompileBenchmark.compile.letter.0@" + engine)
+                    .getAsJsonObject("exclusion")
+                    .get("kind")
+                    .getAsString()
+            )
+                .isEqualTo("unsupportedFeature")
+            if (engine == "re2_cpp" || engine == "go_regexp") {
+                Assertions.assertThat(
+                    entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
+                        .getAsJsonObject("exclusion")
+                        .get("kind")
+                        .getAsString()
+                )
+                    .isEqualTo("unsupportedSyntax")
+            } else {
+                Assertions.assertThat(
+                    entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.alphabetic.0@" + engine)
+                        .getAsJsonArray("patterns")
+                        .get(0)
+                        .getAsString()
+                )
+                    .isEqualTo("\\p{Alphabetic}+")
+            }
+        }
+        Assertions.assertThat(
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.scriptLatin.0@re2_cpp")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString())
-        .isEqualTo("\\p{Latin}+");
-    assertThat(
+                .getAsString()
+        )
+            .isEqualTo("\\p{Latin}+")
+        Assertions.assertThat(
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.scriptLatin.0@pcre2_jit")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString())
-        .isEqualTo("\\p{sc=Latin}+");
-    assertThat(
+                .getAsString()
+        )
+            .isEqualTo("\\p{sc=Latin}+")
+        Assertions.assertThat(
             entry(plan, "UnicodeFirstCompileBenchmark.firstCompile.word.0@rust_regex")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString())
-        .isEqualTo("[A-Za-z0-9_]+");
-  }
-
-  @Test
-  void nativeUtf8CaptureBoundsRowsHaveExactProfilesAndExclusions() throws Exception {
-    Path source =
-        Files.exists(Path.of("benchmark-data.json"))
-            ? Path.of("benchmark-data.json")
-            : Path.of("safere-benchmarks", "benchmark-data.json");
-    JsonObject data =
-        PatternProfiles.normalizeInline(
-            JsonParser.parseString(Files.readString(source)).getAsJsonObject());
-    JsonObject plan = ResolvedBenchmarkPlan.create(data);
-    List<String> rows =
-        List.of(
-            "Utf8MatchingBenchmark.repeatedFind.ascii",
-            "Utf8MatchingBenchmark.repeatedFind.multibyte",
-            "Utf8MatchingBenchmark.captureBounds.numbered",
-            "Utf8MatchingBenchmark.captureBounds.named",
-            "Utf8MatchingBenchmark.captureBounds.nonparticipating",
-            "Utf8MatchingBenchmark.emptyMatchIteration");
-    for (String row : rows) {
-      assertThat(entry(plan, row + "@safere-utf8").get("status").getAsString())
-          .isEqualTo("runnable");
-      for (String engine : List.of("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
-        JsonObject runnable = entry(plan, row + "@" + engine);
-        assertThat(runnable.get("status").getAsString()).isEqualTo("runnable");
-        assertThat(runnable.getAsJsonObject("arguments").getAsJsonArray("expectedBounds"))
-            .isNotEmpty();
-        assertThat(runnable.getAsJsonObject("expected").get("type").getAsString())
-            .isEqualTo("integer");
-      }
-      JsonObject excluded = entry(plan, row + "@dotnet_nonbacktracking");
-      assertThat(excluded.get("status").getAsString()).isEqualTo("excluded");
-      assertThat(excluded.getAsJsonObject("exclusion").get("kind").getAsString())
-          .isEqualTo("unsupportedOperation");
-      for (String engine :
-          List.of("safere-string", "jdk-string", "re2j-string", "re2-ffm-string-conversion")) {
-        JsonObject stringEntry = entry(plan, row + "@" + engine);
-        assertThat(stringEntry.get("status").getAsString()).isEqualTo("excluded");
-        assertThat(stringEntry.getAsJsonObject("exclusion").get("kind").getAsString())
-            .isEqualTo("unsupportedFeature");
-      }
+                .getAsString()
+        )
+            .isEqualTo("[A-Za-z0-9_]+")
     }
-    assertThat(
+
+    @Test
+    @Throws(Exception::class)
+    fun nativeUtf8CaptureBoundsRowsHaveExactProfilesAndExclusions() {
+        val source =
+            if (Files.exists(Path.of("benchmark-data.json")))
+                Path.of("benchmark-data.json")
+            else
+                Path.of("safere-benchmarks", "benchmark-data.json")
+        val data: JsonObject =
+            PatternProfiles.Companion.normalizeInline(
+                JsonParser.parseString(Files.readString(source)).getAsJsonObject()
+            )
+        val plan: JsonObject = create(data)
+        val rows =
+            List.of<String?>(
+                "Utf8MatchingBenchmark.repeatedFind.ascii",
+                "Utf8MatchingBenchmark.repeatedFind.multibyte",
+                "Utf8MatchingBenchmark.captureBounds.numbered",
+                "Utf8MatchingBenchmark.captureBounds.named",
+                "Utf8MatchingBenchmark.captureBounds.nonparticipating",
+                "Utf8MatchingBenchmark.emptyMatchIteration"
+            )
+        for (row in rows) {
+            Assertions.assertThat(entry(plan, row + "@safere-utf8").get("status").getAsString())
+                .isEqualTo("runnable")
+            for (engine in List.of<String?>("re2_cpp", "pcre2_jit", "go_regexp", "rust_regex")) {
+                val runnable: JsonObject = entry(plan, row + "@" + engine)
+                Assertions.assertThat(runnable.get("status").getAsString()).isEqualTo("runnable")
+                Assertions.assertThat<JsonElement?>(
+                    runnable.getAsJsonObject("arguments").getAsJsonArray("expectedBounds")
+                )
+                    .isNotEmpty()
+                Assertions.assertThat(runnable.getAsJsonObject("expected").get("type").getAsString())
+                    .isEqualTo("integer")
+            }
+            val excluded: JsonObject = entry(plan, row + "@dotnet_nonbacktracking")
+            Assertions.assertThat(excluded.get("status").getAsString()).isEqualTo("excluded")
+            Assertions.assertThat(excluded.getAsJsonObject("exclusion").get("kind").getAsString())
+                .isEqualTo("unsupportedOperation")
+            for (engine in List.of<String?>(
+                "safere-string",
+                "jdk-string",
+                "re2j-string",
+                "re2-ffm-string-conversion"
+            )) {
+                val stringEntry: JsonObject = entry(plan, row + "@" + engine)
+                Assertions.assertThat(stringEntry.get("status").getAsString()).isEqualTo("excluded")
+                Assertions.assertThat(stringEntry.getAsJsonObject("exclusion").get("kind").getAsString())
+                    .isEqualTo("unsupportedFeature")
+            }
+        }
+        Assertions.assertThat(
             entry(plan, "Utf8MatchingBenchmark.captureBounds.named@re2_cpp")
                 .getAsJsonArray("patterns")
                 .get(0)
-                .getAsString())
-        .isEqualTo("(?P<key>[A-Za-z]+)=(?P<value>[^&]+)");
-  }
+                .getAsString()
+        )
+            .isEqualTo("(?P<key>[A-Za-z]+)=(?P<value>[^&]+)")
+    }
 
-  @Test
-  void materializationAccountsForCompleteSyntheticWorkloadAndEngineJoin() {
-    JsonObject plan =
-        ResolvedBenchmarkPlan.create(
-            normalizedData(),
-            List.of(
-                engine(
-                    "find-only",
-                    "java",
-                    EnumSet.of(DeclarativeBenchmarkPlan.Feature.FIND),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)),
-                engine(
-                    "find-and-replace",
-                    "alternate",
-                    EnumSet.of(
-                        DeclarativeBenchmarkPlan.Feature.FIND,
-                        DeclarativeBenchmarkPlan.Feature.REPLACE,
-                        DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT),
-                    EnumSet.of(
-                        DeclarativeBenchmarkPlan.Operation.FIND,
-                        DeclarativeBenchmarkPlan.Operation.REPLACE_ALL))));
+    @Test
+    fun materializationAccountsForCompleteSyntheticWorkloadAndEngineJoin() {
+        val plan =
+            ResolvedBenchmarkPlan.create(
+                normalizedData(),
+                List.of<ResolvedBenchmarkPlan.Engine?>(
+                    engine(
+                        "find-only",
+                        "java",
+                        EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
+                        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    ),
+                    engine(
+                        "find-and-replace",
+                        "alternate",
+                        EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(
+                            DeclarativeBenchmarkPlan.Feature.FIND,
+                            DeclarativeBenchmarkPlan.Feature.REPLACE,
+                            DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT
+                        ),
+                        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
+                            DeclarativeBenchmarkPlan.Operation.FIND,
+                            DeclarativeBenchmarkPlan.Operation.REPLACE_ALL
+                        )
+                    )
+                )
+            )
 
-    assertThat(plan.get("version").getAsInt()).isEqualTo(ResolvedBenchmarkPlan.VERSION);
-    assertThat(plan.get("workloadCount").getAsInt()).isEqualTo(2);
-    assertThat(plan.get("engineCount").getAsInt()).isEqualTo(2);
-    JsonArray entries = plan.getAsJsonArray("entries");
-    assertThat(entries).hasSize(4);
-    assertThat(
+        Assertions.assertThat(plan.get("version").getAsInt()).isEqualTo(ResolvedBenchmarkPlan.VERSION)
+        Assertions.assertThat(plan.get("workloadCount").getAsInt()).isEqualTo(2)
+        Assertions.assertThat(plan.get("engineCount").getAsInt()).isEqualTo(2)
+        val entries = plan.getAsJsonArray("entries")
+        Assertions.assertThat<JsonElement?>(entries).hasSize(4)
+        Assertions.assertThat<String?>(
+            entries!!.asList().stream()
+                .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
+                .map<String?>(Function { entry: JsonObject? -> Companion.id(entry!!) })
+        )
+            .containsExactly(
+                "Synthetic.find@find-only",
+                "Synthetic.find@find-and-replace",
+                "Synthetic.replace@find-only",
+                "Synthetic.replace@find-and-replace"
+            )
+        Assertions.assertThat<JsonObject?>(
             entries.asList().stream()
-                .map(JsonObject.class::cast)
-                .map(ResolvedBenchmarkPlanTest::id))
-        .containsExactly(
-            "Synthetic.find@find-only",
-            "Synthetic.find@find-and-replace",
-            "Synthetic.replace@find-only",
-            "Synthetic.replace@find-and-replace");
-    assertThat(
+                .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
+                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").getAsString() == "runnable" })
+        )
+            .hasSize(3)
+        Assertions.assertThat<JsonObject?>(
             entries.asList().stream()
-                .map(JsonObject.class::cast)
-                .filter(entry -> entry.get("status").getAsString().equals("runnable")))
-        .hasSize(3);
-    assertThat(
-            entries.asList().stream()
-                .map(JsonObject.class::cast)
-                .filter(entry -> entry.get("status").getAsString().equals("excluded")))
-        .singleElement()
-        .satisfies(
-            entry -> {
-              assertThat(id(entry)).isEqualTo("Synthetic.replace@find-only");
-              assertThat(entry.getAsJsonObject("exclusion").get("kind").getAsString())
-                  .isEqualTo("unsupportedOperation");
-            });
-  }
+                .map<JsonObject?>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
+                .filter(Predicate { entry: JsonObject? -> entry!!.get("status").getAsString() == "excluded" })
+        )
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { entry: JsonObject? ->
+                    Assertions.assertThat(Companion.id(entry!!)).isEqualTo("Synthetic.replace@find-only")
+                    Assertions.assertThat(entry.getAsJsonObject("exclusion").get("kind").getAsString())
+                        .isEqualTo("unsupportedOperation")
+                })
+    }
 
-  @Test
-  void runnableEntriesContainExactSelectedSyntaxAndUnchangedFallback() {
-    JsonObject plan =
-        ResolvedBenchmarkPlan.create(
-            normalizedData(),
-            List.of(
-                engine(
-                    "alternate-engine",
-                    "alternate",
-                    EnumSet.of(
-                        DeclarativeBenchmarkPlan.Feature.FIND,
-                        DeclarativeBenchmarkPlan.Feature.REPLACE,
-                        DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT),
-                    EnumSet.of(
-                        DeclarativeBenchmarkPlan.Operation.FIND,
-                        DeclarativeBenchmarkPlan.Operation.REPLACE_ALL))));
+    @Test
+    fun runnableEntriesContainExactSelectedSyntaxAndUnchangedFallback() {
+        val plan =
+            ResolvedBenchmarkPlan.create(
+                normalizedData(),
+                List.of<ResolvedBenchmarkPlan.Engine?>(
+                    engine(
+                        "alternate-engine",
+                        "alternate",
+                        EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(
+                            DeclarativeBenchmarkPlan.Feature.FIND,
+                            DeclarativeBenchmarkPlan.Feature.REPLACE,
+                            DeclarativeBenchmarkPlan.Feature.NUMBERED_REPLACEMENT
+                        ),
+                        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(
+                            DeclarativeBenchmarkPlan.Operation.FIND,
+                            DeclarativeBenchmarkPlan.Operation.REPLACE_ALL
+                        )
+                    )
+                )
+            )
 
-    JsonObject find = entry(plan, "Synthetic.find@alternate-engine");
-    JsonObject replace = entry(plan, "Synthetic.replace@alternate-engine");
-    assertThat(find.getAsJsonArray("patterns").get(0).getAsString()).isEqualTo("alternate-pattern");
-    assertThat(replace.getAsJsonArray("patterns").get(0).getAsString())
-        .isEqualTo("unchanged-pattern");
-    assertThat(replace.getAsJsonObject("arguments").get("replacement").getAsString())
-        .isEqualTo("alternate-replacement");
-  }
+        val find: JsonObject = entry(plan, "Synthetic.find@alternate-engine")
+        val replace: JsonObject = entry(plan, "Synthetic.replace@alternate-engine")
+        Assertions.assertThat(find.getAsJsonArray("patterns").get(0).getAsString()).isEqualTo("alternate-pattern")
+        Assertions.assertThat(replace.getAsJsonArray("patterns").get(0).getAsString())
+            .isEqualTo("unchanged-pattern")
+        Assertions.assertThat(replace.getAsJsonObject("arguments").get("replacement").getAsString())
+            .isEqualTo("alternate-replacement")
+    }
 
-  @Test
-  void explicitTrialExclusionsSurviveResolutionAndMaterializedConsumption() {
-    JsonObject data = normalizedData();
-    JsonObject find = data.getAsJsonArray("workloads").get(0).getAsJsonObject();
-    find.add(
-        "trialExclusions",
-        JsonParser.parseString(
-            """
+    @Test
+    fun explicitTrialExclusionsSurviveResolutionAndMaterializedConsumption() {
+        val data: JsonObject = normalizedData()
+        val find = data.getAsJsonArray("workloads").get(0).getAsJsonObject()
+        find.add(
+            "trialExclusions",
+            JsonParser.parseString(
+                """
             [{
               "engineIds": ["jdk-string"],
               "reason": "OpenJDK 26.0.2 throws StackOverflowError for this trial"
             }]
-            """));
+            
+            """.trimIndent()
+            )
+        )
 
-    JsonObject resolved =
-        ResolvedBenchmarkPlan.create(
-            data,
-            List.of(
-                engine(
-                    "safere-string",
-                    "alternate",
-                    EnumSet.of(DeclarativeBenchmarkPlan.Feature.FIND),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND)),
-                engine(
-                    "jdk-string",
-                    "alternate",
-                    EnumSet.of(DeclarativeBenchmarkPlan.Feature.FIND),
-                    EnumSet.of(DeclarativeBenchmarkPlan.Operation.FIND))));
+        val resolved =
+            ResolvedBenchmarkPlan.create(
+                data,
+                List.of<ResolvedBenchmarkPlan.Engine?>(
+                    engine(
+                        "safere-string",
+                        "alternate",
+                        EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
+                        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    ),
+                    engine(
+                        "jdk-string",
+                        "alternate",
+                        EnumSet.of<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature.FIND),
+                        EnumSet.of<DeclarativeBenchmarkPlan.Operation?>(DeclarativeBenchmarkPlan.Operation.FIND)
+                    )
+                )
+            )
 
-    JsonObject exclusion = entry(resolved, "Synthetic.find@jdk-string");
-    assertThat(exclusion.get("status").getAsString()).isEqualTo("excluded");
-    assertThat(exclusion.getAsJsonObject("exclusion").get("kind").getAsString())
-        .isEqualTo("explicitTrialExclusion");
-    assertThat(exclusion.getAsJsonObject("exclusion").get("reason").getAsString())
-        .isEqualTo("OpenJDK 26.0.2 throws StackOverflowError for this trial");
-    assertThat(entry(resolved, "Synthetic.find@safere-string").get("status").getAsString())
-        .isEqualTo("runnable");
+        val exclusion: JsonObject = entry(resolved, "Synthetic.find@jdk-string")
+        Assertions.assertThat(exclusion.get("status").getAsString()).isEqualTo("excluded")
+        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("kind").getAsString())
+            .isEqualTo("explicitTrialExclusion")
+        Assertions.assertThat(exclusion.getAsJsonObject("exclusion").get("reason").getAsString())
+            .isEqualTo("OpenJDK 26.0.2 throws StackOverflowError for this trial")
+        Assertions.assertThat(entry(resolved, "Synthetic.find@safere-string").get("status").getAsString())
+            .isEqualTo("runnable")
 
-    MaterializedExecutionPlan materialized = MaterializedExecutionPlan.parse(resolved);
-    assertThat(materialized.resolve("Synthetic.find@jdk-string").exclusion())
-        .isEqualTo(
-            new MaterializedExecutionPlan.Exclusion(
-                "explicitTrialExclusion",
-                "OpenJDK 26.0.2 throws StackOverflowError for this trial"));
-    CrossEngineBenchmarkPlan collection =
-        CrossEngineBenchmarkPlan.fromMaterialized(materialized.entriesForRunner("java"));
-    assertThat(collection.trials(CrossEngineWorkload.TimingGroup.NANOSECONDS))
-        .extracting(CrossEngineBenchmarkPlan.Trial::id)
-        .contains("Synthetic.find@safere-string")
-        .doesNotContain("Synthetic.find@jdk-string");
-    assertThat(collection.exclusions())
-        .extracting(MaterializedExecutionPlan.Entry::id)
-        .contains("Synthetic.find@jdk-string");
-  }
+        val materialized: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.parse(resolved)
+        Assertions.assertThat<MaterializedExecutionPlan.Exclusion?>(materialized.resolve("Synthetic.find@jdk-string").exclusion)
+            .isEqualTo(
+                MaterializedExecutionPlan.Exclusion(
+                    "explicitTrialExclusion",
+                    "OpenJDK 26.0.2 throws StackOverflowError for this trial"
+                )
+            )
+        val collection: CrossEngineBenchmarkPlan =
+            CrossEngineBenchmarkPlan.Companion.fromMaterialized(materialized.entriesForRunner("java"))
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(collection.trials(TimingGroup.NANOSECONDS))
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { id() })
+            .contains("Synthetic.find@safere-string")
+            .doesNotContain("Synthetic.find@jdk-string")
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(collection.exclusions())
+            .extracting<String?, RuntimeException?>(MaterializedExecutionPlan.Entry::id)
+            .contains("Synthetic.find@jdk-string")
+    }
 
-  private static ResolvedBenchmarkPlan.Engine engine(
-      String id,
-      String profile,
-      EnumSet<DeclarativeBenchmarkPlan.Feature> features,
-      EnumSet<DeclarativeBenchmarkPlan.Operation> operations) {
-    return new ResolvedBenchmarkPlan.Engine(
-        id,
-        id,
-        "java",
-        profile,
-        profile,
-        new DeclarativeBenchmarkPlan.EngineDeclaration(
-            id,
-            DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
-            features,
-            EnumSet.noneOf(DeclarativeBenchmarkPlan.Flag.class),
-            true),
-        operations,
-        EnumSet.of(DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME),
-        Set.of("0"));
-  }
+    companion object {
+        private fun engine(
+            id: String?,
+            profile: String?,
+            features: EnumSet<DeclarativeBenchmarkPlan.Feature?>?,
+            operations: EnumSet<DeclarativeBenchmarkPlan.Operation?>?
+        ): ResolvedBenchmarkPlan.Engine {
+            return ResolvedBenchmarkPlan.Engine(
+                id,
+                id,
+                "java",
+                profile,
+                profile,
+                EngineDeclaration(
+                    id,
+                    DeclarativeBenchmarkPlan.InputRepresentation.JAVA_STRING,
+                    features,
+                    EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java),
+                    true
+                ),
+                operations,
+                EnumSet.of<MeasurementMode?>(MeasurementMode.AVERAGE_TIME),
+                Set.of<String?>("0")
+            )
+        }
 
-  private static JsonObject normalizedData() {
-    return JsonParser.parseString(
-            """
+        private fun normalizedData(): JsonObject {
+            return JsonParser.parseString(
+                """
             {
               "schemaVersion": 2,
               "inputs": [{
@@ -402,19 +463,22 @@ class ResolvedBenchmarkPlanTest {
                 }]
               }
             }
-            """)
-        .getAsJsonObject();
-  }
+            
+            """.trimIndent()
+            )
+                .getAsJsonObject()
+        }
 
-  private static JsonObject entry(JsonObject plan, String id) {
-    return plan.getAsJsonArray("entries").asList().stream()
-        .map(JsonObject.class::cast)
-        .filter(entry -> id(entry).equals(id))
-        .findFirst()
-        .orElseThrow();
-  }
+        private fun entry(plan: JsonObject, id: String?): JsonObject {
+            return plan.getAsJsonArray("entries").asList().stream()
+                .map<JsonObject>(Function { obj: JsonElement? -> JsonObject::class.java.cast(obj) })
+                .filter(Predicate { entry: JsonObject? -> Companion.id(entry!!) == id })
+                .findFirst()
+                .orElseThrow()
+        }
 
-  private static String id(JsonObject entry) {
-    return entry.get("id").getAsString();
-  }
+        private fun id(entry: JsonObject): String? {
+            return entry.get("id").getAsString()
+        }
+    }
 }

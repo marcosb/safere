@@ -2,94 +2,90 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.Arrays;
-import java.util.Random;
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
+import java.util.*
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-class IntArrayListTest {
+internal class IntArrayListTest {
+    @Test
+    fun basicOperations() {
+        val list = IntArrayList(4)
+        Assertions.assertThat(list.isEmpty()).isTrue()
+        Assertions.assertThat(list.size()).isEqualTo(0)
 
-  @Test
-  void basicOperations() {
-    IntArrayList list = new IntArrayList(4);
-    assertThat(list.isEmpty()).isTrue();
-    assertThat(list.size()).isEqualTo(0);
+        list.add(10)
+        list.add(20)
+        list.add(30)
 
-    list.add(10);
-    list.add(20);
-    list.add(30);
+        Assertions.assertThat(list.isEmpty()).isFalse()
+        Assertions.assertThat(list.size()).isEqualTo(3)
+        Assertions.assertThat(list.get(0)).isEqualTo(10)
+        Assertions.assertThat(list.get(1)).isEqualTo(20)
+        Assertions.assertThat(list.get(2)).isEqualTo(30)
 
-    assertThat(list.isEmpty()).isFalse();
-    assertThat(list.size()).isEqualTo(3);
-    assertThat(list.get(0)).isEqualTo(10);
-    assertThat(list.get(1)).isEqualTo(20);
-    assertThat(list.get(2)).isEqualTo(30);
+        Assertions.assertThat(list.removeLast()).isEqualTo(30)
+        Assertions.assertThat(list.size()).isEqualTo(2)
 
-    assertThat(list.removeLast()).isEqualTo(30);
-    assertThat(list.size()).isEqualTo(2);
+        Assertions.assertThat(list.toArray()).containsExactly(10, 20)
 
-    assertThat(list.toArray()).containsExactly(10, 20);
-
-    list.clear();
-    assertThat(list.isEmpty()).isTrue();
-    assertThat(list.size()).isEqualTo(0);
-    assertThat(list.toArray()).isEmpty();
-  }
-
-  @Test
-  void growthBeyondCapacity() {
-    IntArrayList list = new IntArrayList(2);
-    for (int i = 0; i < 100; i++) {
-      list.add(i);
+        list.clear()
+        Assertions.assertThat(list.isEmpty()).isTrue()
+        Assertions.assertThat(list.size()).isEqualTo(0)
+        Assertions.assertThat(list.toArray()).isEmpty()
     }
-    assertThat(list.size()).isEqualTo(100);
-    for (int i = 0; i < 100; i++) {
-      assertThat(list.get(i)).isEqualTo(i);
-    }
-  }
 
-  @Test
-  void toSortedUniqueArray() {
-    IntArrayList list = new IntArrayList();
-    assertThat(list.toSortedUniqueArray()).isEmpty();
-
-    list.add(42);
-    assertThat(list.toSortedUniqueArray()).containsExactly(42);
-
-    list.clear();
-    list.add(5);
-    list.add(1);
-    list.add(3);
-    list.add(1);
-    list.add(5);
-    list.add(2);
-    list.add(3);
-    list.add(5);
-
-    assertThat(list.toSortedUniqueArray()).containsExactly(1, 2, 3, 5);
-  }
-
-  @Test
-  void toSortedUniqueArrayMatchesSortForAnyRunStructure() {
-    Random random = new Random(0x5AFE_292L);
-    for (int trial = 0; trial < 500; trial++) {
-      IntArrayList list = new IntArrayList();
-      int runs = 1 + random.nextInt(trial % 2 == 0 ? 8 : 200);
-      for (int run = 0; run < runs; run++) {
-        int value = random.nextInt(1000);
-        int length = random.nextInt(40);
-        for (int i = 0; i < length; i++) {
-          list.add(value);
-          value += random.nextInt(3);
+    @Test
+    fun growthBeyondCapacity() {
+        val list = IntArrayList(2)
+        for (i in 0..99) {
+            list.add(i)
         }
-      }
-      int[] expected = Arrays.stream(list.toArray()).sorted().distinct().toArray();
-      assertThat(list.toSortedUniqueArray()).containsExactly(expected);
+        Assertions.assertThat(list.size()).isEqualTo(100)
+        for (i in 0..99) {
+            Assertions.assertThat(list.get(i)).isEqualTo(i)
+        }
     }
-  }
+
+    @Test
+    fun toSortedUniqueArray() {
+        val list = IntArrayList()
+        Assertions.assertThat(list.toSortedUniqueArray()).isEmpty()
+
+        list.add(42)
+        Assertions.assertThat(list.toSortedUniqueArray()).containsExactly(42)
+
+        list.clear()
+        list.add(5)
+        list.add(1)
+        list.add(3)
+        list.add(1)
+        list.add(5)
+        list.add(2)
+        list.add(3)
+        list.add(5)
+
+        Assertions.assertThat(list.toSortedUniqueArray()).containsExactly(1, 2, 3, 5)
+    }
+
+    @Test
+    fun toSortedUniqueArrayMatchesSortForAnyRunStructure() {
+        val random = Random(0x5AFE292L)
+        for (trial in 0..499) {
+            val list = IntArrayList()
+            val runs = 1 + random.nextInt(if (trial % 2 == 0) 8 else 200)
+            for (run in 0..<runs) {
+                var value = random.nextInt(1000)
+                val length = random.nextInt(40)
+                for (i in 0..<length) {
+                    list.add(value)
+                    value += random.nextInt(3)
+                }
+            }
+            val expected = Arrays.stream(list.toArray()).sorted().distinct().toArray()
+            Assertions.assertThat(list.toSortedUniqueArray()).containsExactly(*expected)
+        }
+    }
 }

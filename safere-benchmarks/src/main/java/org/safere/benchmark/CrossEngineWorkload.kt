@@ -2,62 +2,61 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import java.util.*
+import java.util.List
 
-import java.util.List;
-import java.util.Objects;
-
-/** One regex workload executed consistently across multiple engines. */
-// groups is internal benchmark metadata; callers do not use record value semantics.
-@SuppressWarnings("ArrayRecordComponent")
-record CrossEngineWorkload(
-    String id,
-    BenchmarkOperation operation,
-    List<String> patterns,
-    List<String> inputKeys,
-    int[] groups,
-    String replacement,
-    Object expected,
-    int limit,
-    DeclarativeBenchmarkPlan.MatcherLifecycle lifecycle,
-    String flagSet,
-    int seed,
-    int count,
-    String mode,
-    DeclarativeBenchmarkPlan.Measurement measurement,
-    TimingGroup timingGroup) {
-
-  CrossEngineWorkload {
-    Objects.requireNonNull(id);
-    Objects.requireNonNull(operation);
-    patterns = List.copyOf(patterns);
-    inputKeys = List.copyOf(inputKeys);
-    groups = groups.clone();
-    Objects.requireNonNull(lifecycle);
-    Objects.requireNonNull(measurement);
-    Objects.requireNonNull(timingGroup);
-    if (id.isBlank()) {
-      throw new IllegalArgumentException("Cross-engine workload ID must not be blank");
+/** One regex workload executed consistently across multiple engines.  */ // groups is internal benchmark metadata; callers do not use record value semantics.
+internal class CrossEngineWorkload(
+    val id: String?,
+    val operation: BenchmarkOperation?,
+    patterns: MutableList<String?>?,
+    inputKeys: MutableList<String?>?,
+    groups: IntArray?,
+    val replacement: String?,
+    val expected: Any?,
+    val limit: Int,
+    val lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle?,
+    val flagSet: String?,
+    val seed: Int,
+    val count: Int,
+    val mode: String?,
+    val measurement: DeclarativeBenchmarkPlan.Measurement?,
+    val timingGroup: TimingGroup?
+) {
+    /** Benchmark schedule group, kept separate so historical output units remain stable.  */
+    internal enum class TimingGroup {
+        NANOSECONDS,
+        MICROSECONDS,
+        MILLISECONDS
     }
-    if (id.indexOf('@') >= 0) {
-      throw new IllegalArgumentException("Cross-engine workload ID must not contain '@': " + id);
-    }
-    if (patterns.isEmpty()) {
-      throw new IllegalArgumentException(id + " requires at least one pattern");
-    }
-    if (inputKeys.isEmpty()
-        && operation != BenchmarkOperation.COMPILE
-        && operation != BenchmarkOperation.FIND_ROTATING_UTF16
-        && operation != BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16) {
-      throw new IllegalArgumentException(id + " requires at least one input");
-    }
-  }
 
-  /** Benchmark schedule group, kept separate so historical output units remain stable. */
-  enum TimingGroup {
-    NANOSECONDS,
-    MICROSECONDS,
-    MILLISECONDS
-  }
+    val patterns: MutableList<String?>?
+    val inputKeys: MutableList<String?>?
+    val groups: IntArray?
+
+    init {
+        var patterns = patterns
+        var inputKeys = inputKeys
+        var groups = groups
+        Objects.requireNonNull<String?>(id)
+        Objects.requireNonNull<BenchmarkOperation?>(operation)
+        patterns = List.copyOf<String?>(patterns)
+        inputKeys = List.copyOf<String?>(inputKeys)
+        groups = groups!!.clone()
+        Objects.requireNonNull<DeclarativeBenchmarkPlan.MatcherLifecycle?>(lifecycle)
+        Objects.requireNonNull<DeclarativeBenchmarkPlan.Measurement?>(measurement)
+        Objects.requireNonNull<TimingGroup?>(timingGroup)
+        require(!id!!.isBlank()) { "Cross-engine workload ID must not be blank" }
+        require(id.indexOf('@') < 0) { "Cross-engine workload ID must not contain '@': " + id }
+        require(!patterns.isEmpty()) { id + " requires at least one pattern" }
+        require(
+            !(inputKeys.isEmpty()
+                    && operation != BenchmarkOperation.COMPILE && operation != BenchmarkOperation.FIND_ROTATING_UTF16 && operation != BenchmarkOperation.COMPILE_AND_FIND_ROTATING_UTF16)
+        ) { id + " requires at least one input" }
+        this.patterns = patterns
+        this.inputKeys = inputKeys
+        this.groups = groups
+    }
 }

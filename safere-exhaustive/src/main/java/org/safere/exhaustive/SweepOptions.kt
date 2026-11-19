@@ -2,104 +2,98 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.exhaustive
 
-package org.safere.exhaustive;
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.math.min
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-/** Shared command-line options for exhaustive sweep tools. */
-record SweepOptions(
-    long rangeStartInclusive,
-    long rangeEndExclusive,
-    Path outputDir,
-    long progressInterval,
-    int threads,
-    Path replayFile,
-    String jsonlFileName) {
-  Path jsonlPath() {
-    return outputDir.resolve(jsonlFileName);
-  }
-
-  long totalChecks(long totalCases) {
-    long end = Math.min(rangeEndExclusive, totalCases);
-    if (rangeStartInclusive >= end) {
-      return 0;
+/** Shared command-line options for exhaustive sweep tools.  */
+@JvmRecord
+internal data class SweepOptions(
+    @JvmField val rangeStartInclusive: Long,
+    @JvmField val rangeEndExclusive: Long,
+    @JvmField val outputDir: Path?,
+    @JvmField val progressInterval: Long,
+    @JvmField val threads: Int,
+    @JvmField val replayFile: Path?,
+    val jsonlFileName: String?
+) {
+    fun jsonlPath(): Path {
+        return outputDir!!.resolve(jsonlFileName)
     }
-    return end - rangeStartInclusive;
-  }
 
-  void printStartup(String sweepName) {
-    System.out.println("sweep=" + sweepName);
-    System.out.println("mode=" + (replayFile == null ? "sweep" : "replay"));
-    System.out.println("range=" + rangeDescription());
-    System.out.println("outputDir=" + outputDir);
-    System.out.println("progressInterval=" + progressInterval);
-    System.out.println("threads=" + threads);
-    System.out.println("replayFile=" + (replayFile == null ? "" : replayFile));
-    if (replayFile != null) {
-      System.out.println("jsonl=" + jsonlPath());
-    }
-  }
-
-  static SweepOptions parse(
-      String[] args, Path defaultOutputDir, String jsonlFileName, long defaultProgressInterval) {
-    long rangeStartInclusive = 0;
-    long rangeEndExclusive = Long.MAX_VALUE;
-    Path outputDir = defaultOutputDir;
-    long progressInterval = defaultProgressInterval;
-    int threads = Runtime.getRuntime().availableProcessors();
-    Path replayFile = null;
-    for (String arg : args) {
-      if (arg.startsWith("--range=")) {
-        String value = arg.substring("--range=".length());
-        int colon = value.indexOf(':');
-        if (colon < 0) {
-          throw new IllegalArgumentException("--range must use start:end syntax");
+    fun totalChecks(totalCases: Long): Long {
+        val end = min(rangeEndExclusive, totalCases)
+        if (rangeStartInclusive >= end) {
+            return 0
         }
-        String start = value.substring(0, colon);
-        String end = value.substring(colon + 1);
-        rangeStartInclusive = start.isEmpty() ? 0 : Long.parseLong(start);
-        rangeEndExclusive = end.isEmpty() ? Long.MAX_VALUE : Long.parseLong(end);
-      } else if (arg.startsWith("--output-dir=")) {
-        outputDir = Path.of(arg.substring("--output-dir=".length()));
-      } else if (arg.startsWith("--progress-interval=")) {
-        progressInterval = Long.parseLong(arg.substring("--progress-interval=".length()));
-      } else if (arg.startsWith("--threads=")) {
-        threads = Integer.parseInt(arg.substring("--threads=".length()));
-      } else if (arg.startsWith("--replay-file=")) {
-        replayFile = Path.of(arg.substring("--replay-file=".length()));
-      } else {
-        throw new IllegalArgumentException("unknown argument: " + arg);
-      }
+        return end - rangeStartInclusive
     }
-    if (rangeStartInclusive < 0 || rangeEndExclusive < 0) {
-      throw new IllegalArgumentException("--range bounds must be non-negative");
-    }
-    if (rangeEndExclusive < rangeStartInclusive) {
-      throw new IllegalArgumentException("--range end must be greater than or equal to start");
-    }
-    if (progressInterval < 1) {
-      throw new IllegalArgumentException("--progress-interval must be at least 1");
-    }
-    if (threads < 1) {
-      throw new IllegalArgumentException("--threads must be at least 1");
-    }
-    if (replayFile != null && !Files.isRegularFile(replayFile)) {
-      throw new IllegalArgumentException("--replay-file must be a regular file");
-    }
-    return new SweepOptions(
-        rangeStartInclusive,
-        rangeEndExclusive,
-        outputDir,
-        progressInterval,
-        threads,
-        replayFile,
-        jsonlFileName);
-  }
 
-  private String rangeDescription() {
-    String end = rangeEndExclusive == Long.MAX_VALUE ? "" : Long.toString(rangeEndExclusive);
-    return rangeStartInclusive + ":" + end;
-  }
+    fun printStartup(sweepName: String?) {
+        println("sweep=" + sweepName)
+        println("mode=" + (if (replayFile == null) "sweep" else "replay"))
+        println("range=" + rangeDescription())
+        println("outputDir=" + outputDir)
+        println("progressInterval=" + progressInterval)
+        println("threads=" + threads)
+        println("replayFile=" + (if (replayFile == null) "" else replayFile))
+        if (replayFile != null) {
+            println("jsonl=" + jsonlPath())
+        }
+    }
+
+    private fun rangeDescription(): String {
+        val end = if (rangeEndExclusive == Long.Companion.MAX_VALUE) "" else rangeEndExclusive.toString()
+        return rangeStartInclusive.toString() + ":" + end
+    }
+
+    companion object {
+        fun parse(
+            args: Array<String>, defaultOutputDir: Path?, jsonlFileName: String?, defaultProgressInterval: Long
+        ): SweepOptions {
+            var rangeStartInclusive: Long = 0
+            var rangeEndExclusive = Long.Companion.MAX_VALUE
+            var outputDir = defaultOutputDir
+            var progressInterval = defaultProgressInterval
+            var threads = Runtime.getRuntime().availableProcessors()
+            var replayFile: Path? = null
+            for (arg in args) {
+                if (arg.startsWith("--range=")) {
+                    val value = arg.substring("--range=".length)
+                    val colon = value.indexOf(':')
+                    require(colon >= 0) { "--range must use start:end syntax" }
+                    val start = value.substring(0, colon)
+                    val end = value.substring(colon + 1)
+                    rangeStartInclusive = if (start.isEmpty()) 0 else start.toLong()
+                    rangeEndExclusive = if (end.isEmpty()) Long.Companion.MAX_VALUE else end.toLong()
+                } else if (arg.startsWith("--output-dir=")) {
+                    outputDir = Path.of(arg.substring("--output-dir=".length))
+                } else if (arg.startsWith("--progress-interval=")) {
+                    progressInterval = arg.substring("--progress-interval=".length).toLong()
+                } else if (arg.startsWith("--threads=")) {
+                    threads = arg.substring("--threads=".length).toInt()
+                } else if (arg.startsWith("--replay-file=")) {
+                    replayFile = Path.of(arg.substring("--replay-file=".length))
+                } else {
+                    throw IllegalArgumentException("unknown argument: " + arg)
+                }
+            }
+            require(!(rangeStartInclusive < 0 || rangeEndExclusive < 0)) { "--range bounds must be non-negative" }
+            require(rangeEndExclusive >= rangeStartInclusive) { "--range end must be greater than or equal to start" }
+            require(progressInterval >= 1) { "--progress-interval must be at least 1" }
+            require(threads >= 1) { "--threads must be at least 1" }
+            require(!(replayFile != null && !Files.isRegularFile(replayFile))) { "--replay-file must be a regular file" }
+            return SweepOptions(
+                rangeStartInclusive,
+                rangeEndExclusive,
+                outputDir,
+                progressInterval,
+                threads,
+                replayFile,
+                jsonlFileName
+            )
+        }
+    }
 }

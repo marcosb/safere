@@ -2,29 +2,28 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
 
 @DisabledForCrosscheck("implementation test uses package-private Teddy and Vector provider APIs")
-class TeddyModelTest {
+internal class TeddyModelTest {
+    @Test
+    fun compilationFollowsVectorProviderAvailability() {
+        val model = TeddyModel.compileForSelectedProvider(arrayOf<String>("INFO", "WARN"))
 
-  @Test
-  void compilationFollowsVectorProviderAvailability() {
-    TeddyModel model = TeddyModel.compileForSelectedProvider(new String[] {"INFO", "WARN"});
-
-    if (!VectorScanProviders.vectorProviderAvailable()) {
-      assertThat(model).isNull();
-    } else {
-      assertThat(model).isNotNull();
-      assertThat(VectorScanProviders.providerFor(ScanKind.CLASS, 64)).isNull();
-      assertThat(VectorScanProviders.providerFor(ScanKind.TEDDY, 64)).isNull();
-      assertThat(VectorScanProviders.providerFor(ScanKind.TEDDY, 256)).isNull();
-      assertThat(VectorScanProviders.providerFor(ScanKind.CLASS, 1024)).isNotNull();
-      assertThat(VectorScanProviders.providerFor(ScanKind.TEDDY, 1024)).isNotNull();
+        if (!VectorScanProviders.vectorProviderAvailable()) {
+            Assertions.assertThat<TeddyModel?>(model).isNull()
+        } else {
+            Assertions.assertThat<TeddyModel?>(model).isNotNull()
+            Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(ScanKind.CLASS, 64)).isNull()
+            Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(ScanKind.TEDDY, 64)).isNull()
+            Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(ScanKind.TEDDY, 256)).isNull()
+            Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(ScanKind.CLASS, 1024))
+                .isNotNull()
+            Assertions.assertThat<VectorScanProvider?>(VectorScanProviders.providerFor(ScanKind.TEDDY, 1024))
+                .isNotNull()
+        }
     }
-  }
 }

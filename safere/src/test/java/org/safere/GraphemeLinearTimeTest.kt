@@ -2,207 +2,220 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.util.function.Consumer
+import kotlin.arrayOf
+import kotlin.booleanArrayOf
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.function.Consumer;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-
-/** Linear-time regression tests for grapheme cluster matching. */
+/** Linear-time regression tests for grapheme cluster matching.  */
 @DisabledForCrosscheck("java.util.regex is not the SafeRE linear-time engine")
 @Tag("work-counter")
-class GraphemeLinearTimeTest {
-  @Test
-  @DisplayName("repeated find() over grapheme clusters reuses per-input context")
-  void repeatedFindOverGraphemeClustersReusesPerInputContext() {
-    Pattern pattern = Pattern.compile("\\X");
+internal class GraphemeLinearTimeTest {
+    @Test
+    @DisplayName("repeated find() over grapheme clusters reuses per-input context")
+    fun repeatedFindOverGraphemeClustersReusesPerInputContext() {
+        val pattern = Pattern.compile("\\X")
 
-    assertFourXInputStaysNearLinear(
-        "repeated find() over grapheme clusters",
-        "a".repeat(20_000),
-        "a".repeat(80_000),
-        text -> {
-          Matcher matcher = pattern.matcher(text);
-          int count = 0;
-          while (matcher.find()) {
-            count++;
-          }
-          assertThat(count).isEqualTo(text.length());
-        });
-  }
-
-  @Test
-  @DisplayName("JDK-compatible low-surrogate search positions stay near-linear")
-  void lowSurrogateSearchPositionsStayNearLinear() {
-    Pattern pattern = Pattern.compile(".*\\b{g}z");
-
-    assertFourXInputStaysNearLinear(
-        "low-surrogate search-position miss",
-        "\uDC00".repeat(20_000),
-        "\uDC00".repeat(80_000),
-        text -> assertThat(pattern.matcher(text).find()).isFalse());
-  }
-
-  @Test
-  @DisplayName("regional-indicator grapheme boundary misses stay near-linear")
-  void regionalIndicatorBoundaryMissesStayNearLinear() {
-    Pattern pattern = Pattern.compile("\\b{g}z");
-
-    assertFourXInputStaysNearLinear(
-        "regional-indicator boundary miss",
-        "\uD83C\uDDE6".repeat(20_000),
-        "\uD83C\uDDE6".repeat(80_000),
-        text -> assertThat(pattern.matcher(text).find()).isFalse());
-  }
-
-  @Test
-  @DisplayName("failed unanchored \\X suffix misses stay near-linear")
-  void failedUnanchoredGraphemeSuffixMissesStayNearLinear() {
-    Pattern pattern = Pattern.compile("\\Xz");
-
-    assertFourXInputStaysNearLinear(
-        "failed unanchored \\X suffix miss",
-        "a" + "\u0301".repeat(20_000),
-        "a" + "\u0301".repeat(80_000),
-        text -> assertThat(pattern.matcher(text).find()).isFalse());
-    assertFourXInputStaysNearLinear(
-        "failed unanchored regional-indicator \\X suffix miss",
-        "\uD83C\uDDE6".repeat(20_000),
-        "\uD83C\uDDE6".repeat(80_000),
-        text -> assertThat(pattern.matcher(text).find()).isFalse());
-  }
-
-  @Test
-  void mixedRuleInteractionsAndExplicitBoundariesStayLinear() {
-    String unit =
-        String.join(
-            "",
-            "\u0600",
-            "👩\u0300\u200D👩",
-            "\u0915\u094D\u200D\u0915",
-            "🇦🇧",
-            "\u1100\u1160\u11A8",
-            "\r",
-            "\n");
-    for (String regex : new String[] {"\\X", "(?s).\\b{g}", "\\b{g}\\X\\b{g}"}) {
-      Pattern pattern = Pattern.compile(regex);
-      for (boolean utf8 : new boolean[] {false, true}) {
         assertFourXInputStaysNearLinear(
-            "mixed Unicode rules " + regex + ", UTF-8=" + utf8,
-            unit.repeat(500),
-            unit.repeat(2_000),
-            text -> {
-              if (utf8) {
-                Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(text.getBytes(UTF_8)));
+            "repeated find() over grapheme clusters",
+            "a".repeat(20000),
+            "a".repeat(80000),
+            Consumer { text: String ->
+                val matcher = pattern.matcher(text)
+                var count = 0
                 while (matcher.find()) {
-                  assertThat(matcher.end()).isGreaterThan(matcher.start());
+                    count++
                 }
-              } else {
-                Matcher matcher = pattern.matcher(text);
-                while (matcher.find()) {
-                  assertThat(matcher.end()).isGreaterThan(matcher.start());
-                }
-              }
-            });
-      }
+                Assertions.assertThat(count).isEqualTo(text.length)
+            })
     }
-  }
 
-  @Test
-  void cachedContextQueriesWithChangingVisibleStartsStayLinear() {
-    for (String unit : new String[] {"🇦", "\u094D", "\u0300"}) {
-      assertFourXInputStaysNearLinear(
-          "cached context for " + unit,
-          unit.repeat(2_000),
-          unit.repeat(8_000),
-          middle -> {
-            String text = "👩\u0915" + middle + "\u200D\u0915";
-            for (InputScanner scanner :
-                new InputScanner[] {
-                  new StringInputScanner(text), new Utf8InputScanner(text.getBytes(UTF_8))
-                }) {
-              GraphemeSupport.Context context = GraphemeSupport.Context.create(scanner, true);
-              int pos = InputScanner.position(scanner.decodeBackward(scanner.length()));
-              // Each query changes the clipping threshold, but the caches are built once.
-              for (int start = 0;
-                  start < pos;
-                  start = InputScanner.position(scanner.decodeForward(start))) {
-                context.hasEvenRegionalIndicatorsBefore(pos, start);
-                context.hasExtendedPictographicBefore(pos, start);
-                context.hasIndicConjunctLinkerBefore(pos, start);
-                context.hasIndicConjunctSequenceBefore(pos, start);
-              }
+    @Test
+    @DisplayName("JDK-compatible low-surrogate search positions stay near-linear")
+    fun lowSurrogateSearchPositionsStayNearLinear() {
+        val pattern = Pattern.compile(".*\\b{g}z")
+
+        assertFourXInputStaysNearLinear(
+            "low-surrogate search-position miss",
+            "\uDC00".repeat(20000),
+            "\uDC00".repeat(80000),
+            Consumer { text: String -> Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+    }
+
+    @Test
+    @DisplayName("regional-indicator grapheme boundary misses stay near-linear")
+    fun regionalIndicatorBoundaryMissesStayNearLinear() {
+        val pattern = Pattern.compile("\\b{g}z")
+
+        assertFourXInputStaysNearLinear(
+            "regional-indicator boundary miss",
+            "\uD83C\uDDE6".repeat(20000),
+            "\uD83C\uDDE6".repeat(80000),
+            Consumer { text: String -> Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+    }
+
+    @Test
+    @DisplayName("failed unanchored \\X suffix misses stay near-linear")
+    fun failedUnanchoredGraphemeSuffixMissesStayNearLinear() {
+        val pattern = Pattern.compile("\\Xz")
+
+        assertFourXInputStaysNearLinear(
+            "failed unanchored \\X suffix miss",
+            "a" + "\u0301".repeat(20000),
+            "a" + "\u0301".repeat(80000),
+            Consumer { text: String -> Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+        assertFourXInputStaysNearLinear(
+            "failed unanchored regional-indicator \\X suffix miss",
+            "\uD83C\uDDE6".repeat(20000),
+            "\uD83C\uDDE6".repeat(80000),
+            Consumer { text: String -> Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+    }
+
+    @Test
+    fun mixedRuleInteractionsAndExplicitBoundariesStayLinear() {
+        val unit =
+            String.join(
+                "",
+                "\u0600",
+                "👩\u0300\u200D👩",
+                "\u0915\u094D\u200D\u0915",
+                "🇦🇧",
+                "\u1100\u1160\u11A8",
+                "\r",
+                "\n"
+            )
+        for (regex in arrayOf<kotlin.String>("\\X", "(?s).\\b{g}", "\\b{g}\\X\\b{g}")) {
+            val pattern = Pattern.compile(regex)
+            for (utf8 in booleanArrayOf(false, true)) {
+                assertFourXInputStaysNearLinear(
+                    "mixed Unicode rules " + regex + ", UTF-8=" + utf8,
+                    unit.repeat(500),
+                    unit.repeat(2000),
+                    Consumer { text: kotlin.String ->
+                        if (utf8) {
+                            val matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
+                            while (matcher.find()) {
+                                Assertions.assertThat(matcher.end()).isGreaterThan(matcher.start())
+                            }
+                        } else {
+                            val matcher = pattern.matcher(text)
+                            while (matcher.find()) {
+                                Assertions.assertThat(matcher.end()).isGreaterThan(matcher.start())
+                            }
+                        }
+                    })
             }
-          });
+        }
     }
-  }
 
-  @Test
-  void immediateOpaqueGraphemeMatchDoesNotScanTheWholeRegion() {
-    Pattern pattern = Pattern.compile("\\X");
-    String small = "a".repeat(256);
-    String large = "a".repeat(65_536);
-    for (boolean find : new boolean[] {false, true}) {
-      Consumer<String> match =
-          input -> {
-            Matcher matcher = pattern.matcher(input).region(1, input.length());
-            assertThat(find ? matcher.find() : matcher.lookingAt()).isTrue();
-            assertThat(matcher.start()).isEqualTo(1);
-            assertThat(matcher.end()).isEqualTo(2);
-          };
-      long smallWork = WorkCounter.countForTesting(() -> match.accept(small));
-      long largeWork = WorkCounter.countForTesting(() -> match.accept(large));
-      assertThat(smallWork).isPositive();
-      assertThat(largeWork)
-          .as("first match must not copy or scan the full region")
-          .isLessThanOrEqualTo(smallWork * 2);
+    @Test
+    fun cachedContextQueriesWithChangingVisibleStartsStayLinear() {
+        for (unit in arrayOf<kotlin.String>("🇦", "\u094D", "\u0300")) {
+            assertFourXInputStaysNearLinear(
+                "cached context for " + unit,
+                unit.repeat(2000),
+                unit.repeat(8000),
+                Consumer { middle: kotlin.String ->
+                    val text = "👩\u0915" + middle + "\u200D\u0915"
+                    for (scanner in arrayOf<InputScanner>(
+                        StringInputScanner(text), Utf8InputScanner(
+                            text.toByteArray(
+                                StandardCharsets.UTF_8
+                            )
+                        )
+                    )) {
+                        val context = GraphemeSupport.Context.create(scanner, true)
+                        val pos = InputScanner.position(scanner.decodeBackward(scanner.length()))
+                        // Each query changes the clipping threshold, but the caches are built once.
+                        var start = 0
+                        while (start < pos
+                        ) {
+                            context.hasEvenRegionalIndicatorsBefore(pos, start)
+                            context.hasExtendedPictographicBefore(pos, start)
+                            context.hasIndicConjunctLinkerBefore(pos, start)
+                            context.hasIndicConjunctSequenceBefore(pos, start)
+                            start = InputScanner.position(scanner.decodeForward(start))
+                        }
+                    }
+                })
+        }
     }
-  }
 
-  @Test
-  void opaqueFindSequencesReuseTheirRegionAndGraphemeContext() {
-    for (String regex : new String[] {"\\X", "\\b{g}\\X\\b{g}", "\\X(?m:$)?"}) {
-      Pattern pattern = Pattern.compile(regex);
-      for (boolean anchoring : new boolean[] {true, false}) {
-        assertFourXInputStaysNearLinear(
-            "opaque repeated find: " + regex + " anchoring=" + anchoring,
-            "\uD83C\uDDE6\uD83C\uDDE7".repeat(500),
-            "\uD83C\uDDE6\uD83C\uDDE7".repeat(2_000),
-            middle -> {
-              Matcher matcher =
-                  pattern
-                      .matcher("x" + middle + "y")
-                      .region(1, middle.length() + 1)
-                      .useAnchoringBounds(anchoring);
-              int matches = 0;
-              while (matcher.find()) {
-                assertThat(matcher.start()).isGreaterThanOrEqualTo(1);
-                assertThat(matcher.end()).isLessThanOrEqualTo(middle.length() + 1);
-                matches++;
-              }
-              assertThat(matches).isPositive();
-            });
-      }
+    @Test
+    fun immediateOpaqueGraphemeMatchDoesNotScanTheWholeRegion() {
+        val pattern = Pattern.compile("\\X")
+        val small = "a".repeat(256)
+        val large = "a".repeat(65536)
+        for (find in booleanArrayOf(false, true)) {
+            val match =
+                Consumer { input: kotlin.String? ->
+                    val matcher = pattern.matcher(input).region(1, input!!.length)
+                    Assertions.assertThat(if (find) matcher.find() else matcher.lookingAt()).isTrue()
+                    Assertions.assertThat(matcher.start()).isEqualTo(1)
+                    Assertions.assertThat(matcher.end()).isEqualTo(2)
+                }
+            val smallWork = WorkCounter.countForTesting(Runnable { match.accept(small) })
+            val largeWork = WorkCounter.countForTesting(Runnable { match.accept(large) })
+            Assertions.assertThat(smallWork).isPositive()
+            Assertions.assertThat(largeWork)
+                .`as`("first match must not copy or scan the full region")
+                .isLessThanOrEqualTo(smallWork * 2)
+        }
     }
-  }
 
-  private static void assertFourXInputStaysNearLinear(
-      String scenario, String smallerInput, String largerInput, Consumer<String> task) {
-    task.accept(smallerInput);
-    task.accept(largerInput);
-    long smallerWork = WorkCounter.countForTesting(() -> task.accept(smallerInput));
-    long largerWork = WorkCounter.countForTesting(() -> task.accept(largerInput));
+    @Test
+    fun opaqueFindSequencesReuseTheirRegionAndGraphemeContext() {
+        for (regex in arrayOf<kotlin.String>("\\X", "\\b{g}\\X\\b{g}", "\\X(?m:$)?")) {
+            val pattern = Pattern.compile(regex)
+            for (anchoring in booleanArrayOf(true, false)) {
+                assertFourXInputStaysNearLinear(
+                    "opaque repeated find: " + regex + " anchoring=" + anchoring,
+                    "\uD83C\uDDE6\uD83C\uDDE7".repeat(500),
+                    "\uD83C\uDDE6\uD83C\uDDE7".repeat(2000),
+                    Consumer { middle: kotlin.String ->
+                        val matcher =
+                            pattern
+                                .matcher("x" + middle + "y")
+                                .region(1, middle.length + 1)
+                                .useAnchoringBounds(anchoring)
+                        var matches = 0
+                        while (matcher.find()) {
+                            Assertions.assertThat(matcher.start()).isGreaterThanOrEqualTo(1)
+                            Assertions.assertThat(matcher.end()).isLessThanOrEqualTo(middle.length + 1)
+                            matches++
+                        }
+                        Assertions.assertThat(matches).isPositive()
+                    })
+            }
+        }
+    }
 
-    assertThat(smallerWork).as("%s: smaller input should use grapheme work", scenario).isPositive();
-    assertThat(largerWork)
-        .as(
-            "%s: 4x input should stay near-linear, smallerWork=%d largerWork=%d",
-            scenario, smallerWork, largerWork)
-        .isLessThan(smallerWork * 5);
-  }
+    companion object {
+        private fun assertFourXInputStaysNearLinear(
+            scenario: kotlin.String?,
+            smallerInput: kotlin.String?,
+            largerInput: kotlin.String?,
+            task: Consumer<kotlin.String>
+        ) {
+            task.accept(smallerInput!!)
+            task.accept(largerInput!!)
+            val smallerWork = WorkCounter.countForTesting(Runnable { task.accept(smallerInput) })
+            val largerWork = WorkCounter.countForTesting(Runnable { task.accept(largerInput) })
+
+            Assertions.assertThat(smallerWork).`as`("%s: smaller input should use grapheme work", scenario).isPositive()
+            Assertions.assertThat(largerWork)
+                .`as`(
+                    "%s: 4x input should stay near-linear, smallerWork=%d largerWork=%d",
+                    scenario, smallerWork, largerWork
+                )
+                .isLessThan(smallerWork * 5)
+        }
+    }
 }

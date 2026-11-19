@@ -2,135 +2,131 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import org.safere.benchmark.DeclarativeBenchmarkPlan.ExpandedWorkload
+import org.safere.benchmark.DeclarativeBenchmarkPlan.MeasurementMode
+import java.util.*
+import java.util.List
+import java.util.function.Function
+import java.util.function.Predicate
+import java.util.stream.Collectors
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
+/** Resolves data-declared workloads that use specialized measurement machinery.  */
+internal class SpecializedBenchmarkPlan private constructor(
+    trials: MutableMap<String?, Trial?>?,
+    exclusions: MutableList<MaterializedExecutionPlan.Entry?>
+) {
+    private val trials: MutableMap<String?, Trial>
+    private val exclusions: MutableList<MaterializedExecutionPlan.Entry?>
 
-/** Resolves data-declared workloads that use specialized measurement machinery. */
-final class SpecializedBenchmarkPlan {
-  private final Map<String, Trial> trials;
-  private final List<MaterializedExecutionPlan.Entry> exclusions;
-
-  private SpecializedBenchmarkPlan(
-      Map<String, Trial> trials, List<MaterializedExecutionPlan.Entry> exclusions) {
-    this.trials = Collections.unmodifiableMap(new LinkedHashMap<>(trials));
-    this.exclusions = List.copyOf(exclusions);
-  }
-
-  static SpecializedBenchmarkPlan load() {
-    Map<String, Trial> trials = new LinkedHashMap<>();
-    List<MaterializedExecutionPlan.Entry> exclusions = new ArrayList<>();
-    for (MaterializedExecutionPlan.Entry entry :
-        MaterializedExecutionPlan.load().entriesForRunner("java")) {
-      if (!isSpecialized(entry.operation(), entry.measurement())) {
-        continue;
-      }
-      if (!entry.runnable()) {
-        exclusions.add(entry);
-        continue;
-      }
-      Trial converted = new Trial(entry.workload(), RegexEngineVariant.fromId(entry.engineId()));
-      if (trials.put(converted.id(), converted) != null) {
-        throw new IllegalArgumentException("Duplicate specialized trial ID: " + converted.id());
-      }
+    init {
+        this.trials = Collections.unmodifiableMap<String?, Trial?>(LinkedHashMap<String?, Trial?>(trials))
+        this.exclusions = List.copyOf<MaterializedExecutionPlan.Entry?>(exclusions)
     }
-    return new SpecializedBenchmarkPlan(trials, exclusions);
-  }
 
-  private static boolean isSpecialized(
-      DeclarativeBenchmarkPlan.Operation operation,
-      DeclarativeBenchmarkPlan.Measurement measurement) {
-    return switch (operation) {
-          case PATTERN_SET_MATCHES,
-              UTF8_CAPTURE_BOUNDS,
-              UTF8_DECODE_FIND,
-              UTF8_REPLACEMENT,
-              FIND_IN_WINDOW,
-              MATCHER_CONSTRUCTION,
-              ANALYZE_PATTERN,
-              CACHED_ANALYSIS,
-              COMPILE_AND_ANALYZE,
-              DIAGNOSTICS_FIND ->
-              true;
-          default -> false;
+    fun resolve(id: String?): Trial {
+        val trial: Trial = trials.get(id)!!
+        requireNotNull(trial) { "Unknown specialized benchmark trial: " + id }
+        return trial
+    }
+
+    fun patternSetTrials(): MutableList<Trial?> {
+        return trials.values().stream()
+            .filter(
+                Predicate { trial: Trial? ->
+                    (trial!!.workload!!.operation
+                            == DeclarativeBenchmarkPlan.Operation.PATTERN_SET_MATCHES)
+                })
+            .toList()
+    }
+
+    fun averageTimeTrials(): MutableList<Trial?> {
+        return trials.values().stream()
+            .filter(
+                Predicate { trial: Trial? ->
+                    (trial!!.workload!!.measurement.mode
+                            == MeasurementMode.AVERAGE_TIME)
+                })
+            .toList()
+    }
+
+    fun retainedMemoryTrials(): MutableList<Trial?> {
+        return trials.values().stream()
+            .filter(
+                Predicate { trial: Trial? ->
+                    (trial!!.workload!!.measurement.mode
+                            == MeasurementMode.RETAINED_MEMORY)
+                })
+            .toList()
+    }
+
+    fun exclusions(): MutableList<MaterializedExecutionPlan.Entry?> {
+        return exclusions
+    }
+
+    @JvmRecord
+    internal data class Trial(val workload: ExpandedWorkload?, val variant: RegexEngineVariant?) {
+        fun id(): String {
+            return workload!!.id + "@" + variant!!.id()
         }
-        || measurement.mode() == DeclarativeBenchmarkPlan.MeasurementMode.RETAINED_MEMORY
-        || measurement.mode() == DeclarativeBenchmarkPlan.MeasurementMode.SUBPROCESS_MEMORY;
-  }
 
-  Trial resolve(String id) {
-    Trial trial = trials.get(id);
-    if (trial == null) {
-      throw new IllegalArgumentException("Unknown specialized benchmark trial: " + id);
-    }
-    return trial;
-  }
-
-  List<Trial> patternSetTrials() {
-    return trials.values().stream()
-        .filter(
-            trial ->
-                trial.workload().operation()
-                    == DeclarativeBenchmarkPlan.Operation.PATTERN_SET_MATCHES)
-        .toList();
-  }
-
-  List<Trial> averageTimeTrials() {
-    return trials.values().stream()
-        .filter(
-            trial ->
-                trial.workload().measurement().mode()
-                    == DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME)
-        .toList();
-  }
-
-  List<Trial> retainedMemoryTrials() {
-    return trials.values().stream()
-        .filter(
-            trial ->
-                trial.workload().measurement().mode()
-                    == DeclarativeBenchmarkPlan.MeasurementMode.RETAINED_MEMORY)
-        .toList();
-  }
-
-  List<MaterializedExecutionPlan.Entry> exclusions() {
-    return exclusions;
-  }
-
-  public static void main(String[] args) {
-    if (args.length != 1) {
-      throw new IllegalArgumentException(
-          "Usage: SpecializedBenchmarkPlan <average-time|pattern-set|retained-memory>");
-    }
-    SpecializedBenchmarkPlan plan = load();
-    List<Trial> selected =
-        switch (args[0]) {
-          case "average-time" -> plan.averageTimeTrials();
-          case "pattern-set" -> plan.patternSetTrials();
-          case "retained-memory" -> plan.retainedMemoryTrials();
-          default -> throw new IllegalArgumentException("Unknown specialized mode: " + args[0]);
-        };
-    if (selected.isEmpty()) {
-      throw new IllegalStateException("No specialized trials for " + args[0]);
-    }
-    System.out.println(selected.stream().map(Trial::id).collect(Collectors.joining(",")));
-  }
-
-  record Trial(DeclarativeBenchmarkPlan.ExpandedWorkload workload, RegexEngineVariant variant) {
-    Trial {
-      Objects.requireNonNull(workload);
-      Objects.requireNonNull(variant);
+        init {
+            Objects.requireNonNull<ExpandedWorkload?>(workload)
+            Objects.requireNonNull<RegexEngineVariant?>(variant)
+        }
     }
 
-    String id() {
-      return workload.id() + "@" + variant.id();
+    companion object {
+        fun load(): SpecializedBenchmarkPlan {
+            val trials: MutableMap<String?, Trial?> = LinkedHashMap<String?, Trial?>()
+            val exclusions: MutableList<MaterializedExecutionPlan.Entry?> =
+                ArrayList<MaterializedExecutionPlan.Entry?>()
+            for (entry in MaterializedExecutionPlan.Companion.load().entriesForRunner("java")) {
+                if (!isSpecialized(entry.operation, entry.measurement)) {
+                    continue
+                }
+                if (!entry.runnable()) {
+                    exclusions.add(entry)
+                    continue
+                }
+                val converted = Trial(entry.workload, RegexEngineVariant.Companion.fromId(entry.engineId))
+                require(
+                    trials.put(
+                        converted.id(),
+                        converted
+                    ) == null
+                ) { "Duplicate specialized trial ID: " + converted.id() }
+            }
+            return SpecializedBenchmarkPlan(trials, exclusions)
+        }
+
+        private fun isSpecialized(
+            operation: DeclarativeBenchmarkPlan.Operation,
+            measurement: DeclarativeBenchmarkPlan.Measurement
+        ): Boolean {
+            return when (operation) {
+                DeclarativeBenchmarkPlan.Operation.PATTERN_SET_MATCHES, DeclarativeBenchmarkPlan.Operation.UTF8_CAPTURE_BOUNDS, DeclarativeBenchmarkPlan.Operation.UTF8_DECODE_FIND, DeclarativeBenchmarkPlan.Operation.UTF8_REPLACEMENT, DeclarativeBenchmarkPlan.Operation.FIND_IN_WINDOW, DeclarativeBenchmarkPlan.Operation.MATCHER_CONSTRUCTION, DeclarativeBenchmarkPlan.Operation.ANALYZE_PATTERN, DeclarativeBenchmarkPlan.Operation.CACHED_ANALYSIS, DeclarativeBenchmarkPlan.Operation.COMPILE_AND_ANALYZE, DeclarativeBenchmarkPlan.Operation.DIAGNOSTICS_FIND -> true
+                else -> false
+            }
+                    || measurement.mode == MeasurementMode.RETAINED_MEMORY || measurement.mode == MeasurementMode.SUBPROCESS_MEMORY
+        }
+
+        @JvmStatic
+        fun main(args: Array<String>) {
+            require(args.length == 1) { "Usage: SpecializedBenchmarkPlan <average-time|pattern-set|retained-memory>" }
+            val plan: SpecializedBenchmarkPlan = load()
+            val selected =
+                when (args[0]) {
+                    "average-time" -> plan.averageTimeTrials()
+                    "pattern-set" -> plan.patternSetTrials()
+                    "retained-memory" -> plan.retainedMemoryTrials()
+                    else -> throw IllegalArgumentException("Unknown specialized mode: " + args[0])
+                }
+            check(!selected.isEmpty()) { "No specialized trials for " + args[0] }
+            System.out.println(
+                selected.stream().map<String?>(Function { obj: Trial? -> obj!!.id() }).collect(Collectors.joining(","))
+            )
+        }
     }
-  }
 }

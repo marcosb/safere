@@ -2,129 +2,127 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import org.openjdk.jmh.infra.Blackhole
+import org.safere.benchmark.CrossEngineWorkload.TimingGroup
+import org.safere.benchmark.RegexEngineVariant.CompiledRegex
+import java.lang.AutoCloseable
+import java.util.List
 
-import java.util.ArrayList;
-import java.util.List;
-import org.openjdk.jmh.infra.Blackhole;
-
-/** Prepared execution state for one supported cross-engine benchmark trial. */
-final class CrossEngineTrialRunner implements AutoCloseable {
-
-  private final List<RegexEngineVariant.CompiledRegex> patterns;
-  private final BenchmarkOperation.BenchmarkTask task;
-
-  private CrossEngineTrialRunner(
-      List<RegexEngineVariant.CompiledRegex> patterns, BenchmarkOperation.BenchmarkTask task) {
-    this.patterns = patterns;
-    this.task = task;
-  }
-
-  static CrossEngineTrialRunner prepare(
-      String trialId, CrossEngineWorkload.TimingGroup expectedTimingGroup) {
-    BenchmarkData data = BenchmarkData.get();
-    CrossEngineBenchmarkPlan.Trial trial = CrossEngineBenchmarkPlan.load().resolve(trialId);
-    return prepare(data, trial, expectedTimingGroup, true);
-  }
-
-  static CrossEngineTrialRunner prepareColdStart(
-      String trialId, CrossEngineWorkload.TimingGroup expectedTimingGroup) {
-    BenchmarkData data = BenchmarkData.get();
-    CrossEngineBenchmarkPlan.Trial trial = CrossEngineBenchmarkPlan.load().resolve(trialId);
-    return prepareColdStart(data, trial, expectedTimingGroup);
-  }
-
-  static CrossEngineTrialRunner prepareColdStart(
-      BenchmarkData data,
-      CrossEngineBenchmarkPlan.Trial trial,
-      CrossEngineWorkload.TimingGroup expectedTimingGroup) {
-    if (trial.workload().operation() != BenchmarkOperation.COMPILE) {
-      throw new IllegalArgumentException(
-          trial.id() + " cold-start execution requires the compile operation");
-    }
-    return prepare(data, trial, expectedTimingGroup, false);
-  }
-
-  private static CrossEngineTrialRunner prepare(
-      BenchmarkData data,
-      CrossEngineBenchmarkPlan.Trial trial,
-      CrossEngineWorkload.TimingGroup expectedTimingGroup,
-      boolean validateBeforeMeasurement) {
-    trial.variant().validateScanProvider();
-    String trialId = trial.id();
-    CrossEngineWorkload workload = trial.workload();
-    if (workload.timingGroup() != expectedTimingGroup) {
-      throw new IllegalArgumentException(
-          trialId + " belongs to " + workload.timingGroup() + ", not " + expectedTimingGroup);
+/** Prepared execution state for one supported cross-engine benchmark trial.  */
+internal class CrossEngineTrialRunner private constructor(
+    private val patterns: MutableList<CompiledRegex>,
+    private val task: BenchmarkOperation.BenchmarkTask
+) : AutoCloseable {
+    fun run(blackhole: Blackhole?) {
+        task.run(blackhole)
     }
 
-    List<RegexEngineVariant.RegexInput> inputs =
-        trial.variant().prepareInputs(data, workload.inputKeys());
-    RegexEngineVariant.PreparedReplacement replacement =
-        trial.variant().prepareReplacement(workload.replacement());
-    List<String> patternSources = workload.patterns();
-    List<RegexEngineVariant.CompiledRegex> patterns = new ArrayList<>();
-    try {
-      if (workload.operation() != BenchmarkOperation.COMPILE) {
-        for (String pattern : patternSources) {
-          patterns.add(trial.variant().compile(pattern));
+    override fun close() {
+        close(patterns)
+    }
+
+    companion object {
+        fun prepare(
+            trialId: String, expectedTimingGroup: TimingGroup?
+        ): CrossEngineTrialRunner {
+            val data: BenchmarkData = BenchmarkData.Companion.get()
+            val trial: CrossEngineBenchmarkPlan.Trial = CrossEngineBenchmarkPlan.Companion.load().resolve(trialId)
+            return prepare(data, trial, expectedTimingGroup, true)
         }
-      }
-      if (validateBeforeMeasurement) {
-        Object actual =
-            workload
-                .operation()
-                .execute(
-                    trial.variant(),
-                    patternSources,
-                    patterns,
-                    inputs,
-                    workload.groups(),
-                    replacement,
-                    workload.limit(),
-                    workload.lifecycle(),
-                    workload.flagSet(),
-                    workload.seed(),
-                    workload.count(),
-                    workload.mode());
-        trial.validate(actual);
-      }
-      BenchmarkOperation.BenchmarkTask task =
-          workload
-              .operation()
-              .bind(
-                  trial.variant(),
-                  patternSources,
-                  patterns,
-                  inputs,
-                  workload.groups(),
-                  replacement,
-                  workload.limit(),
-                  workload.lifecycle(),
-                  workload.flagSet(),
-                  workload.seed(),
-                  workload.count(),
-                  workload.mode());
-      return new CrossEngineTrialRunner(List.copyOf(patterns), task);
-    } catch (RuntimeException | Error exception) {
-      close(patterns);
-      throw exception;
+
+        fun prepareColdStart(
+            trialId: String, expectedTimingGroup: TimingGroup?
+        ): CrossEngineTrialRunner {
+            val data: BenchmarkData = BenchmarkData.Companion.get()
+            val trial: CrossEngineBenchmarkPlan.Trial = CrossEngineBenchmarkPlan.Companion.load().resolve(trialId)
+            return prepareColdStart(data, trial, expectedTimingGroup)
+        }
+
+        fun prepareColdStart(
+            data: BenchmarkData?,
+            trial: CrossEngineBenchmarkPlan.Trial,
+            expectedTimingGroup: TimingGroup?
+        ): CrossEngineTrialRunner {
+            require(trial.workload.operation == BenchmarkOperation.COMPILE) { trial.id() + " cold-start execution requires the compile operation" }
+            return prepare(data, trial, expectedTimingGroup, false)
+        }
+
+        private fun prepare(
+            data: BenchmarkData?,
+            trial: CrossEngineBenchmarkPlan.Trial,
+            expectedTimingGroup: TimingGroup?,
+            validateBeforeMeasurement: Boolean
+        ): CrossEngineTrialRunner {
+            trial.variant.validateScanProvider()
+            val trialId = trial.id()
+            val workload = trial.workload
+            require(workload.timingGroup == expectedTimingGroup) { trialId + " belongs to " + workload.timingGroup + ", not " + expectedTimingGroup }
+
+            val inputs =
+                trial.variant.prepareInputs(data, workload.inputKeys)
+            val replacement =
+                trial.variant.prepareReplacement(workload.replacement)
+            val patternSources = workload.patterns
+            val patterns: MutableList<CompiledRegex> = ArrayList<CompiledRegex>()
+            try {
+                if (workload.operation != BenchmarkOperation.COMPILE) {
+                    for (pattern in patternSources) {
+                        patterns.add(trial.variant.compile(pattern))
+                    }
+                }
+                if (validateBeforeMeasurement) {
+                    val actual =
+                        workload
+                            .operation
+                            .execute(
+                                trial.variant,
+                                patternSources,
+                                patterns,
+                                inputs,
+                                workload.groups,
+                                replacement,
+                                workload.limit,
+                                workload.lifecycle,
+                                workload.flagSet,
+                                workload.seed,
+                                workload.count,
+                                workload.mode
+                            )
+                    trial.validate(actual)
+                }
+                val task =
+                    workload
+                        .operation
+                        .bind(
+                            trial.variant,
+                            patternSources,
+                            patterns,
+                            inputs,
+                            workload.groups,
+                            replacement,
+                            workload.limit,
+                            workload.lifecycle,
+                            workload.flagSet,
+                            workload.seed,
+                            workload.count,
+                            workload.mode
+                        )
+                return CrossEngineTrialRunner(List.copyOf<CompiledRegex?>(patterns), task)
+            } catch (exception: RuntimeException) {
+                close(patterns)
+                throw exception
+            } catch (exception: Error) {
+                close(patterns)
+                throw exception
+            }
+        }
+
+        private fun close(patterns: MutableList<CompiledRegex>) {
+            for (pattern in patterns.reversed()) {
+                pattern.close()
+            }
+        }
     }
-  }
-
-  void run(Blackhole blackhole) {
-    task.run(blackhole);
-  }
-
-  @Override
-  public void close() {
-    close(patterns);
-  }
-
-  private static void close(List<RegexEngineVariant.CompiledRegex> patterns) {
-    for (RegexEngineVariant.CompiledRegex pattern : patterns.reversed()) {
-      pattern.close();
-    }
-  }
 }

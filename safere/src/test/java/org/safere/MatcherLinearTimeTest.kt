@@ -2,179 +2,186 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.function.ThrowingSupplier
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.nio.charset.StandardCharsets
+import java.time.Duration
+import java.util.function.Consumer
+import java.util.function.IntConsumer
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-
-import java.time.Duration;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-/** Work-bound regression tests for matcher operations. */
+/** Work-bound regression tests for matcher operations.  */
 @DisabledForCrosscheck("work accounting is a SafeRE linear-time implementation check")
 @Tag("work-counter")
-class MatcherLinearTimeTest {
-  private static final Duration SCENARIO_TIMEOUT = Duration.ofSeconds(30);
+internal class MatcherLinearTimeTest {
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun captureHistoryDoesNotAddWorkBeforeDfaRejection(utf8: Boolean) {
+        for (repeats in intArrayOf(3, 12, 24)) {
+            val pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
+            val rejected = "error:[x] code:500 ".repeat(repeats) + "C"
+            val bytes = Utf8Input.validated(rejected.toByteArray(StandardCharsets.UTF_8))
+            val reject =
+                Runnable {
+                    Assertions.assertThat(if (utf8) pattern.matcher(bytes).find() else pattern.matcher(rejected).find())
+                        .isFalse()
+                }
+            val cold = WorkCounter.countWithForwardDfaStepsForTesting(reject)
+            val primer = pattern.matcher("error:[C] code:500")
+            Assertions.assertThat(primer.find()).isTrue()
+            Assertions.assertThat(primer.group(1)).isEqualTo("error:[")
+            val warm = WorkCounter.countWithForwardDfaStepsForTesting(reject)
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void captureHistoryDoesNotAddWorkBeforeDfaRejection(boolean utf8) {
-    for (int repeats : new int[] {3, 12, 24}) {
-      Pattern pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)");
-      String rejected = "error:[x] code:500 ".repeat(repeats) + "C";
-      Utf8Input bytes = Utf8Input.validated(rejected.getBytes(UTF_8));
-      Runnable reject =
-          () ->
-              assertThat(utf8 ? pattern.matcher(bytes).find() : pattern.matcher(rejected).find())
-                  .isFalse();
-      long cold = WorkCounter.countWithForwardDfaStepsForTesting(reject);
-      Matcher primer = pattern.matcher("error:[C] code:500");
-      assertThat(primer.find()).isTrue();
-      assertThat(primer.group(1)).isEqualTo("error:[");
-      long warm = WorkCounter.countWithForwardDfaStepsForTesting(reject);
-
-      assertThat(cold).isPositive();
-      assertThat(warm)
-          .as("capture history must not add rejecting work, repeats=%s", repeats)
-          .isLessThanOrEqualTo(cold);
+            Assertions.assertThat(cold).isPositive()
+            Assertions.assertThat(warm)
+                .`as`("capture history must not add rejecting work, repeats=%s", repeats)
+                .isLessThanOrEqualTo(cold)
+        }
     }
-  }
 
-  @Test
-  @DisplayName("group access stays linear for ambiguous repeated captures")
-  void groupAccessWithAmbiguousRepeatedCapturesStaysLinear() {
-    Pattern pattern = Pattern.compile("((a|aa))*");
+    @Test
+    @DisplayName("group access stays linear for ambiguous repeated captures")
+    fun groupAccessWithAmbiguousRepeatedCapturesStaysLinear() {
+        val pattern = Pattern.compile("((a|aa))*")
 
-    assertNoWorkCliff(
-        "matches()+group(1)",
-        "a".repeat(100),
-        "a".repeat(5_000),
-        input -> {
-          Matcher matcher = pattern.matcher(input);
-          assertThat(matcher.matches()).isTrue();
-          assertThat(matcher.group(1)).isEqualTo("a");
-          assertThat(matcher.group(2)).isEqualTo("a");
-        });
-  }
-
-  @Test
-  @DisplayName("matches() stays linear for repeated dot-star with bounded captures")
-  void matchesWithRepeatedDotStarAndBoundedCaptures() {
-    Pattern pattern = repeatedDotStarSqlUnionPattern();
-
-    assertNoWorkCliff(
-        "matches()",
-        blocks -> {
-          String input = repeatedDotStarSqlUnionInput(blocks);
-          Matcher matcher = pattern.matcher(input);
-          assertThat(matcher.matches()).isTrue();
-          assertThat(matcher.group()).isEqualTo(input);
-          assertThat(matcher.start()).isEqualTo(0);
-          assertThat(matcher.end()).isEqualTo(input.length());
-        });
-  }
-
-  @Test
-  @DisplayName("lookingAt() stays linear for repeated dot-star with bounded captures")
-  void lookingAtWithRepeatedDotStarAndBoundedCaptures() {
-    Pattern pattern = repeatedDotStarSqlUnionPattern();
-
-    assertNoWorkCliff(
-        "lookingAt()",
-        blocks -> {
-          Matcher matcher = pattern.matcher(repeatedDotStarSqlUnionInput(blocks));
-          assertThat(matcher.lookingAt()).isTrue();
-          assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA");
-        });
-  }
-
-  @Test
-  @DisplayName("group access after find() stays linear for repeated dot-star captures")
-  void findGroupWithRepeatedDotStarAndBoundedCaptures() {
-    Pattern pattern = repeatedDotStarSqlUnionPattern();
-
-    assertNoWorkCliff(
-        "find()+group(1)",
-        blocks -> {
-          Matcher matcher = pattern.matcher(repeatedDotStarSqlUnionInput(blocks));
-          assertThat(matcher.find()).isTrue();
-          assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA");
-        });
-  }
-
-  @Test
-  @DisplayName("region find stays linear for repeated dot-star captures")
-  void regionFindWithRepeatedDotStarAndBoundedCaptures() {
-    Pattern pattern = repeatedDotStarSqlUnionPattern();
-
-    assertNoWorkCliff(
-        "region().find()",
-        blocks -> {
-          String input = "prefix\n" + repeatedDotStarSqlUnionInput(blocks) + "suffix\n";
-          Matcher matcher = pattern.matcher(input);
-          matcher.region("prefix\n".length(), input.length() - "suffix\n".length());
-          assertThat(matcher.find()).isTrue();
-          assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA");
-        });
-  }
-
-  private static String repeatedDotStarSqlUnionInput(int selectCount) {
-    StringBuilder input = new StringBuilder();
-    for (int i = 1; i <= selectCount; i++) {
-      input
-          .append("(SELECT *, PARSE_DATE('%Y-%m-%d', '2025-06-25') AS snapshot_date FROM ")
-          .append("`project-")
-          .append("%02d".formatted(i))
-          .append("`.`region2`.INFORMATION_SCHEMA.TABLE_OPTIONS)\n")
-          .append("UNION ALL\n");
+        assertNoWorkCliff(
+            "matches()+group(1)",
+            "a".repeat(100),
+            "a".repeat(5000),
+            Consumer { input: String? ->
+                val matcher = pattern.matcher(input)
+                Assertions.assertThat(matcher.matches()).isTrue()
+                Assertions.assertThat(matcher.group(1)).isEqualTo("a")
+                Assertions.assertThat(matcher.group(2)).isEqualTo("a")
+            })
     }
-    return input.toString();
-  }
 
-  private static Pattern repeatedDotStarSqlUnionPattern() {
-    return Pattern.compile(
-        ".*SELECT.*FROM.*(.*INFORMATION_SCHEMA.*){5,}.*",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-  }
+    @Test
+    @DisplayName("matches() stays linear for repeated dot-star with bounded captures")
+    fun matchesWithRepeatedDotStarAndBoundedCaptures() {
+        val pattern: Pattern = repeatedDotStarSqlUnionPattern()
 
-  private static void assertNoWorkCliff(String api, IntConsumer scenario) {
-    long largerPositiveWork = countedWork(() -> scenario.accept(16));
-    long nearMinimumWork = countedWork(() -> scenario.accept(5));
+        assertNoWorkCliff(
+            "matches()",
+            IntConsumer { blocks: Int ->
+                val input: String = repeatedDotStarSqlUnionInput(blocks)
+                val matcher = pattern.matcher(input)
+                Assertions.assertThat(matcher.matches()).isTrue()
+                Assertions.assertThat(matcher.group()).isEqualTo(input)
+                Assertions.assertThat(matcher.start()).isEqualTo(0)
+                Assertions.assertThat(matcher.end()).isEqualTo(input.length)
+            })
+    }
 
-    assertThat(largerPositiveWork).as("%s should use matcher work", api).isPositive();
-    assertThat(nearMinimumWork)
-        .as(
-            "%s near-minimum input should not be dramatically slower than a larger "
-                + "positive input; nearWork=%d largerWork=%d",
-            api, nearMinimumWork, largerPositiveWork)
-        .isLessThan(largerPositiveWork * 50);
-  }
+    @Test
+    @DisplayName("lookingAt() stays linear for repeated dot-star with bounded captures")
+    fun lookingAtWithRepeatedDotStarAndBoundedCaptures() {
+        val pattern: Pattern = repeatedDotStarSqlUnionPattern()
 
-  private static void assertNoWorkCliff(
-      String api, String nearMinimumInput, String largerPositiveInput, Consumer<String> scenario) {
-    scenario.accept(nearMinimumInput);
-    scenario.accept(largerPositiveInput);
-    long largerPositiveWork = countedWork(() -> scenario.accept(largerPositiveInput));
-    long nearMinimumWork = countedWork(() -> scenario.accept(nearMinimumInput));
+        assertNoWorkCliff(
+            "lookingAt()",
+            IntConsumer { blocks: Int ->
+                val matcher: Matcher = pattern.matcher(repeatedDotStarSqlUnionInput(blocks))
+                Assertions.assertThat(matcher.lookingAt()).isTrue()
+                Assertions.assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA")
+            })
+    }
 
-    assertThat(largerPositiveWork).as("%s should use matcher work", api).isPositive();
-    assertThat(nearMinimumWork)
-        .as(
-            "%s near-minimum input should not be dramatically slower than a larger "
-                + "positive input; nearWork=%d largerWork=%d",
-            api, nearMinimumWork, largerPositiveWork)
-        .isLessThan(largerPositiveWork * 50);
-  }
+    @Test
+    @DisplayName("group access after find() stays linear for repeated dot-star captures")
+    fun findGroupWithRepeatedDotStarAndBoundedCaptures() {
+        val pattern: Pattern = repeatedDotStarSqlUnionPattern()
 
-  private static long countedWork(Runnable task) {
-    return assertTimeoutPreemptively(SCENARIO_TIMEOUT, () -> WorkCounter.countForTesting(task));
-  }
+        assertNoWorkCliff(
+            "find()+group(1)",
+            IntConsumer { blocks: Int ->
+                val matcher: Matcher = pattern.matcher(repeatedDotStarSqlUnionInput(blocks))
+                Assertions.assertThat(matcher.find()).isTrue()
+                Assertions.assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA")
+            })
+    }
+
+    @Test
+    @DisplayName("region find stays linear for repeated dot-star captures")
+    fun regionFindWithRepeatedDotStarAndBoundedCaptures() {
+        val pattern: Pattern = repeatedDotStarSqlUnionPattern()
+
+        assertNoWorkCliff(
+            "region().find()",
+            IntConsumer { blocks: Int ->
+                val input = "prefix\n" + repeatedDotStarSqlUnionInput(blocks) + "suffix\n"
+                val matcher = pattern.matcher(input)
+                matcher.region("prefix\n".length, input.length - "suffix\n".length)
+                Assertions.assertThat(matcher.find()).isTrue()
+                Assertions.assertThat(matcher.group(1)).contains("INFORMATION_SCHEMA")
+            })
+    }
+
+    companion object {
+        private val SCENARIO_TIMEOUT: Duration = Duration.ofSeconds(30)
+
+        private fun repeatedDotStarSqlUnionInput(selectCount: Int): String {
+            val input = StringBuilder()
+            for (i in 1..selectCount) {
+                input
+                    .append("(SELECT *, PARSE_DATE('%Y-%m-%d', '2025-06-25') AS snapshot_date FROM ")
+                    .append("`project-")
+                    .append("%02d".formatted(i))
+                    .append("`.`region2`.INFORMATION_SCHEMA.TABLE_OPTIONS)\n")
+                    .append("UNION ALL\n")
+            }
+            return input.toString()
+        }
+
+        private fun repeatedDotStarSqlUnionPattern(): Pattern {
+            return Pattern.compile(
+                ".*SELECT.*FROM.*(.*INFORMATION_SCHEMA.*){5,}.*",
+                Pattern.CASE_INSENSITIVE or Pattern.DOTALL
+            )
+        }
+
+        private fun assertNoWorkCliff(api: String?, scenario: IntConsumer) {
+            val largerPositiveWork: Long = countedWork(Runnable { scenario.accept(16) })
+            val nearMinimumWork: Long = countedWork(Runnable { scenario.accept(5) })
+
+            Assertions.assertThat(largerPositiveWork).`as`("%s should use matcher work", api).isPositive()
+            Assertions.assertThat(nearMinimumWork)
+                .`as`(
+                    "%s near-minimum input should not be dramatically slower than a larger "
+                            + "positive input; nearWork=%d largerWork=%d",
+                    api, nearMinimumWork, largerPositiveWork
+                )
+                .isLessThan(largerPositiveWork * 50)
+        }
+
+        private fun assertNoWorkCliff(
+            api: String?, nearMinimumInput: String?, largerPositiveInput: String?, scenario: Consumer<String?>
+        ) {
+            scenario.accept(nearMinimumInput)
+            scenario.accept(largerPositiveInput)
+            val largerPositiveWork: Long = countedWork(Runnable { scenario.accept(largerPositiveInput) })
+            val nearMinimumWork: Long = countedWork(Runnable { scenario.accept(nearMinimumInput) })
+
+            Assertions.assertThat(largerPositiveWork).`as`("%s should use matcher work", api).isPositive()
+            Assertions.assertThat(nearMinimumWork)
+                .`as`(
+                    "%s near-minimum input should not be dramatically slower than a larger "
+                            + "positive input; nearWork=%d largerWork=%d",
+                    api, nearMinimumWork, largerPositiveWork
+                )
+                .isLessThan(largerPositiveWork * 50)
+        }
+
+        private fun countedWork(task: Runnable?): Long {
+            return org.junit.jupiter.api.Assertions.assertTimeoutPreemptively<Long?>(
+                SCENARIO_TIMEOUT,
+                ThrowingSupplier { WorkCounter.countForTesting(task) })!!
+        }
+    }
 }

@@ -24,6 +24,7 @@
     <test.excludedGroups>work-counter</test.excludedGroups>
     <error-prone.extra-checks>-Xep:UnnecessarilyFullyQualified:ERROR</error-prone.extra-checks>
     <error-prone.library-checks>-Xep:SystemOut:ERROR -Xep:SystemExitOutsideMain:ERROR</error-prone.library-checks>
+      <kotlin.version>2.2.20</kotlin.version>
   </properties>
 
   <dependencyManagement>
@@ -62,6 +63,17 @@
       <version>${asm.version}</version>
       <scope>test</scope>
     </dependency>
+      <dependency>
+          <groupId>org.jetbrains.kotlin</groupId>
+          <artifactId>kotlin-stdlib-jdk8</artifactId>
+          <version>${kotlin.version}</version>
+      </dependency>
+      <dependency>
+          <groupId>org.jetbrains.kotlin</groupId>
+          <artifactId>kotlin-test</artifactId>
+          <version>${kotlin.version}</version>
+          <scope>test</scope>
+      </dependency>
   </dependencies>
 
   <build>
@@ -118,50 +130,7 @@ final class WorkCounterConfig {
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <compilerArgs combine.children="append">
-            <arg>--add-modules</arg>
-            <arg>jdk.incubator.vector</arg>
-            <arg>--add-reads</arg>
-            <arg>org.safere=jdk.incubator.vector</arg>
-            <arg>-Xlint:-incubating</arg>
-          </compilerArgs>
-        </configuration>
-        <executions>
-          <execution>
-            <id>default-testCompile</id>
-            <phase>test-compile</phase>
-            <goals>
-              <goal>testCompile</goal>
-            </goals>
-            <configuration>
-              <compilerArgs combine.self="override">
-                <arg>-Xlint</arg>
-                <arg>-Xlint:-incubating</arg>
-                <arg>-Werror</arg>
-                <!-- Error Prone runs as a javac plugin. -XDcompilePolicy=simple tells javac to
-                     compile all files in a single batch (required by Error Prone). -->
-                <arg>-XDcompilePolicy=simple</arg>
-                <!-- Continue compilation past type-checking errors so Error Prone can analyze
-                     code that has downstream errors in later phases. -->
-                <arg>--should-stop=ifError=FLOW</arg>
-                <arg>-Xplugin:ErrorProne -XepCompilingTestOnlyCode ${error-prone.checks} ${error-prone.extra-checks}</arg>
-              </compilerArgs>
-              <annotationProcessorPaths>
-                <path>
-                  <groupId>com.google.errorprone</groupId>
-                  <artifactId>error_prone_core</artifactId>
-                  <version>${error-prone.version}</version>
-                </path>
-              </annotationProcessorPaths>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
+        <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.6</version>
@@ -288,6 +257,77 @@ final class WorkCounterConfig {
           </additionalOptions>
         </configuration>
       </plugin>
+        <plugin>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-plugin</artifactId>
+            <version>${kotlin.version}</version>
+            <executions>
+                <execution>
+                    <id>compile</id>
+                    <phase>compile</phase>
+                    <goals>
+                        <goal>compile</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>test-compile</id>
+                    <phase>test-compile</phase>
+                    <goals>
+                        <goal>test-compile</goal>
+                    </goals>
+                </execution>
+            </executions>
+            <configuration>
+                <jvmTarget>1.8</jvmTarget>
+            </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration>
+            <compilerArgs combine.children="append">
+              <arg>--add-modules</arg>
+              <arg>jdk.incubator.vector</arg>
+              <arg>--add-reads</arg>
+              <arg>org.safere=jdk.incubator.vector</arg>
+              <arg>-Xlint:-incubating</arg>
+            </compilerArgs>
+          </configuration>
+          <executions>
+            <execution>
+              <id>default-testCompile</id>
+              <phase>test-compile</phase>
+              <goals>
+                <goal>testCompile</goal>
+              </goals>
+              <configuration>
+                <compilerArgs combine.self="override">
+                  <arg>-Xlint</arg>
+                  <arg>-Xlint:-incubating</arg>
+                  <arg>-Werror</arg>
+                  <!-- Error Prone runs as a javac plugin. -XDcompilePolicy=simple tells javac to
+                       compile all files in a single batch (required by Error Prone). -->
+                  <arg>-XDcompilePolicy=simple</arg>
+                  <!-- Continue compilation past type-checking errors so Error Prone can analyze
+                       code that has downstream errors in later phases. -->
+                  <arg>--should-stop=ifError=FLOW</arg>
+                  <arg>-Xplugin:ErrorProne -XepCompilingTestOnlyCode ${error-prone.checks} ${error-prone.extra-checks}</arg>
+                </compilerArgs>
+                <annotationProcessorPaths>
+                  <path>
+                    <groupId>com.google.errorprone</groupId>
+                    <artifactId>error_prone_core</artifactId>
+                    <version>${error-prone.version}</version>
+                  </path>
+                </annotationProcessorPaths>
+              </configuration>
+            </execution>
+              <execution>
+                  <id>default-compile</id>
+                  <phase>none</phase>
+              </execution>
+          </executions>
+        </plugin>
     </plugins>
   </build>
 

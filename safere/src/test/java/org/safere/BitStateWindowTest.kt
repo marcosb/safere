@@ -2,136 +2,131 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import java.nio.charset.StandardCharsets
+import java.util.List
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-
-/** Priority, context, and work bounds for speculative BitState searches. */
+/** Priority, context, and work bounds for speculative BitState searches.  */
 @DisabledForCrosscheck("uses package-private engine paths and search windows")
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
-class BitStateWindowTest {
-  private static final String PROTOCOL_LINK_REGEX =
-      "\\[(.*?)]\\(customProtocol://((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)";
-
-  @Test
-  void higherPriorityPathAtWindowEdgePreventsReturningShorterAlternative() {
-    for (String regex : List.of("a+|a", "a+z|a", "(a?)*z|a")) {
-      Prog prog = Pattern.compile(regex).prog();
-      BitState bs = window(prog, new StringInputScanner("a".repeat(1000)), 4);
-      assertThat(bs.doSearchWindow(0, 0, true, null)).as(regex).isNull();
-      assertThat(bs.windowExceeded()).as(regex).isTrue();
-      assertThat(bs.budgetExceeded()).as(regex).isFalse();
+internal class BitStateWindowTest {
+    @Test
+    fun higherPriorityPathAtWindowEdgePreventsReturningShorterAlternative() {
+        for (regex in mutableListOf<String?>("a+|a", "a+z|a", "(a?)*z|a")) {
+            val prog = Pattern.compile(regex).prog()
+            val bs: BitState = window(prog, StringInputScanner("a".repeat(1000)), 4)
+            Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).`as`(regex).isNull()
+            Assertions.assertThat(bs.windowExceeded()).`as`(regex).isTrue()
+            Assertions.assertThat(bs.budgetExceeded()).`as`(regex).isFalse()
+        }
     }
-  }
 
-  @Test
-  void lowerPriorityLongPathDoesNotPreventReturningPreferredMatch() {
-    Prog prog = Pattern.compile("a|a+").prog();
-    BitState bs = window(prog, new StringInputScanner("a".repeat(1000)), 4);
-    assertThat(bs.doSearchWindow(0, 0, true, null)).containsExactly(0, 1);
-    assertThat(bs.windowExceeded()).isFalse();
-  }
-
-  @Test
-  void assertionsAtWindowEdgeStillObserveFullInput() {
-    String text = "abcd";
-    for (String regex : List.of("ab\\b", "(?:ab$|x)", "(?:ab\\z|x)")) {
-      Prog prog = Pattern.compile(regex).prog();
-      BitState bs = window(prog, new StringInputScanner(text), 2);
-      assertThat(bs.doSearchWindow(0, 0, true, null)).as(regex).isNull();
-      assertThat(bs.windowExceeded()).as(regex).isFalse();
+    @Test
+    fun lowerPriorityLongPathDoesNotPreventReturningPreferredMatch() {
+        val prog = Pattern.compile("a|a+").prog()
+        val bs: BitState = window(prog, StringInputScanner("a".repeat(1000)), 4)
+        Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).containsExactly(0, 1)
+        Assertions.assertThat(bs.windowExceeded()).isFalse()
     }
-    Prog prog = Pattern.compile("ab\\B").prog();
-    BitState bs = window(prog, new StringInputScanner(text), 2);
-    assertThat(bs.doSearchWindow(0, 0, true, null)).containsExactly(0, 2);
-  }
 
-  @Test
-  void codePointStraddlingWindowEdgeRequiresFallback() {
-    Prog prog = Pattern.compile("a😀|a").prog();
-    for (InputScanner input : scanners("a😀x")) {
-      BitState bs = window(prog, input, 2);
-      assertThat(bs.doSearchWindow(0, 0, true, null)).isNull();
-      assertThat(bs.windowExceeded()).isTrue();
+    @Test
+    fun assertionsAtWindowEdgeStillObserveFullInput() {
+        val text = "abcd"
+        for (regex in mutableListOf<String?>("ab\\b", "(?:ab$|x)", "(?:ab\\z|x)")) {
+            val prog = Pattern.compile(regex).prog()
+            val bs: BitState = window(prog, StringInputScanner(text), 2)
+            Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).`as`(regex).isNull()
+            Assertions.assertThat(bs.windowExceeded()).`as`(regex).isFalse()
+        }
+        val prog = Pattern.compile("ab\\B").prog()
+        val bs: BitState = window(prog, StringInputScanner(text), 2)
+        Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).containsExactly(0, 2)
     }
-  }
 
-  @Test
-  void greedyUnicodeLoopsRetainDeferredCapturesAndRespectWindowEdges() {
-    Prog prog = Pattern.compile("([é😀]*)(😀b|b)").prog();
-    String text = "é😀😀b";
-    for (InputScanner input : scanners(text)) {
-      BitState bs = window(prog, input, 2);
-      assertThat(bs.doSearchWindow(0, 0, true, null)).isNull();
-      assertThat(bs.windowExceeded()).isTrue();
-      bs =
-          BitState.getOrCreate(
-              bs, prog, input, 0, input.length(), 2 * prog.numCaptures(), false, true);
-      int[] expected =
-          Nfa.search(
-              prog,
-              input,
-              0,
-              input.length(),
-              input.length(),
-              0,
-              Nfa.Anchor.ANCHORED,
-              Nfa.MatchKind.FULL_MATCH,
-              prog.numCaptures(),
-              null);
-      assertThat(bs.doSearch(0, input.length(), true)).isEqualTo(expected);
-      assertThat(bs.windowExceeded()).isFalse();
+    @Test
+    fun codePointStraddlingWindowEdgeRequiresFallback() {
+        val prog = Pattern.compile("a😀|a").prog()
+        for (input in scanners("a😀x")) {
+            val bs: BitState = window(prog, input, 2)
+            Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull()
+            Assertions.assertThat(bs.windowExceeded()).isTrue()
+        }
     }
-  }
 
-  @Test
-  void reusedWindowClearsAbortedSearchState() {
-    Prog prog = Pattern.compile("a+|a").prog();
-    BitState bs = window(prog, new StringInputScanner("a".repeat(1000)), 4);
-    assertThat(bs.doSearchWindow(0, 0, true, null)).isNull();
-    assertThat(bs.windowExceeded()).isTrue();
+    @Test
+    fun greedyUnicodeLoopsRetainDeferredCapturesAndRespectWindowEdges() {
+        val prog = Pattern.compile("([é😀]*)(😀b|b)").prog()
+        val text = "é😀😀b"
+        for (input in scanners(text)) {
+            var bs: BitState = window(prog, input, 2)
+            Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull()
+            Assertions.assertThat(bs.windowExceeded()).isTrue()
+            bs =
+                BitState.getOrCreate(
+                    bs, prog, input, 0, input.length(), 2 * prog.numCaptures(), false, true
+                )
+            val expected =
+                Nfa.search(
+                    prog,
+                    input,
+                    0,
+                    input.length(),
+                    input.length(),
+                    0,
+                    Nfa.Anchor.ANCHORED,
+                    Nfa.MatchKind.FULL_MATCH,
+                    prog.numCaptures(),
+                    null
+                )
+            Assertions.assertThat(bs.doSearch(0, input.length(), true)).isEqualTo(expected)
+            Assertions.assertThat(bs.windowExceeded()).isFalse()
+        }
+    }
 
-    bs = BitState.getOrCreate(bs, prog, new StringInputScanner("a"), 0, 1, 2, false, false);
-    assertThat(bs.doSearch(0, 0, true)).containsExactly(0, 1);
-    assertThat(bs.windowExceeded()).isFalse();
-    assertThat(bs.budgetExceeded()).isFalse();
-  }
+    @Test
+    fun reusedWindowClearsAbortedSearchState() {
+        val prog = Pattern.compile("a+|a").prog()
+        var bs: BitState = window(prog, StringInputScanner("a".repeat(1000)), 4)
+        Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull()
+        Assertions.assertThat(bs.windowExceeded()).isTrue()
 
-  @Test
-  void longPreferredMatchAndAnchoredOperationsAgreeWithExactEngine() {
-    String regex = "(a?)*b|a";
-    Pattern fast = Pattern.compile(regex);
-    Pattern exact = Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build());
-    String text = "a".repeat(10_000) + "b";
-    Matcher actual = fast.matcher(text);
-    Matcher expected = exact.matcher(text);
-    assertThat(actual.find()).isEqualTo(expected.find());
-    assertThat(actual.end()).isEqualTo(expected.end());
-    assertThat(actual.group(1)).isEqualTo(expected.group(1));
-    assertThat(actual.reset().lookingAt()).isEqualTo(expected.reset().lookingAt());
-    assertThat(actual.end()).isEqualTo(expected.end());
-    assertThat(actual.reset().matches()).isEqualTo(expected.reset().matches());
-    assertThat(actual.end()).isEqualTo(expected.end());
-    assertThat(fast.matcher(text).replaceAll("X")).isEqualTo(exact.matcher(text).replaceAll("X"));
-  }
+        bs = BitState.getOrCreate(bs, prog, StringInputScanner("a"), 0, 1, 2, false, false)
+        Assertions.assertThat(bs.doSearch(0, 0, true)).containsExactly(0, 1)
+        Assertions.assertThat(bs.windowExceeded()).isFalse()
+        Assertions.assertThat(bs.budgetExceeded()).isFalse()
+    }
 
-  @Test
-  void successfulWindowsPreserveExactCapturesAcrossPatternsAndInputRepresentations() {
-    List<String> patterns =
-        List.of(
+    @Test
+    fun longPreferredMatchAndAnchoredOperationsAgreeWithExactEngine() {
+        val regex = "(a?)*b|a"
+        val fast = Pattern.compile(regex)
+        val exact = Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
+        val text = "a".repeat(10000) + "b"
+        val actual = fast.matcher(text)
+        val expected = exact.matcher(text)
+        Assertions.assertThat(actual.find()).isEqualTo(expected.find())
+        Assertions.assertThat(actual.end()).isEqualTo(expected.end())
+        Assertions.assertThat(actual.group(1)).isEqualTo(expected.group(1))
+        Assertions.assertThat(actual.reset().lookingAt()).isEqualTo(expected.reset().lookingAt())
+        Assertions.assertThat(actual.end()).isEqualTo(expected.end())
+        Assertions.assertThat(actual.reset().matches()).isEqualTo(expected.reset().matches())
+        Assertions.assertThat(actual.end()).isEqualTo(expected.end())
+        Assertions.assertThat(fast.matcher(text).replaceAll("X")).isEqualTo(exact.matcher(text).replaceAll("X"))
+    }
+
+    @Test
+    fun successfulWindowsPreserveExactCapturesAcrossPatternsAndInputRepresentations() {
+        val patterns = mutableListOf<String?>(
             "a|a+",
             "a+|a",
             "a+?",
@@ -148,577 +143,616 @@ class BitStateWindowTest {
             "([é😀]*)(.*?)(b)",
             "(😀|a)*",
             "[^()]*\\([^()]*\\)",
-            "((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)");
-    List<String> texts = List.of("", "a", "aaa", "aaabx", "ababx", "a😀b", "(ab)x", "<a>(b))x");
-    for (String regex : patterns) {
-      Prog prog = Pattern.compile(regex).prog();
-      for (String text : texts) {
-        for (InputScanner input : scanners(text)) {
-          for (boolean anchored : List.of(false, true)) {
-            int[] expected =
-                Nfa.search(
-                    prog,
-                    input,
-                    0,
-                    input.length(),
-                    input.length(),
-                    0,
-                    anchored ? Nfa.Anchor.ANCHORED : Nfa.Anchor.UNANCHORED,
-                    Nfa.MatchKind.FIRST_MATCH,
-                    prog.numCaptures(),
-                    null);
-            for (int end = 0; end <= input.length(); end++) {
-              BitState bs = window(prog, input, end);
-              int[] result = bs.doSearchWindow(0, input.length(), anchored, null);
-              if (result != null) {
-                assertThat(bs.windowExceeded()).isFalse();
-                assertThat(result)
-                    .as("/%s/ on %s, anchored=%s, window=%s", regex, text, anchored, end)
-                    .isEqualTo(expected);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  @Test
-  void largeInputFindSequencesAndReplacementsAgreeWithExactEngine() {
-    String regex = "\\[(.*?)]\\(customProtocol://((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)";
-    Pattern fast = Pattern.compile(regex);
-    Pattern exact = Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build());
-    for (String label : List.of("short", "α😀", "a".repeat(300))) {
-      String text = ("[" + label + "](customProtocol://<doc_1>) ").repeat(400);
-      for (String replacement : List.of("X", "$1:$2", "$0")) {
-        assertThat(fast.matcher(text).replaceAll(replacement))
-            .isEqualTo(exact.matcher(text).replaceAll(replacement));
-      }
-      Matcher actual = fast.matcher(text);
-      Matcher expected = exact.matcher(text);
-      while (expected.find()) {
-        assertThat(actual.find()).isTrue();
-        for (int group = 0; group <= expected.groupCount(); group++) {
-          assertThat(actual.start(group)).isEqualTo(expected.start(group));
-          assertThat(actual.end(group)).isEqualTo(expected.end(group));
-        }
-      }
-      assertThat(actual.find()).isFalse();
-      Utf8Input bytes = Utf8Input.trusted(text.getBytes(UTF_8));
-      Utf8Matcher actualUtf8 = fast.matcher(bytes);
-      Utf8Matcher expectedUtf8 = exact.matcher(bytes);
-      while (expectedUtf8.find()) {
-        assertThat(actualUtf8.find()).isTrue();
-        for (int group = 0; group <= expectedUtf8.groupCount(); group++) {
-          assertThat(actualUtf8.start(group)).isEqualTo(expectedUtf8.start(group));
-          assertThat(actualUtf8.end(group)).isEqualTo(expectedUtf8.end(group));
-        }
-      }
-      assertThat(actualUtf8.find()).isFalse();
-    }
-  }
-
-  @Test
-  void shortNullableLoopMatchInLargeInputUsesBitState() {
-    Pattern pattern = Pattern.compile("((a)?b?)*c");
-    String text = "abbc" + "x".repeat(100_000);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            operations.add(event);
-          }
-        });
-    try {
-      assertThat(pattern.matcher(text).find()).isTrue();
-      assertThat(pattern.matcher(Utf8Input.trusted(text.getBytes(UTF_8))).find()).isTrue();
-      assertThat(operations).hasSize(2);
-      for (OperationDiagnostics operation : operations) {
-        assertThat(operation.boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  @Tag("work-counter")
-  void repeatedShortMatchesUseLinearWorkAcrossInputSizes() {
-    for (String atom : List.of("a", "α", "😀")) {
-      Pattern pattern = Pattern.compile("S((?:" + atom + "?)*)E");
-      for (boolean utf8 : List.of(false, true)) {
-        long previous = -1;
-        for (int size : List.of(4_000, 8_000, 16_000)) {
-          String text = ("S" + atom + atom + "E ").repeat(size);
-          Matcher stringMatcher = pattern.matcher(text);
-          Utf8Matcher utf8Matcher = pattern.matcher(Utf8Input.trusted(text.getBytes(UTF_8)));
-          long work =
-              WorkCounter.countForTesting(
-                  () -> {
-                    int matches = 0;
-                    while (utf8 ? utf8Matcher.find() : stringMatcher.find()) {
-                      matches++;
+            "((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)"
+        )
+        val texts: MutableList<String> =
+            mutableListOf<String?>("", "a", "aaa", "aaabx", "ababx", "a😀b", "(ab)x", "<a>(b))x")
+        for (regex in patterns) {
+            val prog = Pattern.compile(regex).prog()
+            for (text in texts) {
+                for (input in scanners(text)) {
+                    for (anchored in mutableListOf<Boolean?>(false, true)) {
+                        val expected =
+                            Nfa.search(
+                                prog,
+                                input,
+                                0,
+                                input.length(),
+                                input.length(),
+                                0,
+                                if (anchored) Nfa.Anchor.ANCHORED else Nfa.Anchor.UNANCHORED,
+                                Nfa.MatchKind.FIRST_MATCH,
+                                prog.numCaptures(),
+                                null
+                            )
+                        for (end in 0..input.length()) {
+                            val bs: BitState = window(prog, input, end)
+                            val result = bs.doSearchWindow(0, input.length(), anchored!!, null)
+                            if (result != null) {
+                                Assertions.assertThat(bs.windowExceeded()).isFalse()
+                                Assertions.assertThat(result)
+                                    .`as`("/%s/ on %s, anchored=%s, window=%s", regex, text, anchored, end)
+                                    .isEqualTo(expected)
+                            }
+                        }
                     }
-                    assertThat(matches).isEqualTo(size);
-                  });
-          if (previous >= 0) {
-            assertThat(work).as("%s, UTF-8=%s", atom, utf8).isLessThan(previous * 3);
-          }
-          previous = work;
-        }
-      }
-    }
-  }
-
-  @Test
-  @Tag("work-counter")
-  void speculationWorkIsIndependentOfUnvisitedInputLength() {
-    Prog prog = Pattern.compile("(a?)*z|a").prog();
-    long previous = -1;
-    for (int size : List.of(10_000, 100_000, 1_000_000)) {
-      BitState bs =
-          window(prog, new StringInputScanner("a".repeat(size)), BitState.SPECULATIVE_WINDOW_SIZE);
-      long work =
-          WorkCounter.countForTesting(
-              () -> assertThat(bs.doSearchWindow(0, 0, true, null)).isNull());
-      assertThat(bs.windowExceeded()).isTrue();
-      if (previous >= 0) {
-        assertThat(work).isEqualTo(previous);
-      }
-      previous = work;
-    }
-  }
-
-  @Test
-  void longMatchesThenShortMatchesRecoverSpeculationWithExactCaptures() {
-    Pattern pattern = Pattern.compile(PROTOCOL_LINK_REGEX);
-    Pattern exact =
-        Pattern.compile(
-            PROTOCOL_LINK_REGEX, 0, EnginePathOptions.builder().bitState(false).build());
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (String label : List.of("Click here", "α😀")) {
-        String longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) ";
-        String text =
-            longMatch.repeat(2) + ("[" + label + "](customProtocol://<doc_1>) ").repeat(3000);
-        List<Matcher> actual = matchers(pattern, text);
-        List<Matcher> expected = matchers(exact, text);
-        for (int representation = 0; representation < actual.size(); representation++) {
-          Matcher matcher = actual.get(representation);
-          Matcher oracle = expected.get(representation);
-          boolean recovered = false;
-          for (int i = 0; i < 3002; i++) {
-            operations.clear();
-            assertThat(matcher.find()).isTrue();
-            if (i >= 2 && i < 66) {
-              recovered |= operations.getFirst().boundaryStrategy() == MatchStrategy.BIT_STATE;
+                }
             }
-            assertThat(oracle.find()).isTrue();
-            for (int group = 0; group <= matcher.groupCount(); group++) {
-              assertThat(matcher.start(group)).isEqualTo(oracle.start(group));
-              assertThat(matcher.end(group)).isEqualTo(oracle.end(group));
-              if (representation == 0) {
-                assertThat(matcher.group(group)).isEqualTo(oracle.group(group));
-              }
+        }
+    }
+
+    @Test
+    fun largeInputFindSequencesAndReplacementsAgreeWithExactEngine() {
+        val regex = "\\[(.*?)]\\(customProtocol://((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)"
+        val fast = Pattern.compile(regex)
+        val exact = Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
+        for (label in List.of<String?>("short", "α😀", "a".repeat(300))) {
+            val text = ("[" + label + "](customProtocol://<doc_1>) ").repeat(400)
+            for (replacement in mutableListOf<String?>("X", "$1:$2", "$0")) {
+                Assertions.assertThat(fast.matcher(text).replaceAll(replacement))
+                    .isEqualTo(exact.matcher(text).replaceAll(replacement))
             }
-          }
-          assertThat(matcher.find()).isFalse();
-          assertThat(oracle.find()).isFalse();
-          assertThat(recovered)
-              .as("short matches should recover while input is still large")
-              .isTrue();
-        }
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void failedRetriesBecomeLessFrequentButStillRecoverAfterSustainedFailures() {
-    Pattern pattern = unhintedPattern(PROTOCOL_LINK_REGEX);
-    String longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) ";
-    String shortMatch = "[α😀](customProtocol://<doc_1>) ";
-    String text = longMatch.repeat(2000) + shortMatch.repeat(3000);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (Matcher matcher : matchers(pattern, text)) {
-        List<Integer> failures = new ArrayList<>();
-        for (int i = 0; i < 2000; i++) {
-          operations.clear();
-          assertThat(matcher.find()).isTrue();
-          assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400);
-          if (operations.getFirst().strategyDecisions().contains(windowFailure())) {
-            failures.add(i);
-          } else {
-            assertThat(operations.getFirst().strategyDecisions()).contains(windowBackoff());
-          }
-        }
-        assertThat(failures).hasSizeBetween(5, 30).startsWith(0, 1);
-        int previousGap = 1;
-        for (int i = 2; i < failures.size(); i++) {
-          int gap = failures.get(i) - failures.get(i - 1);
-          assertThat(gap).isBetween(previousGap, 512);
-          previousGap = gap;
-        }
-        assertThat(previousGap)
-            .isEqualTo(failures.get(failures.size() - 2) - failures.get(failures.size() - 3));
-        boolean recovered = false;
-        for (int i = 0; i < 512; i++) {
-          operations.clear();
-          assertThat(matcher.find()).isTrue();
-          assertThat(matcher.end(1) - matcher.start(1)).isIn(3, 6);
-          if (operations.getFirst().boundaryStrategy() == MatchStrategy.BIT_STATE) {
-            recovered = true;
-            // A successful retry restores consecutive speculation, without another delay.
-            operations.clear();
-            assertThat(matcher.find()).isTrue();
-            assertThat(operations.getFirst().boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-            break;
-          }
-        }
-        assertThat(recovered).isTrue();
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  @Tag("work-counter")
-  void retryTransitionsPreserveLinearWorkAcrossInputSizes() {
-    Pattern pattern = Pattern.compile(PROTOCOL_LINK_REGEX);
-    String longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) ";
-    String shortMatch = "[α😀](customProtocol://<doc_1>) ";
-    String block = longMatch.repeat(2) + shortMatch.repeat(32);
-    for (boolean utf8 : List.of(false, true)) {
-      long previous = -1;
-      for (int size : List.of(64, 128, 256)) {
-        Matcher matcher = matchers(pattern, block.repeat(size)).get(utf8 ? 1 : 0);
-        long work =
-            WorkCounter.countForTesting(
-                () -> {
-                  int matches = 0;
-                  while (matcher.find()) {
-                    matches++;
-                  }
-                  assertThat(matches).isEqualTo(size * 34);
-                });
-        if (previous >= 0) {
-          assertThat(work).as("UTF-8=%s", utf8).isLessThan(previous * 3);
-        }
-        previous = work;
-      }
-    }
-  }
-
-  @Test
-  void resetRegionAndPatternChangesClearRetryDelayForBothInputRepresentations() {
-    Pattern pattern = unhintedPattern(PROTOCOL_LINK_REGEX);
-    String text = ("[" + "a".repeat(400) + "](customProtocol://<doc_1>) ").repeat(100);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (String change : List.of("reset", "region", "pattern")) {
-        for (Matcher matcher : matchers(pattern, text)) {
-          for (int i = 0; i < 3; i++) {
-            operations.clear();
-            assertThat(matcher.find()).isTrue();
-          }
-          assertThat(operations.getFirst().strategyDecisions()).contains(windowBackoff());
-          switch (change) {
-            case "reset" -> matcher.reset();
-            case "region" -> matcher.region(0, text.length());
-            case "pattern" -> matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"));
-            default -> throw new AssertionError(change);
-          }
-          operations.clear();
-          assertThat(matcher.find()).isTrue();
-          assertThat(operations.getFirst().strategyDecisions()).contains(windowFailure());
-          assertThat(operations.getFirst().strategyDecisions()).doesNotContain(windowBackoff());
-        }
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void repeatedWindowFailuresBackOffUntilResetForBothInputRepresentations() {
-    Pattern pattern = unhintedPattern(PROTOCOL_LINK_REGEX);
-    String longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) ";
-    String text = longMatch.repeat(100);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (Matcher matcher : matchers(pattern, text)) {
-        operations.clear();
-        for (int i = 0; i < 3; i++) {
-          assertThat(matcher.find()).isTrue();
-          assertThat(matcher.start()).isEqualTo(i * longMatch.length());
-          assertThat(matcher.end()).isEqualTo(i * longMatch.length() + longMatch.length() - 1);
-          assertThat(matcher.start(1)).isEqualTo(matcher.start() + 1);
-          assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400);
-        }
-        assertThat(operations.get(0).strategyDecisions()).contains(windowFailure());
-        assertThat(operations.get(1).strategyDecisions()).contains(windowFailure());
-        assertThat(operations.get(2).strategyDecisions())
-            .contains(windowBackoff())
-            .doesNotContain(windowFailure());
-
-        operations.clear();
-        assertThat(matcher.reset().find()).isTrue();
-        assertThat(operations.getFirst().strategyDecisions()).contains(windowFailure());
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void successfulWindowBreaksConsecutiveFailureStreak() {
-    Pattern pattern = unhintedPattern(PROTOCOL_LINK_REGEX);
-    String longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) ";
-    String text = longMatch + "[aa](customProtocol://<doc_1>) " + longMatch.repeat(100);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (Matcher matcher : matchers(pattern, text)) {
-        operations.clear();
-        for (int i = 0; i < 5; i++) {
-          assertThat(matcher.find()).isTrue();
-        }
-        assertThat(operations.get(0).strategyDecisions()).contains(windowFailure());
-        assertThat(operations.get(1).boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-        assertThat(operations.get(2).strategyDecisions()).contains(windowFailure());
-        assertThat(operations.get(3).strategyDecisions()).contains(windowFailure());
-        assertThat(operations.get(4).strategyDecisions()).contains(windowBackoff());
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void changingPatternOrInputClearsSpeculativeBackoff() {
-    Pattern pattern = unhintedPattern(PROTOCOL_LINK_REGEX);
-    String longText = ("[" + "a".repeat(400) + "](customProtocol://<doc_1>) ").repeat(100);
-    String shortText = "[aa](customProtocol://<doc_1>) " + "x".repeat(40_000);
-    Matcher matcher = pattern.matcher(longText);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.reset(shortText).find()).isTrue();
-      assertThat(operations.getLast().boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-
-      matcher.reset(longText);
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.find()).isTrue();
-      operations.clear();
-      matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"));
-      assertThat(matcher.find()).isTrue();
-      assertThat(operations.getFirst().strategyDecisions()).contains(windowFailure());
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void dfaEndHintLetsExactWindowsReachBeyondTheDefaultSize() {
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (String atom : List.of("a", "α", "😀")) {
-        String regex = "(" + atom + "?)*b";
-        String text = atom.repeat(400) + "b" + "q".repeat(40_000);
-        Pattern pattern = Pattern.compile(regex);
-        Pattern exact =
-            Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build());
-        List<Matcher> actual = matchers(pattern, text);
-        List<Matcher> expected = matchers(exact, text);
-        for (int i = 0; i < actual.size(); i++) {
-          operations.clear();
-          assertThat(actual.get(i).find()).isTrue();
-          assertThat(operations.getFirst().boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-          assertThat(expected.get(i).find()).isTrue();
-          assertThat(actual.get(i).start()).isEqualTo(expected.get(i).start());
-          assertThat(actual.get(i).end()).isEqualTo(expected.get(i).end());
-        }
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  @Tag("work-counter")
-  void lazyRuneLoopsChargeOnlyRequestedCaptureRestoresAndCountDecodes() {
-    Prog prog = Pattern.compile("x(.*?)z").prog();
-    for (int ncap : new int[] {2, 4}) {
-      for (boolean utf8 : List.of(false, true)) {
-        long shortWork = lazyRuneLoopWork(prog, 100, ncap, utf8);
-        long longWork = lazyRuneLoopWork(prog, 300, ncap, utf8);
-        // Each extra ASCII rune tries ALT, capture, literal and body. Captures add a restore
-        // only when requested. The failed literal and the body each decode one UTF-8 byte.
-        int workPerRune = 4 + (ncap == 4 ? 1 : 0) + (utf8 ? 2 : 0);
-        assertThat(longWork - shortWork)
-            .as("ncap=%s, UTF-8=%s", ncap, utf8)
-            .isEqualTo(200L * workPerRune);
-      }
-    }
-  }
-
-  private static long lazyRuneLoopWork(Prog prog, int repeat, int ncap, boolean utf8) {
-    InputScanner scanner = scanners("x" + "a".repeat(repeat) + "z").get(utf8 ? 1 : 0);
-    BitState engine =
-        BitState.getOrCreate(null, prog, scanner, 0, scanner.length(), ncap, false, false);
-    return WorkCounter.countForTesting(
-        () -> assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length()));
-  }
-
-  @Test
-  void oversizedDfaHintsLeaveSpeculativeWorkBounded() {
-    Pattern pattern = Pattern.compile("(a?)*b");
-    String text = "a".repeat(4_096) + "b" + "q".repeat(40_000);
-    assertThat(BitState.maxTextSize(pattern.prog())).isGreaterThan(4_097);
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (Matcher matcher : matchers(pattern, text)) {
-        operations.clear();
-        assertThat(matcher.find()).isTrue();
-        assertThat(matcher.end()).isEqualTo(4_097);
-        assertThat(operations.getFirst().strategyDecisions()).contains(windowFailure());
-        assertThat(operations.getFirst().boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @ParameterizedTest(name = "prefix repeats {0}, expected speculative window {1}")
-  @CsvSource({"1023, 2048", "4096, 256"})
-  void failedSpeculationChargesOnlyWorkForTheAllowedWindow(int repeats, int windowSize) {
-    String prefix = "ab".repeat(repeats) + "bc";
-    SafeReMatchDiagnostics previous = Pattern.diagnostics();
-    List<OperationDiagnostics> operations = new ArrayList<>();
-    Pattern.setDiagnostics(recordOperations(operations));
-    try {
-      for (int tailLength : List.of(20_000, 40_000)) {
-        String text = prefix + "q".repeat(tailLength);
-        for (InputScanner scanner : scanners(text)) {
-          Pattern pattern = Pattern.compile("(?:(b?)*?(c|)+)*c");
-          // The hint fits the bitmap, including when it exceeds the separate hint limit.
-          assertThat(BitState.maxTextSize(pattern.prog()))
-              .isBetween(prefix.length(), scanner.length() - 1);
-          Pattern.ThreadCache cache = pattern.getOrCreateThreadCache();
-          Matcher matcher =
-              scanner instanceof Utf8InputScanner utf8
-                  ? new Matcher(pattern, utf8)
-                  : pattern.matcher(text);
-          operations.clear();
-          assertThat(matcher.find()).isTrue();
-          assertThat(operations.getFirst().strategyDecisions()).contains(windowFailure());
-          assertThat(operations.getFirst().boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-
-          // The NFA restart leaves the failed attempt in the cache with its own step count.
-          BitState attempt = cache.bitState;
-          assertThat(attempt).isNotNull();
-          long allowedWork = window(pattern.prog(), scanner, windowSize).stepBudgetForTesting();
-          assertThat(attempt.stepCountForTesting()).isBetween(1L, allowedWork);
-          assertThat(attempt.stepBudgetForTesting()).isEqualTo(allowedWork);
-          assertThat(matcher.start()).isEqualTo(prefix.length() - 3);
-          assertThat(matcher.end()).isEqualTo(prefix.length());
-        }
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void hintedWindowsPreservePriorityCapturesAndReplacement() {
-    for (String regex : List.of("(a?)*b", "(a?|ab)*b", "([ab]?)*z|b", "((a?)*b)+", "(a?)*b\\B")) {
-      Pattern pattern = Pattern.compile(regex);
-      Pattern exact =
-          Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build());
-      for (int length : List.of(255, 256, 257, 400, 30_000)) {
-        String text = "a".repeat(length) + "bz " + "q".repeat(40_000);
-        List<Matcher> actual = matchers(pattern, text);
-        List<Matcher> expected = matchers(exact, text);
-        for (int i = 0; i < actual.size(); i++) {
-          Matcher matcher = actual.get(i);
-          Matcher oracle = expected.get(i);
-          while (oracle.find()) {
-            assertThat(matcher.find()).as("%s, length=%s", regex, length).isTrue();
-            for (int group = 0; group <= matcher.groupCount(); group++) {
-              assertThat(matcher.start(group)).isEqualTo(oracle.start(group));
-              assertThat(matcher.end(group)).isEqualTo(oracle.end(group));
+            val actual = fast.matcher(text)
+            val expected = exact.matcher(text)
+            while (expected.find()) {
+                Assertions.assertThat(actual.find()).isTrue()
+                for (group in 0..expected.groupCount()) {
+                    Assertions.assertThat(actual.start(group)).isEqualTo(expected.start(group))
+                    Assertions.assertThat(actual.end(group)).isEqualTo(expected.end(group))
+                }
             }
-          }
-          assertThat(matcher.find()).isFalse();
+            Assertions.assertThat(actual.find()).isFalse()
+            val bytes = Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))
+            val actualUtf8 = fast.matcher(bytes)
+            val expectedUtf8 = exact.matcher(bytes)
+            while (expectedUtf8.find()) {
+                Assertions.assertThat(actualUtf8.find()).isTrue()
+                for (group in 0..expectedUtf8.groupCount()) {
+                    Assertions.assertThat(actualUtf8.start(group)).isEqualTo(expectedUtf8.start(group))
+                    Assertions.assertThat(actualUtf8.end(group)).isEqualTo(expectedUtf8.end(group))
+                }
+            }
+            Assertions.assertThat(actualUtf8.find()).isFalse()
         }
-        assertThat(pattern.matcher(text).replaceAll("<$1>"))
-            .isEqualTo(exact.matcher(text).replaceAll("<$1>"));
-        assertThat(pattern.matcher(text).replaceAll("X"))
-            .isEqualTo(exact.matcher(text).replaceAll("X"));
-      }
     }
-  }
 
-  private static Pattern unhintedPattern(String regex) {
-    // Keep retry/backoff coverage for searches that have no usable DFA end hint.
-    return Pattern.compile(regex, 0, EnginePathOptions.builder().dfa(false).build());
-  }
+    @Test
+    fun shortNullableLoopMatchInLargeInputUsesBitState() {
+        val pattern = Pattern.compile("((a)?b?)*c")
+        val text = "abbc" + "x".repeat(100000)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics> = ArrayList<OperationDiagnostics>()
+        Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    operations.add(event!!)
+                }
+            })
+        try {
+            Assertions.assertThat(pattern.matcher(text).find()).isTrue()
+            Assertions.assertThat(pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))).find())
+                .isTrue()
+            Assertions.assertThat<OperationDiagnostics?>(operations).hasSize(2)
+            for (operation in operations) {
+                Assertions.assertThat<MatchStrategy?>(operation.boundaryStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
 
-  private static SafeReMatchDiagnostics recordOperations(List<OperationDiagnostics> operations) {
-    return new SafeReMatchDiagnostics() {
-      @Override
-      public void onOperationCompleted(OperationDiagnostics event) {
-        operations.add(event);
-      }
-    };
-  }
+    @Test
+    @Tag("work-counter")
+    fun repeatedShortMatchesUseLinearWorkAcrossInputSizes() {
+        for (atom in mutableListOf<String?>("a", "α", "😀")) {
+            val pattern = Pattern.compile("S((?:" + atom + "?)*)E")
+            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+                var previous: Long = -1
+                for (size in mutableListOf<Int?>(4000, 8000, 16000)) {
+                    val text = ("S" + atom + atom + "E ").repeat(size!!)
+                    val stringMatcher = pattern.matcher(text)
+                    val utf8Matcher = pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))
+                    val work =
+                        WorkCounter.countForTesting(
+                            Runnable {
+                                var matches = 0
+                                while (if (utf8) utf8Matcher.find() else stringMatcher.find()) {
+                                    matches++
+                                }
+                                Assertions.assertThat(matches).isEqualTo(size)
+                            })
+                    if (previous >= 0) {
+                        Assertions.assertThat(work).`as`("%s, UTF-8=%s", atom, utf8).isLessThan(previous * 3)
+                    }
+                    previous = work
+                }
+            }
+        }
+    }
 
-  private static StrategyDecision windowFailure() {
-    return new StrategyDecision(
-        MatchStrategy.BIT_STATE,
-        StrategyDisposition.FALLBACK,
-        StrategyReason.SPECULATIVE_WINDOW_EXCEEDED);
-  }
+    @Test
+    @Tag("work-counter")
+    fun speculationWorkIsIndependentOfUnvisitedInputLength() {
+        val prog = Pattern.compile("(a?)*z|a").prog()
+        var previous: Long = -1
+        for (size in mutableListOf<Int?>(10000, 100000, 1000000)) {
+            val bs: BitState =
+                window(prog, StringInputScanner("a".repeat(size!!)), BitState.SPECULATIVE_WINDOW_SIZE)
+            val work =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull() })
+            Assertions.assertThat(bs.windowExceeded()).isTrue()
+            if (previous >= 0) {
+                Assertions.assertThat(work).isEqualTo(previous)
+            }
+            previous = work
+        }
+    }
 
-  private static StrategyDecision windowBackoff() {
-    return new StrategyDecision(
-        MatchStrategy.BIT_STATE, StrategyDisposition.BYPASSED, StrategyReason.SPECULATIVE_BACKOFF);
-  }
+    @Test
+    fun longMatchesThenShortMatchesRecoverSpeculationWithExactCaptures() {
+        val pattern = Pattern.compile(PROTOCOL_LINK_REGEX)
+        val exact =
+            Pattern.compile(
+                PROTOCOL_LINK_REGEX, 0, EnginePathOptions.builder().bitState(false).build()
+            )
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (label in mutableListOf<String?>("Click here", "α😀")) {
+                val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
+                val text =
+                    longMatch.repeat(2) + ("[" + label + "](customProtocol://<doc_1>) ").repeat(3000)
+                val actual: MutableList<Matcher> = matchers(pattern, text)
+                val expected: MutableList<Matcher> = matchers(exact, text)
+                for (representation in actual.indices) {
+                    val matcher = actual.get(representation)
+                    val oracle = expected.get(representation)
+                    var recovered = false
+                    for (i in 0..3001) {
+                        operations.clear()
+                        Assertions.assertThat(matcher.find()).isTrue()
+                        if (i >= 2 && i < 66) {
+                            recovered = recovered or (operations.getFirst().boundaryStrategy == MatchStrategy.BIT_STATE)
+                        }
+                        Assertions.assertThat(oracle.find()).isTrue()
+                        for (group in 0..matcher.groupCount()) {
+                            Assertions.assertThat(matcher.start(group)).isEqualTo(oracle.start(group))
+                            Assertions.assertThat(matcher.end(group)).isEqualTo(oracle.end(group))
+                            if (representation == 0) {
+                                Assertions.assertThat(matcher.group(group)).isEqualTo(oracle.group(group))
+                            }
+                        }
+                    }
+                    Assertions.assertThat(matcher.find()).isFalse()
+                    Assertions.assertThat(oracle.find()).isFalse()
+                    Assertions.assertThat(recovered)
+                        .`as`("short matches should recover while input is still large")
+                        .isTrue()
+                }
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
 
-  private static List<Matcher> matchers(Pattern pattern, String text) {
-    return List.of(
-        pattern.matcher(text),
-        new Matcher(pattern, ((ArrayUtf8Input) Utf8Input.trusted(text.getBytes(UTF_8))).scanner()));
-  }
+    @Test
+    fun failedRetriesBecomeLessFrequentButStillRecoverAfterSustainedFailures() {
+        val pattern: Pattern = unhintedPattern(PROTOCOL_LINK_REGEX)
+        val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
+        val shortMatch = "[α😀](customProtocol://<doc_1>) "
+        val text = longMatch.repeat(2000) + shortMatch.repeat(3000)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (matcher in matchers(pattern, text)) {
+                val failures: MutableList<Int> = ArrayList<Int>()
+                for (i in 0..1999) {
+                    operations.clear()
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    Assertions.assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400)
+                    if (operations.getFirst().strategyDecisions.contains(windowFailure())) {
+                        failures.add(i)
+                    } else {
+                        Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                            windowBackoff()
+                        )
+                    }
+                }
+                Assertions.assertThat<Int?>(failures).hasSizeBetween(5, 30).startsWith(0, 1)
+                var previousGap = 1
+                for (i in 2..<failures.size) {
+                    val gap = failures.get(i) - failures.get(i - 1)
+                    Assertions.assertThat(gap).isBetween(previousGap, 512)
+                    previousGap = gap
+                }
+                Assertions.assertThat(previousGap)
+                    .isEqualTo(failures.get(failures.size - 2) - failures.get(failures.size - 3))
+                var recovered = false
+                for (i in 0..511) {
+                    operations.clear()
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    Assertions.assertThat(matcher.end(1) - matcher.start(1)).isIn(3, 6)
+                    if (operations.getFirst().boundaryStrategy == MatchStrategy.BIT_STATE) {
+                        recovered = true
+                        // A successful retry restores consecutive speculation, without another delay.
+                        operations.clear()
+                        Assertions.assertThat(matcher.find()).isTrue()
+                        Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                            .isEqualTo(MatchStrategy.BIT_STATE)
+                        break
+                    }
+                }
+                Assertions.assertThat(recovered).isTrue()
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
 
-  private static BitState window(Prog prog, InputScanner input, int end) {
-    return BitState.getOrCreate(null, prog, input, 0, end, 2 * prog.numCaptures(), false, false);
-  }
+    @Test
+    @Tag("work-counter")
+    fun retryTransitionsPreserveLinearWorkAcrossInputSizes() {
+        val pattern = Pattern.compile(PROTOCOL_LINK_REGEX)
+        val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
+        val shortMatch = "[α😀](customProtocol://<doc_1>) "
+        val block = longMatch.repeat(2) + shortMatch.repeat(32)
+        for (utf8 in mutableListOf<Boolean?>(false, true)) {
+            var previous: Long = -1
+            for (size in mutableListOf<Int?>(64, 128, 256)) {
+                val matcher: Matcher = matchers(pattern, block.repeat(size!!)).get(if (utf8) 1 else 0)
+                val work =
+                    WorkCounter.countForTesting(
+                        Runnable {
+                            var matches = 0
+                            while (matcher.find()) {
+                                matches++
+                            }
+                            Assertions.assertThat(matches).isEqualTo(size * 34)
+                        })
+                if (previous >= 0) {
+                    Assertions.assertThat(work).`as`("UTF-8=%s", utf8).isLessThan(previous * 3)
+                }
+                previous = work
+            }
+        }
+    }
 
-  private static List<InputScanner> scanners(String text) {
-    return List.of(
-        new StringInputScanner(text),
-        ((ArrayUtf8Input) Utf8Input.trusted(text.getBytes(UTF_8))).scanner());
-  }
+    @Test
+    fun resetRegionAndPatternChangesClearRetryDelayForBothInputRepresentations() {
+        val pattern: Pattern = unhintedPattern(PROTOCOL_LINK_REGEX)
+        val text = ("[" + "a".repeat(400) + "](customProtocol://<doc_1>) ").repeat(100)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (change in mutableListOf<String?>("reset", "region", "pattern")) {
+                for (matcher in matchers(pattern, text)) {
+                    for (i in 0..2) {
+                        operations.clear()
+                        Assertions.assertThat(matcher.find()).isTrue()
+                    }
+                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                        windowBackoff()
+                    )
+                    when (change) {
+                        "reset" -> matcher.reset()
+                        "region" -> matcher.region(0, text.length)
+                        "pattern" -> matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"))
+                        else -> throw AssertionError(change)
+                    }
+                    operations.clear()
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                        windowFailure()
+                    )
+                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).doesNotContain(
+                        windowBackoff()
+                    )
+                }
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    fun repeatedWindowFailuresBackOffUntilResetForBothInputRepresentations() {
+        val pattern: Pattern = unhintedPattern(PROTOCOL_LINK_REGEX)
+        val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
+        val text = longMatch.repeat(100)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (matcher in matchers(pattern, text)) {
+                operations.clear()
+                for (i in 0..2) {
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    Assertions.assertThat(matcher.start()).isEqualTo(i * longMatch.length)
+                    Assertions.assertThat(matcher.end()).isEqualTo(i * longMatch.length + longMatch.length - 1)
+                    Assertions.assertThat(matcher.start(1)).isEqualTo(matcher.start() + 1)
+                    Assertions.assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400)
+                }
+                Assertions.assertThat<StrategyDecision?>(operations.get(0)!!.strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<StrategyDecision?>(operations.get(1)!!.strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<StrategyDecision?>(operations.get(2)!!.strategyDecisions)
+                    .contains(windowBackoff())
+                    .doesNotContain(windowFailure())
+
+                operations.clear()
+                Assertions.assertThat(matcher.reset().find()).isTrue()
+                Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions)
+                    .contains(windowFailure())
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    fun successfulWindowBreaksConsecutiveFailureStreak() {
+        val pattern: Pattern = unhintedPattern(PROTOCOL_LINK_REGEX)
+        val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
+        val text = longMatch + "[aa](customProtocol://<doc_1>) " + longMatch.repeat(100)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (matcher in matchers(pattern, text)) {
+                operations.clear()
+                for (i in 0..4) {
+                    Assertions.assertThat(matcher.find()).isTrue()
+                }
+                Assertions.assertThat<StrategyDecision?>(operations.get(0)!!.strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<MatchStrategy?>(operations.get(1)!!.boundaryStrategy)
+                    .isEqualTo(MatchStrategy.BIT_STATE)
+                Assertions.assertThat<StrategyDecision?>(operations.get(2)!!.strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<StrategyDecision?>(operations.get(3)!!.strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<StrategyDecision?>(operations.get(4)!!.strategyDecisions)
+                    .contains(windowBackoff())
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    fun changingPatternOrInputClearsSpeculativeBackoff() {
+        val pattern: Pattern = unhintedPattern(PROTOCOL_LINK_REGEX)
+        val longText = ("[" + "a".repeat(400) + "](customProtocol://<doc_1>) ").repeat(100)
+        val shortText = "[aa](customProtocol://<doc_1>) " + "x".repeat(40000)
+        val matcher = pattern.matcher(longText)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.reset(shortText).find()).isTrue()
+            Assertions.assertThat<MatchStrategy?>(operations.getLast().boundaryStrategy)
+                .isEqualTo(MatchStrategy.BIT_STATE)
+
+            matcher.reset(longText)
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.find()).isTrue()
+            operations.clear()
+            matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"))
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(windowFailure())
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    fun dfaEndHintLetsExactWindowsReachBeyondTheDefaultSize() {
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (atom in mutableListOf<String?>("a", "α", "😀")) {
+                val regex = "(" + atom + "?)*b"
+                val text = atom!!.repeat(400) + "b" + "q".repeat(40000)
+                val pattern = Pattern.compile(regex)
+                val exact =
+                    Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
+                val actual: MutableList<Matcher> = matchers(pattern, text)
+                val expected: MutableList<Matcher> = matchers(exact, text)
+                for (i in actual.indices) {
+                    operations.clear()
+                    Assertions.assertThat(actual.get(i).find()).isTrue()
+                    Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                        .isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat(expected.get(i).find()).isTrue()
+                    Assertions.assertThat(actual.get(i).start()).isEqualTo(expected.get(i).start())
+                    Assertions.assertThat(actual.get(i).end()).isEqualTo(expected.get(i).end())
+                }
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    @Tag("work-counter")
+    fun lazyRuneLoopsChargeOnlyRequestedCaptureRestoresAndCountDecodes() {
+        val prog = Pattern.compile("x(.*?)z").prog()
+        for (ncap in intArrayOf(2, 4)) {
+            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+                val shortWork: Long = Companion.lazyRuneLoopWork(prog, 100, ncap, utf8!!)
+                val longWork: Long = Companion.lazyRuneLoopWork(prog, 300, ncap, utf8)
+                // Each extra ASCII rune tries ALT, capture, literal and body. Captures add a restore
+                // only when requested. The failed literal and the body each decode one UTF-8 byte.
+                val workPerRune = 4 + (if (ncap == 4) 1 else 0) + (if (utf8) 2 else 0)
+                Assertions.assertThat(longWork - shortWork)
+                    .`as`("ncap=%s, UTF-8=%s", ncap, utf8)
+                    .isEqualTo(200L * workPerRune)
+            }
+        }
+    }
+
+    @Test
+    fun oversizedDfaHintsLeaveSpeculativeWorkBounded() {
+        val pattern = Pattern.compile("(a?)*b")
+        val text = "a".repeat(4096) + "b" + "q".repeat(40000)
+        Assertions.assertThat(BitState.maxTextSize(pattern.prog())).isGreaterThan(4097)
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (matcher in matchers(pattern, text)) {
+                operations.clear()
+                Assertions.assertThat(matcher.find()).isTrue()
+                Assertions.assertThat(matcher.end()).isEqualTo(4097)
+                Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions)
+                    .contains(windowFailure())
+                Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                    .isEqualTo(MatchStrategy.NFA)
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @ParameterizedTest(name = "prefix repeats {0}, expected speculative window {1}")
+    @CsvSource("1023, 2048", "4096, 256")
+    fun failedSpeculationChargesOnlyWorkForTheAllowedWindow(repeats: Int, windowSize: Int) {
+        val prefix = "ab".repeat(repeats) + "bc"
+        val previous = Pattern.diagnostics()
+        val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
+        Pattern.setDiagnostics(recordOperations(operations))
+        try {
+            for (tailLength in mutableListOf<Int?>(20000, 40000)) {
+                val text = prefix + "q".repeat(tailLength!!)
+                for (scanner in scanners(text)) {
+                    val pattern = Pattern.compile("(?:(b?)*?(c|)+)*c")
+                    // The hint fits the bitmap, including when it exceeds the separate hint limit.
+                    Assertions.assertThat(BitState.maxTextSize(pattern.prog()))
+                        .isBetween(prefix.length, scanner.length() - 1)
+                    val cache = pattern.getOrCreateThreadCache()
+                    val matcher =
+                        if (scanner is Utf8InputScanner)
+                            Matcher(pattern, scanner)
+                        else
+                            pattern.matcher(text)
+                    operations.clear()
+                    Assertions.assertThat(matcher.find()).isTrue()
+                    Assertions.assertThat<StrategyDecision?>(operations.getFirst().strategyDecisions).contains(
+                        windowFailure()
+                    )
+                    Assertions.assertThat<MatchStrategy?>(operations.getFirst().boundaryStrategy)
+                        .isEqualTo(MatchStrategy.NFA)
+
+                    // The NFA restart leaves the failed attempt in the cache with its own step count.
+                    val attempt = cache.bitState
+                    Assertions.assertThat<BitState?>(attempt).isNotNull()
+                    val allowedWork: Long = window(pattern.prog(), scanner, windowSize).stepBudgetForTesting()
+                    Assertions.assertThat(attempt!!.stepCountForTesting()).isBetween(1L, allowedWork)
+                    Assertions.assertThat(attempt.stepBudgetForTesting()).isEqualTo(allowedWork)
+                    Assertions.assertThat(matcher.start()).isEqualTo(prefix.length - 3)
+                    Assertions.assertThat(matcher.end()).isEqualTo(prefix.length)
+                }
+            }
+        } finally {
+            Pattern.setDiagnostics(previous)
+        }
+    }
+
+    @Test
+    fun hintedWindowsPreservePriorityCapturesAndReplacement() {
+        for (regex in mutableListOf<String?>("(a?)*b", "(a?|ab)*b", "([ab]?)*z|b", "((a?)*b)+", "(a?)*b\\B")) {
+            val pattern = Pattern.compile(regex)
+            val exact =
+                Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
+            for (length in mutableListOf<Int?>(255, 256, 257, 400, 30000)) {
+                val text = "a".repeat(length!!) + "bz " + "q".repeat(40000)
+                val actual: MutableList<Matcher> = matchers(pattern, text)
+                val expected: MutableList<Matcher> = matchers(exact, text)
+                for (i in actual.indices) {
+                    val matcher = actual.get(i)
+                    val oracle = expected.get(i)
+                    while (oracle.find()) {
+                        Assertions.assertThat(matcher.find()).`as`("%s, length=%s", regex, length).isTrue()
+                        for (group in 0..matcher.groupCount()) {
+                            Assertions.assertThat(matcher.start(group)).isEqualTo(oracle.start(group))
+                            Assertions.assertThat(matcher.end(group)).isEqualTo(oracle.end(group))
+                        }
+                    }
+                    Assertions.assertThat(matcher.find()).isFalse()
+                }
+                Assertions.assertThat(pattern.matcher(text).replaceAll("<$1>"))
+                    .isEqualTo(exact.matcher(text).replaceAll("<$1>"))
+                Assertions.assertThat(pattern.matcher(text).replaceAll("X"))
+                    .isEqualTo(exact.matcher(text).replaceAll("X"))
+            }
+        }
+    }
+
+    companion object {
+        private const val PROTOCOL_LINK_REGEX = "\\[(.*?)]\\(customProtocol://((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)"
+
+        private fun lazyRuneLoopWork(prog: Prog?, repeat: Int, ncap: Int, utf8: Boolean): Long {
+            val scanner: InputScanner = scanners("x" + "a".repeat(repeat) + "z").get(if (utf8) 1 else 0)
+            val engine =
+                BitState.getOrCreate(null, prog, scanner, 0, scanner.length(), ncap, false, false)
+            return WorkCounter.countForTesting(
+                Runnable { Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length()) })
+        }
+
+        private fun unhintedPattern(regex: String?): Pattern {
+            // Keep retry/backoff coverage for searches that have no usable DFA end hint.
+            return Pattern.compile(regex, 0, EnginePathOptions.builder().dfa(false).build())
+        }
+
+        private fun recordOperations(operations: MutableList<OperationDiagnostics?>): SafeReMatchDiagnostics {
+            return object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    operations.add(event)
+                }
+            }
+        }
+
+        private fun windowFailure(): StrategyDecision {
+            return StrategyDecision(
+                MatchStrategy.BIT_STATE,
+                StrategyDisposition.FALLBACK,
+                StrategyReason.SPECULATIVE_WINDOW_EXCEEDED
+            )
+        }
+
+        private fun windowBackoff(): StrategyDecision {
+            return StrategyDecision(
+                MatchStrategy.BIT_STATE, StrategyDisposition.BYPASSED, StrategyReason.SPECULATIVE_BACKOFF
+            )
+        }
+
+        private fun matchers(pattern: Pattern, text: String): MutableList<Matcher> {
+            return List.of<Matcher?>(
+                pattern.matcher(text),
+                Matcher(
+                    pattern,
+                    (Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)) as ArrayUtf8Input).scanner()
+                )
+            )
+        }
+
+        private fun window(prog: Prog, input: InputScanner?, end: Int): BitState {
+            return BitState.getOrCreate(null, prog, input, 0, end, 2 * prog.numCaptures(), false, false)
+        }
+
+        private fun scanners(text: String): MutableList<InputScanner> {
+            return List.of<InputScanner?>(
+                StringInputScanner(text),
+                (Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)) as ArrayUtf8Input).scanner()
+            )
+        }
+    }
 }

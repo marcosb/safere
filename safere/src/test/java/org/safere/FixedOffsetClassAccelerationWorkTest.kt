@@ -2,95 +2,99 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.safere.MultiAnchorDescriptor.StartPlan
+import java.nio.charset.StandardCharsets
 
 @DisabledForCrosscheck("uses internal work counters to verify acceleration bounds")
 @Tag("work-counter")
-class FixedOffsetClassAccelerationWorkTest {
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void denseInteriorHitsWithNoLeadingCharacterCostOneLeadingScan(boolean utf8) {
-    String input = "1234567890".repeat(10_000);
-    for (String regex : List.of(" [0-9]{4,}", "[a-z]{2}[0-9]+", "[ \\t\\r\\n]{3}[0-9]+")) {
-      Pattern pattern = Pattern.compile(regex);
-      var plan = (MultiAnchorDescriptor.StartPlan.FixedOffsetClass) pattern.startPlan();
-      InputScanner scanner =
-          utf8 ? new Utf8InputScanner(input.getBytes(UTF_8)) : new StringInputScanner(input);
-      long leadingWork =
-          WorkCounter.countForTesting(
-              () -> assertThat(scanner.indexOfCharClass(plan.leadingClass(), 0)).isEqualTo(-1));
-      long acceleratedWork =
-          WorkCounter.countForTesting(
-              () -> {
-                int candidate =
-                    utf8
-                        ? Utf8StartAccelerator.findNextCandidate(
-                            pattern.utf8StartAccelerator(), (Utf8InputScanner) scanner, 0)
-                        : StringStartAccelerator.findNextCandidate(
-                            pattern.stringStartAccelerator(), input, 0, false);
-                assertThat(candidate).isEqualTo(-1);
-              });
-      assertThat(acceleratedWork).as(regex).isLessThanOrEqualTo(leadingWork + 8);
+internal class FixedOffsetClassAccelerationWorkTest {
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun denseInteriorHitsWithNoLeadingCharacterCostOneLeadingScan(utf8: Boolean) {
+        val input = "1234567890".repeat(10000)
+        for (regex in mutableListOf<String?>(" [0-9]{4,}", "[a-z]{2}[0-9]+", "[ \\t\\r\\n]{3}[0-9]+")) {
+            val pattern = Pattern.compile(regex)
+            val plan = pattern.startPlan() as StartPlan.FixedOffsetClass
+            val scanner =
+                if (utf8) Utf8InputScanner(input.toByteArray(StandardCharsets.UTF_8)) else StringInputScanner(input)
+            val leadingWork =
+                WorkCounter.countForTesting(
+                    Runnable { Assertions.assertThat(scanner.indexOfCharClass(plan.leadingClass, 0)).isEqualTo(-1) })
+            val acceleratedWork =
+                WorkCounter.countForTesting(
+                    Runnable {
+                        val candidate =
+                            if (utf8)
+                                Utf8StartAccelerator.findNextCandidate(
+                                    pattern.utf8StartAccelerator(), scanner as Utf8InputScanner, 0
+                                )
+                            else
+                                StringStartAccelerator.findNextCandidate(
+                                    pattern.stringStartAccelerator(), input, 0, false
+                                )
+                        Assertions.assertThat(candidate).isEqualTo(-1)
+                    })
+            Assertions.assertThat(acceleratedWork).`as`(regex).isLessThanOrEqualTo(leadingWork + 8)
+        }
     }
-  }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void absentInteriorClassRejectsBeforeDfaSearch(boolean utf8) {
-    Pattern pattern = Pattern.compile(" [0-9]{4,}");
-    String input = "words with frequent spaces é😀 ".repeat(2_000);
-    WorkCounter.StartAccelerationWork work =
-        WorkCounter.countStartAccelerationForTesting(
-            () -> assertThat(find(pattern, input, utf8)).isFalse());
-    assertThat(work.calls()).isZero();
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void earlySuccessDoesNotScanTheRemainingInput(boolean utf8) {
-    Pattern pattern = Pattern.compile(" [0-9]{4,}");
-    // Warm engine setup before comparing searches with the same early successful match.
-    assertThat(find(pattern, " 1234x", utf8)).isTrue();
-    long small = successWork(pattern, " 1234x" + " words é😀".repeat(4_000), utf8);
-    long large = successWork(pattern, " 1234x" + " words é😀".repeat(20_000), utf8);
-    assertThat(small).isPositive();
-    assertThat(large).isLessThanOrEqualTo(small + 32);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void falseCandidatesAndLongContinuationsRemainLinear(boolean utf8) {
-    for (String regex : List.of(" [0-9]{4,}", " ([0-9]+)Z", "[a-z]{2}([0-9]+)Z")) {
-      Pattern pattern = Pattern.compile(regex);
-      for (String unit : List.of("1111x", " 1x", "aa1234Y", "é😀1111x")) {
-        long small = failureWork(pattern, unit.repeat(2_000) + "Z", utf8);
-        long large = failureWork(pattern, unit.repeat(10_000) + "Z", utf8);
-        assertThat(small).as("%s on %s", regex, unit).isPositive();
-        assertThat(large).as("%s on %s", regex, unit).isLessThan(small * 6);
-      }
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun absentInteriorClassRejectsBeforeDfaSearch(utf8: Boolean) {
+        val pattern = Pattern.compile(" [0-9]{4,}")
+        val input = "words with frequent spaces é😀 ".repeat(2000)
+        val work =
+            WorkCounter.countStartAccelerationForTesting(
+                Runnable { Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
+        Assertions.assertThat(work.calls).isZero()
     }
-  }
 
-  private static long successWork(Pattern pattern, String input, boolean utf8) {
-    return WorkCounter.countForTesting(() -> assertThat(find(pattern, input, utf8)).isTrue());
-  }
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun earlySuccessDoesNotScanTheRemainingInput(utf8: Boolean) {
+        val pattern = Pattern.compile(" [0-9]{4,}")
+        // Warm engine setup before comparing searches with the same early successful match.
+        Assertions.assertThat(find(pattern, " 1234x", utf8)).isTrue()
+        val small: Long = successWork(pattern, " 1234x" + " words é😀".repeat(4000), utf8)
+        val large: Long = successWork(pattern, " 1234x" + " words é😀".repeat(20000), utf8)
+        Assertions.assertThat(small).isPositive()
+        Assertions.assertThat(large).isLessThanOrEqualTo(small + 32)
+    }
 
-  private static long failureWork(Pattern pattern, String input, boolean utf8) {
-    return WorkCounter.countForTesting(() -> assertThat(find(pattern, input, utf8)).isFalse());
-  }
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun falseCandidatesAndLongContinuationsRemainLinear(utf8: Boolean) {
+        for (regex in mutableListOf<String?>(" [0-9]{4,}", " ([0-9]+)Z", "[a-z]{2}([0-9]+)Z")) {
+            val pattern = Pattern.compile(regex)
+            for (unit in mutableListOf<String?>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
+                val small: Long = failureWork(pattern, unit!!.repeat(2000) + "Z", utf8)
+                val large: Long = failureWork(pattern, unit.repeat(10000) + "Z", utf8)
+                Assertions.assertThat(small).`as`("%s on %s", regex, unit).isPositive()
+                Assertions.assertThat(large).`as`("%s on %s", regex, unit).isLessThan(small * 6)
+            }
+        }
+    }
 
-  private static boolean find(Pattern pattern, String input, boolean utf8) {
-    return utf8
-        ? pattern.matcher(Utf8Input.trusted(input.getBytes(UTF_8))).find()
-        : pattern.matcher(input).find();
-  }
+    companion object {
+        private fun successWork(pattern: Pattern, input: String, utf8: Boolean): Long {
+            return WorkCounter.countForTesting(Runnable { Assertions.assertThat(find(pattern, input, utf8)).isTrue() })
+        }
+
+        private fun failureWork(pattern: Pattern, input: String, utf8: Boolean): Long {
+            return WorkCounter.countForTesting(Runnable { Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
+        }
+
+        private fun find(pattern: Pattern, input: String, utf8: Boolean): Boolean {
+            return if (utf8)
+                pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))).find()
+            else
+                pattern.matcher(input).find()
+        }
+    }
 }

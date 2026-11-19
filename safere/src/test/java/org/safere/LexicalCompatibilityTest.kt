@@ -2,51 +2,23 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Assumptions
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.util.List
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.lang.reflect.Method;
-import java.util.List;
-import java.util.regex.PatternSyntaxException;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-/** Compatibility at boundaries within lexical constructs, rather than only between atoms. */
-class LexicalCompatibilityTest {
-  private static final List<String> INPUTS =
-      List.of(
-          "",
-          "a",
-          "aa",
-          "aaa",
-          "aaaa",
-          "A",
-          "!",
-          "&",
-          "%",
-          "!a",
-          "mz",
-          " ",
-          "#",
-          "+",
-          "a+",
-          "😀",
-          "𠀀",
-          "\uD83D",
-          "\uD840",
-          "\uDE00",
-          "\uDC00",
-          "\uD83D\uD800\uDE00");
-
-  @Test
-  void literalRunsKeepAtomQuantifiersAndGroupBoundaries() {
-    List<String> inputs =
-        List.of(
+/** Compatibility at boundaries within lexical constructs, rather than only between atoms.  */
+internal class LexicalCompatibilityTest {
+    @Test
+    fun literalRunsKeepAtomQuantifiersAndGroupBoundaries() {
+        val inputs: MutableList<String> = mutableListOf<String?>(
             "",
             "a",
             "ab",
@@ -67,9 +39,9 @@ class LexicalCompatibilityTest {
             "a😀😀",
             "a😀a😀",
             "a\uD83D\uD800\uDE00",
-            "a\uD83D\uD800\uDE00\uD800\uDE00");
-    for (String regex :
-        List.of(
+            "a\uD83D\uD800\uDE00\uD800\uDE00"
+        )
+        for (regex in mutableListOf<String?>(
             "abc+",
             "abc{0,2}",
             "abc*?",
@@ -92,39 +64,39 @@ class LexicalCompatibilityTest {
             "abc\\Q\\E+?",
             "(a|ab)c+",
             "(ab){0}c+",
-            "^abc+$")) {
-      for (int flags :
-          List.of(
-              0,
-              Pattern.COMMENTS,
-              Pattern.CASE_INSENSITIVE,
-              Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)) {
-        assertSame(regex, flags, inputs);
-      }
-    }
-  }
-
-  @Test
-  void propertyComponentsCrossTriviaAndQuoteBoundaries() {
-    for (String introducer : List.of("\\p", "\\P")) {
-      for (String gap : List.of("", "\\Q\\E", "\\Q\\E\\Q\\E", " ", "#c\n", " \\Q\\E#c\n")) {
-        for (String payload : List.of("L", "{L}", "{ L}", "{L }", "\\QL\\E", "\\Q{L}\\E")) {
-          String escape = introducer + gap + payload;
-          for (String expression : List.of(escape, "[" + escape + "]", "(" + escape + ")+")) {
-            assertSame(expression, 0);
-            assertSame(expression, Pattern.COMMENTS);
-            assertSame("(?x)" + expression, 0);
-            assertSame("(?x:" + expression + ")", 0);
-          }
+            "^abc+$"
+        )) {
+            for (flags in List.of<Int?>(
+                0,
+                Pattern.COMMENTS,
+                Pattern.CASE_INSENSITIVE,
+                Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+            )) {
+                Companion.assertSame(regex!!, flags, inputs)
+            }
         }
-      }
     }
-  }
 
-  @Test
-  void controlAndNumericEscapesRespectTheirComponentBoundaries() {
-    for (String expression :
-        List.of(
+    @Test
+    fun propertyComponentsCrossTriviaAndQuoteBoundaries() {
+        for (introducer in mutableListOf<String?>("\\p", "\\P")) {
+            for (gap in mutableListOf<String?>("", "\\Q\\E", "\\Q\\E\\Q\\E", " ", "#c\n", " \\Q\\E#c\n")) {
+                for (payload in mutableListOf<String?>("L", "{L}", "{ L}", "{L }", "\\QL\\E", "\\Q{L}\\E")) {
+                    val escape = introducer + gap + payload
+                    for (expression in List.of<String>(escape, "[" + escape + "]", "(" + escape + ")+")) {
+                        assertSame(expression, 0)
+                        assertSame(expression, Pattern.COMMENTS)
+                        assertSame("(?x)" + expression, 0)
+                        assertSame("(?x:" + expression + ")", 0)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun controlAndNumericEscapesRespectTheirComponentBoundaries() {
+        for (expression in mutableListOf<String?>(
             "\\c\\Q\\Ea",
             "\\c\\Q\\E\\Q\\Ea",
             "\\c\\Qa\\E",
@@ -138,143 +110,148 @@ class LexicalCompatibilityTest {
             "\\x{ 41}",
             "\\x{4 1}",
             "\\u00\\Q41\\E",
-            "\\p\\Q{L}\\E")) {
-      for (String wrapped : List.of(expression, "[" + expression + "]")) {
-        assertSame(wrapped, 0);
-        assertSame(wrapped, Pattern.COMMENTS);
-      }
-    }
-  }
-
-  @Test
-  void quantifierModifiersCrossEmptyQuotesWithoutChangingMatchPriority() {
-    for (String operand : List.of("a", "(a)", "(a?)", "()")) {
-      for (String repeat : List.of("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
-        for (String gap : List.of("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
-          assertSame(operand + repeat + gap + "?", Pattern.COMMENTS);
-          assertSame(operand + repeat + "?" + gap + "?", Pattern.COMMENTS);
-          assertSame(operand + repeat + "?" + gap + "+", Pattern.COMMENTS);
-          assertSame("(?x:" + operand + repeat + gap + "?)", 0);
+            "\\p\\Q{L}\\E"
+        )) {
+            for (wrapped in List.of<String>(expression, "[" + expression + "]")) {
+                assertSame(wrapped, 0)
+                assertSame(wrapped, Pattern.COMMENTS)
+            }
         }
-      }
     }
-  }
 
-  @Test
-  void operandFreeCountedRepeatsRemainTransparentToEmptyQuotes() {
-    for (String prefix : List.of("", "(?i)", "a+", "|", "(?:")) {
-      for (String repeat : List.of("{0}", "{1}", "{01,03}")) {
-        for (String modifier : List.of("?", "+")) {
-          String regex = prefix + repeat + "\\Q\\E" + modifier;
-          if (prefix.equals("(?:")) regex += ")";
-          assertSame(regex, 0);
+    @Test
+    fun quantifierModifiersCrossEmptyQuotesWithoutChangingMatchPriority() {
+        for (operand in mutableListOf<String?>("a", "(a)", "(a?)", "()")) {
+            for (repeat in mutableListOf<String?>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
+                for (gap in mutableListOf<String?>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
+                    assertSame(operand + repeat + gap + "?", Pattern.COMMENTS)
+                    assertSame(operand + repeat + "?" + gap + "?", Pattern.COMMENTS)
+                    assertSame(operand + repeat + "?" + gap + "+", Pattern.COMMENTS)
+                    assertSame("(?x:" + operand + repeat + gap + "?)", 0)
+                }
+            }
         }
-      }
     }
-  }
 
-  @Test
-  @DisabledForCrosscheck("SafeRE rejects possessive repetition over consuming operands")
-  void consumingPossessiveRejectionHasOnePathForEquivalentSpellings() {
-    for (String operand : List.of("a", "(a)", "(?:a?)", "\\p{Lower}", "^\\p{Lower}")) {
-      for (String repeat : List.of("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
-        for (String gap : List.of("", "\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
-          assertThatThrownBy(() -> Pattern.compile(operand + repeat + gap + "+", Pattern.COMMENTS))
-              .isInstanceOf(PatternSyntaxException.class)
-              .hasMessageContaining("possessive");
+    @Test
+    fun operandFreeCountedRepeatsRemainTransparentToEmptyQuotes() {
+        for (prefix in mutableListOf<String?>("", "(?i)", "a+", "|", "(?:")) {
+            for (repeat in mutableListOf<String?>("{0}", "{1}", "{01,03}")) {
+                for (modifier in mutableListOf<String?>("?", "+")) {
+                    var regex = prefix + repeat + "\\Q\\E" + modifier
+                    if (prefix == "(?:") regex += ")"
+                    assertSame(regex, 0)
+                }
+            }
         }
-      }
     }
-  }
 
-  @Test
-  void zeroWidthPossessivesAndQuotedClassRangesKeepTheirSemantics() {
-    for (String regex :
-        List.of(
+    @Test
+    @DisabledForCrosscheck("SafeRE rejects possessive repetition over consuming operands")
+    fun consumingPossessiveRejectionHasOnePathForEquivalentSpellings() {
+        for (operand in mutableListOf<String?>("a", "(a)", "(?:a?)", "\\p{Lower}", "^\\p{Lower}")) {
+            for (repeat in mutableListOf<String?>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
+                for (gap in mutableListOf<String?>("", "\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
+                    Assertions.assertThatThrownBy(ThrowingCallable {
+                        Pattern.compile(
+                            operand + repeat + gap + "+",
+                            Pattern.COMMENTS
+                        )
+                    })
+                        .isInstanceOf(PatternSyntaxException::class.java)
+                        .hasMessageContaining("possessive")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun zeroWidthPossessivesAndQuotedClassRangesKeepTheirSemantics() {
+        for (regex in mutableListOf<String?>(
             "()*\\Q\\E+",
             "(){2}\\Q\\E+",
             "(){0,2}\\Q\\E+",
             "[\\Qab\\E-z]",
             "[a-\\Qyz\\E]",
             "[\\Q-]&^# \\E]",
-            "[a&\\Q\\E&[a-z]]")) {
-      assertSame(regex, 0);
-      assertSame(regex, Pattern.COMMENTS);
-    }
-  }
-
-  @Test
-  void quotedClassSpansKeepCodePointsAndRangeEndpointsAcrossLengths() {
-    List<String> inputs =
-        List.of("", "a", "b", "z", "Z", "A", "~", "😀", "𠀀", "#", " ", "&", "-", "]");
-    for (int length : List.of(3, 4, 5, 7, 8, 9, 15, 16, 17, 64, 65, 257)) {
-      for (String unit : List.of("a", "😀", "# &-]")) {
-        String quote = "\\QZ" + unit.repeat(length) + "z\\E";
-        for (String regex :
-            List.of(
-                "[" + quote + "]",
-                "[^" + quote + "]",
-                "[" + quote + "-~]",
-                "[A-" + quote + "]",
-                "[[" + quote + "]&&[^z]]",
-                "[\\Q\\E" + quote + "\\Qab\\E]")) {
-          assertSame(regex, 0, inputs);
-          assertSame(regex, Pattern.COMMENTS, inputs);
+            "[a&\\Q\\E&[a-z]]"
+        )) {
+            assertSame(regex!!, 0)
+            assertSame(regex, Pattern.COMMENTS)
         }
-      }
     }
-  }
 
-  @Test
-  void rangeEndpointsConsumeOneAmpersandBeforeRecognizingIntersections() {
-    for (String lower : List.of("!", "%", "&", "\\Q&\\E")) {
-      for (String upperAndTail : List.of("&&", "\\Q&\\E&")) {
-        String regex = "[" + lower + "-" + upperAndTail + "]";
-        assertSame(regex, 0);
-        assertSame(regex, Pattern.COMMENTS);
-      }
-    }
-  }
-
-  @Test
-  void rangeEndpointControlsKeepDelimiterRolesAndValidation() {
-    List<String> inputs = List.of("!", "-", "A", "]", "a", "!]", "-]", "A]", "]]");
-    for (String regex : List.of("[!-]]", "[!-\\Q\\E]]", "[!-\\]]", "[!-\\Q]\\E]")) {
-      assertSame(regex, 0, inputs);
-      assertSame(regex, Pattern.COMMENTS, inputs);
-    }
-  }
-
-  @Test
-  void leadingClassTriviaKeepsCaretsLiteralWhileEmptyQuotesAreTransparent() {
-    for (String regex :
-        List.of(
-            "[ ^a]", "[#c\n^a]", "[[ ^a]]", "[ ^]", "[\\Q\\E^a]", "[ \\Q\\E^a]", "[a&&[ ^a]]")) {
-      assertSame(regex, Pattern.COMMENTS);
-    }
-  }
-
-  @Test
-  void surrogateEscapePairsUseTheSameComponentRulesAsIndividualEscapes() {
-    for (String high : List.of("\\uD83D", "\\uD840")) {
-      for (String low : List.of("DE00", "DC00", "D800", "0041")) {
-        for (String gap : List.of("", " ", "#c\n", "\\Q\\E")) {
-          for (String between : List.of("", " ", "\\Q\\E")) {
-            String regex = high + between + "\\u" + low.substring(0, 2) + gap + low.substring(2);
-            for (String expression : List.of(regex, "[" + regex + "]", regex + "\\uDE00")) {
-              assertSame(expression, 0);
-              assertSame(expression, Pattern.COMMENTS);
+    @Test
+    fun quotedClassSpansKeepCodePointsAndRangeEndpointsAcrossLengths() {
+        val inputs: MutableList<String> =
+            mutableListOf<String?>("", "a", "b", "z", "Z", "A", "~", "😀", "𠀀", "#", " ", "&", "-", "]")
+        for (length in mutableListOf<Int?>(3, 4, 5, 7, 8, 9, 15, 16, 17, 64, 65, 257)) {
+            for (unit in mutableListOf<String?>("a", "😀", "# &-]")) {
+                val quote = "\\QZ" + unit!!.repeat(length!!) + "z\\E"
+                for (regex in List.of<String?>(
+                    "[" + quote + "]",
+                    "[^" + quote + "]",
+                    "[" + quote + "-~]",
+                    "[A-" + quote + "]",
+                    "[[" + quote + "]&&[^z]]",
+                    "[\\Q\\E" + quote + "\\Qab\\E]"
+                )) {
+                    assertSame(regex, 0, inputs)
+                    assertSame(regex, Pattern.COMMENTS, inputs)
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  @Test
-  void flagChangesDoNotReuseLookaheadFromThePreviousMode() {
-    for (String regex :
-        List.of(
+    @Test
+    fun rangeEndpointsConsumeOneAmpersandBeforeRecognizingIntersections() {
+        for (lower in mutableListOf<String?>("!", "%", "&", "\\Q&\\E")) {
+            for (upperAndTail in mutableListOf<String?>("&&", "\\Q&\\E&")) {
+                val regex = "[" + lower + "-" + upperAndTail + "]"
+                assertSame(regex, 0)
+                assertSame(regex, Pattern.COMMENTS)
+            }
+        }
+    }
+
+    @Test
+    fun rangeEndpointControlsKeepDelimiterRolesAndValidation() {
+        val inputs: MutableList<String> = mutableListOf<String?>("!", "-", "A", "]", "a", "!]", "-]", "A]", "]]")
+        for (regex in mutableListOf<String?>("[!-]]", "[!-\\Q\\E]]", "[!-\\]]", "[!-\\Q]\\E]")) {
+            Companion.assertSame(regex!!, 0, inputs)
+            Companion.assertSame(regex, Pattern.COMMENTS, inputs)
+        }
+    }
+
+    @Test
+    fun leadingClassTriviaKeepsCaretsLiteralWhileEmptyQuotesAreTransparent() {
+        for (regex in mutableListOf<String?>(
+            "[ ^a]", "[#c\n^a]", "[[ ^a]]", "[ ^]", "[\\Q\\E^a]", "[ \\Q\\E^a]", "[a&&[ ^a]]"
+        )) {
+            assertSame(regex!!, Pattern.COMMENTS)
+        }
+    }
+
+    @Test
+    fun surrogateEscapePairsUseTheSameComponentRulesAsIndividualEscapes() {
+        for (high in mutableListOf<String?>("\\uD83D", "\\uD840")) {
+            for (low in mutableListOf<String?>("DE00", "DC00", "D800", "0041")) {
+                for (gap in mutableListOf<String?>("", " ", "#c\n", "\\Q\\E")) {
+                    for (between in mutableListOf<String?>("", " ", "\\Q\\E")) {
+                        val regex = high + between + "\\u" + low!!.substring(0, 2) + gap + low.substring(2)
+                        for (expression in List.of<String>(regex, "[" + regex + "]", regex + "\\uDE00")) {
+                            assertSame(expression, 0)
+                            assertSame(expression, Pattern.COMMENTS)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun flagChangesDoNotReuseLookaheadFromThePreviousMode() {
+        for (regex in mutableListOf<String?>(
             "(?x:a b) c",
             "(?x)( ?:a)",
             "(?x)(? x:a)",
@@ -286,118 +263,145 @@ class LexicalCompatibilityTest {
             "(?x:a(?-x: b)c) d",
             "(?x)a+\\Q\\E?(?-x) b",
             "(?x:a#x\n)b c",
-            "(?x)[a #x\n b](?-x) c")) {
-      assertSame(regex, 0);
-    }
-    String regex = "(?x)\\Q #😀+ \\E";
-    assertThat(Pattern.compile(regex).pattern()).isEqualTo(regex);
-    assertThat(Pattern.compile(regex).matcher(" #😀+ ").matches()).isTrue();
-    assertThat(Pattern.compile(regex, Pattern.LITERAL).matcher(regex).matches()).isTrue();
-  }
-
-  @Test
-  @DisabledForCrosscheck("Quoting delimiters in ignored comments cannot affect later syntax")
-  void ignoredCommentQuotesDoNotChangeLexicalState() {
-    assertThat(Pattern.compile("(?x)#\\Q\n.").matcher("x").matches()).isTrue();
-    assertThatThrownBy(() -> Pattern.compile("(?x)#\\Q\n("))
-        .isInstanceOf(PatternSyntaxException.class);
-    assertThatThrownBy(() -> Pattern.compile("(?x)#\\Q\n\\E"))
-        .isInstanceOf(PatternSyntaxException.class);
-  }
-
-  @Test
-  @DisabledForCrosscheck("Original UTF-16 coordinates are SafeRE's diagnostic contract")
-  void errorsKeepOriginalSourceAndUtf16Positions() {
-    String regex = "😀\\Q\\E\\p{NotAProperty}";
-    try {
-      Pattern.compile(regex);
-      throw new AssertionError("expected syntax error");
-    } catch (PatternSyntaxException e) {
-      assertThat(e.getPattern()).isEqualTo(regex);
-      assertThat(e.getIndex()).isEqualTo(regex.indexOf("\\p"));
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"a", "ab", "😀", "ab😀# &-]abcdefghi"})
-  @DisabledForCrosscheck("Compilation allocation is a SafeRE complexity invariant")
-  void manyShortQuotedClassFragmentsAllocateLinearly(String span)
-      throws ReflectiveOperationException {
-    // #1059: suffix-sized buffers made short quoted spans allocate quadratically. The streaming
-    // lexer introduced in #1071 must keep allocation linear for every span length and code point.
-    // ThreadMXBean is a supported public JDK management API, accessed reflectively so this
-    // optional assertion does not add a jdk.management module dependency to the library.
-    Object bean =
-        Class.forName("java.lang.management.ManagementFactory")
-            .getMethod("getThreadMXBean")
-            .invoke(null);
-    Class<?> type = Class.forName("com.sun.management.ThreadMXBean");
-    Assumptions.assumeTrue(type.isInstance(bean));
-    Assumptions.assumeTrue(
-        (Boolean) type.getMethod("isThreadAllocatedMemorySupported").invoke(bean));
-    type.getMethod("setThreadAllocatedMemoryEnabled", boolean.class).invoke(bean, true);
-    Method allocated = type.getMethod("getThreadAllocatedBytes", long.class);
-    String[] patterns = new String[3];
-    for (int i = 0; i < patterns.length; i++) {
-      patterns[i] = "[" + ("\\Q" + span + "\\E").repeat(128 << (2 * i)) + "]";
-    }
-    for (int i = 0; i < 12; i++) {
-      for (String regex : patterns) {
-        Pattern.compile(regex);
-      }
-    }
-    long thread = Thread.currentThread().threadId();
-    long previous = 0;
-    for (String regex : patterns) {
-      long before = (Long) allocated.invoke(bean, thread);
-      Pattern.compile(regex);
-      long bytes = (Long) allocated.invoke(bean, thread) - before;
-      if (previous != 0) {
-        // Four times as many fixed-size spans may allocate proportionally, not quadratically.
-        assertThat(bytes)
-            .as("allocation for %s UTF-16 units", regex.length())
-            .isLessThan(previous * 6);
-      }
-      previous = bytes;
-    }
-  }
-
-  private static void assertSame(String regex, int flags) {
-    assertSame(regex, flags, INPUTS);
-  }
-
-  private static void assertSame(String regex, int flags, List<String> inputs) {
-    java.util.regex.Pattern expected;
-    try {
-      expected = java.util.regex.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException e) {
-      assertThatThrownBy(() -> Pattern.compile(regex, flags))
-          .as("rejection of %s with flags %s", regex, flags)
-          .isInstanceOf(PatternSyntaxException.class);
-      return;
-    }
-    Pattern actual = Pattern.compile(regex, flags);
-    for (String input : inputs) {
-      java.util.regex.Matcher jdk = expected.matcher(input);
-      Matcher safe = actual.matcher(input);
-      while (true) {
-        boolean found = jdk.find();
-        assertThat(safe.find())
-            .as("find: %s flags %s input %s", regex, flags, input)
-            .isEqualTo(found);
-        if (!found) break;
-        for (int group = 0; group <= jdk.groupCount(); group++) {
-          assertThat(safe.start(group))
-              .as("start: %s group %s", regex, group)
-              .isEqualTo(jdk.start(group));
-          assertThat(safe.end(group))
-              .as("end: %s group %s", regex, group)
-              .isEqualTo(jdk.end(group));
-          assertThat(safe.group(group))
-              .as("capture: %s group %s", regex, group)
-              .isEqualTo(jdk.group(group));
+            "(?x)[a #x\n b](?-x) c"
+        )) {
+            assertSame(regex!!, 0)
         }
-      }
+        val regex = "(?x)\\Q #😀+ \\E"
+        Assertions.assertThat(Pattern.compile(regex).pattern()).isEqualTo(regex)
+        Assertions.assertThat(Pattern.compile(regex).matcher(" #😀+ ").matches()).isTrue()
+        Assertions.assertThat(Pattern.compile(regex, Pattern.LITERAL).matcher(regex).matches()).isTrue()
     }
-  }
+
+    @Test
+    @DisabledForCrosscheck("Quoting delimiters in ignored comments cannot affect later syntax")
+    fun ignoredCommentQuotesDoNotChangeLexicalState() {
+        Assertions.assertThat(Pattern.compile("(?x)#\\Q\n.").matcher("x").matches()).isTrue()
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("(?x)#\\Q\n(") })
+            .isInstanceOf(PatternSyntaxException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("(?x)#\\Q\n\\E") })
+            .isInstanceOf(PatternSyntaxException::class.java)
+    }
+
+    @Test
+    @DisabledForCrosscheck("Original UTF-16 coordinates are SafeRE's diagnostic contract")
+    fun errorsKeepOriginalSourceAndUtf16Positions() {
+        val regex = "😀\\Q\\E\\p{NotAProperty}"
+        try {
+            Pattern.compile(regex)
+            throw AssertionError("expected syntax error")
+        } catch (e: PatternSyntaxException) {
+            Assertions.assertThat(e.getPattern()).isEqualTo(regex)
+            Assertions.assertThat(e.getIndex()).isEqualTo(regex.indexOf("\\p"))
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["a", "ab", "😀", "ab😀# &-]abcdefghi"])
+    @DisabledForCrosscheck("Compilation allocation is a SafeRE complexity invariant")
+    @Throws(
+        ReflectiveOperationException::class
+    )
+    fun manyShortQuotedClassFragmentsAllocateLinearly(span: String?) {
+        // #1059: suffix-sized buffers made short quoted spans allocate quadratically. The streaming
+        // lexer introduced in #1071 must keep allocation linear for every span length and code point.
+        // ThreadMXBean is a supported public JDK management API, accessed reflectively so this
+        // optional assertion does not add a jdk.management module dependency to the library.
+        val bean =
+            Class.forName("java.lang.management.ManagementFactory")
+                .getMethod("getThreadMXBean")
+                .invoke(null)
+        val type = Class.forName("com.sun.management.ThreadMXBean")
+        Assumptions.assumeTrue(type.isInstance(bean))
+        Assumptions.assumeTrue(
+            (type.getMethod("isThreadAllocatedMemorySupported").invoke(bean) as Boolean?)!!
+        )
+        type.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
+        val allocated = type.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
+        val patterns: Array<String> = arrayOfNulls<String>(3)
+        for (i in patterns.indices) {
+            patterns[i] = "[" + ("\\Q" + span + "\\E").repeat(128 shl (2 * i)) + "]"
+        }
+        for (i in 0..11) {
+            for (regex in patterns) {
+                Pattern.compile(regex)
+            }
+        }
+        val thread = Thread.currentThread().threadId()
+        var previous: Long = 0
+        for (regex in patterns) {
+            val before = allocated.invoke(bean, thread) as Long
+            Pattern.compile(regex)
+            val bytes = (allocated.invoke(bean, thread) as Long?)!! - before
+            if (previous != 0L) {
+                // Four times as many fixed-size spans may allocate proportionally, not quadratically.
+                Assertions.assertThat(bytes)
+                    .`as`("allocation for %s UTF-16 units", regex.length)
+                    .isLessThan(previous * 6)
+            }
+            previous = bytes
+        }
+    }
+
+    companion object {
+        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+            "",
+            "a",
+            "aa",
+            "aaa",
+            "aaaa",
+            "A",
+            "!",
+            "&",
+            "%",
+            "!a",
+            "mz",
+            " ",
+            "#",
+            "+",
+            "a+",
+            "😀",
+            "𠀀",
+            "\uD83D",
+            "\uD840",
+            "\uDE00",
+            "\uDC00",
+            "\uD83D\uD800\uDE00"
+        )
+
+        private fun assertSame(regex: String, flags: Int, inputs: MutableList<String> = INPUTS) {
+            val expected: Pattern?
+            try {
+                expected = Pattern.compile(regex, flags)
+            } catch (e: PatternSyntaxException) {
+                Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, flags) })
+                    .`as`("rejection of %s with flags %s", regex, flags)
+                    .isInstanceOf(PatternSyntaxException::class.java)
+                return
+            }
+            val actual = org.safere.Pattern.compile(regex, flags)
+            for (input in inputs) {
+                val jdk = expected.matcher(input)
+                val safe = actual.matcher(input)
+                while (true) {
+                    val found = jdk.find()
+                    Assertions.assertThat(safe.find())
+                        .`as`("find: %s flags %s input %s", regex, flags, input)
+                        .isEqualTo(found)
+                    if (!found) break
+                    for (group in 0..jdk.groupCount()) {
+                        Assertions.assertThat(safe.start(group))
+                            .`as`("start: %s group %s", regex, group)
+                            .isEqualTo(jdk.start(group))
+                        Assertions.assertThat(safe.end(group))
+                            .`as`("end: %s group %s", regex, group)
+                            .isEqualTo(jdk.end(group))
+                        Assertions.assertThat(safe.group(group))
+                            .`as`("capture: %s group %s", regex, group)
+                            .isEqualTo(jdk.group(group))
+                    }
+                }
+            }
+        }
+    }
 }

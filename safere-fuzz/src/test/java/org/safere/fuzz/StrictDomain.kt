@@ -2,101 +2,100 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import java.util.List
+import java.util.function.IntUnaryOperator
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.IntUnaryOperator;
+/** Bounded ASCII grammar shared by enumeration and coverage-guided sampling.  */
+internal object StrictDomain {
+    val ATOMS: MutableList<String> = mutableListOf<String?>("", "a", "b", "ab", "[ab]", "[^a]", "[a-c]", "\\.", ".")
+    val QUANTIFIERS: MutableList<String> = mutableListOf<String?>("?", "??", "*", "*?", "+", "+?", "{0,2}", "{1,3}?")
+    const val MAX_DEPTH: Int = 3
+    const val MAX_INPUT: Int = 24
 
-/** Bounded ASCII grammar shared by enumeration and coverage-guided sampling. */
-final class StrictDomain {
-  static final List<String> ATOMS =
-      List.of("", "a", "b", "ab", "[ab]", "[^a]", "[a-c]", "\\.", ".");
-  static final List<String> QUANTIFIERS =
-      List.of("?", "??", "*", "*?", "+", "+?", "{0,2}", "{1,3}?");
-  static final int MAX_DEPTH = 3;
-  static final int MAX_INPUT = 24;
-
-  private StrictDomain() {}
-
-  record Sample(String regex, String witness) {}
-
-  static Sample generate(FuzzedDataProvider data) {
-    return generate(bound -> data.consumeInt(0, bound - 1));
-  }
-
-  static Sample generate(IntUnaryOperator choice) {
-    return generate(choice, MAX_DEPTH);
-  }
-
-  // Recursion is statically bounded by MAX_DEPTH, independent of fuzz input.
-  private static Sample generate(IntUnaryOperator choice, int depth) {
-    int operation = depth == 0 ? 0 : choice.applyAsInt(5);
-    if (operation == 0) {
-      int atom = choice.applyAsInt(ATOMS.size());
-      return new Sample(
-          ATOMS.get(atom), List.of("", "a", "b", "ab", "a", "b", "a", ".", "a").get(atom));
+    fun generate(data: FuzzedDataProvider): Sample {
+        return generate(IntUnaryOperator { bound: Int -> data.consumeInt(0, bound - 1) })
     }
-    Sample left = generate(choice, depth - 1);
-    if (operation == 3) {
-      String quantifier = QUANTIFIERS.get(choice.applyAsInt(QUANTIFIERS.size()));
-      int copies = quantifier.startsWith("+") || quantifier.startsWith("{1") ? 1 : 0;
-      if (!quantifier.startsWith("?")) {
-        copies += choice.applyAsInt(2);
-      }
-      return new Sample(quantify(left.regex(), quantifier), left.witness().repeat(copies));
-    }
-    Sample right = generate(choice, depth - 1);
-    if (operation == 4) {
-      // Exercise the final empty iteration after a consuming iteration, with a lower-priority
-      // consuming alternative. In particular, NFA epsilon deduplication must retain the exit.
-      String body = concatenate(quantify(left.regex(), "?"), alternate("", right.regex()));
-      return new Sample(quantify(body, List.of("+", "*", "+?").get(choice.applyAsInt(3))), "");
-    }
-    if (operation == 1) {
-      return new Sample(concatenate(left.regex(), right.regex()), left.witness() + right.witness());
-    }
-    return new Sample(
-        alternate(left.regex(), right.regex()),
-        choice.applyAsInt(2) == 0 ? left.witness() : right.witness());
-  }
 
-  static String input(FuzzedDataProvider data) {
-    StringBuilder input = new StringBuilder();
-    int length = data.consumeInt(0, MAX_INPUT);
-    for (int index = 0; index < length; index++) {
-      input.append(
-          data.pickValue(
-              List.of("a", "b", "c", ".", "!", "é", "中", "😀", "\ud800", "\udc00", "\n")));
+    fun generate(choice: IntUnaryOperator): Sample {
+        return generate(choice, MAX_DEPTH)
     }
-    return input.toString();
-  }
 
-  static String concatenate(String left, String right) {
-    return "(?:" + left + ")(?:" + right + ")";
-  }
-
-  static String alternate(String left, String right) {
-    return "(?:" + left + "|" + right + ")";
-  }
-
-  static String quantify(String expression, String quantifier) {
-    return "(?:" + expression + ")" + quantifier;
-  }
-
-  static List<String> smallPatterns() {
-    List<String> result = new ArrayList<>(ATOMS);
-    for (String atom : ATOMS) {
-      for (String quantifier : QUANTIFIERS) {
-        result.add(quantify(atom, quantifier));
-      }
-      for (String right : ATOMS) {
-        result.add(concatenate(atom, right));
-        result.add(alternate(atom, right));
-      }
+    // Recursion is statically bounded by MAX_DEPTH, independent of fuzz input.
+    private fun generate(choice: IntUnaryOperator, depth: Int): Sample {
+        val operation = if (depth == 0) 0 else choice.applyAsInt(5)
+        if (operation == 0) {
+            val atom = choice.applyAsInt(ATOMS.size)
+            return Sample(
+                ATOMS.get(atom), mutableListOf<String?>("", "a", "b", "ab", "a", "b", "a", ".", "a").get(atom)
+            )
+        }
+        val left = generate(choice, depth - 1)
+        if (operation == 3) {
+            val quantifier = QUANTIFIERS.get(choice.applyAsInt(QUANTIFIERS.size))
+            var copies = if (quantifier.startsWith("+") || quantifier.startsWith("{1")) 1 else 0
+            if (!quantifier.startsWith("?")) {
+                copies += choice.applyAsInt(2)
+            }
+            return Sample(StrictDomain.quantify(left.regex!!, quantifier), left.witness!!.repeat(copies))
+        }
+        val right = generate(choice, depth - 1)
+        if (operation == 4) {
+            // Exercise the final empty iteration after a consuming iteration, with a lower-priority
+            // consuming alternative. In particular, NFA epsilon deduplication must retain the exit.
+            val body = concatenate(StrictDomain.quantify(left.regex!!, "?"), alternate("", right.regex))
+            return Sample(quantify(body, mutableListOf<String?>("+", "*", "+?").get(choice.applyAsInt(3))), "")
+        }
+        if (operation == 1) {
+            return Sample(StrictDomain.concatenate(left.regex!!, right.regex), left.witness + right.witness)
+        }
+        return Sample(
+            StrictDomain.alternate(left.regex!!, right.regex),
+            if (choice.applyAsInt(2) == 0) left.witness else right.witness
+        )
     }
-    return List.copyOf(result);
-  }
+
+    fun input(data: FuzzedDataProvider): String {
+        val input = StringBuilder()
+        val length = data.consumeInt(0, MAX_INPUT)
+        for (index in 0..<length) {
+            input.append(
+                data.pickValue<String?>(
+                    mutableListOf<String?>("a", "b", "c", ".", "!", "é", "中", "😀", "\ud800", "\udc00", "\n")
+                )
+            )
+        }
+        return input.toString()
+    }
+
+    fun concatenate(left: String, right: String?): String {
+        return "(?:" + left + ")(?:" + right + ")"
+    }
+
+    fun alternate(left: String, right: String?): String {
+        return "(?:" + left + "|" + right + ")"
+    }
+
+    fun quantify(expression: String, quantifier: String?): String {
+        return "(?:" + expression + ")" + quantifier
+    }
+
+    fun smallPatterns(): MutableList<String?> {
+        val result: MutableList<String?> = ArrayList<String?>(ATOMS)
+        for (atom in ATOMS) {
+            for (quantifier in QUANTIFIERS) {
+                result.add(quantify(atom, quantifier))
+            }
+            for (right in ATOMS) {
+                result.add(concatenate(atom, right))
+                result.add(alternate(atom, right))
+            }
+        }
+        return List.copyOf<String?>(result)
+    }
+
+    @JvmRecord
+    internal data class Sample(val regex: String?, val witness: String?)
 }

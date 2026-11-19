@@ -71,54 +71,26 @@
     <google-java-format.version>1.35.0</google-java-format.version>
     <pmd.version>7.29.0</pmd.version>
     <spotless.version>3.11.0</spotless.version>
+      <kotlin.version>2.2.20</kotlin.version>
   </properties>
 
-  <build>
+    <dependencies>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
+            <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-test</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
     <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.16.0</version>
-        <configuration>
-          <compilerArgs>
-            <arg>-Xlint</arg>
-            <arg>-Werror</arg>
-            <!-- Error Prone runs as a javac plugin. -XDcompilePolicy=simple tells javac to
-                 compile all files in a single batch (required by Error Prone). -->
-            <arg>-XDcompilePolicy=simple</arg>
-            <!-- Continue compilation past type-checking errors so Error Prone can analyze
-                 code that has downstream errors in later phases. -->
-            <arg>--should-stop=ifError=FLOW</arg>
-          </compilerArgs>
-          <annotationProcessorPaths>
-            <path>
-              <groupId>com.google.errorprone</groupId>
-              <artifactId>error_prone_core</artifactId>
-              <version>${error-prone.version}</version>
-            </path>
-          </annotationProcessorPaths>
-        </configuration>
-        <executions>
-          <!-- Production code also gets ${error-prone.production-checks}; tests do not. -->
-          <execution>
-            <id>default-compile</id>
-            <configuration>
-              <compilerArgs combine.children="append">
-                <arg>-Xplugin:ErrorProne ${error-prone.checks} ${error-prone.production-checks} ${error-prone.library-checks} ${error-prone.extra-checks}</arg>
-              </compilerArgs>
-            </configuration>
-          </execution>
-          <execution>
-            <id>default-testCompile</id>
-            <configuration>
-              <compilerArgs combine.children="append">
-                <arg>-Xplugin:ErrorProne ${error-prone.checks} ${error-prone.extra-checks}</arg>
-              </compilerArgs>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
+        <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
         <version>${spotless.version}</version>
@@ -143,6 +115,87 @@
           </execution>
         </executions>
       </plugin>
+        <plugin>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-plugin</artifactId>
+            <version>${kotlin.version}</version>
+            <executions>
+                <execution>
+                    <id>compile</id>
+                    <phase>compile</phase>
+                    <goals>
+                        <goal>compile</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>test-compile</id>
+                    <phase>test-compile</phase>
+                    <goals>
+                        <goal>test-compile</goal>
+                    </goals>
+                </execution>
+            </executions>
+            <configuration>
+                <jvmTarget>1.8</jvmTarget>
+            </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.16.0</version>
+          <configuration>
+            <compilerArgs>
+              <arg>-Xlint</arg>
+              <arg>-Werror</arg>
+              <!-- Error Prone runs as a javac plugin. -XDcompilePolicy=simple tells javac to
+                   compile all files in a single batch (required by Error Prone). -->
+              <arg>-XDcompilePolicy=simple</arg>
+              <!-- Continue compilation past type-checking errors so Error Prone can analyze
+                   code that has downstream errors in later phases. -->
+              <arg>--should-stop=ifError=FLOW</arg>
+            </compilerArgs>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_core</artifactId>
+                <version>${error-prone.version}</version>
+              </path>
+            </annotationProcessorPaths>
+          </configuration>
+          <executions>
+            <!-- Production code also gets ${error-prone.production-checks}; tests do not. -->
+            <execution>
+              <id>default-compile</id>
+              <configuration>
+                <compilerArgs combine.children="append">
+                  <arg>-Xplugin:ErrorProne ${error-prone.checks} ${error-prone.production-checks} ${error-prone.library-checks} ${error-prone.extra-checks}</arg>
+                </compilerArgs>
+              </configuration>
+            </execution>
+            <execution>
+              <id>default-testCompile</id>
+              <configuration>
+                <compilerArgs combine.children="append">
+                  <arg>-Xplugin:ErrorProne ${error-prone.checks} ${error-prone.extra-checks}</arg>
+                </compilerArgs>
+              </configuration>
+            </execution>
+              <execution>
+                  <id>compile</id>
+                  <phase>compile</phase>
+                  <goals>
+                      <goal>compile</goal>
+                  </goals>
+              </execution>
+              <execution>
+                  <id>testCompile</id>
+                  <phase>test-compile</phase>
+                  <goals>
+                      <goal>testCompile</goal>
+                  </goals>
+              </execution>
+          </executions>
+        </plugin>
     </plugins>
   </build>
 

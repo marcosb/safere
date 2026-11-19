@@ -2,723 +2,817 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.re2j.Pattern
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.assertj.core.api.ThrowingConsumer
+import org.assertj.core.api.iterable.ThrowingExtractor
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.api.parallel.ResourceLock
+import org.junit.jupiter.api.parallel.Resources
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.openjdk.jmh.infra.Blackhole
+import org.safere.benchmark.BenchmarkCollectionPlan.CollectionTrial
+import org.safere.benchmark.BenchmarkCollectionPlan.ReportExclusion
+import org.safere.benchmark.CrossEngineWorkload.TimingGroup
+import org.safere.benchmark.DeclarativeBenchmarkPlan.*
+import org.safere.benchmark.RegexEngineVariant.CompiledRegex
+import org.safere.benchmark.RegexEngineVariant.MatchCursor
+import org.safere.benchmark.RegexEngineVariant.RegexInput
+import org.safere.benchmark.RegexEngineVariant.StringRegexInput
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.List
+import java.util.function.Consumer
+import java.util.function.Predicate
+import kotlin.AssertionError
+import kotlin.Boolean
+import kotlin.Exception
+import kotlin.IllegalArgumentException
+import kotlin.IllegalStateException
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.RuntimeException
+import kotlin.Throws
+import kotlin.UnsupportedOperationException
+import kotlin.arrayOf
+import kotlin.code
+import kotlin.collections.ArrayList
+import kotlin.collections.HashSet
+import kotlin.collections.MutableList
+import kotlin.collections.MutableSet
+import kotlin.collections.filter
+import kotlin.collections.lastIndexOf
+import kotlin.collections.map
+import kotlin.collections.mutableListOf
+import kotlin.collections.mutableSetOf
+import kotlin.collections.plus
+import kotlin.collections.toList
+import kotlin.collections.toTypedArray
+import kotlin.intArrayOf
+import kotlin.io.startsWith
+import kotlin.io.use
+import kotlin.map
+import kotlin.plus
+import kotlin.run
+import kotlin.sequences.filter
+import kotlin.sequences.lastIndexOf
+import kotlin.sequences.map
+import kotlin.sequences.plus
+import kotlin.sequences.toList
+import kotlin.streams.asStream
+import kotlin.text.contains
+import kotlin.text.endsWith
+import kotlin.text.get
+import kotlin.text.lastIndexOf
+import kotlin.text.lineSequence
+import kotlin.text.map
+import kotlin.text.split
+import kotlin.text.startsWith
+import kotlin.text.substring
+import kotlin.text.toByteArray
+import kotlin.text.toList
+import kotlin.text.toRegex
+import kotlin.toList
+import kotlin.toString
+import kotlin.use
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.parallel.ResourceLock;
-import org.junit.jupiter.api.parallel.Resources;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.openjdk.jmh.infra.Blackhole;
-
-class CrossEngineBenchmarkPlanTest {
-  // This is a historical floor, not a snapshot. Additions do not raise it.
-  private static final int MINIMUM_CROSS_ENGINE_WORKLOADS = 606;
-  private static final int MINIMUM_RUNNABLE_CROSS_ENGINE_TRIALS = 2_448;
-  private static final int MINIMUM_SPECIALIZED_AVERAGE_TIME_TRIALS = 63;
-  private static final int MINIMUM_SPECIALIZED_RETAINED_MEMORY_TRIALS = 34;
-  private static final int MINIMUM_COLLECTION_RUNNER_TRIALS = 2_487;
-
-  @TempDir static Path temporaryDirectory;
-
-  @BeforeAll
-  static void materializeCorpus() throws Exception {
-    Path benchmarkDirectory =
-        Files.exists(Path.of("benchmark-data.json")) ? Path.of(".") : Path.of("safere-benchmarks");
-    BenchmarkInputMaterializer.main(
-        new String[] {benchmarkDirectory.toString(), temporaryDirectory.toString()});
-    System.setProperty("safere.benchmark.corpus", temporaryDirectory.toString());
-  }
-
-  @Test
-  void everyRunnableRe2jPatternCompiles() {
-    List<MaterializedExecutionPlan.Entry> entries =
-        MaterializedExecutionPlan.load().entries().stream()
-            .filter(entry -> entry.engineId().equals("re2j-string") && entry.runnable())
-            .toList();
-    assertThat(entries).isNotEmpty();
-    for (MaterializedExecutionPlan.Entry entry : entries) {
-      for (String pattern : entry.workload().patterns()) {
-        assertThatCode(() -> com.google.re2j.Pattern.compile(pattern))
-            .as("%s pattern %s", entry.id(), pattern)
-            .doesNotThrowAnyException();
-      }
-    }
-  }
-
-  @Test
-  void workloadIdsAreUniqueStableReportIdentities() {
-    List<String> ids =
-        CrossEngineBenchmarkPlan.load().workloads().stream().map(CrossEngineWorkload::id).toList();
-
-    assertThat(ids).doesNotHaveDuplicates();
-    assertThat(ids)
-        .contains(
-            "RegexBenchmark.literalMatch",
-            "ApplicationBenchmark.uuidValidation",
-            "RealWorldRegexBenchmark.runBenchmark.mapFieldPath.match.1000",
-            "HttpBenchmark.httpFull",
-            "SearchScalingBenchmark.searchEasyFail.1024",
-            "FanoutBenchmark.fanoutUnicode.1024");
-    assertThat(ids).hasSizeGreaterThanOrEqualTo(MINIMUM_CROSS_ENGINE_WORKLOADS);
-  }
-
-  @Test
-  void everyWorkloadEnginePairIsScheduledOrExplicitlyExcluded() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-    List<CrossEngineBenchmarkPlan.Trial> allTrials =
-        List.of(
-                plan.trials(CrossEngineWorkload.TimingGroup.NANOSECONDS),
-                plan.trials(CrossEngineWorkload.TimingGroup.MICROSECONDS),
-                plan.trials(CrossEngineWorkload.TimingGroup.MILLISECONDS))
-            .stream()
-            .flatMap(List::stream)
-            .toList();
-    Set<String> accounted = new HashSet<>();
-    allTrials.forEach(trial -> assertThat(accounted.add(trial.id())).isTrue());
-    plan.exclusions()
-        .forEach(
-            exclusion ->
-                assertThat(accounted.add(exclusion.workloadId() + "@" + exclusion.engineId()))
-                    .isTrue());
-
-    for (CrossEngineWorkload workload : plan.workloads()) {
-      assertThat(
-              allTrials.stream()
-                  .filter(trial -> trial.workload().id().equals(workload.id()))
-                  .map(CrossEngineBenchmarkPlan.Trial::variant))
-          .containsAnyOf(RegexEngineVariant.SAFERE_STRING, RegexEngineVariant.SAFERE_UTF8);
-    }
-    assertThat(allTrials).hasSizeGreaterThanOrEqualTo(MINIMUM_RUNNABLE_CROSS_ENGINE_TRIALS);
-    Set<String> expected = new HashSet<>();
-    for (CrossEngineWorkload workload : plan.workloads()) {
-      for (RegexEngineVariant variant : RegexEngineVariant.values()) {
-        expected.add(workload.id() + "@" + variant.id());
-      }
-    }
-    assertThat(accounted).containsExactlyInAnyOrderElementsOf(expected);
-  }
-
-  @Test
-  void utf8TrialPreparationRejectsTheWrongProviderBeforeMeasurement() {
-    String property = "org.safere.experimental.vectorScanProvider";
-    String previous = System.getProperty(property);
-    try {
-      System.clearProperty(property);
-      assertThatThrownBy(
-              () ->
-                  CrossEngineTrialRunner.prepare(
-                      "RegexBenchmark.emailFind@safere-utf8-vector",
-                      CrossEngineWorkload.TimingGroup.NANOSECONDS))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("requires -D" + property + "=vector");
-      assertThatThrownBy(
-              () ->
-                  SpecializedTrialRunner.prepare(
-                      "Utf8MatchingBenchmark.captureBounds.numbered@safere-utf8-vector"))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("requires -D" + property + "=vector");
-      System.setProperty(property, "vector");
-      assertThatThrownBy(
-              () ->
-                  CrossEngineTrialRunner.prepare(
-                      "RegexBenchmark.emailFind@safere-utf8",
-                      CrossEngineWorkload.TimingGroup.NANOSECONDS))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("requires default provider selection");
-    } finally {
-      if (previous == null) {
-        System.clearProperty(property);
-      } else {
-        System.setProperty(property, previous);
-      }
-    }
-  }
-
-  @Test
-  void vectorUtf8PreservesWorkloadsExclusionsAndProviderMetadata() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    List<BenchmarkCollectionPlan.CollectionTrial> defaults =
-        plan.reportPlan().trials().stream()
-            .filter(trial -> trial.executionVariant().equals("safere-utf8"))
-            .toList();
-    List<BenchmarkCollectionPlan.CollectionTrial> vector =
-        plan.reportPlan().trials().stream()
-            .filter(trial -> trial.executionVariant().equals("safere-utf8-vector"))
-            .toList();
-    assertThat(vector)
-        .isNotEmpty()
-        .allSatisfy(trial -> assertThat(trial.requestedScanProvider()).isEqualTo("vector"));
-    assertThat(vector)
-        .extracting(BenchmarkCollectionPlan.CollectionTrial::workloadId)
-        .containsExactlyElementsOf(
-            defaults.stream().map(BenchmarkCollectionPlan.CollectionTrial::workloadId).toList());
-    assertThat(vector)
-        .extracting(BenchmarkCollectionPlan.CollectionTrial::measurement)
-        .containsExactlyElementsOf(
-            defaults.stream().map(BenchmarkCollectionPlan.CollectionTrial::measurement).toList());
-    assertThat(
-            plan.reportPlan().exclusions().stream()
-                .filter(row -> row.executionVariant().equals("safere-utf8-vector"))
-                .map(row -> row.workloadId() + ":" + row.kind() + ":" + row.reason()))
-        .containsExactlyElementsOf(
-            plan.reportPlan().exclusions().stream()
-                .filter(row -> row.executionVariant().equals("safere-utf8"))
-                .map(row -> row.workloadId() + ":" + row.kind() + ":" + row.reason())
-                .toList());
-  }
-
-  @Test
-  void executionGroupsIsolateProvidersAndPreserveFullAndSmokeMembership() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    for (boolean smoke : List.of(false, true)) {
-      List<BenchmarkCollectionPlan.Runner> groups = plan.executionRunners(false, smoke);
-      assertThat(groups)
-          .allSatisfy(
-              group -> {
-                String provider =
-                    RegexEngineVariant.fromId(
-                            group
-                                .trialIds()
-                                .getFirst()
-                                .substring(group.trialIds().getFirst().lastIndexOf('@') + 1))
-                        .scanProvider();
-                assertThat(group.trialIds())
-                    .allMatch(id -> BenchmarkCollectionPlan.matchesScanProvider(id, provider));
-              });
-      assertThat(groups.stream().flatMap(group -> group.trialIds().stream()))
-          .containsExactlyInAnyOrderElementsOf(
-              plan.reportPlan(smoke).trials().stream()
-                  .map(BenchmarkCollectionPlan.CollectionTrial::id)
-                  .toList());
-    }
-    assertThat(plan.forScanProvider("vector").runners())
-        .flatExtracting(BenchmarkCollectionPlan.Runner::trialIds)
-        .isNotEmpty()
-        .allMatch(id -> id.endsWith("@safere-utf8-vector"));
-    assertThat(plan.forScanProvider("default").allocationRunners())
-        .flatExtracting(BenchmarkCollectionPlan.Runner::trialIds)
-        .noneMatch(id -> id.endsWith("@safere-utf8-vector"));
-    assertThat(
-            plan.executionRunners(true, false).stream().flatMap(group -> group.trialIds().stream()))
-        .containsExactlyInAnyOrderElementsOf(
-            plan.allocationRunners().stream().flatMap(group -> group.trialIds().stream()).toList());
-  }
-
-  @Test
-  void longRecitationListsExcludeOnlyJdkTrialsThatOverflowItsStack() {
-    List<MaterializedExecutionPlan.Entry> exclusions =
-        CrossEngineBenchmarkPlan.load().exclusions().stream()
-            .filter(
-                exclusion ->
-                    exclusion
-                            .workloadId()
-                            .startsWith("RealWorldRegexBenchmark.runBenchmark.recitation.")
-                        && exclusion.engineId().equals("jdk-string"))
-            .toList();
-
-    assertThat(exclusions)
-        .extracting(MaterializedExecutionPlan.Entry::id)
-        .containsExactly(
-            "RealWorldRegexBenchmark.runBenchmark.recitation.match.10000@jdk-string",
-            "RealWorldRegexBenchmark.runBenchmark.recitation.match.100000@jdk-string",
-            "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.10000@jdk-string",
-            "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.100000@jdk-string");
-    assertThat(exclusions)
-        .allSatisfy(
-            exclusion -> {
-              assertThat(exclusion.exclusion().kind()).isEqualTo("explicitTrialExclusion");
-              assertThat(exclusion.exclusion().reason())
-                  .isEqualTo(
-                      "JDK's backtracking matcher throws StackOverflowError for the nested "
-                          + "quantified recitation pattern at these input sizes");
-            });
-  }
-
-  @Test
-  void trialExpansionIsDeterministicAndPreservesTimingGroups() {
-    CrossEngineBenchmarkPlan first = CrossEngineBenchmarkPlan.load();
-    CrossEngineBenchmarkPlan second = CrossEngineBenchmarkPlan.load();
-
-    Set<String> trialIds = new HashSet<>();
-    for (CrossEngineWorkload.TimingGroup timingGroup : CrossEngineWorkload.TimingGroup.values()) {
-      List<CrossEngineBenchmarkPlan.Trial> firstTrials = first.trials(timingGroup);
-      assertThat(firstTrials)
-          .as(timingGroup.name())
-          .isNotEmpty()
-          .allMatch(trial -> trial.workload().timingGroup() == timingGroup)
-          .extracting(CrossEngineBenchmarkPlan.Trial::id)
-          .containsExactlyElementsOf(
-              second.trials(timingGroup).stream().map(CrossEngineBenchmarkPlan.Trial::id).toList());
-      firstTrials.forEach(trial -> assertThat(trialIds.add(trial.id())).as(trial.id()).isTrue());
-    }
-  }
-
-  @Test
-  void utf8ParticipatesInEveryOperationSupportedByItsNativeApi() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-    List<CrossEngineBenchmarkPlan.Trial> utf8Trials =
-        List.of(
-                plan.trials(CrossEngineWorkload.TimingGroup.NANOSECONDS),
-                plan.trials(CrossEngineWorkload.TimingGroup.MICROSECONDS))
-            .stream()
-            .flatMap(List::stream)
-            .filter(trial -> trial.variant() == RegexEngineVariant.SAFERE_UTF8)
-            .toList();
-
-    assertThat(utf8Trials).isNotEmpty();
-    assertThat(utf8Trials)
-        .extracting(trial -> trial.workload().operation())
-        .contains(
-            BenchmarkOperation.FIND,
-            BenchmarkOperation.FIND_ALL_COUNT,
-            BenchmarkOperation.MATCHES,
-            BenchmarkOperation.MATCHES_CORPUS,
-            BenchmarkOperation.LOOKING_AT,
-            BenchmarkOperation.MATCHER_RESET_FIND,
-            BenchmarkOperation.MATCHER_REGION_FIND,
-            BenchmarkOperation.FIND_GROUP_PRESENT,
-            BenchmarkOperation.REPLACE_FIRST,
-            BenchmarkOperation.REPLACE_ALL,
-            BenchmarkOperation.REPLACE_ALL_LENGTH_SUM,
-            BenchmarkOperation.MANUAL_REPLACE_ALL,
-            BenchmarkOperation.CAPTURE_GROUPS,
-            BenchmarkOperation.FIND_GROUP)
-        .doesNotContain(BenchmarkOperation.SPLIT_LENGTH_SUM);
-  }
-
-  @Test
-  void utf8ReplacementTrialsCoverGenericBenchmarkFamilies() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-
-    assertThat(
-            List.of(
-                    plan.trials(CrossEngineWorkload.TimingGroup.NANOSECONDS),
-                    plan.trials(CrossEngineWorkload.TimingGroup.MICROSECONDS))
-                .stream()
-                .flatMap(List::stream)
-                .filter(trial -> trial.variant() == RegexEngineVariant.SAFERE_UTF8)
-                .map(CrossEngineBenchmarkPlan.Trial::id))
-        .contains(
-            "ApplicationBenchmark.secretRedaction@safere-utf8",
-            "RealWorldRegexBenchmark.runBenchmark.markupImageLink.match.1000@safere-utf8",
-            "ReplaceBenchmark.literalReplaceFirst@safere-utf8",
-            "ReplaceBenchmark.literalReplaceFirstNoMatch@safere-utf8",
-            "ReplaceBenchmark.startAnchoredReplaceFirstNoMatch.literal@safere-utf8",
-            "ReplaceBenchmark.startAnchoredReplaceFirstNoMatch.charClass@safere-utf8",
-            "ReplaceBenchmark.startAnchoredReplaceAllNoMatch.literal@safere-utf8",
-            "ReplaceBenchmark.startAnchoredReplaceAllNoMatch.charClass@safere-utf8",
-            "ReplaceBenchmark.pigLatinReplaceAll@safere-utf8",
-            "ReplaceBenchmark.anchoredReplace@safere-utf8",
-            "ReplaceBenchmark.manualReplaceAll@safere-utf8");
-  }
-
-  @Test
-  void unsupportedCombinationIsDistinctFromMissingImplementation() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-
-    assertThat(plan.resolve("RegexBenchmark.literalMatch@safere-utf8")).isNotNull();
-    assertThat(plan.resolve("HttpBenchmark.httpExtract@safere-utf8")).isNotNull();
-    assertThatThrownBy(() -> plan.resolve("Issue481ScalingBenchmark.splitWords.128@safere-utf8"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Unsupported cross-engine combination")
-        .hasMessageContaining("split");
-    assertThatThrownBy(() -> plan.resolve("missing.workload@safere-string"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unknown cross-engine workload ID: missing.workload");
-  }
-
-  @Test
-  void inputRepresentationsExposeTheirTimingBoundaries() {
-    assertThat(RegexEngineVariant.SAFERE_STRING.inputRepresentation())
-        .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING);
-    assertThat(RegexEngineVariant.SAFERE_UTF8.inputRepresentation())
-        .isEqualTo(RegexEngineVariant.InputRepresentation.PREEXISTING_UTF8);
-    assertThat(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.inputRepresentation())
-        .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION);
-  }
-
-  @Test
-  void re2BasedAdaptersShareARegexSyntaxProfile() {
-    assertThat(RegexEngineVariant.RE2J_STRING.patternProfile()).isEqualTo("re2");
-    assertThat(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.patternProfile()).isEqualTo("re2");
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "0,15",
-    "CASE_INSENSITIVE,8",
-    "CASE_INSENSITIVE_UNICODE_CASE,7",
-    "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,5"
-  })
-  void unicodeCompileRowsAdmitOnlyEquivalentRe2jOptions(String flagSet, int expectedRunnable) {
-    MaterializedExecutionPlan plan = MaterializedExecutionPlan.load();
-    List<MaterializedExecutionPlan.Entry> rows =
-        plan.entries().stream()
-            .filter(entry -> entry.engineId().equals("re2j-string"))
-            .filter(entry -> entry.workloadId().startsWith("UnicodeCompileBenchmark.compile."))
-            .filter(entry -> entry.workloadId().endsWith("." + flagSet))
-            .toList();
-    assertThat(rows).hasSize(19);
-    assertThat(rows.stream().filter(MaterializedExecutionPlan.Entry::runnable))
-        .hasSize(expectedRunnable);
-    for (MaterializedExecutionPlan.Entry row : rows) {
-      if (!row.runnable()) {
-        assertThat(row.exclusion().kind()).isIn("unsupportedSyntax", "explicitTrialExclusion");
-        assertThat(row.exclusion().reason()).isNotBlank();
-      }
-    }
-    for (String property : List.of("alphabetic", "ideographic", "emoji", "extendedPictographic")) {
-      MaterializedExecutionPlan.Entry row =
-          plan.resolve(
-              "UnicodeCompileBenchmark.compile." + property + "." + flagSet + "@re2j-string");
-      assertThat(row.runnable()).isFalse();
-      assertThat(row.exclusion().kind()).isEqualTo("unsupportedSyntax");
-    }
-  }
-
-  @Test
-  void admittedUnicodeCompileRowsPreserveDeclaredSemantics() {
-    MaterializedExecutionPlan plan = MaterializedExecutionPlan.load();
-    // Stable characters exercise folding, categories, scripts, blocks and predefined classes.
-    // Engine Unicode database versions differ; this is not a Unicode-version conformance test.
-    List<String> inputs =
-        List.of(
-            "", "a", "A", "I", "i", "İ", "ı", "ſ", "K", "ß", "ẞ", "ǅ", "ǆ", "Ǆ", "α", "Α", "Σ", "ς",
-            "σ", "中", "𠀀", "𐐀", "𐐨", "1", "١", "_", " ", "\t", "\n", "\r", "\f", "\u000B",
-            "\u00A0", "\u2003", "!", "abc_12");
-    for (MaterializedExecutionPlan.Entry row : plan.entries()) {
-      if (!row.engineId().equals("re2j-string")
-          || !row.runnable()
-          || !(row.workloadId().startsWith("UnicodeCompileBenchmark.compile.")
-              || row.workloadId().startsWith("UnicodeFirstCompileBenchmark.firstCompile."))) {
-        continue;
-      }
-      String flagSet =
-          ((DeclarativeBenchmarkPlan.RecipeString) row.workload().arguments().get("flagSet"))
-              .value();
-      String canonical =
-          plan.resolve(row.workloadId() + "@jdk-string").workload().patterns().getFirst();
-      java.util.regex.Pattern jdk =
-          java.util.regex.Pattern.compile(canonical, BenchmarkFlags.parse(flagSet));
-      com.google.re2j.Pattern re2j =
-          (com.google.re2j.Pattern)
-              RegexEngineVariant.RE2J_STRING.compileForBenchmark(
-                  row.workload().patterns().getFirst(), flagSet);
-      for (String input : inputs) {
-        assertThat(re2j.matcher(input).matches())
-            .as("%s input %s", row.id(), input)
-            .isEqualTo(jdk.matcher(input).matches());
-      }
-      if (!flagSet.equals("0")) {
-        java.util.regex.Pattern unflaggedJdk = java.util.regex.Pattern.compile(canonical);
-        com.google.re2j.Pattern unflaggedRe2j =
-            com.google.re2j.Pattern.compile(row.workload().patterns().getFirst());
-        for (int codePoint = 0; codePoint <= Character.MAX_VALUE; codePoint++) {
-          if (Character.isSurrogate((char) codePoint)) {
-            continue;
-          }
-          String input = Character.toString(codePoint);
-          // Ignore existing Unicode database differences; isolate the admitted flag mapping.
-          if (unflaggedJdk.matcher(input).matches() != unflaggedRe2j.matcher(input).matches()) {
-            continue;
-          }
-          assertThat(re2j.matcher(input).matches())
-              .as("%s U+%04X", row.id(), codePoint)
-              .isEqualTo(jdk.matcher(input).matches());
+internal class CrossEngineBenchmarkPlanTest {
+    @Test
+    fun everyRunnableRe2jPatternCompiles() {
+        val entries: MutableList<MaterializedExecutionPlan.Entry> =
+            MaterializedExecutionPlan.Companion.load().entries().stream()
+                .filter { entry: MaterializedExecutionPlan.Entry -> entry.engineId == "re2j-string" && entry.runnable() }
+                .toList()
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(entries).isNotEmpty()
+        for (entry in entries) {
+            for (pattern in entry.workload.patterns) {
+                Assertions.assertThatCode(ThrowingCallable { Pattern.compile(pattern) })
+                    .`as`("%s pattern %s", entry.id, pattern)
+                    .doesNotThrowAnyException()
+            }
         }
-      }
     }
-  }
 
-  @ParameterizedTest
-  @CsvSource({"0,9", "CASE_INSENSITIVE_UNICODE_CASE,4", "UNICODE_CHARACTER_CLASS,0"})
-  void coldUnicodeCompileRowsRetainEquivalentRe2jOptions(String flagSet, int expectedRunnable) {
-    assertThat(
-            MaterializedExecutionPlan.load().entries().stream()
-                .filter(entry -> entry.engineId().equals("re2j-string") && entry.runnable())
-                .filter(
-                    entry ->
-                        entry.workloadId().startsWith("UnicodeFirstCompileBenchmark.firstCompile."))
-                .filter(entry -> entry.workloadId().endsWith("." + flagSet)))
-        .hasSize(expectedRunnable);
-  }
+    @Test
+    fun workloadIdsAreUniqueStableReportIdentities() {
+        val ids: MutableList<String> =
+            CrossEngineBenchmarkPlan.Companion.load().workloads().stream().map<String?>(CrossEngineWorkload::id)
+                .toList()
 
-  @ParameterizedTest
-  @CsvSource({
-    "uppercaseLetter,CASE_INSENSITIVE_UNICODE_CASE,ı",
-    "lowercaseLetter,CASE_INSENSITIVE,A",
-    "titlecaseLetter,CASE_INSENSITIVE,A",
-    "letterIntersection,CASE_INSENSITIVE,a",
-    "blockBasicLatin,CASE_INSENSITIVE,K",
-    "asciiLower,CASE_INSENSITIVE,ſ",
-    "asciiRange,CASE_INSENSITIVE_UNICODE_CASE,İ",
-    "word,CASE_INSENSITIVE_UNICODE_CASE,K",
-    "word,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,α",
-    "digit,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,١",
-    "space,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,'\u2003'"
-  })
-  void excludedUnicodeCompileRowsHaveDemonstrablyDifferentFlagSemantics(
-      String regex, String flagSet, String input) {
-    MaterializedExecutionPlan plan = MaterializedExecutionPlan.load();
-    String prefix = "UnicodeCompileBenchmark.compile." + regex + ".";
-    assertThat(plan.resolve(prefix + flagSet + "@re2j-string").exclusion().kind())
-        .isEqualTo("explicitTrialExclusion");
-    String canonical =
-        plan.resolve(prefix + flagSet + "@jdk-string").workload().patterns().getFirst();
-    String alternate = plan.resolve(prefix + "0@re2j-string").workload().patterns().getFirst();
-    assertThat(
-            com.google.re2j.Pattern.compile(alternate, com.google.re2j.Pattern.CASE_INSENSITIVE)
-                .matcher(input)
-                .matches())
-        .isNotEqualTo(
-            java.util.regex.Pattern.compile(canonical, BenchmarkFlags.parse(flagSet))
-                .matcher(input)
-                .matches());
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "0,0",
-    "CASE_INSENSITIVE,1",
-    "CASE_INSENSITIVE_UNICODE_CASE,1",
-    "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,1"
-  })
-  void re2jCompileAdapterMapsFlagIdentitiesExplicitly(String flagSet, int expectedFlags) {
-    com.google.re2j.Pattern pattern =
-        (com.google.re2j.Pattern) RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", flagSet);
-    assertThat(pattern.flags()).isEqualTo(expectedFlags);
-    assertThat(pattern.matcher("A").matches()).isEqualTo(expectedFlags != 0);
-    assertThat(pattern.matcher("\n").matches()).isFalse();
-  }
-
-  @Test
-  void re2jCompileAdapterRejectsUnsupportedFlagIdentities() {
-    assertThatThrownBy(
-            () ->
-                RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", "UNICODE_CHARACTER_CLASS"))
-        .isInstanceOf(UnsupportedOperationException.class)
-        .hasMessageContaining("UNICODE_CHARACTER_CLASS");
-    assertThatThrownBy(() -> RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", "unknown"))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "newPerInvocation,capture,5,3",
-    "retained,capture,1,3",
-    "newPerInvocation,boolean,5,0",
-    "retained,boolean,1,0"
-  })
-  void sampledCaptureWorkloadHonorsMatcherLifetimeAndReadFrequency(
-      String reuse, String mode, int expectedMatchers, int expectedReads) {
-    int[] creations = {0};
-    int[] resets = {0};
-    int[] reads = {0};
-    RegexEngineVariant.CompiledRegex pattern =
-        new RegexEngineVariant.CompiledRegex() {
-          @Override
-          public RegexEngineVariant.MatchCursor matcher(RegexEngineVariant.RegexInput input) {
-            creations[0]++;
-            return new RegexEngineVariant.MatchCursor() {
-              @Override
-              public boolean find() {
-                return true;
-              }
-
-              @Override
-              public int start(int group) {
-                assertThat(group).isEqualTo(1);
-                reads[0]++;
-                return 0;
-              }
-
-              @Override
-              public void reset() {
-                resets[0]++;
-              }
-            };
-          }
-        };
-    BenchmarkOperation.BenchmarkTask task =
-        BenchmarkOperation.FIND_SAMPLED_GROUP.bind(
-            RegexEngineVariant.SAFERE_STRING,
-            List.of("(a)"),
-            List.of(pattern),
-            List.of(new RegexEngineVariant.StringRegexInput("a")),
-            new int[] {1},
-            null,
-            0,
-            new DeclarativeBenchmarkPlan.MatcherLifecycle(
-                DeclarativeBenchmarkPlan.MatcherReuse.fromJson(reuse), List.of()),
-            null,
-            0,
-            2,
-            mode);
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-    for (int i = 0; i < 5; i++) {
-      task.run(blackhole);
+        Assertions.assertThat<String?>(ids).doesNotHaveDuplicates()
+        Assertions.assertThat<String?>(ids)
+            .contains(
+                "RegexBenchmark.literalMatch",
+                "ApplicationBenchmark.uuidValidation",
+                "RealWorldRegexBenchmark.runBenchmark.mapFieldPath.match.1000",
+                "HttpBenchmark.httpFull",
+                "SearchScalingBenchmark.searchEasyFail.1024",
+                "FanoutBenchmark.fanoutUnicode.1024"
+            )
+        Assertions.assertThat<String?>(ids).hasSizeGreaterThanOrEqualTo(MINIMUM_CROSS_ENGINE_WORKLOADS)
     }
-    assertThat(creations[0]).isEqualTo(expectedMatchers);
-    assertThat(reads[0]).isEqualTo(expectedReads);
-    assertThat(resets[0]).isEqualTo(reuse.equals("retained") ? 5 : 0);
-  }
 
-  @Test
-  void matcherLifecycleControlsCursorConstruction() {
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-    for (BenchmarkOperation operation :
-        List.of(BenchmarkOperation.MATCHER_REGION_FIND, BenchmarkOperation.MATCHER_RESET_FIND)) {
-      for (DeclarativeBenchmarkPlan.MatcherReuse reuse :
-          List.of(
-              DeclarativeBenchmarkPlan.MatcherReuse.RETAINED,
-              DeclarativeBenchmarkPlan.MatcherReuse.NEW_PER_INVOCATION)) {
-        List<RegexEngineVariant.MatchCursor> created = new ArrayList<>();
-        RegexEngineVariant.CompiledRegex pattern =
-            new RegexEngineVariant.CompiledRegex() {
-              @Override
-              public RegexEngineVariant.MatchCursor matcher(RegexEngineVariant.RegexInput input) {
-                RegexEngineVariant.MatchCursor cursor =
-                    new RegexEngineVariant.MatchCursor() {
-                      private boolean found;
+    @Test
+    fun everyWorkloadEnginePairIsScheduledOrExplicitlyExcluded() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val allTrials =
+            List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
+                plan.trials(TimingGroup.NANOSECONDS),
+                plan.trials(TimingGroup.MICROSECONDS),
+                plan.trials(TimingGroup.MILLISECONDS)
+            )
+                .stream()
+                .flatMap<CrossEngineBenchmarkPlan.Trial?> { obj: MutableList<CrossEngineBenchmarkPlan.Trial?>? -> obj!!.stream() }
+                .toList()
+        val accounted: MutableSet<String?> = HashSet<String?>()
+        allTrials.forEach(Consumer { trial: CrossEngineBenchmarkPlan.Trial? ->
+            Assertions.assertThat(accounted.add(trial!!.id())).isTrue()
+        })
+        plan.exclusions()
+            .forEach(
+                Consumer { exclusion: MaterializedExecutionPlan.Entry? ->
+                    Assertions.assertThat(accounted.add(exclusion!!.workloadId + "@" + exclusion.engineId))
+                        .isTrue()
+                })
 
-                      @Override
-                      public boolean find() {
-                        boolean result = !found;
-                        found = true;
-                        return result;
-                      }
+        for (workload in plan.workloads()) {
+            Assertions.assertThat<RegexEngineVariant?>(
+                allTrials.stream()
+                    .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.id == workload.id }
+                    .map<RegexEngineVariant?>(CrossEngineBenchmarkPlan.Trial::variant))
+                .containsAnyOf(RegexEngineVariant.SAFERE_STRING, RegexEngineVariant.SAFERE_UTF8)
+        }
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(allTrials)
+            .hasSizeGreaterThanOrEqualTo(MINIMUM_RUNNABLE_CROSS_ENGINE_TRIALS)
+        val expected: MutableSet<String> = HashSet<String>()
+        for (workload in plan.workloads()) {
+            for (variant in RegexEngineVariant.entries) {
+                expected.add(workload.id + "@" + variant.id())
+            }
+        }
+        Assertions.assertThat<String?>(accounted).containsExactlyInAnyOrderElementsOf(expected)
+    }
 
-                      @Override
-                      public void reset() {
-                        found = false;
-                      }
+    @Test
+    fun utf8TrialPreparationRejectsTheWrongProviderBeforeMeasurement() {
+        val property = "org.safere.experimental.vectorScanProvider"
+        val previous = System.getProperty(property)
+        try {
+            System.clearProperty(property)
+            Assertions.assertThatThrownBy(
+                ThrowingCallable {
+                    CrossEngineTrialRunner.Companion.prepare(
+                        "RegexBenchmark.emailFind@safere-utf8-vector",
+                        TimingGroup.NANOSECONDS
+                    )
+                })
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("requires -D" + property + "=vector")
+            Assertions.assertThatThrownBy(
+                ThrowingCallable {
+                    SpecializedTrialRunner.Companion.prepare(
+                        "Utf8MatchingBenchmark.captureBounds.numbered@safere-utf8-vector"
+                    )
+                })
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("requires -D" + property + "=vector")
+            System.setProperty(property, "vector")
+            Assertions.assertThatThrownBy(
+                ThrowingCallable {
+                    CrossEngineTrialRunner.Companion.prepare(
+                        "RegexBenchmark.emailFind@safere-utf8",
+                        TimingGroup.NANOSECONDS
+                    )
+                })
+                .isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining("requires default provider selection")
+        } finally {
+            if (previous == null) {
+                System.clearProperty(property)
+            } else {
+                System.setProperty(property, previous)
+            }
+        }
+    }
 
-                      @Override
-                      public void region(int start, int end) {
-                        assertThat(start).isEqualTo(1);
-                        assertThat(end).isEqualTo(3);
-                        found = false;
-                      }
-                    };
-                created.add(cursor);
-                return cursor;
-              }
-            };
-        List<DeclarativeBenchmarkPlan.LifecycleStep> steps =
-            operation == BenchmarkOperation.MATCHER_REGION_FIND
-                ? List.of(
-                    new DeclarativeBenchmarkPlan.LifecycleStep(
-                        DeclarativeBenchmarkPlan.LifecycleStepKind.REGION, 1, 3, null))
-                : List.of(
-                    new DeclarativeBenchmarkPlan.LifecycleStep(
-                        DeclarativeBenchmarkPlan.LifecycleStepKind.RESET, null, null, null));
-        BenchmarkOperation.BenchmarkTask task =
-            operation.bind(
+    @Test
+    fun vectorUtf8PreservesWorkloadsExclusionsAndProviderMetadata() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val defaults =
+            plan.reportPlan().trials.stream()
+                .filter { trial: CollectionTrial? -> trial!!.executionVariant == "safere-utf8" }
+                .toList()
+        val vector =
+            plan.reportPlan().trials.stream()
+                .filter { trial: CollectionTrial -> trial.executionVariant == "safere-utf8-vector" }
+                .toList()
+        Assertions.assertThat<CollectionTrial?>(vector)
+            .isNotEmpty()
+            .allSatisfy(ThrowingConsumer { trial: CollectionTrial? ->
+                Assertions.assertThat(trial!!.requestedScanProvider).isEqualTo("vector")
+            })
+        Assertions.assertThat<CollectionTrial?>(vector)
+            .extracting<String?, RuntimeException?>(CollectionTrial::workloadId)
+            .containsExactlyElementsOf(
+                defaults.stream().map<String?>(CollectionTrial::workloadId).toList()
+            )
+        Assertions.assertThat<CollectionTrial?>(vector)
+            .extracting<DeclarativeBenchmarkPlan.Measurement?, RuntimeException?>(CollectionTrial::measurement)
+            .containsExactlyElementsOf(
+                defaults.stream().map<DeclarativeBenchmarkPlan.Measurement?>(CollectionTrial::measurement).toList()
+            )
+        Assertions.assertThat<String?>(
+            plan.reportPlan().exclusions.stream()
+                .filter { row: ReportExclusion? -> row!!.executionVariant == "safere-utf8-vector" }
+                .map<String?> { row: ReportExclusion? -> row!!.workloadId + ":" + row.kind + ":" + row.reason })
+            .containsExactlyElementsOf(
+                plan.reportPlan().exclusions.stream()
+                    .filter { row: ReportExclusion? -> row!!.executionVariant == "safere-utf8" }
+                    .map<String?> { row: ReportExclusion? -> row!!.workloadId + ":" + row.kind + ":" + row.reason }
+                    .toList())
+    }
+
+    @Test
+    fun executionGroupsIsolateProvidersAndPreserveFullAndSmokeMembership() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        for (smoke in mutableListOf<Boolean?>(false, true)) {
+            val groups = plan.executionRunners(false, smoke!!)
+            Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(groups)
+                .allSatisfy(
+                    ThrowingConsumer { group: BenchmarkCollectionPlan.Runner? ->
+                        val provider: String =
+                            RegexEngineVariant.Companion.fromId(
+                                group!!
+                                    .trialIds
+                                    .getFirst()
+                                    .substring(group.trialIds.getFirst().lastIndexOf('@') + 1)
+                            )
+                                .scanProvider()
+                        Assertions.assertThat<String?>(group.trialIds)
+                            .allMatch(Predicate { id: String? ->
+                                BenchmarkCollectionPlan.Companion.matchesScanProvider(
+                                    id,
+                                    provider
+                                )
+                            })
+                    })
+            Assertions.assertThat<String?>(
+                groups.stream()
+                    .flatMap<String?> { group: BenchmarkCollectionPlan.Runner? -> group!!.trialIds.stream() })
+                .containsExactlyInAnyOrderElementsOf(
+                    plan.reportPlan(smoke).trials.stream()
+                        .map<String?>(CollectionTrial::id)
+                        .toList()
+                )
+        }
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.forScanProvider("vector").runners())
+            .flatExtracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .isNotEmpty()
+            .allMatch(Predicate { id: String? -> id!!.endsWith("@safere-utf8-vector") })
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.forScanProvider("default").allocationRunners())
+            .flatExtracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .noneMatch(Predicate { id: String? -> id!!.endsWith("@safere-utf8-vector") })
+        Assertions.assertThat<String?>(
+            plan.executionRunners(true, false).stream()
+                .flatMap<String?> { group: BenchmarkCollectionPlan.Runner? -> group!!.trialIds.stream() })
+            .containsExactlyInAnyOrderElementsOf(
+                plan.allocationRunners().stream()
+                    .flatMap<String?> { group: BenchmarkCollectionPlan.Runner? -> group!!.trialIds.stream() }.toList()
+            )
+    }
+
+    @Test
+    fun longRecitationListsExcludeOnlyJdkTrialsThatOverflowItsStack() {
+        val exclusions: MutableList<MaterializedExecutionPlan.Entry> =
+            CrossEngineBenchmarkPlan.Companion.load().exclusions().stream()
+                .filter { exclusion: MaterializedExecutionPlan.Entry ->
+                    exclusion
+                        .workloadId
+                        .startsWith("RealWorldRegexBenchmark.runBenchmark.recitation.")
+                            && exclusion.engineId == "jdk-string"
+                }
+                .toList()
+
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(exclusions)
+            .extracting<String?, RuntimeException?>(MaterializedExecutionPlan.Entry::id)
+            .containsExactly(
+                "RealWorldRegexBenchmark.runBenchmark.recitation.match.10000@jdk-string",
+                "RealWorldRegexBenchmark.runBenchmark.recitation.match.100000@jdk-string",
+                "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.10000@jdk-string",
+                "RealWorldRegexBenchmark.runBenchmark.recitation.noMatch.100000@jdk-string"
+            )
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(exclusions)
+            .allSatisfy(
+                ThrowingConsumer { exclusion: MaterializedExecutionPlan.Entry? ->
+                    Assertions.assertThat(exclusion!!.exclusion.kind).isEqualTo("explicitTrialExclusion")
+                    Assertions.assertThat(exclusion.exclusion.reason)
+                        .isEqualTo(
+                            "JDK's backtracking matcher throws StackOverflowError for the nested "
+                                    + "quantified recitation pattern at these input sizes"
+                        )
+                })
+    }
+
+    @Test
+    fun trialExpansionIsDeterministicAndPreservesTimingGroups() {
+        val first: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val second: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+
+        val trialIds: MutableSet<String?> = HashSet<String?>()
+        for (timingGroup in TimingGroup.entries) {
+            val firstTrials = first.trials(timingGroup)
+            Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(firstTrials)
+                .`as`(timingGroup.name)
+                .isNotEmpty()
+                .allMatch(Predicate { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.timingGroup == timingGroup })
+                .extracting<String?, RuntimeException?>(ThrowingExtractor { id() })
+                .containsExactlyElementsOf(
+                    second.trials(timingGroup).stream().map<String?> { id() }.toList()
+                )
+            firstTrials.forEach(Consumer { trial: CrossEngineBenchmarkPlan.Trial? ->
+                Assertions.assertThat(
+                    trialIds.add(
+                        trial!!.id()
+                    )
+                ).`as`(trial.id()).isTrue()
+            })
+        }
+    }
+
+    @Test
+    fun utf8ParticipatesInEveryOperationSupportedByItsNativeApi() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val utf8Trials =
+            List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
+                plan.trials(TimingGroup.NANOSECONDS),
+                plan.trials(TimingGroup.MICROSECONDS)
+            )
+                .stream()
+                .flatMap<CrossEngineBenchmarkPlan.Trial?> { obj: MutableList<CrossEngineBenchmarkPlan.Trial?>? -> obj!!.stream() }
+                .filter { trial: CrossEngineBenchmarkPlan.Trial -> trial.variant === RegexEngineVariant.SAFERE_UTF8 }
+                .toList()
+
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(utf8Trials).isNotEmpty()
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(utf8Trials)
+            .extracting<BenchmarkOperation?, RuntimeException?>(ThrowingExtractor { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.operation })
+            .contains(
+                BenchmarkOperation.FIND,
+                BenchmarkOperation.FIND_ALL_COUNT,
+                BenchmarkOperation.MATCHES,
+                BenchmarkOperation.MATCHES_CORPUS,
+                BenchmarkOperation.LOOKING_AT,
+                BenchmarkOperation.MATCHER_RESET_FIND,
+                BenchmarkOperation.MATCHER_REGION_FIND,
+                BenchmarkOperation.FIND_GROUP_PRESENT,
+                BenchmarkOperation.REPLACE_FIRST,
+                BenchmarkOperation.REPLACE_ALL,
+                BenchmarkOperation.REPLACE_ALL_LENGTH_SUM,
+                BenchmarkOperation.MANUAL_REPLACE_ALL,
+                BenchmarkOperation.CAPTURE_GROUPS,
+                BenchmarkOperation.FIND_GROUP
+            )
+            .doesNotContain(BenchmarkOperation.SPLIT_LENGTH_SUM)
+    }
+
+    @Test
+    fun utf8ReplacementTrialsCoverGenericBenchmarkFamilies() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+
+        Assertions.assertThat<String?>(
+            List.of<MutableList<CrossEngineBenchmarkPlan.Trial?>?>(
+                plan.trials(TimingGroup.NANOSECONDS),
+                plan.trials(TimingGroup.MICROSECONDS)
+            )
+                .stream()
+                .flatMap<CrossEngineBenchmarkPlan.Trial?> { obj: MutableList<CrossEngineBenchmarkPlan.Trial?>? -> obj!!.stream() }
+                .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.variant === RegexEngineVariant.SAFERE_UTF8 }
+                .map<String?> { id() })
+            .contains(
+                "ApplicationBenchmark.secretRedaction@safere-utf8",
+                "RealWorldRegexBenchmark.runBenchmark.markupImageLink.match.1000@safere-utf8",
+                "ReplaceBenchmark.literalReplaceFirst@safere-utf8",
+                "ReplaceBenchmark.literalReplaceFirstNoMatch@safere-utf8",
+                "ReplaceBenchmark.startAnchoredReplaceFirstNoMatch.literal@safere-utf8",
+                "ReplaceBenchmark.startAnchoredReplaceFirstNoMatch.charClass@safere-utf8",
+                "ReplaceBenchmark.startAnchoredReplaceAllNoMatch.literal@safere-utf8",
+                "ReplaceBenchmark.startAnchoredReplaceAllNoMatch.charClass@safere-utf8",
+                "ReplaceBenchmark.pigLatinReplaceAll@safere-utf8",
+                "ReplaceBenchmark.anchoredReplace@safere-utf8",
+                "ReplaceBenchmark.manualReplaceAll@safere-utf8"
+            )
+    }
+
+    @Test
+    fun unsupportedCombinationIsDistinctFromMissingImplementation() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(plan.resolve("RegexBenchmark.literalMatch@safere-utf8"))
+            .isNotNull()
+        Assertions.assertThat<CrossEngineBenchmarkPlan.Trial?>(plan.resolve("HttpBenchmark.httpExtract@safere-utf8"))
+            .isNotNull()
+        Assertions.assertThatThrownBy(ThrowingCallable { plan.resolve("Issue481ScalingBenchmark.splitWords.128@safere-utf8") })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("Unsupported cross-engine combination")
+            .hasMessageContaining("split")
+        Assertions.assertThatThrownBy(ThrowingCallable { plan.resolve("missing.workload@safere-string") })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unknown cross-engine workload ID: missing.workload")
+    }
+
+    @Test
+    fun inputRepresentationsExposeTheirTimingBoundaries() {
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.SAFERE_STRING.inputRepresentation())
+            .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING)
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.SAFERE_UTF8.inputRepresentation())
+            .isEqualTo(RegexEngineVariant.InputRepresentation.PREEXISTING_UTF8)
+        Assertions.assertThat<RegexEngineVariant.InputRepresentation?>(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.inputRepresentation())
+            .isEqualTo(RegexEngineVariant.InputRepresentation.JAVA_STRING_WITH_TIMED_UTF8_CONVERSION)
+    }
+
+    @Test
+    fun re2BasedAdaptersShareARegexSyntaxProfile() {
+        Assertions.assertThat(RegexEngineVariant.RE2J_STRING.patternProfile()).isEqualTo("re2")
+        Assertions.assertThat(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.patternProfile()).isEqualTo("re2")
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "0,15", "CASE_INSENSITIVE,8", "CASE_INSENSITIVE_UNICODE_CASE,7", "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,5"
+    )
+    fun unicodeCompileRowsAdmitOnlyEquivalentRe2jOptions(flagSet: String?, expectedRunnable: Int) {
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        val rows =
+            plan.entries().stream()
+                .filter { entry: MaterializedExecutionPlan.Entry -> entry.engineId == "re2j-string" }
+                .filter { entry: MaterializedExecutionPlan.Entry -> entry.workloadId.startsWith("UnicodeCompileBenchmark.compile.") }
+                .filter { entry: MaterializedExecutionPlan.Entry -> entry.workloadId.endsWith("." + flagSet) }
+                .toList()
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(rows).hasSize(19)
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(rows.stream().filter { runnable() })
+            .hasSize(expectedRunnable)
+        for (row in rows) {
+            if (!row.runnable()) {
+                Assertions.assertThat(row.exclusion.kind).isIn("unsupportedSyntax", "explicitTrialExclusion")
+                Assertions.assertThat(row.exclusion.reason).isNotBlank()
+            }
+        }
+        for (property in mutableListOf<String?>("alphabetic", "ideographic", "emoji", "extendedPictographic")) {
+            val row =
+                plan.resolve(
+                    "UnicodeCompileBenchmark.compile." + property + "." + flagSet + "@re2j-string"
+                )
+            Assertions.assertThat(row.runnable()).isFalse()
+            Assertions.assertThat(row.exclusion.kind).isEqualTo("unsupportedSyntax")
+        }
+    }
+
+    @Test
+    fun admittedUnicodeCompileRowsPreserveDeclaredSemantics() {
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        // Stable characters exercise folding, categories, scripts, blocks and predefined classes.
+        // Engine Unicode database versions differ; this is not a Unicode-version conformance test.
+        val inputs: MutableList<String> = mutableListOf<String?>(
+            "", "a", "A", "I", "i", "İ", "ı", "ſ", "K", "ß", "ẞ", "ǅ", "ǆ", "Ǆ", "α", "Α", "Σ", "ς",
+            "σ", "中", "𠀀", "𐐀", "𐐨", "1", "١", "_", " ", "\t", "\n", "\r", "\u000c", "\u000B",
+            "\u00A0", "\u2003", "!", "abc_12"
+        )
+        for (row in plan.entries()) {
+            if ((row.engineId != "re2j-string") || !row.runnable() || !(row.workloadId.startsWith("UnicodeCompileBenchmark.compile.")
+                        || row.workloadId.startsWith("UnicodeFirstCompileBenchmark.firstCompile."))
+            ) {
+                continue
+            }
+            val flagSet =
+                (row.workload.arguments.get("flagSet") as RecipeString)
+                    .value
+            val canonical: String =
+                plan.resolve(row.workloadId + "@jdk-string").workload.patterns.getFirst()
+            val jdk =
+                java.util.regex.Pattern.compile(canonical, BenchmarkFlags.parse(flagSet))
+            val re2j =
+                RegexEngineVariant.RE2J_STRING.compileForBenchmark(
+                    row.workload.patterns.getFirst(), flagSet
+                ) as Pattern
+            for (input in inputs) {
+                Assertions.assertThat(re2j.matcher(input).matches())
+                    .`as`("%s input %s", row.id, input)
+                    .isEqualTo(jdk.matcher(input).matches())
+            }
+            if (flagSet != "0") {
+                val unflaggedJdk = java.util.regex.Pattern.compile(canonical)
+                val unflaggedRe2j =
+                    Pattern.compile(row.workload.patterns.getFirst())
+                var codePoint = 0
+                while (codePoint <= Character.MAX_VALUE.code) {
+                    if (Character.isSurrogate(codePoint.toChar())) {
+                        codePoint++
+                        continue
+                    }
+                    val input = Character.toString(codePoint)
+                    // Ignore existing Unicode database differences; isolate the admitted flag mapping.
+                    if (unflaggedJdk.matcher(input).matches() != unflaggedRe2j.matcher(input).matches()) {
+                        codePoint++
+                        continue
+                    }
+                    Assertions.assertThat(re2j.matcher(input).matches())
+                        .`as`("%s U+%04X", row.id, codePoint)
+                        .isEqualTo(jdk.matcher(input).matches())
+                    codePoint++
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource("0,9", "CASE_INSENSITIVE_UNICODE_CASE,4", "UNICODE_CHARACTER_CLASS,0")
+    fun coldUnicodeCompileRowsRetainEquivalentRe2jOptions(flagSet: String?, expectedRunnable: Int) {
+        Assertions.assertThat<MaterializedExecutionPlan.Entry?>(
+            MaterializedExecutionPlan.Companion.load().entries().stream()
+                .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.engineId == "re2j-string" && entry.runnable() }
+                .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.workloadId.startsWith("UnicodeFirstCompileBenchmark.firstCompile.") }
+                .filter { entry: MaterializedExecutionPlan.Entry? -> entry!!.workloadId.endsWith("." + flagSet) })
+            .hasSize(expectedRunnable)
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "uppercaseLetter,CASE_INSENSITIVE_UNICODE_CASE,ı",
+        "lowercaseLetter,CASE_INSENSITIVE,A",
+        "titlecaseLetter,CASE_INSENSITIVE,A",
+        "letterIntersection,CASE_INSENSITIVE,a",
+        "blockBasicLatin,CASE_INSENSITIVE,K",
+        "asciiLower,CASE_INSENSITIVE,ſ",
+        "asciiRange,CASE_INSENSITIVE_UNICODE_CASE,İ",
+        "word,CASE_INSENSITIVE_UNICODE_CASE,K",
+        "word,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,α",
+        "digit,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,١",
+        "space,CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,'\u2003'"
+    )
+    fun excludedUnicodeCompileRowsHaveDemonstrablyDifferentFlagSemantics(
+        regex: String, flagSet: String, input: String
+    ) {
+        val plan: MaterializedExecutionPlan = MaterializedExecutionPlan.Companion.load()
+        val prefix = "UnicodeCompileBenchmark.compile." + regex + "."
+        Assertions.assertThat(plan.resolve(prefix + flagSet + "@re2j-string").exclusion.kind)
+            .isEqualTo("explicitTrialExclusion")
+        val canonical: String =
+            plan.resolve(prefix + flagSet + "@jdk-string").workload.patterns.getFirst()
+        val alternate: String = plan.resolve(prefix + "0@re2j-string").workload.patterns.getFirst()
+        Assertions.assertThat(
+            Pattern.compile(alternate, Pattern.CASE_INSENSITIVE)
+                .matcher(input)
+                .matches()
+        )
+            .isNotEqualTo(
+                java.util.regex.Pattern.compile(canonical, BenchmarkFlags.parse(flagSet))
+                    .matcher(input)
+                    .matches()
+            )
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "0,0", "CASE_INSENSITIVE,1", "CASE_INSENSITIVE_UNICODE_CASE,1", "CASE_INSENSITIVE_UNICODE_CHARACTER_CLASS,1"
+    )
+    fun re2jCompileAdapterMapsFlagIdentitiesExplicitly(flagSet: String?, expectedFlags: Int) {
+        val pattern =
+            RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", flagSet) as Pattern
+        Assertions.assertThat(pattern.flags()).isEqualTo(expectedFlags)
+        Assertions.assertThat(pattern.matcher("A").matches()).isEqualTo(expectedFlags != 0)
+        Assertions.assertThat(pattern.matcher("\n").matches()).isFalse()
+    }
+
+    @Test
+    fun re2jCompileAdapterRejectsUnsupportedFlagIdentities() {
+        Assertions.assertThatThrownBy(
+            ThrowingCallable { RegexEngineVariant.RE2J_STRING.compileForBenchmark("a", "UNICODE_CHARACTER_CLASS") })
+            .isInstanceOf(UnsupportedOperationException::class.java)
+            .hasMessageContaining("UNICODE_CHARACTER_CLASS")
+        Assertions.assertThatThrownBy(ThrowingCallable {
+            RegexEngineVariant.RE2J_STRING.compileForBenchmark(
+                "a",
+                "unknown"
+            )
+        })
+            .isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "newPerInvocation,capture,5,3", "retained,capture,1,3", "newPerInvocation,boolean,5,0", "retained,boolean,1,0"
+    )
+    fun sampledCaptureWorkloadHonorsMatcherLifetimeAndReadFrequency(
+        reuse: String, mode: String?, expectedMatchers: Int, expectedReads: Int
+    ) {
+        val creations = intArrayOf(0)
+        val resets = intArrayOf(0)
+        val reads = intArrayOf(0)
+        val pattern: CompiledRegex =
+            object : CompiledRegex {
+                override fun matcher(input: RegexInput?): MatchCursor {
+                    creations[0]++
+                    return object : MatchCursor {
+                        override fun find(): Boolean {
+                            return true
+                        }
+
+                        override fun start(group: Int): Int {
+                            Assertions.assertThat(group).isEqualTo(1)
+                            reads[0]++
+                            return 0
+                        }
+
+                        override fun reset() {
+                            resets[0]++
+                        }
+                    }
+                }
+            }
+        val task =
+            BenchmarkOperation.FIND_SAMPLED_GROUP.bind(
                 RegexEngineVariant.SAFERE_STRING,
-                List.of("x"),
-                List.of(pattern),
-                List.of(new RegexEngineVariant.StringRegexInput("abcd")),
-                new int[0],
+                mutableListOf<String?>("(a)"),
+                List.of<CompiledRegex?>(pattern),
+                List.of<RegexInput?>(StringRegexInput("a")),
+                intArrayOf(1),
                 null,
                 0,
-                new DeclarativeBenchmarkPlan.MatcherLifecycle(reuse, steps),
+                DeclarativeBenchmarkPlan.MatcherLifecycle(
+                    MatcherReuse.Companion.fromJson(reuse), mutableListOf<LifecycleStep?>()
+                ),
                 null,
                 0,
-                0,
-                "boolean");
-        boolean retained = reuse == DeclarativeBenchmarkPlan.MatcherReuse.RETAINED;
-        assertThat(created).as("%s %s binding", operation, reuse).hasSize(retained ? 1 : 0);
-        task.run(blackhole);
-        task.run(blackhole);
-        assertThat(created).as("%s %s invocations", operation, reuse).hasSize(retained ? 1 : 2);
-      }
+                2,
+                mode
+            )
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+        for (i in 0..4) {
+            task.run(blackhole)
+        }
+        Assertions.assertThat(creations[0]).isEqualTo(expectedMatchers)
+        Assertions.assertThat(reads[0]).isEqualTo(expectedReads)
+        Assertions.assertThat(resets[0]).isEqualTo(if (reuse == "retained") 5 else 0)
     }
-  }
 
-  @Test
-  void boundTaskReusesInputPreparedBeforeTimedInvocation() {
-    RegexEngineVariant.RegexInput preparedInput =
-        new RegexEngineVariant.StringRegexInput("materialized before binding");
-    List<RegexEngineVariant.RegexInput> observedInputs = new ArrayList<>();
-    RegexEngineVariant.CompiledRegex pattern =
-        new RegexEngineVariant.CompiledRegex() {
-          @Override
-          public boolean find(RegexEngineVariant.RegexInput input) {
-            observedInputs.add(input);
-            return true;
-          }
-        };
-    BenchmarkOperation.BenchmarkTask task =
-        BenchmarkOperation.FIND.bind(
-            RegexEngineVariant.SAFERE_STRING,
-            List.of("x"),
-            List.of(pattern),
-            List.of(preparedInput),
-            new int[0],
-            null,
-            0,
-            DeclarativeBenchmarkPlan.MatcherLifecycle.NONE,
-            null,
-            0,
-            0,
-            null);
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
+    @Test
+    fun matcherLifecycleControlsCursorConstruction() {
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+        for (operation in List.of<BenchmarkOperation?>(
+            BenchmarkOperation.MATCHER_REGION_FIND,
+            BenchmarkOperation.MATCHER_RESET_FIND
+        )) {
+            for (reuse in List.of<MatcherReuse?>(
+                MatcherReuse.RETAINED,
+                MatcherReuse.NEW_PER_INVOCATION
+            )) {
+                val created: MutableList<MatchCursor> = ArrayList<MatchCursor>()
+                val pattern: CompiledRegex =
+                    object : CompiledRegex {
+                        override fun matcher(input: RegexInput?): MatchCursor {
+                            val cursor: MatchCursor =
+                                object : MatchCursor {
+                                    private var found = false
 
-    task.run(blackhole);
-    task.run(blackhole);
+                                    override fun find(): Boolean {
+                                        val result = !found
+                                        found = true
+                                        return result
+                                    }
 
-    assertThat(observedInputs)
-        .hasSize(2)
-        .allSatisfy(input -> assertThat(input).isSameAs(preparedInput));
-  }
+                                    override fun reset() {
+                                        found = false
+                                    }
 
-  @Test
-  void preparationValidatesDeclaredExpectedResult() {
-    try (CrossEngineTrialRunner ignored =
-        CrossEngineTrialRunner.prepare(
+                                    override fun region(start: Int, end: Int) {
+                                        Assertions.assertThat(start).isEqualTo(1)
+                                        Assertions.assertThat(end).isEqualTo(3)
+                                        found = false
+                                    }
+                                }
+                            created.add(cursor)
+                            return cursor
+                        }
+                    }
+                val steps =
+                    if (operation == BenchmarkOperation.MATCHER_REGION_FIND)
+                        List.of<LifecycleStep?>(
+                            LifecycleStep(
+                                LifecycleStepKind.REGION, 1, 3, null
+                            )
+                        )
+                    else
+                        List.of<LifecycleStep?>(
+                            LifecycleStep(
+                                LifecycleStepKind.RESET, null, null, null
+                            )
+                        )
+                val task =
+                    operation.bind(
+                        RegexEngineVariant.SAFERE_STRING,
+                        mutableListOf<String?>("x"),
+                        List.of<CompiledRegex?>(pattern),
+                        List.of<RegexInput?>(StringRegexInput("abcd")),
+                        IntArray(0),
+                        null,
+                        0,
+                        DeclarativeBenchmarkPlan.MatcherLifecycle(reuse, steps),
+                        null,
+                        0,
+                        0,
+                        "boolean"
+                    )
+                val retained = reuse == MatcherReuse.RETAINED
+                Assertions.assertThat<MatchCursor?>(created).`as`("%s %s binding", operation, reuse)
+                    .hasSize(if (retained) 1 else 0)
+                task.run(blackhole)
+                task.run(blackhole)
+                Assertions.assertThat<MatchCursor?>(created).`as`("%s %s invocations", operation, reuse)
+                    .hasSize(if (retained) 1 else 2)
+            }
+        }
+    }
+
+    @Test
+    fun boundTaskReusesInputPreparedBeforeTimedInvocation() {
+        val preparedInput: RegexInput =
+            StringRegexInput("materialized before binding")
+        val observedInputs: MutableList<RegexInput> = ArrayList<RegexInput>()
+        val pattern: CompiledRegex =
+            object : CompiledRegex {
+                override fun find(input: RegexInput?): Boolean {
+                    observedInputs.add(input!!)
+                    return true
+                }
+            }
+        val task =
+            BenchmarkOperation.FIND.bind(
+                RegexEngineVariant.SAFERE_STRING,
+                mutableListOf<String?>("x"),
+                List.of<CompiledRegex?>(pattern),
+                List.of<RegexInput?>(preparedInput),
+                IntArray(0),
+                null,
+                0,
+                DeclarativeBenchmarkPlan.MatcherLifecycle.Companion.NONE,
+                null,
+                0,
+                0,
+                null
+            )
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+
+        task.run(blackhole)
+        task.run(blackhole)
+
+        Assertions.assertThat<RegexInput?>(observedInputs)
+            .hasSize(2)
+            .allSatisfy(ThrowingConsumer { input: RegexInput? ->
+                Assertions.assertThat<RegexInput?>(input).isSameAs(preparedInput)
+            })
+    }
+
+    @Test
+    fun preparationValidatesDeclaredExpectedResult() {
+        CrossEngineTrialRunner.Companion.prepare(
             "ApplicationBenchmark.uuidValidation@safere-string",
-            CrossEngineWorkload.TimingGroup.NANOSECONDS)) {
-      assertThat(ignored).isNotNull();
+            TimingGroup.NANOSECONDS
+        ).use { ignored ->
+            Assertions.assertThat<CrossEngineTrialRunner?>(ignored).isNotNull()
+        }
     }
-  }
 
-  @Test
-  void expandedUtf8OperationsPrepareAndRunThroughTheGenericAdapter() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-    for (String id :
-        List.of(
+    @Test
+    fun expandedUtf8OperationsPrepareAndRunThroughTheGenericAdapter() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+        for (id in mutableListOf<String?>(
             "RegexBenchmark.literalMatch@safere-utf8",
             "ApplicationBenchmark.uuidValidation@safere-utf8",
             "HttpBenchmark.httpFull@safere-utf8",
@@ -734,52 +828,52 @@ class CrossEngineBenchmarkPlanTest {
             "MatcherApiBenchmark.regionFind@safere-utf8",
             "MatcherApiBenchmark.resetAndFind@safere-utf8",
             "Issue481ScalingBenchmark.blockFind.128@safere-utf8",
-            "PathologicalBenchmark.pathological.10@safere-utf8")) {
-      CrossEngineBenchmarkPlan.Trial trial = plan.resolve(id);
-      try (CrossEngineTrialRunner runner =
-          CrossEngineTrialRunner.prepare(id, trial.workload().timingGroup())) {
-        runner.run(blackhole);
-      }
+            "PathologicalBenchmark.pathological.10@safere-utf8"
+        )) {
+            val trial = plan.resolve(id)
+            CrossEngineTrialRunner.Companion.prepare(id, trial.workload.timingGroup).use { runner ->
+                runner.run(blackhole)
+            }
+        }
+        Assertions.assertThatThrownBy(
+            ThrowingCallable { plan.resolve("MatcherApiBenchmark.resetAndFind@re2-ffm-string-conversion") })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("unsupportedTimingBoundary")
     }
-    assertThatThrownBy(
-            () -> plan.resolve("MatcherApiBenchmark.resetAndFind@re2-ffm-string-conversion"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("unsupportedTimingBoundary");
-  }
 
-  @Test
-  void ffmPublicMatcherOperationsPrepareAndRunThroughTheGenericAdapter() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-    for (String workload :
-        List.of(
+    @Test
+    fun ffmPublicMatcherOperationsPrepareAndRunThroughTheGenericAdapter() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+        for (workload in mutableListOf<String?>(
             "MatcherApiBenchmark.lookingAt",
             "MatcherApiBenchmark.newMatcherRegionFind",
-            "MatcherApiBenchmark.newMatcherRegionMatches")) {
-      String id = workload + "@re2-ffm-string-conversion";
-      CrossEngineBenchmarkPlan.Trial trial = plan.resolve(id);
-      try (CrossEngineTrialRunner runner =
-          CrossEngineTrialRunner.prepare(id, trial.workload().timingGroup())) {
-        runner.run(blackhole);
-        runner.run(blackhole);
-      }
+            "MatcherApiBenchmark.newMatcherRegionMatches"
+        )) {
+            val id = workload + "@re2-ffm-string-conversion"
+            val trial = plan.resolve(id)
+            CrossEngineTrialRunner.Companion.prepare(id, trial.workload.timingGroup).use { runner ->
+                runner.run(blackhole)
+                runner.run(blackhole)
+            }
+        }
+        Assertions.assertThat<EngineCapability?>(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.capabilities())
+            .doesNotContain(EngineCapability.APPEND_REPLACEMENT)
     }
-    assertThat(RegexEngineVariant.RE2_FFM_STRING_CONVERSION.capabilities())
-        .doesNotContain(EngineCapability.APPEND_REPLACEMENT);
-  }
 
-  @Test
-  void utf8ReplacementOperationsPrepareAndRunThroughTheGenericAdapter() {
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-    for (String id :
-        List.of(
+    @Test
+    fun utf8ReplacementOperationsPrepareAndRunThroughTheGenericAdapter() {
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+        for (id in mutableListOf<String?>(
             "ReplaceBenchmark.literalReplaceFirst@safere-utf8",
             "ReplaceBenchmark.literalReplaceFirstNoMatch@safere-utf8",
             "ReplaceBenchmark.startAnchoredReplaceFirstNoMatch.literal@safere-utf8",
@@ -790,97 +884,105 @@ class CrossEngineBenchmarkPlanTest {
             "ReplaceBenchmark.pigLatinReplaceAll@safere-utf8",
             "ReplaceBenchmark.manualReplaceAll@safere-utf8",
             "ApplicationBenchmark.secretRedaction@safere-utf8",
-            "RealWorldRegexBenchmark.runBenchmark.markupImageLink.match.1000@safere-utf8")) {
-      CrossEngineBenchmarkPlan.Trial trial = plan.resolve(id);
-      try (CrossEngineTrialRunner runner =
-          CrossEngineTrialRunner.prepare(id, trial.workload().timingGroup())) {
-        runner.run(blackhole);
-      }
+            "RealWorldRegexBenchmark.runBenchmark.markupImageLink.match.1000@safere-utf8"
+        )) {
+            val trial = plan.resolve(id)
+            CrossEngineTrialRunner.Companion.prepare(id, trial.workload.timingGroup).use { runner ->
+                runner.run(blackhole)
+            }
+        }
     }
-  }
 
-  @Test
-  void utf8ReplacementAdapterExpandsLiteralNumberedAndNamedTemplates() {
-    RegexEngineVariant variant = RegexEngineVariant.SAFERE_UTF8;
-    RegexEngineVariant.RegexInput input =
-        RegexEngineVariant.utf8Input("alpha=one&beta=two".getBytes(StandardCharsets.UTF_8));
+    @Test
+    fun utf8ReplacementAdapterExpandsLiteralNumberedAndNamedTemplates() {
+        val variant = RegexEngineVariant.SAFERE_UTF8
+        val input: RegexInput =
+            utf8Input("alpha=one&beta=two".toByteArray(StandardCharsets.UTF_8))
 
-    try (RegexEngineVariant.CompiledRegex literal = variant.compile("&");
-        RegexEngineVariant.CompiledRegex numbered = variant.compile("([a-z]+)=([a-z]+)");
-        RegexEngineVariant.CompiledRegex named =
-            variant.compile("(?<key>[a-z]+)=(?<value>[a-z]+)")) {
-      assertThat(literal.replaceFirst(input, variant.prepareReplacement(";")).validationValue())
-          .isEqualTo("alpha=one;beta=two");
-      assertThat(numbered.replaceAll(input, variant.prepareReplacement("$2:$1")).validationValue())
-          .isEqualTo("one:alpha&two:beta");
-      assertThat(
-              named
-                  .replaceAll(input, variant.prepareReplacement("${key}=[${value}]"))
-                  .validationValue())
-          .isEqualTo("alpha=[one]&beta=[two]");
+        variant.compile("&").use { literal ->
+            variant.compile("([a-z]+)=([a-z]+)").use { numbered ->
+                variant.compile("(?<key>[a-z]+)=(?<value>[a-z]+)").use { named ->
+                    Assertions.assertThat(
+                        literal.replaceFirst(input, variant.prepareReplacement(";")).validationValue()
+                    )
+                        .isEqualTo("alpha=one;beta=two")
+                    Assertions.assertThat(
+                        numbered.replaceAll(input, variant.prepareReplacement("$2:$1")).validationValue()
+                    )
+                        .isEqualTo("one:alpha&two:beta")
+                    Assertions.assertThat(
+                        named
+                            .replaceAll(input, variant.prepareReplacement("\${key}=[\${value}]"))
+                            .validationValue()
+                    )
+                        .isEqualTo("alpha=[one]&beta=[two]")
+                }
+            }
+        }
     }
-  }
 
-  @Test
-  void groupParticipationUsesBoundsWithoutMaterializingCaptureText() {
-    RegexEngineVariant.MatchCursor cursor =
-        new RegexEngineVariant.MatchCursor() {
-          @Override
-          public int start(int group) {
-            return group == 1 ? 4 : -1;
-          }
+    @Test
+    fun groupParticipationUsesBoundsWithoutMaterializingCaptureText() {
+        val cursor: MatchCursor =
+            object : MatchCursor {
+                override fun start(group: Int): Int {
+                    return if (group == 1) 4 else -1
+                }
 
-          @Override
-          public String group(int group) {
-            throw new AssertionError("group participation must not materialize capture text");
-          }
-        };
+                override fun group(group: Int): String? {
+                    throw AssertionError("group participation must not materialize capture text")
+                }
+            }
 
-    assertThat(cursor.groupParticipated(1)).isTrue();
-    assertThat(cursor.groupParticipated(2)).isFalse();
-  }
-
-  @Test
-  void coldStartPreparationDefersCompilationUntilTheMeasuredTask() {
-    CrossEngineWorkload workload =
-        new CrossEngineWorkload(
-            "Synthetic.coldCompile",
-            BenchmarkOperation.COMPILE,
-            List.of("("),
-            List.of(),
-            new int[0],
-            null,
-            null,
-            0,
-            DeclarativeBenchmarkPlan.MatcherLifecycle.NONE,
-            "",
-            0,
-            1,
-            null,
-            new DeclarativeBenchmarkPlan.Measurement(
-                DeclarativeBenchmarkPlan.MeasurementMode.SINGLE_SHOT_COLD_START,
-                DeclarativeBenchmarkPlan.TimingUnit.MILLISECONDS,
-                EnumSet.of(
-                    DeclarativeBenchmarkPlan.ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION)),
-            CrossEngineWorkload.TimingGroup.MILLISECONDS);
-    CrossEngineBenchmarkPlan.Trial trial =
-        new CrossEngineBenchmarkPlan.Trial(workload, RegexEngineVariant.SAFERE_STRING);
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
-
-    try (CrossEngineTrialRunner runner =
-        CrossEngineTrialRunner.prepareColdStart(
-            BenchmarkData.get(), trial, CrossEngineWorkload.TimingGroup.MILLISECONDS)) {
-      assertThatThrownBy(() -> runner.run(blackhole)).isInstanceOf(IllegalArgumentException.class);
+        Assertions.assertThat(cursor.groupParticipated(1)).isTrue()
+        Assertions.assertThat(cursor.groupParticipated(2)).isFalse()
     }
-  }
 
-  @Test
-  void migratedOperationsReplayCorrectnessForEveryCompatibleEngine() {
-    List<String> trials =
-        List.of(
+    @Test
+    fun coldStartPreparationDefersCompilationUntilTheMeasuredTask() {
+        val workload =
+            CrossEngineWorkload(
+                "Synthetic.coldCompile",
+                BenchmarkOperation.COMPILE,
+                mutableListOf<String?>("("),
+                mutableListOf<String?>(),
+                IntArray(0),
+                null,
+                null,
+                0,
+                DeclarativeBenchmarkPlan.MatcherLifecycle.Companion.NONE,
+                "",
+                0,
+                1,
+                null,
+                DeclarativeBenchmarkPlan.Measurement(
+                    MeasurementMode.SINGLE_SHOT_COLD_START,
+                    TimingUnit.MILLISECONDS,
+                    EnumSet.of<ExecutionConstraint?>(
+                        ExecutionConstraint.FRESH_PROCESS_PER_INVOCATION
+                    )
+                ),
+                TimingGroup.MILLISECONDS
+            )
+        val trial =
+            CrossEngineBenchmarkPlan.Trial(workload, RegexEngineVariant.SAFERE_STRING)
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
+
+        CrossEngineTrialRunner.Companion.prepareColdStart(
+            BenchmarkData.Companion.get(), trial, TimingGroup.MILLISECONDS
+        ).use { runner ->
+            Assertions.assertThatThrownBy(ThrowingCallable { runner.run(blackhole) })
+                .isInstanceOf(IllegalArgumentException::class.java)
+        }
+    }
+
+    @Test
+    fun migratedOperationsReplayCorrectnessForEveryCompatibleEngine() {
+        val trials: MutableList<String> = mutableListOf<String?>(
             "CompileBenchmark.compileSimple@safere-string",
             "CompileBenchmark.compileSimple@jdk-string",
             "CompileBenchmark.compileSimple@re2j-string",
@@ -916,329 +1018,379 @@ class CrossEngineBenchmarkPlanTest {
             "JavaCharacterClassBenchmark.compileAndFindJavaLetter@safere-string",
             "JavaCharacterClassBenchmark.compileAndFindJavaLetter@jdk-string",
             "JavaCharacterClassBenchmark.findJavaLetter@safere-string",
-            "JavaCharacterClassBenchmark.findJavaLetter@jdk-string");
-    CrossEngineBenchmarkPlan plan = CrossEngineBenchmarkPlan.load();
+            "JavaCharacterClassBenchmark.findJavaLetter@jdk-string"
+        )
+        val plan: CrossEngineBenchmarkPlan = CrossEngineBenchmarkPlan.Companion.load()
 
-    for (String trialId : trials) {
-      CrossEngineWorkload.TimingGroup timingGroup = plan.resolve(trialId).workload().timingGroup();
-      try (CrossEngineTrialRunner ignored = CrossEngineTrialRunner.prepare(trialId, timingGroup)) {
-        assertThat(ignored).as(trialId).isNotNull();
-      }
+        for (trialId in trials) {
+            val timingGroup = plan.resolve(trialId).workload.timingGroup
+            CrossEngineTrialRunner.Companion.prepare(trialId, timingGroup).use { ignored ->
+                Assertions.assertThat<CrossEngineTrialRunner?>(ignored).`as`(trialId).isNotNull()
+            }
+        }
     }
-  }
 
-  @Test
-  void specializedMeasurementModesSelectStableGenericTrials() {
-    SpecializedBenchmarkPlan first = SpecializedBenchmarkPlan.load();
-    SpecializedBenchmarkPlan second = SpecializedBenchmarkPlan.load();
+    @Test
+    fun specializedMeasurementModesSelectStableGenericTrials() {
+        val first: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
+        val second: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
 
-    assertThat(first.averageTimeTrials())
-        .hasSizeGreaterThanOrEqualTo(MINIMUM_SPECIALIZED_AVERAGE_TIME_TRIALS)
-        .allMatch(
-            trial ->
-                trial.workload().measurement().mode()
-                    == DeclarativeBenchmarkPlan.MeasurementMode.AVERAGE_TIME)
-        .extracting(SpecializedBenchmarkPlan.Trial::id)
-        .containsExactlyElementsOf(
-            second.averageTimeTrials().stream().map(SpecializedBenchmarkPlan.Trial::id).toList());
-    assertThat(first.retainedMemoryTrials())
-        .hasSizeGreaterThanOrEqualTo(MINIMUM_SPECIALIZED_RETAINED_MEMORY_TRIALS)
-        .allMatch(
-            trial ->
-                trial.workload().measurement().mode()
-                    == DeclarativeBenchmarkPlan.MeasurementMode.RETAINED_MEMORY)
-        .extracting(SpecializedBenchmarkPlan.Trial::id)
-        .containsExactlyElementsOf(
-            second.retainedMemoryTrials().stream()
-                .map(SpecializedBenchmarkPlan.Trial::id)
-                .toList());
-  }
-
-  @Test
-  void collectionPlanDiscoversGenericRunnersAndStableReportRows() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-
-    assertThat(plan.runners())
-        .extracting(BenchmarkCollectionPlan.Runner::benchmark)
-        .containsExactly(
-            "org.safere.benchmark.CrossEngineBenchmark.run",
-            "org.safere.benchmark.CrossEngineScalingBenchmark.run",
-            "org.safere.benchmark.CrossEngineNoForkBenchmark.run",
-            "org.safere.benchmark.CrossEngineColdStartBenchmark.run",
-            "org.safere.benchmark.SpecializedBenchmark.run");
-    List<String> runnerTrialIds =
-        plan.runners().stream().flatMap(runner -> runner.trialIds().stream()).toList();
-    assertThat(plan.runners()).allMatch(runner -> !runner.trialIds().isEmpty());
-    assertThat(runnerTrialIds)
-        .hasSizeGreaterThanOrEqualTo(MINIMUM_COLLECTION_RUNNER_TRIALS)
-        .doesNotHaveDuplicates();
-    assertThat(plan.reportPlan().trials())
-        .extracting(BenchmarkCollectionPlan.CollectionTrial::id)
-        .containsExactlyInAnyOrderElementsOf(runnerTrialIds);
-    assertThat(plan.reportPlan().exclusions()).isNotEmpty().doesNotHaveDuplicates();
-    Set<String> expectedSmokeTrialIds = new HashSet<>();
-    for (BenchmarkCollectionPlan.Runner runner : plan.runners()) {
-      String firstTrial = runner.trialIds().getFirst();
-      String firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'));
-      runner.trialIds().stream()
-          .filter(trialId -> trialId.startsWith(firstWorkload + "@"))
-          .forEach(expectedSmokeTrialIds::add);
+        Assertions.assertThat<SpecializedBenchmarkPlan.Trial?>(first.averageTimeTrials())
+            .hasSizeGreaterThanOrEqualTo(MINIMUM_SPECIALIZED_AVERAGE_TIME_TRIALS)
+            .allMatch(
+                Predicate { trial: SpecializedBenchmarkPlan.Trial? ->
+                    (trial!!.workload.measurement.mode
+                            == MeasurementMode.AVERAGE_TIME)
+                })
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { id() })
+            .containsExactlyElementsOf(
+                second.averageTimeTrials().stream().map<String?> { id() }.toList()
+            )
+        Assertions.assertThat<SpecializedBenchmarkPlan.Trial?>(first.retainedMemoryTrials())
+            .hasSizeGreaterThanOrEqualTo(MINIMUM_SPECIALIZED_RETAINED_MEMORY_TRIALS)
+            .allMatch(
+                Predicate { trial: SpecializedBenchmarkPlan.Trial? ->
+                    (trial!!.workload.measurement.mode
+                            == MeasurementMode.RETAINED_MEMORY)
+                })
+            .extracting<String?, RuntimeException?>(ThrowingExtractor { id() })
+            .containsExactlyElementsOf(
+                second.retainedMemoryTrials().stream()
+                    .map<String?> { id() }
+                    .toList())
     }
-    assertThat(plan.reportPlan(true).trials())
-        .extracting(BenchmarkCollectionPlan.CollectionTrial::id)
-        .containsExactlyInAnyOrderElementsOf(expectedSmokeTrialIds);
-  }
 
-  @Test
-  void collectionPlanSelectsOnlyRunnersMatchedByJmhFilter() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
+    @Test
+    fun collectionPlanDiscoversGenericRunnersAndStableReportRows() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
 
-    assertThat(
-            plan.runnersMatching("^org\\.safere\\.benchmark\\.CrossEngineScalingBenchmark\\.run$"))
-        .extracting(BenchmarkCollectionPlan.Runner::parameter)
-        .containsExactly("crossEngineScalingTrial");
-    assertThat(plan.runnersMatching("CrossEngine(?:Scaling|NoFork)Benchmark"))
-        .extracting(BenchmarkCollectionPlan.Runner::parameter)
-        .containsExactly("crossEngineScalingTrial", "crossEngineNoForkTrial");
-    assertThat(plan.runnersMatching("UnparameterizedBenchmark")).isEmpty();
-    assertThat(
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runners())
+            .extracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::benchmark)
+            .containsExactly(
+                "org.safere.benchmark.CrossEngineBenchmark.run",
+                "org.safere.benchmark.CrossEngineScalingBenchmark.run",
+                "org.safere.benchmark.CrossEngineNoForkBenchmark.run",
+                "org.safere.benchmark.CrossEngineColdStartBenchmark.run",
+                "org.safere.benchmark.SpecializedBenchmark.run"
+            )
+        val runnerTrialIds =
+            plan.runners().stream()
+                .flatMap<String?> { runner: BenchmarkCollectionPlan.Runner? -> runner!!.trialIds.stream() }.toList()
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runners())
+            .allMatch(Predicate { runner: BenchmarkCollectionPlan.Runner? -> !runner!!.trialIds.isEmpty() })
+        Assertions.assertThat<String?>(runnerTrialIds)
+            .hasSizeGreaterThanOrEqualTo(MINIMUM_COLLECTION_RUNNER_TRIALS)
+            .doesNotHaveDuplicates()
+        Assertions.assertThat<CollectionTrial?>(plan.reportPlan().trials)
+            .extracting<String?, RuntimeException?>(CollectionTrial::id)
+            .containsExactlyInAnyOrderElementsOf(runnerTrialIds)
+        Assertions.assertThat<ReportExclusion?>(plan.reportPlan().exclusions).isNotEmpty().doesNotHaveDuplicates()
+        val expectedSmokeTrialIds: MutableSet<String> = HashSet<String>()
+        for (runner in plan.runners()) {
+            val firstTrial: String = runner.trialIds.getFirst()
+            val firstWorkload = firstTrial.substring(0, firstTrial.lastIndexOf('@'))
+            runner.trialIds.stream()
+                .filter { trialId: String? -> trialId!!.startsWith(firstWorkload + "@") }
+                .forEach { e: String? -> expectedSmokeTrialIds.add(e!!) }
+        }
+        Assertions.assertThat<CollectionTrial?>(plan.reportPlan(true).trials)
+            .extracting<String?, RuntimeException?>(CollectionTrial::id)
+            .containsExactlyInAnyOrderElementsOf(expectedSmokeTrialIds)
+    }
+
+    @Test
+    fun collectionPlanSelectsOnlyRunnersMatchedByJmhFilter() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(
+            plan.runnersMatching("^org\\.safere\\.benchmark\\.CrossEngineScalingBenchmark\\.run$")
+        )
+            .extracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::parameter)
+            .containsExactly("crossEngineScalingTrial")
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runnersMatching("CrossEngine(?:Scaling|NoFork)Benchmark"))
+            .extracting<String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::parameter)
+            .containsExactly("crossEngineScalingTrial", "crossEngineNoForkTrial")
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runnersMatching("UnparameterizedBenchmark"))
+            .isEmpty()
+        Assertions.assertThat<String?>(
             plan.launcherArguments(
-                "CrossEngineScalingBenchmark", "/tmp/benchmark jar.jar", Set.of()))
-        .startsWith("-jar", "\"/tmp/benchmark jar.jar\"", "-p")
-        .element(3)
-        .asString()
-        .startsWith("\"crossEngineScalingTrial=");
-    assertThat(
+                "CrossEngineScalingBenchmark", "/tmp/benchmark jar.jar", mutableSetOf<String?>()
+            )
+        )
+            .startsWith("-jar", "\"/tmp/benchmark jar.jar\"", "-p")
+            .element(3)
+            .asString()
+            .startsWith("\"crossEngineScalingTrial=")
+        Assertions.assertThat<String?>(
             plan.launcherArguments(
                 "CrossEngineScalingBenchmark",
                 "/tmp/benchmark.jar",
-                Set.of("crossEngineScalingTrial")))
-        .containsExactly("-jar", "\"/tmp/benchmark.jar\"");
-  }
-
-  @ParameterizedTest
-  @CsvSource({
-    "nanoseconds, RegexBenchmark.literalMatch, crossEngineTrial",
-    "microseconds, SearchScalingBenchmark.searchEasyFail.1024, crossEngineScalingTrial"
-  })
-  @ResourceLock(Resources.SYSTEM_OUT)
-  void prefixSelectionsCanBeWrittenDirectlyToArgumentFiles(
-      String timingGroup, String prefix, String parameter) {
-    CrossEngineWorkload.TimingGroup group =
-        timingGroup.equals("nanoseconds")
-            ? CrossEngineWorkload.TimingGroup.NANOSECONDS
-            : CrossEngineWorkload.TimingGroup.MICROSECONDS;
-    List<String> expected =
-        CrossEngineBenchmarkPlan.load().trials(group).stream()
-            .filter(trial -> trial.workload().id().startsWith(prefix))
-            .map(CrossEngineBenchmarkPlan.Trial::id)
-            .toList();
-    assertThat(expected).isNotEmpty();
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    PrintStream original = System.out;
-    try (PrintStream capture = new PrintStream(output, true, StandardCharsets.UTF_8)) {
-      System.setOut(capture);
-      CrossEngineBenchmarkPlan.main(new String[] {"--argument-file", timingGroup, prefix});
-    } finally {
-      System.setOut(original);
+                mutableSetOf<String?>("crossEngineScalingTrial")
+            )
+        )
+            .containsExactly("-jar", "\"/tmp/benchmark.jar\"")
     }
-    assertThat(output.toString(StandardCharsets.UTF_8).lines().toList())
-        .containsExactly("-p", "\"" + parameter + "=" + String.join(",", expected) + "\"");
-  }
 
-  @Test
-  void declaredRunnerArgumentsUseTheSelectedTimingOrAllocationTrials() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    String benchmark = "org.safere.benchmark.CrossEngineBenchmark.run";
-    String jar = "/tmp/benchmark jar.jar";
-    BenchmarkCollectionPlan.Runner timing =
-        plan.runners().stream()
-            .filter(runner -> runner.benchmark().equals(benchmark))
-            .findFirst()
-            .orElseThrow();
-    BenchmarkCollectionPlan.Runner allocation =
-        plan.allocationRunners().stream()
-            .filter(runner -> runner.benchmark().equals(benchmark))
-            .findFirst()
-            .orElseThrow();
-
-    assertThat(plan.declaredLauncherArguments(benchmark, jar, false, false, null))
-        .containsExactly(
-            "-jar",
-            "\"/tmp/benchmark jar.jar\"",
-            "-p",
-            "\"crossEngineTrial=" + String.join(",", timing.trialIds()) + "\"");
-    assertThat(plan.declaredLauncherArguments(benchmark, jar, true, false, null))
-        .containsExactly(
-            "-jar",
-            "\"/tmp/benchmark jar.jar\"",
-            "-p",
-            "\"crossEngineTrial=" + String.join(",", allocation.trialIds()) + "\"");
-    String firstWorkload = allocation.trialIds().getFirst().split("@", 2)[0];
-    List<String> smokeTrials =
-        allocation.trialIds().stream()
-            .filter(trialId -> trialId.startsWith(firstWorkload + "@"))
-            .toList();
-    assertThat(plan.declaredLauncherArguments(benchmark, jar, true, true, null))
-        .containsExactly(
-            "-jar",
-            "\"/tmp/benchmark jar.jar\"",
-            "-p",
-            "\"crossEngineTrial=" + String.join(",", smokeTrials) + "\"");
-    assertThatThrownBy(() -> plan.declaredLauncherArguments("missing", jar, false, false, null))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Unknown declared benchmark runner: missing");
-  }
-
-  @Test
-  void declaredArgumentFilesPreserveProviderGroupsAndSmokeSelection() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    String jar = "/tmp/benchmark \"quoted\" \\ jar.jar";
-    for (boolean allocation : List.of(false, true)) {
-      for (boolean smoke : List.of(false, true)) {
-        for (BenchmarkCollectionPlan.Runner runner : plan.executionRunners(allocation, smoke)) {
-          String provider =
-              RegexEngineVariant.fromId(
-                      runner
-                          .trialIds()
-                          .getFirst()
-                          .substring(runner.trialIds().getFirst().lastIndexOf('@') + 1))
-                  .scanProvider();
-          assertThat(
-                  plan.declaredLauncherArguments(
-                      runner.benchmark(), jar, allocation, smoke, provider))
-              .containsExactly(
-                  "-jar",
-                  BenchmarkCollectionPlan.argumentFileToken(jar),
-                  "-p",
-                  BenchmarkCollectionPlan.argumentFileToken(
-                      runner.parameter() + "=" + String.join(",", runner.trialIds())));
-        }
-      }
-    }
-  }
-
-  @Test
-  @ResourceLock(Resources.SYSTEM_OUT)
-  @ResourceLock(Resources.SYSTEM_PROPERTIES)
-  void declaredArgumentFileCommandFiltersProvidersAfterSmokeSelection() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    String property = "safere.benchmark.scanProvider";
-    String previous = System.getProperty(property);
-    PrintStream original = System.out;
-    try {
-      for (BenchmarkCollectionPlan.Runner runner : plan.executionRunners(false, true)) {
-        String provider =
-            RegexEngineVariant.fromId(
-                    runner
-                        .trialIds()
-                        .getFirst()
-                        .substring(runner.trialIds().getFirst().lastIndexOf('@') + 1))
-                .scanProvider();
-        System.setProperty(property, provider);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try (PrintStream capture = new PrintStream(output, true, StandardCharsets.UTF_8)) {
-          System.setOut(capture);
-          BenchmarkCollectionPlan.main(
-              new String[] {
-                "declared-runner-arguments",
-                "runners",
-                runner.benchmark(),
-                "/tmp/benchmark jar.jar",
-                "--smoke"
-              });
+    @ParameterizedTest
+    @CsvSource(
+        "nanoseconds, RegexBenchmark.literalMatch, crossEngineTrial",
+        "microseconds, SearchScalingBenchmark.searchEasyFail.1024, crossEngineScalingTrial"
+    )
+    @ResourceLock(Resources.SYSTEM_OUT)
+    fun prefixSelectionsCanBeWrittenDirectlyToArgumentFiles(
+        timingGroup: String, prefix: String, parameter: String?
+    ) {
+        val group =
+            if (timingGroup == "nanoseconds")
+                TimingGroup.NANOSECONDS
+            else
+                TimingGroup.MICROSECONDS
+        val expected: MutableList<String> =
+            CrossEngineBenchmarkPlan.Companion.load().trials(group).stream()
+                .filter { trial: CrossEngineBenchmarkPlan.Trial? -> trial!!.workload.id.startsWith(prefix) }
+                .map<String?> { id() }
+                .toList()
+        Assertions.assertThat<String?>(expected).isNotEmpty()
+        val output = ByteArrayOutputStream()
+        val original = System.out
+        try {
+            PrintStream(output, true, StandardCharsets.UTF_8).use { capture ->
+                System.setOut(capture)
+                CrossEngineBenchmarkPlan.Companion.main(arrayOf<String>("--argument-file", timingGroup, prefix))
+            }
         } finally {
-          System.setOut(original);
+            System.setOut(original)
         }
-        assertThat(output.toString(StandardCharsets.UTF_8).lines().toList())
+        Assertions.assertThat<String?>(output.toString(StandardCharsets.UTF_8).lineSequence().asStream().toList())
+            .containsExactly("-p", "\"" + parameter + "=" + String.join(",", expected) + "\"")
+    }
+
+    @Test
+    fun declaredRunnerArgumentsUseTheSelectedTimingOrAllocationTrials() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val benchmark = "org.safere.benchmark.CrossEngineBenchmark.run"
+        val jar = "/tmp/benchmark jar.jar"
+        val timing =
+            plan.runners().stream()
+                .filter { runner: BenchmarkCollectionPlan.Runner? -> runner!!.benchmark == benchmark }
+                .findFirst()
+                .orElseThrow()
+        val allocation =
+            plan.allocationRunners().stream()
+                .filter { runner: BenchmarkCollectionPlan.Runner? -> runner!!.benchmark == benchmark }
+                .findFirst()
+                .orElseThrow()
+
+        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, false, false, null))
             .containsExactly(
                 "-jar",
                 "\"/tmp/benchmark jar.jar\"",
                 "-p",
-                BenchmarkCollectionPlan.argumentFileToken(
-                    runner.parameter() + "=" + String.join(",", runner.trialIds())));
-      }
-    } finally {
-      System.setOut(original);
-      if (previous == null) {
-        System.clearProperty(property);
-      } else {
-        System.setProperty(property, previous);
-      }
+                "\"crossEngineTrial=" + String.join(",", timing.trialIds) + "\""
+            )
+        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, true, false, null))
+            .containsExactly(
+                "-jar",
+                "\"/tmp/benchmark jar.jar\"",
+                "-p",
+                "\"crossEngineTrial=" + String.join(",", allocation.trialIds) + "\""
+            )
+        val firstWorkload: kotlin.String? =
+            allocation.trialIds.getFirst().split("@".toRegex(), limit = 2).toTypedArray()[0]
+        val smokeTrials =
+            allocation.trialIds.stream()
+                .filter { trialId: kotlin.String -> trialId.startsWith(firstWorkload + "@") }
+                .toList()
+        Assertions.assertThat<kotlin.String?>(plan.declaredLauncherArguments(benchmark, jar, true, true, null))
+            .containsExactly(
+                "-jar",
+                "\"/tmp/benchmark jar.jar\"",
+                "-p",
+                "\"crossEngineTrial=" + String.join(",", smokeTrials) + "\""
+            )
+        Assertions.assertThatThrownBy(ThrowingCallable {
+            plan.declaredLauncherArguments(
+                "missing",
+                jar,
+                false,
+                false,
+                null
+            )
+        })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unknown declared benchmark runner: missing")
     }
-  }
 
-  @Test
-  void allocationCollectionPreservesMemoryScalingWithoutAddingTimingTrials() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
+    @Test
+    fun declaredArgumentFilesPreserveProviderGroupsAndSmokeSelection() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val jar = "/tmp/benchmark \"quoted\" \\ jar.jar"
+        for (allocation in mutableListOf<Boolean?>(false, true)) {
+            for (smoke in mutableListOf<Boolean?>(false, true)) {
+                for (runner in plan.executionRunners(allocation!!, smoke!!)) {
+                    val provider: kotlin.String =
+                        RegexEngineVariant.Companion.fromId(
+                            runner
+                                .trialIds
+                                .getFirst()
+                                .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                        )
+                            .scanProvider()
+                    Assertions.assertThat<kotlin.String?>(
+                        plan.declaredLauncherArguments(
+                            runner.benchmark, jar, allocation, smoke, provider
+                        )
+                    )
+                        .containsExactly(
+                            "-jar",
+                            BenchmarkCollectionPlan.Companion.argumentFileToken(jar),
+                            "-p",
+                            BenchmarkCollectionPlan.Companion.argumentFileToken(
+                                runner.parameter + "=" + String.join(",", runner.trialIds)
+                            )
+                        )
+                }
+            }
+        }
+    }
 
-    assertThat(plan.allocationRunners())
-        .flatExtracting(BenchmarkCollectionPlan.Runner::trialIds)
-        .contains(
-            "MemoryScalingBenchmark.searchEasy.1024@safere-string",
-            "MemoryScalingBenchmark.searchEasy.1024@jdk-string",
-            "MemoryScalingBenchmark.searchEasy.1024@re2j-string",
-            "MemoryScalingBenchmark.searchMedium.1048576@safere-string",
-            "MemoryScalingBenchmark.searchMedium.1048576@jdk-string",
-            "MemoryScalingBenchmark.searchMedium.1048576@re2j-string")
-        .noneMatch(trial -> trial.startsWith("MemoryScalingBenchmark.") && trial.contains("utf8"));
-    assertThat(plan.runners())
-        .flatExtracting(BenchmarkCollectionPlan.Runner::trialIds)
-        .noneMatch(trial -> trial.startsWith("MemoryScalingBenchmark."));
-  }
+    @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    fun declaredArgumentFileCommandFiltersProvidersAfterSmokeSelection() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val property = "safere.benchmark.scanProvider"
+        val previous = System.getProperty(property)
+        val original = System.out
+        try {
+            for (runner in plan.executionRunners(false, true)) {
+                val provider: kotlin.String =
+                    RegexEngineVariant.Companion.fromId(
+                        runner
+                            .trialIds
+                            .getFirst()
+                            .substring(runner.trialIds.getFirst().lastIndexOf('@') + 1)
+                    )
+                        .scanProvider()
+                System.setProperty(property, provider)
+                val output = ByteArrayOutputStream()
+                try {
+                    PrintStream(output, true, StandardCharsets.UTF_8).use { capture ->
+                        System.setOut(capture)
+                        BenchmarkCollectionPlan.Companion.main(
+                            arrayOf<kotlin.String?>(
+                                "declared-runner-arguments",
+                                "runners",
+                                runner.benchmark,
+                                "/tmp/benchmark jar.jar",
+                                "--smoke"
+                            )
+                        )
+                    }
+                } finally {
+                    System.setOut(original)
+                }
+                Assertions.assertThat<kotlin.String?>(
+                    output.toString(StandardCharsets.UTF_8).lineSequence().asStream().toList()
+                )
+                    .containsExactly(
+                        "-jar",
+                        "\"/tmp/benchmark jar.jar\"",
+                        "-p",
+                        BenchmarkCollectionPlan.Companion.argumentFileToken(
+                            runner.parameter + "=" + String.join(",", runner.trialIds)
+                        )
+                    )
+            }
+        } finally {
+            System.setOut(original)
+            if (previous == null) {
+                System.clearProperty(property)
+            } else {
+                System.setProperty(property, previous)
+            }
+        }
+    }
 
-  @Test
-  void collectionPlanQueriesModeTimingPrefixAndExecutionVariant() {
-    BenchmarkCollectionPlan plan = BenchmarkCollectionPlan.load();
-    BenchmarkCollectionPlan.Query query =
-        new BenchmarkCollectionPlan.Query(
-            "averageTime", "nanoseconds", "RegexBenchmark.", "safere-utf8");
+    @Test
+    fun allocationCollectionPreservesMemoryScalingWithoutAddingTimingTrials() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
 
-    assertThat(plan.trials(query))
-        .isNotEmpty()
-        .allMatch(
-            trial ->
-                trial.workloadId().startsWith("RegexBenchmark.")
-                    && trial.executionVariant().equals("safere-utf8")
-                    && trial.measurement().timingUnit()
-                        == DeclarativeBenchmarkPlan.TimingUnit.NANOSECONDS);
-  }
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.allocationRunners())
+            .flatExtracting<kotlin.String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .contains(
+                "MemoryScalingBenchmark.searchEasy.1024@safere-string",
+                "MemoryScalingBenchmark.searchEasy.1024@jdk-string",
+                "MemoryScalingBenchmark.searchEasy.1024@re2j-string",
+                "MemoryScalingBenchmark.searchMedium.1048576@safere-string",
+                "MemoryScalingBenchmark.searchMedium.1048576@jdk-string",
+                "MemoryScalingBenchmark.searchMedium.1048576@re2j-string"
+            )
+            .noneMatch(Predicate { trial: kotlin.String? ->
+                trial!!.startsWith("MemoryScalingBenchmark.") && trial.contains(
+                    "utf8"
+                )
+            })
+        Assertions.assertThat<BenchmarkCollectionPlan.Runner?>(plan.runners())
+            .flatExtracting<kotlin.String?, RuntimeException?>(BenchmarkCollectionPlan.Runner::trialIds)
+            .noneMatch(Predicate { trial: kotlin.String? -> trial!!.startsWith("MemoryScalingBenchmark.") })
+    }
 
-  @Test
-  void everyJmhMethodIsGenericOrExplicitMeasurementInfrastructure() throws Exception {
-    Path sourceDirectory =
-        Files.exists(Path.of("src/main/java/org/safere/benchmark"))
-            ? Path.of("src/main/java/org/safere/benchmark")
-            : Path.of("safere-benchmarks/src/main/java/org/safere/benchmark");
+    @Test
+    fun collectionPlanQueriesModeTimingPrefixAndExecutionVariant() {
+        val plan: BenchmarkCollectionPlan = BenchmarkCollectionPlan.Companion.load()
+        val query =
+            BenchmarkCollectionPlan.Query(
+                "averageTime", "nanoseconds", "RegexBenchmark.", "safere-utf8"
+            )
 
-    try (Stream<Path> files = Files.list(sourceDirectory)) {
-      assertThat(
-              files
-                  .filter(path -> path.toString().endsWith(".java"))
-                  .filter(
-                      path -> {
+        Assertions.assertThat<CollectionTrial?>(plan.trials(query))
+            .isNotEmpty()
+            .allMatch(
+                Predicate { trial: CollectionTrial? ->
+                    trial!!.workloadId.startsWith("RegexBenchmark.")
+                            && trial.executionVariant == "safere-utf8"
+                            && (trial.measurement.timingUnit
+                            == TimingUnit.NANOSECONDS)
+                })
+    }
+
+    @Test
+    @Throws(Exception::class)
+    fun everyJmhMethodIsGenericOrExplicitMeasurementInfrastructure() {
+        val sourceDirectory =
+            if (Files.exists(Path.of("src/main/java/org/safere/benchmark")))
+                Path.of("src/main/java/org/safere/benchmark")
+            else
+                Path.of("safere-benchmarks/src/main/java/org/safere/benchmark")
+
+        Files.list(sourceDirectory).use { files ->
+            Assertions.assertThat<kotlin.String?>(
+                files
+                    .filter { path: Path? -> path.toString().endsWith(".java") }
+                    .filter { path: Path? ->
                         try {
-                          return Files.readString(path).contains("@Benchmark");
-                        } catch (Exception exception) {
-                          throw new IllegalStateException(exception);
+                            return@filter Files.readString(path).contains("@Benchmark")
+                        } catch (exception: Exception) {
+                            throw IllegalStateException(exception)
                         }
-                      })
-                  .map(path -> path.getFileName().toString())
-                  .sorted())
-          .containsExactly(
-              "CrossEngineBenchmark.java",
-              "CrossEngineColdStartBenchmark.java",
-              "CrossEngineNoForkBenchmark.java",
-              "CrossEngineScalingBenchmark.java",
-              "CrosscheckOverheadBenchmark.java",
-              "SpecializedBenchmark.java");
+                    }
+                    .map<kotlin.String?> { path: Path? -> path!!.getFileName().toString() }
+                    .sorted())
+                .containsExactly(
+                    "CrossEngineBenchmark.java",
+                    "CrossEngineColdStartBenchmark.java",
+                    "CrossEngineNoForkBenchmark.java",
+                    "CrossEngineScalingBenchmark.java",
+                    "CrosscheckOverheadBenchmark.java",
+                    "SpecializedBenchmark.java"
+                )
+        }
     }
-  }
 
-  @Test
-  void everySpecializedOperationPreparesAndRunsThroughOneEntryPoint() {
-    List<String> trials =
-        List.of(
+    @Test
+    fun everySpecializedOperationPreparesAndRunsThroughOneEntryPoint() {
+        val trials = mutableListOf<kotlin.String?>(
             "PatternSetBenchmark.unanchoredMatch.4@safere-string",
             "Utf8MatchingBenchmark.repeatedFind.ascii@safere-utf8",
             "Utf8MatchingBenchmark.repeatedFind.multibyte@safere-utf8",
@@ -1254,16 +1406,41 @@ class CrossEngineBenchmarkPlanTest {
             "PatternAnalysisBenchmark.compileOnly@safere-string",
             "PatternAnalysisBenchmark.compileAndAnalyze@safere-string",
             "DiagnosticsDisabledBenchmark.tinyLiteralFindHit@safere-string",
-            "DiagnosticsEnabledBenchmark.charClassDenseReplaceAll.longAdder@safere-string");
-    Blackhole blackhole =
-        new Blackhole(
-            "Today's password is swordfish. I understand instantiating Blackholes directly is"
-                + " dangerous.");
+            "DiagnosticsEnabledBenchmark.charClassDenseReplaceAll.longAdder@safere-string"
+        )
+        val blackhole =
+            Blackhole(
+                "Today's password is swordfish. I understand instantiating Blackholes directly is"
+                        + " dangerous."
+            )
 
-    for (String trial : trials) {
-      try (SpecializedTrialRunner runner = SpecializedTrialRunner.prepare(trial)) {
-        runner.run(blackhole);
-      }
+        for (trial in trials) {
+            SpecializedTrialRunner.Companion.prepare(trial).use { runner ->
+                runner.run(blackhole)
+            }
+        }
     }
-  }
+
+    companion object {
+        // This is a historical floor, not a snapshot. Additions do not raise it.
+        private const val MINIMUM_CROSS_ENGINE_WORKLOADS = 606
+        private const val MINIMUM_RUNNABLE_CROSS_ENGINE_TRIALS = 2448
+        private const val MINIMUM_SPECIALIZED_AVERAGE_TIME_TRIALS = 63
+        private const val MINIMUM_SPECIALIZED_RETAINED_MEMORY_TRIALS = 34
+        private const val MINIMUM_COLLECTION_RUNNER_TRIALS = 2487
+
+        @TempDir
+        var temporaryDirectory: Path? = null
+
+        @BeforeAll
+        @Throws(Exception::class)
+        fun materializeCorpus() {
+            val benchmarkDirectory =
+                if (Files.exists(Path.of("benchmark-data.json"))) Path.of(".") else Path.of("safere-benchmarks")
+            BenchmarkInputMaterializer.Companion.main(
+                arrayOf<kotlin.String>(benchmarkDirectory.toString(), temporaryDirectory.toString())
+            )
+            System.setProperty("safere.benchmark.corpus", temporaryDirectory.toString())
+        }
+    }
 }

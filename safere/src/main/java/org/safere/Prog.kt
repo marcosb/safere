@@ -4,1032 +4,1062 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.lang.String
+import java.util.*
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.BooleanArray
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.arrayOfNulls
+import kotlin.collections.ArrayList
+import kotlin.collections.MutableList
+import kotlin.collections.indices
+import kotlin.collections.minus
+import kotlin.collections.plus
+import kotlin.concurrent.Volatile
+import kotlin.plus
+import kotlin.sequences.minus
+import kotlin.sequences.plus
+import kotlin.text.StringBuilder
+import kotlin.times
 
 /**
- * A compiled regular expression program, consisting of an array of {@link Inst} instructions. This
- * is the output of the {@code Compiler} and the input to the execution engines (NFA, DFA, etc.).
- *
- * <p>A Prog is produced by compiling a {@link Regexp} AST via Thompson NFA construction. Each
+ * A compiled regular expression program, consisting of an array of [Inst] instructions. This
+ * is the output of the `Compiler` and the input to the execution engines (NFA, DFA, etc.).
+ * 
+ * 
+ * A Prog is produced by compiling a [Regexp] AST via Thompson NFA construction. Each
  * instruction represents a state in the NFA.
  */
-final class Prog {
+internal class Prog {
+    val instructions: MutableList<Inst> = ArrayList<Inst>()
+    private var didFlatten = false
+    private var instArray: Array<Inst>?
+    private var start = 0
+    private var startUnanchored = 0
+    private var numCaptures = 0
+    private var anchorStart = false
+    private var anchorEnd = false
 
-  final List<Inst> instructions = new ArrayList<>();
-  private boolean didFlatten;
-  private Inst[] instArray;
-  private int start;
-  private int startUnanchored;
-  private int numCaptures;
-  private boolean anchorStart;
-  private boolean anchorEnd;
+    /**
+     * True when the end anchor was `$` (not `\z`). When true, the match may end before a
+     * trailing `\n` at the end of the text, not just at the absolute end. This mirrors JDK's
+     * default (non-MULTILINE) `$` behavior.
+     */
+    private var dollarAnchorEnd = false
 
-  /**
-   * True when the end anchor was {@code $} (not {@code \z}). When true, the match may end before a
-   * trailing {@code \n} at the end of the text, not just at the absolute end. This mirrors JDK's
-   * default (non-MULTILINE) {@code $} behavior.
-   */
-  private boolean dollarAnchorEnd;
+    private var dollarAnchorUnixLines = false
 
-  private boolean dollarAnchorUnixLines;
+    private var reversed = false
+    private var unixLines = false
+    private var lineStartUnixLines = false
+    private var numLoopRegs = 0
+    private var hasGraphemeSemantics = false
+    private var hasGraphemeClusterInstruction = false
+    private var hasWordBoundary = false
+    private var hasTextAnchor = false
 
-  private boolean reversed;
-  private boolean unixLines;
-  private boolean lineStartUnixLines;
-  private int numLoopRegs;
-  private boolean hasGraphemeSemantics;
-  private boolean hasGraphemeClusterInstruction;
-  private boolean hasWordBoundary;
-  private boolean hasTextAnchor;
+    /** Creates an empty program.  */
+    constructor()
 
-  /** Creates an empty program. */
-  public Prog() {}
+    /** Creates a copy of another program.  */
+    constructor(other: Prog) : this(other,  /* copyInstructions= */true)
 
-  /** Creates a copy of another program. */
-  public Prog(Prog other) {
-    this(other, /* copyInstructions= */ true);
-  }
-
-  /**
-   * Copies another program's fields. With {@code copyInstructions} false, the copy shares the other
-   * program's {@link Inst} objects, so it must not modify them.
-   */
-  private Prog(Prog other, boolean copyInstructions) {
-    if (copyInstructions) {
-      for (Inst inst : other.instructions) {
-        this.instructions.add(new Inst(inst));
-      }
-    } else {
-      this.instructions.addAll(other.instructions);
-    }
-    this.didFlatten = other.didFlatten;
-    this.start = other.start;
-    this.startUnanchored = other.startUnanchored;
-    this.numCaptures = other.numCaptures;
-    this.anchorStart = other.anchorStart;
-    this.anchorEnd = other.anchorEnd;
-    this.dollarAnchorEnd = other.dollarAnchorEnd;
-    this.dollarAnchorUnixLines = other.dollarAnchorUnixLines;
-    this.reversed = other.reversed;
-    this.unixLines = other.unixLines;
-    this.lineStartUnixLines = other.lineStartUnixLines;
-    this.numLoopRegs = other.numLoopRegs;
-    this.hasGraphemeSemantics = other.hasGraphemeSemantics;
-    this.hasGraphemeClusterInstruction = other.hasGraphemeClusterInstruction;
-    this.hasWordBoundary = other.hasWordBoundary;
-    this.hasTextAnchor = other.hasTextAnchor;
-  }
-
-  /** Returns the instruction at the given index. Must be called after {@link #freeze()}. */
-  public Inst inst(int index) {
-    return instArray[index];
-  }
-
-  /** Returns the frozen instruction array. Callers must not modify it or its instructions. */
-  Inst[] frozenInstructions() {
-    return instArray;
-  }
-
-  /**
-   * Returns the instruction at the given index from the mutable instruction list. Used during
-   * compilation before the program is frozen.
-   */
-  Inst mutableInst(int index) {
-    return instructions.get(index);
-  }
-
-  /** Returns the total number of instructions. */
-  public int size() {
-    return instArray != null ? instArray.length : instructions.size();
-  }
-
-  /** Returns true if the program has been flattened. */
-  public boolean didFlatten() {
-    return didFlatten;
-  }
-
-  /**
-   * Allocates a new instruction at the end of the program and returns its index. Must be called
-   * before {@link #freeze()}.
-   *
-   * @return the index of the newly allocated instruction
-   */
-  public int allocInst() {
-    int index = instructions.size();
-    instructions.add(new Inst());
-    return index;
-  }
-
-  /**
-   * Freezes the instruction list into a flat array for fast indexed access. Must be called after
-   * all instructions have been allocated and initialized (typically at the end of compilation).
-   * After freezing, {@link #inst(int)} reads directly from the array, avoiding ArrayList overhead.
-   */
-  public void freeze() {
-    instArray = instructions.toArray(new Inst[0]);
-    hasGraphemeSemantics = computeHasGraphemeSemantics();
-    hasGraphemeClusterInstruction = computeHasGraphemeClusterInstruction();
-    hasWordBoundary = computeHasWordBoundary();
-    hasTextAnchor = computeHasTextAnchor();
-    lineStartUnixLines = true;
-    for (Inst inst : instArray) {
-      if (inst.op == InstOp.EMPTY_WIDTH && (inst.arg & EmptyOp.BEGIN_LINE) != 0) {
-        lineStartUnixLines = false;
-        break;
-      }
-    }
-  }
-
-  /** Returns the start instruction index for anchored matching. */
-  public int start() {
-    return start;
-  }
-
-  /** Sets the start instruction index for anchored matching. */
-  public void setStart(int start) {
-    this.start = start;
-  }
-
-  /**
-   * Returns the start instruction index for unanchored matching. This typically points to a {@code
-   * .*?} loop that skips to the real start.
-   */
-  public int startUnanchored() {
-    return startUnanchored;
-  }
-
-  /** Sets the start instruction index for unanchored matching. */
-  public void setStartUnanchored(int startUnanchored) {
-    this.startUnanchored = startUnanchored;
-  }
-
-  /** Returns the number of capturing groups (including the implicit group 0 for the full match). */
-  public int numCaptures() {
-    return numCaptures;
-  }
-
-  /** Sets the number of capturing groups. */
-  public void setNumCaptures(int numCaptures) {
-    this.numCaptures = numCaptures;
-  }
-
-  /** Returns true if the pattern is anchored at the start. */
-  public boolean anchorStart() {
-    return anchorStart;
-  }
-
-  /** Sets whether the pattern is anchored at the start. */
-  public void setAnchorStart(boolean anchorStart) {
-    this.anchorStart = anchorStart;
-  }
-
-  /** Returns true if the pattern is anchored at the end. */
-  public boolean anchorEnd() {
-    return anchorEnd;
-  }
-
-  /** Sets whether the pattern is anchored at the end. */
-  public void setAnchorEnd(boolean anchorEnd) {
-    this.anchorEnd = anchorEnd;
-  }
-
-  /**
-   * Returns true if the end anchor was {@code $} (not {@code \z}), meaning the match may end before
-   * a trailing newline at the end of the text.
-   */
-  public boolean dollarAnchorEnd() {
-    return dollarAnchorEnd;
-  }
-
-  /** Sets whether the end anchor allows a trailing newline. */
-  public void setDollarAnchorEnd(boolean dollarAnchorEnd) {
-    this.dollarAnchorEnd = dollarAnchorEnd;
-  }
-
-  /** Returns the effective line mode of the stripped trailing end anchor. */
-  boolean dollarAnchorUnixLines() {
-    return dollarAnchorUnixLines;
-  }
-
-  /** Sets the effective line mode of the stripped trailing end anchor. */
-  void setDollarAnchorUnixLines(boolean unixLines) {
-    dollarAnchorUnixLines = unixLines;
-  }
-
-  /** Returns true if this program runs in reverse (for finding match starts). */
-  public boolean reversed() {
-    return reversed;
-  }
-
-  /** Sets whether this program runs in reverse. */
-  public void setReversed(boolean reversed) {
-    this.reversed = reversed;
-  }
-
-  /** Returns the number of loop progress-check registers allocated by the compiler. */
-  public int numLoopRegs() {
-    return numLoopRegs;
-  }
-
-  /** Sets the number of loop progress-check registers. */
-  public void setNumLoopRegs(int numLoopRegs) {
-    this.numLoopRegs = numLoopRegs;
-  }
-
-  /**
-   * Returns true if Unix lines mode is active. When true, only {@code '\n'} is recognized as a line
-   * terminator. When false (default), all JDK line terminators are recognized.
-   */
-  public boolean unixLines() {
-    return unixLines;
-  }
-
-  /** Returns whether line-start acceleration can restrict candidates to LF boundaries. */
-  boolean lineStartUnixLines() {
-    return lineStartUnixLines;
-  }
-
-  /** Sets whether Unix lines mode is active. */
-  public void setUnixLines(boolean unixLines) {
-    this.unixLines = unixLines;
-  }
-
-  /**
-   * Returns true if the program contains EMPTY_WIDTH instructions with {@link
-   * EmptyOp#WORD_BOUNDARY}, {@link EmptyOp#NON_WORD_BOUNDARY}, {@link
-   * EmptyOp#UNICODE_WORD_BOUNDARY}, or {@link EmptyOp#UNICODE_NON_WORD_BOUNDARY} flags. The DFA
-   * handles these as deferred assertions that are re-expanded when the word-character context is
-   * known.
-   */
-  public boolean hasWordBoundary() {
-    return hasWordBoundary;
-  }
-
-  boolean hasTextAnchor() {
-    return hasTextAnchor;
-  }
-
-  private boolean computeHasWordBoundary() {
-    int mask =
-        EmptyOp.WORD_BOUNDARY
-            | EmptyOp.NON_WORD_BOUNDARY
-            | EmptyOp.UNICODE_WORD_BOUNDARY
-            | EmptyOp.UNICODE_NON_WORD_BOUNDARY;
-    int n = size();
-    for (int i = 0; i < n; i++) {
-      Inst ip = inst(i);
-      if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg & mask) != 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private boolean computeHasTextAnchor() {
-    if (anchorStart || anchorEnd) {
-      return true;
-    }
-    int mask =
-        EmptyOp.BEGIN_LINE
-            | EmptyOp.END_LINE
-            | EmptyOp.BEGIN_TEXT
-            | EmptyOp.END_TEXT
-            | EmptyOp.DOLLAR_END
-            | EmptyOp.UNIX_DOLLAR_END
-            | EmptyOp.UNIX_BEGIN_LINE
-            | EmptyOp.UNIX_END_LINE;
-    int n = size();
-    for (int i = 0; i < n; i++) {
-      Inst ip = inst(i);
-      if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg & mask) != 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Returns true if this program contains grapheme-sensitive matching. */
-  boolean hasGraphemeSemantics() {
-    return hasGraphemeSemantics;
-  }
-
-  /** Returns true if this program contains a consuming {@code \X} instruction. */
-  boolean hasGraphemeClusterInstruction() {
-    return hasGraphemeClusterInstruction;
-  }
-
-  private boolean computeHasGraphemeSemantics() {
-    int n = instArray.length;
-    for (int i = 0; i < n; i++) {
-      Inst ip = instArray[i];
-      if (ip.op == InstOp.GRAPHEME_CLUSTER
-          || (ip.op == InstOp.EMPTY_WIDTH
-              && (ip.arg
-                      & (EmptyOp.GRAPHEME_CLUSTER_BOUNDARY
-                          | EmptyOp.EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY))
-                  != 0)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private boolean computeHasGraphemeClusterInstruction() {
-    int n = instArray.length;
-    for (int i = 0; i < n; i++) {
-      if (instArray[i].op == InstOp.GRAPHEME_CLUSTER) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns a human-readable dump of the program, useful for debugging.
-   *
-   * <p>Example output:
-   *
-   * <pre>
-   *   0. char [0x61-0x61] -> 1
-   *   1. match 0
-   * </pre>
-   */
-  public String dump() {
-    int n = size();
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < n; i++) {
-      if (i == start) {
-        sb.append('>');
-      } else {
-        sb.append(' ');
-      }
-      sb.append(
-          String.format(
-              Locale.ROOT, "%d. %s\n", i, instArray != null ? instArray[i] : instructions.get(i)));
-    }
-    return sb.toString();
-  }
-
-  @Override
-  public String toString() {
-    return String.format(
-        Locale.ROOT,
-        "Prog{size=%d, start=%d, startUnanchored=%d, captures=%d}",
-        size(),
-        start,
-        startUnanchored,
-        numCaptures);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Program analysis for BitState
-  // ---------------------------------------------------------------------------
-
-  // Computed lazily on first use by BitState, possibly by several threads sharing one Pattern. The
-  // computation is deterministic, so a racing duplicate computation is harmless, but the analysis
-  // must be published through a volatile field so that readers see its arrays' elements.
-  private volatile BitStateAnalysis bitStateAnalysis;
-
-  private static final class BitStateAnalysis {
-    final boolean[] epsilonCycleAlts;
-    final CaptureRune[] captureRunes;
-    final LoopEntry[] loopEntries;
-    final Inst[] captureProgressChecks;
-    final Inst[] greedyRunes;
-    final LazyRuneLoop[] lazyRuneLoops;
-
-    BitStateAnalysis(
-        boolean[] epsilonCycleAlts,
-        CaptureRune[] captureRunes,
-        LoopEntry[] loopEntries,
-        Inst[] captureProgressChecks,
-        Inst[] greedyRunes,
-        LazyRuneLoop[] lazyRuneLoops) {
-      this.epsilonCycleAlts = epsilonCycleAlts;
-      this.captureRunes = captureRunes;
-      this.loopEntries = loopEntries;
-      this.captureProgressChecks = captureProgressChecks;
-      this.greedyRunes = greedyRunes;
-      this.lazyRuneLoops = lazyRuneLoops;
-    }
-  }
-
-  /**
-   * Returns a boolean array indexed by instruction ID. An entry is {@code true} if that instruction
-   * is an ALT/ALT_MATCH that participates in an epsilon cycle — a path back to itself through only
-   * epsilon transitions (ALT, NOP, CAPTURE, EMPTY_WIDTH). Only these ALT instructions need the
-   * BitState visited bitmap to prevent infinite loops; other ALTs can be safely revisited from
-   * different DFS paths.
-   *
-   * <p>The result is computed once and cached.
-   */
-  boolean[] epsilonCycleAlts() {
-    return bitStateAnalysis().epsilonCycleAlts;
-  }
-
-  /** Returns shared read-only fusion metadata, or null when no sequences can be fused. */
-  CaptureRune[] captureRunes() {
-    return bitStateAnalysis().captureRunes;
-  }
-
-  /** Returns shared entry/check fusion targets, or null when no pairs can be fused. */
-  LoopEntry[] loopEntries() {
-    return bitStateAnalysis().loopEntries;
-  }
-
-  /** Returns shared capture/check fusion targets, or null when no pairs can be fused. */
-  Inst[] captureProgressChecks() {
-    return bitStateAnalysis().captureProgressChecks;
-  }
-
-  /**
-   * Returns consuming bodies of simple greedy loops, or null when none exist. Each body is the
-   * ALT's preferred branch and consumes one rune before jumping directly back to that ALT.
-   */
-  Inst[] greedyRunes() {
-    return bitStateAnalysis().greedyRunes;
-  }
-
-  private Inst[] computeGreedyRunes(boolean[] reachable) {
-    Inst[] runes = null;
-    for (int i = 0; i < size(); i++) {
-      Inst alt = inst(i);
-      if (reachable[i] && (alt.opCode == InstOp.OP_ALT || alt.opCode == InstOp.OP_ALT_MATCH)) {
-        Inst rune = inst(alt.out);
-        if ((rune.opCode == InstOp.OP_CHAR_RANGE || rune.opCode == InstOp.OP_CHAR_CLASS)
-            && rune.out == i) {
-          if (runes == null) {
-            runes = new Inst[size()];
-          }
-          runes[i] = rune;
-        }
-      }
-    }
-    return runes;
-  }
-
-  /** Returns simple lazy character loops with a literal exit, or null if none exist. */
-  LazyRuneLoop[] lazyRuneLoops() {
-    return bitStateAnalysis().lazyRuneLoops;
-  }
-
-  private LazyRuneLoop[] computeLazyRuneLoops(boolean[] reachable) {
-    LazyRuneLoop[] loops = null;
-    for (int i = 0; i < size(); i++) {
-      Inst alt = inst(i);
-      if (!reachable[i] || alt.op != InstOp.ALT) {
-        continue;
-      }
-      Inst rune = inst(alt.out1);
-      if ((rune.op != InstOp.CHAR_RANGE && rune.op != InstOp.CHAR_CLASS) || rune.out != i) {
-        continue;
-      }
-      int exit = alt.out;
-      for (int steps = 0; steps < size(); steps++) {
-        Inst next = inst(exit);
-        if (next.op == InstOp.CAPTURE || next.op == InstOp.NOP) {
-          exit = next.out;
-          continue;
-        }
-        if (next.op == InstOp.CHAR_RANGE && next.lo == next.hi && next.lo < 128 && !next.foldCase) {
-          if (loops == null) {
-            loops = new LazyRuneLoop[size()];
-          }
-          loops[i] = new LazyRuneLoop(rune, next.lo, alt.out);
-        }
-        break;
-      }
-    }
-    return loops;
-  }
-
-  private BitStateAnalysis bitStateAnalysis() {
-    BitStateAnalysis result = bitStateAnalysis;
-    if (result == null) {
-      boolean[] reachable = computeReachableInstructions();
-      CaptureRune[] captures = computeCaptureRunes(reachable);
-      result =
-          new BitStateAnalysis(
-              computeEpsilonCycleAlts(reachable),
-              captures,
-              computeLoopEntries(reachable, captures),
-              computeCaptureProgressChecks(reachable),
-              computeGreedyRunes(reachable),
-              computeLazyRuneLoops(reachable));
-      bitStateAnalysis = result;
-    }
-    return result;
-  }
-
-  private boolean[] computeEpsilonCycleAlts(boolean[] reachable) {
-    int n = size();
-    boolean[] inCycle = new boolean[n];
-
-    for (int i = 0; i < n; i++) {
-      Inst inst = inst(i);
-      if (!reachable[i] || (inst.op != InstOp.ALT && inst.op != InstOp.ALT_MATCH)) {
-        continue;
-      }
-      if (canReachSelfViaEpsilon(i, reachable)) {
-        inCycle[i] = true;
-      }
-    }
-    return inCycle;
-  }
-
-  private CaptureRune[] computeCaptureRunes(boolean[] reachable) {
-    CaptureRune[] fused = null;
-    for (int i = 0; i < size(); i++) {
-      Inst instruction = inst(i);
-      // Discarded fragments may retain unresolved patch-list links instead of successor IDs.
-      if (reachable[i] && instruction.opCode == InstOp.OP_CAPTURE) {
-        Inst rune = inst(instruction.out);
-        if (rune.opCode == InstOp.OP_CHAR_RANGE || rune.opCode == InstOp.OP_CHAR_CLASS) {
-          Inst end = inst(rune.out);
-          if (end.opCode == InstOp.OP_CAPTURE) {
-            if (fused == null) {
-              fused = new CaptureRune[size()];
+    /**
+     * Copies another program's fields. With `copyInstructions` false, the copy shares the other
+     * program's [Inst] objects, so it must not modify them.
+     */
+    private constructor(other: Prog, copyInstructions: Boolean) {
+        if (copyInstructions) {
+            for (inst in other.instructions) {
+                this.instructions.add(Inst(inst))
             }
-            fused[i] = new CaptureRune(rune, end.arg, end.out);
-          }
+        } else {
+            this.instructions.addAll(other.instructions)
         }
-      }
+        this.didFlatten = other.didFlatten
+        this.start = other.start
+        this.startUnanchored = other.startUnanchored
+        this.numCaptures = other.numCaptures
+        this.anchorStart = other.anchorStart
+        this.anchorEnd = other.anchorEnd
+        this.dollarAnchorEnd = other.dollarAnchorEnd
+        this.dollarAnchorUnixLines = other.dollarAnchorUnixLines
+        this.reversed = other.reversed
+        this.unixLines = other.unixLines
+        this.lineStartUnixLines = other.lineStartUnixLines
+        this.numLoopRegs = other.numLoopRegs
+        this.hasGraphemeSemantics = other.hasGraphemeSemantics
+        this.hasGraphemeClusterInstruction = other.hasGraphemeClusterInstruction
+        this.hasWordBoundary = other.hasWordBoundary
+        this.hasTextAnchor = other.hasTextAnchor
     }
-    return fused;
-  }
 
-  private LoopEntry[] computeLoopEntries(boolean[] reachable, CaptureRune[] captures) {
-    LoopEntry[] entries = null;
-    for (int i = 0; i < size(); i++) {
-      Inst entry = inst(i);
-      if (reachable[i] && entry.opCode == InstOp.OP_LOOP_ENTER) {
-        Inst check = inst(entry.out);
-        if (check.opCode == InstOp.OP_PROGRESS_CHECK && check.arg == entry.arg && check.out != 0) {
-          if (entries == null) {
-            entries = new LoopEntry[size()];
-          }
-          Inst body = inst(check.out);
-          // Retain the existing capture/consumer/capture fusion when it can do more work.
-          if (body.opCode == InstOp.OP_CAPTURE
-              && (captures == null || captures[check.out] == null)) {
-            entries[i] = new LoopEntry(body.out, body.arg);
-          } else {
-            entries[i] = new LoopEntry(check.out, -1);
-          }
+    /** Returns the instruction at the given index. Must be called after [.freeze].  */
+    fun inst(index: Int): Inst {
+        return instArray!![index]
+    }
+
+    /** Returns the frozen instruction array. Callers must not modify it or its instructions.  */
+    fun frozenInstructions(): Array<Inst>? {
+        return instArray
+    }
+
+    /**
+     * Returns the instruction at the given index from the mutable instruction list. Used during
+     * compilation before the program is frozen.
+     */
+    fun mutableInst(index: Int): Inst? {
+        return instructions.get(index)
+    }
+
+    /** Returns the total number of instructions.  */
+    fun size(): Int {
+        return if (instArray != null) instArray.length else instructions.size()
+    }
+
+    /** Returns true if the program has been flattened.  */
+    fun didFlatten(): Boolean {
+        return didFlatten
+    }
+
+    /**
+     * Allocates a new instruction at the end of the program and returns its index. Must be called
+     * before [.freeze].
+     * 
+     * @return the index of the newly allocated instruction
+     */
+    fun allocInst(): Int {
+        val index: Int = instructions.size()
+        instructions.add(Inst())
+        return index
+    }
+
+    /**
+     * Freezes the instruction list into a flat array for fast indexed access. Must be called after
+     * all instructions have been allocated and initialized (typically at the end of compilation).
+     * After freezing, [.inst] reads directly from the array, avoiding ArrayList overhead.
+     */
+    fun freeze() {
+        instArray = instructions.toArray<Inst?>(arrayOfNulls<Inst>(0))
+        hasGraphemeSemantics = computeHasGraphemeSemantics()
+        hasGraphemeClusterInstruction = computeHasGraphemeClusterInstruction()
+        hasWordBoundary = computeHasWordBoundary()
+        hasTextAnchor = computeHasTextAnchor()
+        lineStartUnixLines = true
+        for (inst in instArray!!) {
+            if (inst.op == InstOp.EMPTY_WIDTH && (inst.arg and EmptyOp.BEGIN_LINE) != 0) {
+                lineStartUnixLines = false
+                break
+            }
         }
-      }
     }
-    return entries;
-  }
 
-  private Inst[] computeCaptureProgressChecks(boolean[] reachable) {
-    Inst[] checks = null;
-    for (int i = 0; i < size(); i++) {
-      Inst capture = inst(i);
-      if (reachable[i] && capture.opCode == InstOp.OP_CAPTURE) {
-        Inst next = inst(capture.out);
-        if (next.opCode == InstOp.OP_PROGRESS_CHECK) {
-          if (checks == null) {
-            checks = new Inst[size()];
-          }
-          checks[i] = next;
+    /** Returns the start instruction index for anchored matching.  */
+    fun start(): Int {
+        return start
+    }
+
+    /** Sets the start instruction index for anchored matching.  */
+    fun setStart(start: Int) {
+        this.start = start
+    }
+
+    /**
+     * Returns the start instruction index for unanchored matching. This typically points to a `.*?` loop that skips to the real start.
+     */
+    fun startUnanchored(): Int {
+        return startUnanchored
+    }
+
+    /** Sets the start instruction index for unanchored matching.  */
+    fun setStartUnanchored(startUnanchored: Int) {
+        this.startUnanchored = startUnanchored
+    }
+
+    /** Returns the number of capturing groups (including the implicit group 0 for the full match).  */
+    fun numCaptures(): Int {
+        return numCaptures
+    }
+
+    /** Sets the number of capturing groups.  */
+    fun setNumCaptures(numCaptures: Int) {
+        this.numCaptures = numCaptures
+    }
+
+    /** Returns true if the pattern is anchored at the start.  */
+    fun anchorStart(): Boolean {
+        return anchorStart
+    }
+
+    /** Sets whether the pattern is anchored at the start.  */
+    fun setAnchorStart(anchorStart: Boolean) {
+        this.anchorStart = anchorStart
+    }
+
+    /** Returns true if the pattern is anchored at the end.  */
+    fun anchorEnd(): Boolean {
+        return anchorEnd
+    }
+
+    /** Sets whether the pattern is anchored at the end.  */
+    fun setAnchorEnd(anchorEnd: Boolean) {
+        this.anchorEnd = anchorEnd
+    }
+
+    /**
+     * Returns true if the end anchor was `$` (not `\z`), meaning the match may end before
+     * a trailing newline at the end of the text.
+     */
+    fun dollarAnchorEnd(): Boolean {
+        return dollarAnchorEnd
+    }
+
+    /** Sets whether the end anchor allows a trailing newline.  */
+    fun setDollarAnchorEnd(dollarAnchorEnd: Boolean) {
+        this.dollarAnchorEnd = dollarAnchorEnd
+    }
+
+    /** Returns the effective line mode of the stripped trailing end anchor.  */
+    fun dollarAnchorUnixLines(): Boolean {
+        return dollarAnchorUnixLines
+    }
+
+    /** Sets the effective line mode of the stripped trailing end anchor.  */
+    fun setDollarAnchorUnixLines(unixLines: Boolean) {
+        dollarAnchorUnixLines = unixLines
+    }
+
+    /** Returns true if this program runs in reverse (for finding match starts).  */
+    fun reversed(): Boolean {
+        return reversed
+    }
+
+    /** Sets whether this program runs in reverse.  */
+    fun setReversed(reversed: Boolean) {
+        this.reversed = reversed
+    }
+
+    /** Returns the number of loop progress-check registers allocated by the compiler.  */
+    fun numLoopRegs(): Int {
+        return numLoopRegs
+    }
+
+    /** Sets the number of loop progress-check registers.  */
+    fun setNumLoopRegs(numLoopRegs: Int) {
+        this.numLoopRegs = numLoopRegs
+    }
+
+    /**
+     * Returns true if Unix lines mode is active. When true, only `'\n'` is recognized as a line
+     * terminator. When false (default), all JDK line terminators are recognized.
+     */
+    fun unixLines(): Boolean {
+        return unixLines
+    }
+
+    /** Returns whether line-start acceleration can restrict candidates to LF boundaries.  */
+    fun lineStartUnixLines(): Boolean {
+        return lineStartUnixLines
+    }
+
+    /** Sets whether Unix lines mode is active.  */
+    fun setUnixLines(unixLines: Boolean) {
+        this.unixLines = unixLines
+    }
+
+    /**
+     * Returns true if the program contains EMPTY_WIDTH instructions with [ ][EmptyOp.WORD_BOUNDARY], [EmptyOp.NON_WORD_BOUNDARY], [ ][EmptyOp.UNICODE_WORD_BOUNDARY], or [EmptyOp.UNICODE_NON_WORD_BOUNDARY] flags. The DFA
+     * handles these as deferred assertions that are re-expanded when the word-character context is
+     * known.
+     */
+    fun hasWordBoundary(): Boolean {
+        return hasWordBoundary
+    }
+
+    fun hasTextAnchor(): Boolean {
+        return hasTextAnchor
+    }
+
+    private fun computeHasWordBoundary(): Boolean {
+        val mask =
+            (EmptyOp.WORD_BOUNDARY
+                    or EmptyOp.NON_WORD_BOUNDARY
+                    or EmptyOp.UNICODE_WORD_BOUNDARY
+                    or EmptyOp.UNICODE_NON_WORD_BOUNDARY)
+        val n = size()
+        for (i in 0..<n) {
+            val ip = inst(i)
+            if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg and mask) != 0) {
+                return true
+            }
         }
-      }
+        return false
     }
-    return checks;
-  }
 
-  /**
-   * Returns instruction reachability from both entry points. Only reachable instructions are
-   * guaranteed to have patched successor fields; discarded fragments may retain patch-list links.
-   * Grapheme consumption reaches its successor here, but breaks paths in the epsilon-cycle walk.
-   */
-  private boolean[] computeReachableInstructions() {
-    int n = size();
-    boolean[] reachable = new boolean[n];
-    ArrayDeque<Integer> stack = new ArrayDeque<>();
-    addSuccessor(start, reachable, stack);
-    addSuccessor(startUnanchored, reachable, stack);
-
-    while (!stack.isEmpty()) {
-      int id = stack.pop();
-      Inst inst = inst(id);
-      switch (inst.op) {
-        case ALT, ALT_MATCH, PROGRESS_CHECK -> {
-          addSuccessor(inst.out, reachable, stack);
-          addSuccessor(inst.out1, reachable, stack);
+    private fun computeHasTextAnchor(): Boolean {
+        if (anchorStart || anchorEnd) {
+            return true
         }
-        case NOP, CAPTURE, LOOP_ENTER, EMPTY_WIDTH, CHAR_RANGE, CHAR_CLASS, GRAPHEME_CLUSTER ->
-            addSuccessor(inst.out, reachable, stack);
-        default -> {
-          // MATCH and FAIL terminate.
+        val mask =
+            (EmptyOp.BEGIN_LINE
+                    or EmptyOp.END_LINE
+                    or EmptyOp.BEGIN_TEXT
+                    or EmptyOp.END_TEXT
+                    or EmptyOp.DOLLAR_END
+                    or EmptyOp.UNIX_DOLLAR_END
+                    or EmptyOp.UNIX_BEGIN_LINE
+                    or EmptyOp.UNIX_END_LINE)
+        val n = size()
+        for (i in 0..<n) {
+            val ip = inst(i)
+            if (ip.op == InstOp.EMPTY_WIDTH && (ip.arg and mask) != 0) {
+                return true
+            }
         }
-      }
-    }
-    return reachable;
-  }
-
-  /**
-   * Returns true if instruction {@code target} can reach itself via a path that consists entirely
-   * of epsilon transitions (ALT, ALT_MATCH, NOP, CAPTURE, EMPTY_WIDTH). CHAR_RANGE and MATCH
-   * consume input or terminate, so they break any epsilon path.
-   */
-  private boolean canReachSelfViaEpsilon(int target, boolean[] reachable) {
-    int n = size();
-    boolean[] visited = new boolean[n];
-    ArrayDeque<Integer> stack = new ArrayDeque<>();
-
-    // Seed with epsilon successors of target (don't count target itself as a starting node).
-    addEpsilonSuccessors(target, reachable, visited, stack);
-
-    while (!stack.isEmpty()) {
-      int id = stack.pop();
-      if (id == target) {
-        return true;
-      }
-      addEpsilonSuccessors(id, reachable, visited, stack);
-    }
-    return false;
-  }
-
-  private void addEpsilonSuccessors(
-      int id, boolean[] reachable, boolean[] visited, ArrayDeque<Integer> stack) {
-    Inst inst = inst(id);
-    switch (inst.op) {
-      case ALT, ALT_MATCH -> {
-        addEpsilonSuccessor(inst.out, reachable, visited, stack);
-        addEpsilonSuccessor(inst.out1, reachable, visited, stack);
-      }
-      case NOP, CAPTURE, LOOP_ENTER, EMPTY_WIDTH -> {
-        addEpsilonSuccessor(inst.out, reachable, visited, stack);
-      }
-      default -> {
-        // CHAR_RANGE, MATCH, FAIL: not epsilon transitions.
-      }
-    }
-  }
-
-  private static void addEpsilonSuccessor(
-      int id, boolean[] reachable, boolean[] visited, ArrayDeque<Integer> stack) {
-    if (id > 0 && id < reachable.length && reachable[id] && !visited[id]) {
-      visited[id] = true;
-      stack.push(id);
-    }
-  }
-
-  private static void addSuccessor(int id, boolean[] reachable, ArrayDeque<Integer> stack) {
-    if (id > 0 && id < reachable.length && !reachable[id]) {
-      reachable[id] = true;
-      stack.push(id);
-    }
-  }
-
-  private static final class PredecessorGraph {
-    final int[] head;
-    int[] nextEdge;
-    int[] predInst;
-    int edgeCount;
-
-    PredecessorGraph(int ninst) {
-      head = new int[ninst];
-      Arrays.fill(head, -1);
-      nextEdge = new int[Math.max(16, ninst * 2)];
-      predInst = new int[Math.max(16, ninst * 2)];
+        return false
     }
 
-    void addPredecessor(int to, int from) {
-      if (to < 0 || to >= head.length) {
-        return;
-      }
-      if (edgeCount == nextEdge.length) {
-        int newCap = nextEdge.length * 2;
-        nextEdge = Arrays.copyOf(nextEdge, newCap);
-        predInst = Arrays.copyOf(predInst, newCap);
-      }
-      int edge = edgeCount++;
-      predInst[edge] = from;
-      nextEdge[edge] = head[to];
-      head[to] = edge;
-    }
-  }
-
-  /**
-   * Returns a flattened, frozen copy of this program, leaving this program unchanged. This avoids
-   * copying every instruction first: {@link #flatten()} reads the original instructions and emits
-   * new ones, so the copy can share them until it replaces its instruction list.
-   */
-  Prog flattenedCopy() {
-    Prog copy = new Prog(this, /* copyInstructions= */ false);
-    copy.flatten();
-    copy.freeze();
-    return copy;
-  }
-
-  public void flatten() {
-    if (didFlatten) {
-      return;
+    /** Returns true if this program contains grapheme-sensitive matching.  */
+    fun hasGraphemeSemantics(): Boolean {
+        return hasGraphemeSemantics
     }
 
-    int ninst = instructions.size();
-    int[] rootmap = new int[ninst];
-    Arrays.fill(rootmap, -1);
-    IntArrayList roots = new IntArrayList(ninst);
-    PredecessorGraph predecessors = new PredecessorGraph(ninst);
-
-    boolean[] reachable = new boolean[ninst];
-    IntArrayList reachableList = new IntArrayList(ninst);
-    IntArrayList stack = new IntArrayList(ninst);
-
-    // Pass 1: Mark successor roots and predecessors.
-    markSuccessors(rootmap, roots, predecessors, reachable, reachableList, stack);
-
-    // Pass 2: Mark dominator roots by working backwards.
-    int[] sortedRoots = roots.toArray();
-    Arrays.sort(sortedRoots);
-    for (int i = sortedRoots.length - 1; i >= 0; i--) {
-      int root = sortedRoots[i];
-      markDominator(root, rootmap, roots, predecessors, reachable, reachableList, stack);
+    /** Returns true if this program contains a consuming `\X` instruction.  */
+    fun hasGraphemeClusterInstruction(): Boolean {
+        return hasGraphemeClusterInstruction
     }
 
-    // Pass 3: Emit lists. Remap outs to root-ids.
-    int[] flatmap = new int[roots.size()];
-    List<Inst> flat = new ArrayList<>(ninst);
-
-    for (int r = 0; r < roots.size(); r++) {
-      int root = roots.get(r);
-      flatmap[r] = flat.size();
-      emitList(root, rootmap, flat, reachable, reachableList, stack);
-      flat.get(flat.size() - 1).last = true;
-    }
-
-    // Pass 4: Remap outs from root-ids to flat-ids.
-    for (Inst inst : flat) {
-      if (inst.op == InstOp.ALT_MATCH) {
-        // AltMatch's outs are already flat offsets (flat.len() and flat.len() + 1)
-      } else if (inst.op == InstOp.PROGRESS_CHECK) {
-        inst.out = flatmap[inst.out];
-        inst.out1 = flatmap[inst.out1];
-      } else {
-        inst.out = flatmap[inst.out];
-      }
-    }
-
-    // Remap startUnanchored and start.
-    if (startUnanchored == 0) {
-      // do nothing
-    } else if (startUnanchored == start) {
-      startUnanchored = flatmap[1];
-      start = flatmap[1];
-    } else {
-      startUnanchored = flatmap[1];
-      start = flatmap[2];
-    }
-    instructions.clear();
-    instructions.addAll(flat);
-    didFlatten = true;
-  }
-
-  private void markSuccessors(
-      int[] rootmap,
-      IntArrayList roots,
-      PredecessorGraph predecessors,
-      boolean[] reachable,
-      IntArrayList reachableList,
-      IntArrayList stack) {
-
-    // Mark the kInstFail instruction.
-    rootmap[0] = roots.size();
-    roots.add(0);
-
-    // Mark the startUnanchored and start instructions.
-    if (rootmap[startUnanchored] == -1) {
-      rootmap[startUnanchored] = roots.size();
-      roots.add(startUnanchored);
-    }
-    if (rootmap[start] == -1) {
-      rootmap[start] = roots.size();
-      roots.add(start);
-    }
-
-    reachableList.clear();
-    stack.clear();
-    stack.add(startUnanchored);
-
-    int nextId = -1;
-    while (!stack.isEmpty() || nextId != -1) {
-      int id = nextId;
-      if (id == -1) {
-        id = stack.removeLast();
-      } else {
-        nextId = -1;
-      }
-
-      if (reachable[id]) {
-        continue;
-      }
-      reachable[id] = true;
-      reachableList.add(id);
-
-      Inst inst = instructions.get(id);
-      switch (inst.op) {
-        case ALT, ALT_MATCH -> {
-          int out = inst.out;
-          int out1 = inst.out1;
-          predecessors.addPredecessor(out, id);
-          predecessors.addPredecessor(out1, id);
-          stack.add(out1);
-          nextId = out;
+    private fun computeHasGraphemeSemantics(): Boolean {
+        val n: Int = instArray.length
+        for (i in 0..<n) {
+            val ip = instArray!![i]
+            if (ip.op == InstOp.GRAPHEME_CLUSTER
+                || (ip.op == InstOp.EMPTY_WIDTH
+                        && ((ip.arg
+                        and (EmptyOp.GRAPHEME_CLUSTER_BOUNDARY
+                        or EmptyOp.EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY))
+                        != 0))
+            ) {
+                return true
+            }
         }
-        case CHAR_RANGE, CHAR_CLASS, CAPTURE, LOOP_ENTER, EMPTY_WIDTH, GRAPHEME_CLUSTER -> {
-          int out = inst.out;
-          if (rootmap[out] == -1) {
-            rootmap[out] = roots.size();
-            roots.add(out);
-          }
-          nextId = out;
-        }
-        case PROGRESS_CHECK -> {
-          int out = inst.out;
-          int out1 = inst.out1;
-          if (rootmap[out] == -1) {
-            rootmap[out] = roots.size();
-            roots.add(out);
-          }
-          if (rootmap[out1] == -1) {
-            rootmap[out1] = roots.size();
-            roots.add(out1);
-          }
-          stack.add(out1);
-          nextId = out;
-        }
-        case NOP -> {
-          nextId = inst.out;
-        }
-        case MATCH, FAIL -> {
-          // terminates
-        }
-      }
+        return false
     }
 
-    for (int i = 0; i < reachableList.size(); i++) {
-      reachable[reachableList.get(i)] = false;
-    }
-  }
-
-  private void markDominator(
-      int root,
-      int[] rootmap,
-      IntArrayList roots,
-      PredecessorGraph predecessors,
-      boolean[] reachable,
-      IntArrayList reachableList,
-      IntArrayList stack) {
-
-    reachableList.clear();
-    stack.clear();
-    stack.add(root);
-
-    int nextId = -1;
-    while (!stack.isEmpty() || nextId != -1) {
-      int id = nextId;
-      if (id == -1) {
-        id = stack.removeLast();
-      } else {
-        nextId = -1;
-      }
-
-      if (reachable[id]) {
-        continue;
-      }
-      reachable[id] = true;
-      reachableList.add(id);
-
-      if (id != root && rootmap[id] != -1) {
-        continue;
-      }
-
-      Inst inst = instructions.get(id);
-      switch (inst.op) {
-        case ALT, ALT_MATCH -> {
-          stack.add(inst.out1);
-          nextId = inst.out;
+    private fun computeHasGraphemeClusterInstruction(): Boolean {
+        val n: Int = instArray.length
+        for (i in 0..<n) {
+            if (instArray!![i].op == InstOp.GRAPHEME_CLUSTER) {
+                return true
+            }
         }
-        case NOP -> {
-          nextId = inst.out;
-        }
-        case CHAR_RANGE,
-            CHAR_CLASS,
-            CAPTURE,
-            LOOP_ENTER,
-            EMPTY_WIDTH,
-            GRAPHEME_CLUSTER,
-            PROGRESS_CHECK,
-            MATCH,
-            FAIL -> {
-          // Leaf/non-epsilon
-        }
-      }
+        return false
     }
 
-    for (int idx = 0; idx < reachableList.size(); idx++) {
-      int i = reachableList.get(idx);
-      for (int edge = predecessors.head[i]; edge != -1; edge = predecessors.nextEdge[edge]) {
-        int pred = predecessors.predInst[edge];
-        if (!reachable[pred]) {
-          if (rootmap[i] == -1) {
-            rootmap[i] = roots.size();
-            roots.add(i);
-          }
+    /**
+     * Returns a human-readable dump of the program, useful for debugging.
+     * 
+     * 
+     * Example output:
+     * 
+     * <pre>
+     * 0. char [0x61-0x61] -> 1
+     * 1. match 0
+    </pre> * 
+     */
+    fun dump(): String {
+        val n = size()
+        val sb = StringBuilder()
+        for (i in 0..<n) {
+            if (i == start) {
+                sb.append('>')
+            } else {
+                sb.append(' ')
+            }
+            sb.append(
+                String.format(
+                    Locale.ROOT, "%d. %s\n", i, if (instArray != null) instArray!![i] else instructions.get(i)
+                )
+            )
         }
-      }
+        return sb.toString()
     }
 
-    for (int idx = 0; idx < reachableList.size(); idx++) {
-      reachable[reachableList.get(idx)] = false;
-    }
-  }
-
-  private void emitList(
-      int root,
-      int[] rootmap,
-      List<Inst> flat,
-      boolean[] reachable,
-      IntArrayList reachableList,
-      IntArrayList stack) {
-
-    reachableList.clear();
-    stack.clear();
-    stack.add(root);
-
-    int nextId = -1;
-    while (!stack.isEmpty() || nextId != -1) {
-      int id = nextId;
-      if (id == -1) {
-        id = stack.removeLast();
-      } else {
-        nextId = -1;
-      }
-
-      if (reachable[id]) {
-        continue;
-      }
-      reachable[id] = true;
-      reachableList.add(id);
-
-      if (id != root && rootmap[id] != -1) {
-        Inst nop = new Inst();
-        nop.initNop(rootmap[id]);
-        flat.add(nop);
-        continue;
-      }
-
-      Inst inst = instructions.get(id);
-      switch (inst.op) {
-        case ALT -> {
-          stack.add(inst.out1);
-          nextId = inst.out;
-        }
-        case ALT_MATCH -> {
-          Inst flatAltMatch = new Inst();
-          flatAltMatch.op = InstOp.ALT_MATCH;
-          flatAltMatch.opCode = InstOp.OP_ALT_MATCH;
-          flatAltMatch.out = flat.size();
-          flatAltMatch.out1 = flat.size() + 1;
-          flat.add(flatAltMatch);
-
-          stack.add(inst.out1);
-          nextId = inst.out;
-        }
-        case NOP -> {
-          nextId = inst.out;
-        }
-        case PROGRESS_CHECK -> {
-          Inst newInst = new Inst(inst);
-          newInst.out = rootmap[inst.out];
-          newInst.out1 = rootmap[inst.out1];
-          flat.add(newInst);
-        }
-        case CAPTURE, LOOP_ENTER, EMPTY_WIDTH, CHAR_RANGE, CHAR_CLASS, GRAPHEME_CLUSTER -> {
-          Inst newInst = new Inst(inst);
-          newInst.out = rootmap[inst.out];
-          flat.add(newInst);
-        }
-        case MATCH, FAIL -> {
-          Inst newInst = new Inst(inst);
-          flat.add(newInst);
-        }
-      }
+    override fun toString(): kotlin.String {
+        return String.format(
+            Locale.ROOT,
+            "Prog{size=%d, start=%d, startUnanchored=%d, captures=%d}",
+            size(),
+            start,
+            startUnanchored,
+            numCaptures
+        )
     }
 
-    for (int idx = 0; idx < reachableList.size(); idx++) {
-      reachable[reachableList.get(idx)] = false;
+    // ---------------------------------------------------------------------------
+    // Program analysis for BitState
+    // ---------------------------------------------------------------------------
+    // Computed lazily on first use by BitState, possibly by several threads sharing one Pattern. The
+    // computation is deterministic, so a racing duplicate computation is harmless, but the analysis
+    // must be published through a volatile field so that readers see its arrays' elements.
+    @Volatile
+    private var bitStateAnalysis: BitStateAnalysis? = null
+
+    private class BitStateAnalysis(
+        epsilonCycleAlts: BooleanArray?,
+        captureRunes: Array<CaptureRune?>?,
+        loopEntries: Array<LoopEntry?>?,
+        captureProgressChecks: Array<Inst?>?,
+        greedyRunes: Array<Inst?>?,
+        lazyRuneLoops: Array<LazyRuneLoop?>?
+    ) {
+        val epsilonCycleAlts: BooleanArray?
+        val captureRunes: Array<CaptureRune?>?
+        val loopEntries: Array<LoopEntry?>?
+        val captureProgressChecks: Array<Inst?>?
+        val greedyRunes: Array<Inst?>?
+        val lazyRuneLoops: Array<LazyRuneLoop?>?
+
+        init {
+            this.epsilonCycleAlts = epsilonCycleAlts
+            this.captureRunes = captureRunes
+            this.loopEntries = loopEntries
+            this.captureProgressChecks = captureProgressChecks
+            this.greedyRunes = greedyRunes
+            this.lazyRuneLoops = lazyRuneLoops
+        }
     }
-  }
+
+    /**
+     * Returns a boolean array indexed by instruction ID. An entry is `true` if that instruction
+     * is an ALT/ALT_MATCH that participates in an epsilon cycle — a path back to itself through only
+     * epsilon transitions (ALT, NOP, CAPTURE, EMPTY_WIDTH). Only these ALT instructions need the
+     * BitState visited bitmap to prevent infinite loops; other ALTs can be safely revisited from
+     * different DFS paths.
+     * 
+     * 
+     * The result is computed once and cached.
+     */
+    fun epsilonCycleAlts(): BooleanArray? {
+        return bitStateAnalysis().epsilonCycleAlts
+    }
+
+    /** Returns shared read-only fusion metadata, or null when no sequences can be fused.  */
+    fun captureRunes(): Array<CaptureRune?>? {
+        return bitStateAnalysis().captureRunes
+    }
+
+    /** Returns shared entry/check fusion targets, or null when no pairs can be fused.  */
+    fun loopEntries(): Array<LoopEntry?>? {
+        return bitStateAnalysis().loopEntries
+    }
+
+    /** Returns shared capture/check fusion targets, or null when no pairs can be fused.  */
+    fun captureProgressChecks(): Array<Inst?>? {
+        return bitStateAnalysis().captureProgressChecks
+    }
+
+    /**
+     * Returns consuming bodies of simple greedy loops, or null when none exist. Each body is the
+     * ALT's preferred branch and consumes one rune before jumping directly back to that ALT.
+     */
+    fun greedyRunes(): Array<Inst?>? {
+        return bitStateAnalysis().greedyRunes
+    }
+
+    private fun computeGreedyRunes(reachable: BooleanArray): Array<Inst?>? {
+        var runes: Array<Inst?>? = null
+        for (i in 0..<size()) {
+            val alt = inst(i)
+            if (reachable[i] && (alt.opCode == InstOp.Companion.OP_ALT || alt.opCode == InstOp.Companion.OP_ALT_MATCH)) {
+                val rune = inst(alt.out)
+                if ((rune.opCode == InstOp.Companion.OP_CHAR_RANGE || rune.opCode == InstOp.Companion.OP_CHAR_CLASS)
+                    && rune.out == i
+                ) {
+                    if (runes == null) {
+                        runes = arrayOfNulls<Inst>(size())
+                    }
+                    runes[i] = rune
+                }
+            }
+        }
+        return runes
+    }
+
+    /** Returns simple lazy character loops with a literal exit, or null if none exist.  */
+    fun lazyRuneLoops(): Array<LazyRuneLoop?>? {
+        return bitStateAnalysis().lazyRuneLoops
+    }
+
+    private fun computeLazyRuneLoops(reachable: BooleanArray): Array<LazyRuneLoop?>? {
+        var loops: Array<LazyRuneLoop?>? = null
+        for (i in 0..<size()) {
+            val alt = inst(i)
+            if (!reachable[i] || alt.op != InstOp.ALT) {
+                continue
+            }
+            val rune = inst(alt.out1)
+            if ((rune.op != InstOp.CHAR_RANGE && rune.op != InstOp.CHAR_CLASS) || rune.out != i) {
+                continue
+            }
+            var exit = alt.out
+            for (steps in 0..<size()) {
+                val next = inst(exit)
+                if (next.op == InstOp.CAPTURE || next.op == InstOp.NOP) {
+                    exit = next.out
+                    continue
+                }
+                if (next.op == InstOp.CHAR_RANGE && next.lo == next.hi && next.lo < 128 && !next.foldCase) {
+                    if (loops == null) {
+                        loops = arrayOfNulls<LazyRuneLoop>(size())
+                    }
+                    loops[i] = LazyRuneLoop(rune, next.lo, alt.out)
+                }
+                break
+            }
+        }
+        return loops
+    }
+
+    private fun bitStateAnalysis(): BitStateAnalysis {
+        var result = bitStateAnalysis
+        if (result == null) {
+            val reachable = computeReachableInstructions()
+            val captures = computeCaptureRunes(reachable)
+            result =
+                BitStateAnalysis(
+                    computeEpsilonCycleAlts(reachable),
+                    captures,
+                    computeLoopEntries(reachable, captures),
+                    computeCaptureProgressChecks(reachable),
+                    computeGreedyRunes(reachable),
+                    computeLazyRuneLoops(reachable)
+                )
+            bitStateAnalysis = result
+        }
+        return result
+    }
+
+    private fun computeEpsilonCycleAlts(reachable: BooleanArray): BooleanArray {
+        val n = size()
+        val inCycle = BooleanArray(n)
+
+        for (i in 0..<n) {
+            val inst = inst(i)
+            if (!reachable[i] || (inst.op != InstOp.ALT && inst.op != InstOp.ALT_MATCH)) {
+                continue
+            }
+            if (canReachSelfViaEpsilon(i, reachable)) {
+                inCycle[i] = true
+            }
+        }
+        return inCycle
+    }
+
+    private fun computeCaptureRunes(reachable: BooleanArray): Array<CaptureRune?>? {
+        var fused: Array<CaptureRune?>? = null
+        for (i in 0..<size()) {
+            val instruction = inst(i)
+            // Discarded fragments may retain unresolved patch-list links instead of successor IDs.
+            if (reachable[i] && instruction.opCode == InstOp.Companion.OP_CAPTURE) {
+                val rune = inst(instruction.out)
+                if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE || rune.opCode == InstOp.Companion.OP_CHAR_CLASS) {
+                    val end = inst(rune.out)
+                    if (end.opCode == InstOp.Companion.OP_CAPTURE) {
+                        if (fused == null) {
+                            fused = arrayOfNulls<CaptureRune>(size())
+                        }
+                        fused[i] = CaptureRune(rune, end.arg, end.out)
+                    }
+                }
+            }
+        }
+        return fused
+    }
+
+    private fun computeLoopEntries(reachable: BooleanArray, captures: Array<CaptureRune?>?): Array<LoopEntry?>? {
+        var entries: Array<LoopEntry?>? = null
+        for (i in 0..<size()) {
+            val entry = inst(i)
+            if (reachable[i] && entry.opCode == InstOp.Companion.OP_LOOP_ENTER) {
+                val check = inst(entry.out)
+                if (check.opCode == InstOp.Companion.OP_PROGRESS_CHECK && check.arg == entry.arg && check.out != 0) {
+                    if (entries == null) {
+                        entries = arrayOfNulls<LoopEntry>(size())
+                    }
+                    val body = inst(check.out)
+                    // Retain the existing capture/consumer/capture fusion when it can do more work.
+                    if (body.opCode == InstOp.Companion.OP_CAPTURE
+                        && (captures == null || captures[check.out] == null)
+                    ) {
+                        entries[i] = LoopEntry(body.out, body.arg)
+                    } else {
+                        entries[i] = LoopEntry(check.out, -1)
+                    }
+                }
+            }
+        }
+        return entries
+    }
+
+    private fun computeCaptureProgressChecks(reachable: BooleanArray): Array<Inst?>? {
+        var checks: Array<Inst?>? = null
+        for (i in 0..<size()) {
+            val capture = inst(i)
+            if (reachable[i] && capture.opCode == InstOp.Companion.OP_CAPTURE) {
+                val next = inst(capture.out)
+                if (next.opCode == InstOp.Companion.OP_PROGRESS_CHECK) {
+                    if (checks == null) {
+                        checks = arrayOfNulls<Inst>(size())
+                    }
+                    checks[i] = next
+                }
+            }
+        }
+        return checks
+    }
+
+    /**
+     * Returns instruction reachability from both entry points. Only reachable instructions are
+     * guaranteed to have patched successor fields; discarded fragments may retain patch-list links.
+     * Grapheme consumption reaches its successor here, but breaks paths in the epsilon-cycle walk.
+     */
+    private fun computeReachableInstructions(): BooleanArray {
+        val n = size()
+        val reachable = BooleanArray(n)
+        val stack = ArrayDeque<Int?>()
+        addSuccessor(start, reachable, stack)
+        addSuccessor(startUnanchored, reachable, stack)
+
+        while (!stack.isEmpty()) {
+            val id: Int = stack.pop()
+            val inst = inst(id)
+            when (inst.op) {
+                InstOp.ALT, InstOp.ALT_MATCH, InstOp.PROGRESS_CHECK -> {
+                    addSuccessor(inst.out, reachable, stack)
+                    addSuccessor(inst.out1, reachable, stack)
+                }
+
+                InstOp.NOP, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.GRAPHEME_CLUSTER -> addSuccessor(
+                    inst.out,
+                    reachable,
+                    stack
+                )
+
+                else -> {}
+            }
+        }
+        return reachable
+    }
+
+    /**
+     * Returns true if instruction `target` can reach itself via a path that consists entirely
+     * of epsilon transitions (ALT, ALT_MATCH, NOP, CAPTURE, EMPTY_WIDTH). CHAR_RANGE and MATCH
+     * consume input or terminate, so they break any epsilon path.
+     */
+    private fun canReachSelfViaEpsilon(target: Int, reachable: BooleanArray): Boolean {
+        val n = size()
+        val visited = BooleanArray(n)
+        val stack = ArrayDeque<Int?>()
+
+        // Seed with epsilon successors of target (don't count target itself as a starting node).
+        addEpsilonSuccessors(target, reachable, visited, stack)
+
+        while (!stack.isEmpty()) {
+            val id: Int = stack.pop()
+            if (id == target) {
+                return true
+            }
+            addEpsilonSuccessors(id, reachable, visited, stack)
+        }
+        return false
+    }
+
+    private fun addEpsilonSuccessors(
+        id: Int, reachable: BooleanArray, visited: BooleanArray, stack: ArrayDeque<Int?>
+    ) {
+        val inst = inst(id)
+        when (inst.op) {
+            InstOp.ALT, InstOp.ALT_MATCH -> {
+                addEpsilonSuccessor(inst.out, reachable, visited, stack)
+                addEpsilonSuccessor(inst.out1, reachable, visited, stack)
+            }
+
+            InstOp.NOP, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH -> {
+                addEpsilonSuccessor(inst.out, reachable, visited, stack)
+            }
+
+            else -> {}
+        }
+    }
+
+    private class PredecessorGraph(ninst: Int) {
+        val head: IntArray
+        var nextEdge: IntArray
+        var predInst: IntArray
+        var edgeCount: Int = 0
+
+        init {
+            head = IntArray(ninst)
+            Arrays.fill(head, -1)
+            nextEdge = IntArray(Math.max(16, ninst * 2))
+            predInst = IntArray(Math.max(16, ninst * 2))
+        }
+
+        fun addPredecessor(to: Int, from: Int) {
+            if (to < 0 || to >= head.length) {
+                return
+            }
+            if (edgeCount == nextEdge.length) {
+                val newCap: Int = nextEdge.length * 2
+                nextEdge = Arrays.copyOf(nextEdge, newCap)
+                predInst = Arrays.copyOf(predInst, newCap)
+            }
+            val edge = edgeCount++
+            predInst[edge] = from
+            nextEdge[edge] = head[to]
+            head[to] = edge
+        }
+    }
+
+    /**
+     * Returns a flattened, frozen copy of this program, leaving this program unchanged. This avoids
+     * copying every instruction first: [.flatten] reads the original instructions and emits
+     * new ones, so the copy can share them until it replaces its instruction list.
+     */
+    fun flattenedCopy(): Prog {
+        val copy = Prog(this,  /* copyInstructions= */false)
+        copy.flatten()
+        copy.freeze()
+        return copy
+    }
+
+    fun flatten() {
+        if (didFlatten) {
+            return
+        }
+
+        val ninst: Int = instructions.size()
+        val rootmap = IntArray(ninst)
+        Arrays.fill(rootmap, -1)
+        val roots = IntArrayList(ninst)
+        val predecessors = PredecessorGraph(ninst)
+
+        val reachable = BooleanArray(ninst)
+        val reachableList = IntArrayList(ninst)
+        val stack = IntArrayList(ninst)
+
+        // Pass 1: Mark successor roots and predecessors.
+        markSuccessors(rootmap, roots, predecessors, reachable, reachableList, stack)
+
+        // Pass 2: Mark dominator roots by working backwards.
+        val sortedRoots = roots.toArray()
+        Arrays.sort(sortedRoots)
+        for (i in sortedRoots.indices.reversed()) {
+            val root = sortedRoots[i]
+            markDominator(root, rootmap, roots, predecessors, reachable, reachableList, stack)
+        }
+
+        // Pass 3: Emit lists. Remap outs to root-ids.
+        val flatmap = IntArray(roots.size())
+        val flat: MutableList<Inst> = ArrayList<Inst>(ninst)
+
+        for (r in 0..<roots.size()) {
+            val root = roots.get(r)
+            flatmap[r] = flat.size()
+            emitList(root, rootmap, flat, reachable, reachableList, stack)
+            flat.get(flat.size() - 1).last = true
+        }
+
+        // Pass 4: Remap outs from root-ids to flat-ids.
+        for (inst in flat) {
+            if (inst.op == InstOp.ALT_MATCH) {
+                // AltMatch's outs are already flat offsets (flat.len() and flat.len() + 1)
+            } else if (inst.op == InstOp.PROGRESS_CHECK) {
+                inst.out = flatmap[inst.out]
+                inst.out1 = flatmap[inst.out1]
+            } else {
+                inst.out = flatmap[inst.out]
+            }
+        }
+
+        // Remap startUnanchored and start.
+        if (startUnanchored == 0) {
+            // do nothing
+        } else if (startUnanchored == start) {
+            startUnanchored = flatmap[1]
+            start = flatmap[1]
+        } else {
+            startUnanchored = flatmap[1]
+            start = flatmap[2]
+        }
+        instructions.clear()
+        instructions.addAll(flat)
+        didFlatten = true
+    }
+
+    private fun markSuccessors(
+        rootmap: IntArray,
+        roots: IntArrayList,
+        predecessors: PredecessorGraph,
+        reachable: BooleanArray,
+        reachableList: IntArrayList,
+        stack: IntArrayList
+    ) {
+        // Mark the kInstFail instruction.
+
+        rootmap[0] = roots.size()
+        roots.add(0)
+
+        // Mark the startUnanchored and start instructions.
+        if (rootmap[startUnanchored] == -1) {
+            rootmap[startUnanchored] = roots.size()
+            roots.add(startUnanchored)
+        }
+        if (rootmap[start] == -1) {
+            rootmap[start] = roots.size()
+            roots.add(start)
+        }
+
+        reachableList.clear()
+        stack.clear()
+        stack.add(startUnanchored)
+
+        var nextId = -1
+        while (!stack.isEmpty() || nextId != -1) {
+            var id = nextId
+            if (id == -1) {
+                id = stack.removeLast()
+            } else {
+                nextId = -1
+            }
+
+            if (reachable[id]) {
+                continue
+            }
+            reachable[id] = true
+            reachableList.add(id)
+
+            val inst = instructions.get(id)
+            when (inst.op) {
+                InstOp.ALT, InstOp.ALT_MATCH -> {
+                    val out = inst.out
+                    val out1 = inst.out1
+                    predecessors.addPredecessor(out, id)
+                    predecessors.addPredecessor(out1, id)
+                    stack.add(out1)
+                    nextId = out
+                }
+
+                InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.GRAPHEME_CLUSTER -> {
+                    val out = inst.out
+                    if (rootmap[out] == -1) {
+                        rootmap[out] = roots.size()
+                        roots.add(out)
+                    }
+                    nextId = out
+                }
+
+                InstOp.PROGRESS_CHECK -> {
+                    val out = inst.out
+                    val out1 = inst.out1
+                    if (rootmap[out] == -1) {
+                        rootmap[out] = roots.size()
+                        roots.add(out)
+                    }
+                    if (rootmap[out1] == -1) {
+                        rootmap[out1] = roots.size()
+                        roots.add(out1)
+                    }
+                    stack.add(out1)
+                    nextId = out
+                }
+
+                InstOp.NOP -> {
+                    nextId = inst.out
+                }
+
+                InstOp.MATCH, InstOp.FAIL -> {
+                    // terminates
+                }
+            }
+        }
+
+        for (i in 0..<reachableList.size()) {
+            reachable[reachableList.get(i)] = false
+        }
+    }
+
+    private fun markDominator(
+        root: Int,
+        rootmap: IntArray,
+        roots: IntArrayList,
+        predecessors: PredecessorGraph,
+        reachable: BooleanArray,
+        reachableList: IntArrayList,
+        stack: IntArrayList
+    ) {
+        reachableList.clear()
+        stack.clear()
+        stack.add(root)
+
+        var nextId = -1
+        while (!stack.isEmpty() || nextId != -1) {
+            var id = nextId
+            if (id == -1) {
+                id = stack.removeLast()
+            } else {
+                nextId = -1
+            }
+
+            if (reachable[id]) {
+                continue
+            }
+            reachable[id] = true
+            reachableList.add(id)
+
+            if (id != root && rootmap[id] != -1) {
+                continue
+            }
+
+            val inst = instructions.get(id)
+            when (inst.op) {
+                InstOp.ALT, InstOp.ALT_MATCH -> {
+                    stack.add(inst.out1)
+                    nextId = inst.out
+                }
+
+                InstOp.NOP -> {
+                    nextId = inst.out
+                }
+
+                InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.GRAPHEME_CLUSTER, InstOp.PROGRESS_CHECK, InstOp.MATCH, InstOp.FAIL -> {
+                    // Leaf/non-epsilon
+                }
+            }
+        }
+
+        for (idx in 0..<reachableList.size()) {
+            val i = reachableList.get(idx)
+            var edge = predecessors.head[i]
+            while (edge != -1) {
+                val pred = predecessors.predInst[edge]
+                if (!reachable[pred]) {
+                    if (rootmap[i] == -1) {
+                        rootmap[i] = roots.size()
+                        roots.add(i)
+                    }
+                }
+                edge = predecessors.nextEdge[edge]
+            }
+        }
+
+        for (idx in 0..<reachableList.size()) {
+            reachable[reachableList.get(idx)] = false
+        }
+    }
+
+    private fun emitList(
+        root: Int,
+        rootmap: IntArray,
+        flat: MutableList<Inst>,
+        reachable: BooleanArray,
+        reachableList: IntArrayList,
+        stack: IntArrayList
+    ) {
+        reachableList.clear()
+        stack.clear()
+        stack.add(root)
+
+        var nextId = -1
+        while (!stack.isEmpty() || nextId != -1) {
+            var id = nextId
+            if (id == -1) {
+                id = stack.removeLast()
+            } else {
+                nextId = -1
+            }
+
+            if (reachable[id]) {
+                continue
+            }
+            reachable[id] = true
+            reachableList.add(id)
+
+            if (id != root && rootmap[id] != -1) {
+                val nop = Inst()
+                nop.initNop(rootmap[id])
+                flat.add(nop)
+                continue
+            }
+
+            val inst = instructions.get(id)
+            when (inst.op) {
+                InstOp.ALT -> {
+                    stack.add(inst.out1)
+                    nextId = inst.out
+                }
+
+                InstOp.ALT_MATCH -> {
+                    val flatAltMatch = Inst()
+                    flatAltMatch.op = InstOp.ALT_MATCH
+                    flatAltMatch.opCode = InstOp.Companion.OP_ALT_MATCH
+                    flatAltMatch.out = flat.size()
+                    flatAltMatch.out1 = flat.size() + 1
+                    flat.add(flatAltMatch)
+
+                    stack.add(inst.out1)
+                    nextId = inst.out
+                }
+
+                InstOp.NOP -> {
+                    nextId = inst.out
+                }
+
+                InstOp.PROGRESS_CHECK -> {
+                    val newInst = Inst(inst)
+                    newInst.out = rootmap[inst.out]
+                    newInst.out1 = rootmap[inst.out1]
+                    flat.add(newInst)
+                }
+
+                InstOp.CAPTURE, InstOp.LOOP_ENTER, InstOp.EMPTY_WIDTH, InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.GRAPHEME_CLUSTER -> {
+                    val newInst = Inst(inst)
+                    newInst.out = rootmap[inst.out]
+                    flat.add(newInst)
+                }
+
+                InstOp.MATCH, InstOp.FAIL -> {
+                    val newInst = Inst(inst)
+                    flat.add(newInst)
+                }
+            }
+        }
+
+        for (idx in 0..<reachableList.size()) {
+            reachable[reachableList.get(idx)] = false
+        }
+    }
+
+    companion object {
+        private fun addEpsilonSuccessor(
+            id: Int, reachable: BooleanArray, visited: BooleanArray, stack: ArrayDeque<Int?>
+        ) {
+            if (id > 0 && id < reachable.length && reachable[id] && !visited[id]) {
+                visited[id] = true
+                stack.push(id)
+            }
+        }
+
+        private fun addSuccessor(id: Int, reachable: BooleanArray, stack: ArrayDeque<Int?>) {
+            if (id > 0 && id < reachable.length && !reachable[id]) {
+                reachable[id] = true
+                stack.push(id)
+            }
+        }
+    }
 }

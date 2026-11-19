@@ -2,134 +2,111 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import java.util.Set;
+/** Validates the complete checked-in `benchmark-data.json` document envelope.  */
+internal object BenchmarkDataSchema {
+    private val ROOT_FIELDS = mutableSetOf<String?>("schemaVersion", "configuration", "inputs", "workloads")
+    private val CONFIGURATION_FIELDS =
+        mutableSetOf<String?>("collection", "crosscheckOverhead", "vectorScan", "investigation")
+    private val COLLECTION_FIELDS = mutableSetOf<String?>("allocationWorkloadPrefixes")
+    private val CROSSCHECK_OVERHEAD_FIELDS = mutableSetOf<String?>("pattern", "replacement")
+    private val VECTOR_SCAN_FIELDS = mutableSetOf<String?>("smokeTrials", "standardTrials")
 
-/** Validates the complete checked-in {@code benchmark-data.json} document envelope. */
-final class BenchmarkDataSchema {
-  private static final Set<String> ROOT_FIELDS =
-      Set.of("schemaVersion", "configuration", "inputs", "workloads");
-  private static final Set<String> CONFIGURATION_FIELDS =
-      Set.of("collection", "crosscheckOverhead", "vectorScan", "investigation");
-  private static final Set<String> COLLECTION_FIELDS = Set.of("allocationWorkloadPrefixes");
-  private static final Set<String> CROSSCHECK_OVERHEAD_FIELDS = Set.of("pattern", "replacement");
-  private static final Set<String> VECTOR_SCAN_FIELDS = Set.of("smokeTrials", "standardTrials");
-
-  private BenchmarkDataSchema() {}
-
-  static void validate(JsonObject source) {
-    requireOnly(source, "benchmark-data.json", ROOT_FIELDS);
-    var _ = required(source, "schemaVersion").getAsInt();
-    requiredArray(source, "inputs");
-    if (source.has("workloads")) {
-      requiredArray(source, "workloads");
-    }
-    if (source.has("configuration")) {
-      validateConfiguration(requiredObject(source, "configuration"));
-    }
-  }
-
-  static void requireWorkloads(JsonObject source) {
-    JsonArray workloads = requiredArray(source, "workloads");
-    if (workloads.isEmpty()) {
-      throw new IllegalArgumentException("benchmark-data.json workloads must not be empty");
-    }
-  }
-
-  private static void validateConfiguration(JsonObject configuration) {
-    requireOnly(configuration, "benchmark-data.json configuration", CONFIGURATION_FIELDS);
-    if (configuration.has("investigation")) {
-      requiredObject(configuration, "investigation");
-    }
-    if (configuration.has("collection")) {
-      JsonObject collection = requiredObject(configuration, "collection");
-      requireOnly(collection, "benchmark-data.json configuration.collection", COLLECTION_FIELDS);
-      JsonArray prefixes = requiredArray(collection, "allocationWorkloadPrefixes");
-      for (JsonElement prefix : prefixes) {
-        if (!prefix.isJsonPrimitive()
-            || !prefix.getAsJsonPrimitive().isString()
-            || prefix.getAsString().isBlank()) {
-          throw new IllegalArgumentException(
-              "benchmark-data.json allocation workload prefixes must be nonblank strings");
+    fun validate(source: JsonObject) {
+        requireOnly(source, "benchmark-data.json", ROOT_FIELDS)
+        val `_` = required(source, "schemaVersion").getAsInt()
+        requiredArray(source, "inputs")
+        if (source.has("workloads")) {
+            requiredArray(source, "workloads")
         }
-      }
+        if (source.has("configuration")) {
+            validateConfiguration(requiredObject(source, "configuration"))
+        }
     }
-    if (configuration.has("crosscheckOverhead")) {
-      JsonObject crosscheck = requiredObject(configuration, "crosscheckOverhead");
-      requireOnly(
-          crosscheck,
-          "benchmark-data.json configuration.crosscheckOverhead",
-          CROSSCHECK_OVERHEAD_FIELDS);
-      requiredString(crosscheck, "pattern");
-      requiredString(crosscheck, "replacement");
-    }
-    if (configuration.has("vectorScan")) {
-      JsonObject vectorScan = requiredObject(configuration, "vectorScan");
-      requireOnly(vectorScan, "benchmark-data.json configuration.vectorScan", VECTOR_SCAN_FIELDS);
-      validateNonblankStrings(vectorScan, "smokeTrials", "Vector scan smoke trials");
-      validateNonblankStrings(vectorScan, "standardTrials", "Vector scan standard trials");
-    }
-  }
 
-  private static void validateNonblankStrings(JsonObject object, String field, String description) {
-    JsonArray values = requiredArray(object, field);
-    if (values.isEmpty()) {
-      throw new IllegalArgumentException(description + " must not be empty");
+    fun requireWorkloads(source: JsonObject) {
+        val workloads = requiredArray(source, "workloads")
+        require(!workloads.isEmpty()) { "benchmark-data.json workloads must not be empty" }
     }
-    for (JsonElement value : values) {
-      if (!value.isJsonPrimitive()
-          || !value.getAsJsonPrimitive().isString()
-          || value.getAsString().isBlank()) {
-        throw new IllegalArgumentException(description + " must be nonblank strings");
-      }
-    }
-  }
 
-  private static void requireOnly(JsonObject object, String context, Set<String> allowed) {
-    for (String field : object.keySet()) {
-      if (!allowed.contains(field)) {
-        throw new IllegalArgumentException(context + " has unknown field: " + field);
-      }
+    private fun validateConfiguration(configuration: JsonObject) {
+        requireOnly(configuration, "benchmark-data.json configuration", CONFIGURATION_FIELDS)
+        if (configuration.has("investigation")) {
+            requiredObject(configuration, "investigation")
+        }
+        if (configuration.has("collection")) {
+            val collection = requiredObject(configuration, "collection")
+            requireOnly(collection, "benchmark-data.json configuration.collection", COLLECTION_FIELDS)
+            val prefixes = requiredArray(collection, "allocationWorkloadPrefixes")
+            for (prefix in prefixes) {
+                require(
+                    !(!prefix.isJsonPrimitive() || !prefix.getAsJsonPrimitive().isString() || prefix.getAsString()
+                        .isBlank())
+                ) { "benchmark-data.json allocation workload prefixes must be nonblank strings" }
+            }
+        }
+        if (configuration.has("crosscheckOverhead")) {
+            val crosscheck = requiredObject(configuration, "crosscheckOverhead")
+            requireOnly(
+                crosscheck,
+                "benchmark-data.json configuration.crosscheckOverhead",
+                CROSSCHECK_OVERHEAD_FIELDS
+            )
+            requiredString(crosscheck, "pattern")
+            requiredString(crosscheck, "replacement")
+        }
+        if (configuration.has("vectorScan")) {
+            val vectorScan = requiredObject(configuration, "vectorScan")
+            requireOnly(vectorScan, "benchmark-data.json configuration.vectorScan", VECTOR_SCAN_FIELDS)
+            validateNonblankStrings(vectorScan, "smokeTrials", "Vector scan smoke trials")
+            validateNonblankStrings(vectorScan, "standardTrials", "Vector scan standard trials")
+        }
     }
-  }
 
-  private static JsonElement required(JsonObject object, String field) {
-    JsonElement value = object.get(field);
-    if (value == null || value.isJsonNull()) {
-      throw new IllegalArgumentException("benchmark-data.json requires " + field);
+    private fun validateNonblankStrings(`object`: JsonObject, field: String?, description: String?) {
+        val values = requiredArray(`object`, field)
+        require(!values.isEmpty()) { description + " must not be empty" }
+        for (value in values) {
+            require(
+                !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || value.getAsString().isBlank())
+            ) { description + " must be nonblank strings" }
+        }
     }
-    return value;
-  }
 
-  private static JsonObject requiredObject(JsonObject object, String field) {
-    JsonElement value = required(object, field);
-    if (!value.isJsonObject()) {
-      throw new IllegalArgumentException("benchmark-data.json field must be an object: " + field);
+    private fun requireOnly(`object`: JsonObject, context: String?, allowed: MutableSet<String?>) {
+        for (field in `object`.keySet()) {
+            require(allowed.contains(field)) { context + " has unknown field: " + field }
+        }
     }
-    return value.getAsJsonObject();
-  }
 
-  private static JsonArray requiredArray(JsonObject object, String field) {
-    JsonElement value = required(object, field);
-    if (!value.isJsonArray()) {
-      throw new IllegalArgumentException("benchmark-data.json field must be an array: " + field);
+    private fun required(`object`: JsonObject, field: String?): JsonElement {
+        val value = `object`.get(field)
+        require(!(value == null || value.isJsonNull())) { "benchmark-data.json requires " + field }
+        return value
     }
-    return value.getAsJsonArray();
-  }
 
-  private static String requiredString(JsonObject object, String field) {
-    JsonElement value = required(object, field);
-    if (!value.isJsonPrimitive()
-        || !value.getAsJsonPrimitive().isString()
-        || value.getAsString().isBlank()) {
-      throw new IllegalArgumentException(
-          "benchmark-data.json field must be a nonblank string: " + field);
+    private fun requiredObject(`object`: JsonObject, field: String?): JsonObject {
+        val value = required(`object`, field)
+        require(value.isJsonObject()) { "benchmark-data.json field must be an object: " + field }
+        return value.getAsJsonObject()
     }
-    return value.getAsString();
-  }
+
+    private fun requiredArray(`object`: JsonObject, field: String?): JsonArray {
+        val value = required(`object`, field)
+        require(value.isJsonArray()) { "benchmark-data.json field must be an array: " + field }
+        return value.getAsJsonArray()
+    }
+
+    private fun requiredString(`object`: JsonObject, field: String?): String? {
+        val value = required(`object`, field)
+        require(
+            !(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString() || value.getAsString().isBlank())
+        ) { "benchmark-data.json field must be a nonblank string: " + field }
+        return value.getAsString()
+    }
 }

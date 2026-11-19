@@ -2,282 +2,283 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import org.safere.benchmark.DeclarativeBenchmarkPlan.*
+import java.util.*
+import java.util.List
+import java.util.Map
+import java.util.function.Consumer
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+/** Typed Java consumer of the common materialized execution-plan artifact.  */
+internal class MaterializedExecutionPlan private constructor(
+    engines: MutableMap<String?, Engine>?,
+    entries: MutableMap<String?, Entry>?
+) {
+    private val engines: MutableMap<String?, Engine?>
+    private val entries: MutableMap<String?, Entry>
 
-/** Typed Java consumer of the common materialized execution-plan artifact. */
-final class MaterializedExecutionPlan {
-  private final Map<String, Engine> engines;
-  private final Map<String, Entry> entries;
-
-  private MaterializedExecutionPlan(Map<String, Engine> engines, Map<String, Entry> entries) {
-    this.engines = Collections.unmodifiableMap(new LinkedHashMap<>(engines));
-    this.entries = Collections.unmodifiableMap(new LinkedHashMap<>(entries));
-  }
-
-  static MaterializedExecutionPlan load() {
-    return parse(BenchmarkData.get().executionPlan());
-  }
-
-  static MaterializedExecutionPlan parse(JsonObject json) {
-    int version = required(json, "version").getAsInt();
-    if (version != ResolvedBenchmarkPlan.VERSION) {
-      throw new IllegalArgumentException("Unsupported execution-plan version: " + version);
-    }
-    Map<String, Engine> engines = new LinkedHashMap<>();
-    for (JsonElement element : required(json, "engines").getAsJsonArray()) {
-      JsonObject object = element.getAsJsonObject();
-      Engine engine =
-          new Engine(
-              string(object, "id"), string(object, "reportEngine"), string(object, "runner"));
-      if (engines.put(engine.id(), engine) != null) {
-        throw new IllegalArgumentException("Duplicate materialized engine ID: " + engine.id());
-      }
+    init {
+        this.engines = Collections.unmodifiableMap<String?, Engine?>(LinkedHashMap<String?, Engine?>(engines))
+        this.entries = Collections.unmodifiableMap<String?, Entry?>(LinkedHashMap<String?, Entry?>(entries))
     }
 
-    Map<String, Entry> entries = new LinkedHashMap<>();
-    Map<String, Integer> workloadCounts = new LinkedHashMap<>();
-    for (JsonElement element : required(json, "entries").getAsJsonArray()) {
-      Entry entry = parseEntry(element.getAsJsonObject(), engines);
-      if (entries.put(entry.id(), entry) != null) {
-        throw new IllegalArgumentException("Duplicate materialized execution ID: " + entry.id());
-      }
-      workloadCounts.merge(entry.workloadId(), 1, Integer::sum);
+    fun entries(): MutableList<Entry?> {
+        return List.copyOf<Entry?>(entries.values)
     }
-    int expectedWorkloads = required(json, "workloadCount").getAsInt();
-    int expectedEngines = required(json, "engineCount").getAsInt();
-    if (engines.size() != expectedEngines
-        || workloadCounts.size() != expectedWorkloads
-        || entries.size() != expectedWorkloads * expectedEngines
-        || workloadCounts.values().stream().anyMatch(count -> count != expectedEngines)) {
-      throw new IllegalArgumentException(
-          "Execution plan does not contain the complete workload/engine join");
-    }
-    return new MaterializedExecutionPlan(engines, entries);
-  }
 
-  List<Entry> entries() {
-    return List.copyOf(entries.values());
-  }
+    fun entriesForRunner(runner: String?): MutableList<Entry?> {
+        val engineIds: MutableSet<String?> = LinkedHashSet<String?>()
+        engines.values.stream()
+            .filter { engine: Engine? -> engine!!.runner == runner }
+            .map<String?>(Engine::id)
+            .forEach { e: String? -> engineIds.add(e) }
+        return entries.values.stream().filter { entry: Entry? -> engineIds.contains(entry!!.engineId) }.toList()
+    }
 
-  List<Entry> entriesForRunner(String runner) {
-    Set<String> engineIds = new LinkedHashSet<>();
-    engines.values().stream()
-        .filter(engine -> engine.runner().equals(runner))
-        .map(Engine::id)
-        .forEach(engineIds::add);
-    return entries.values().stream().filter(entry -> engineIds.contains(entry.engineId())).toList();
-  }
+    fun resolve(id: String?): Entry {
+        val entry: Entry = entries.get(id)!!
+        requireNotNull(entry) { "Unknown materialized execution ID: " + id }
+        return entry
+    }
 
-  Entry resolve(String id) {
-    Entry entry = entries.get(id);
-    if (entry == null) {
-      throw new IllegalArgumentException("Unknown materialized execution ID: " + id);
-    }
-    return entry;
-  }
+    @JvmRecord
+    internal data class Engine(val id: String?, val reportEngine: String?, val runner: String?)
 
-  private static Entry parseEntry(JsonObject object, Map<String, Engine> engines) {
-    String id = string(object, "id");
-    String workloadId = string(object, "workloadId");
-    String engineId = string(object, "engineId");
-    Engine engine = engines.get(engineId);
-    if (engine == null) {
-      throw new IllegalArgumentException(
-          id + " references unknown materialized engine " + engineId);
-    }
-    if (!id.equals(workloadId + "@" + engineId)) {
-      throw new IllegalArgumentException("Malformed materialized execution ID: " + id);
-    }
-    if (!string(object, "reportEngine").equals(engine.reportEngine())) {
-      throw new IllegalArgumentException(id + " report engine differs from engine declaration");
-    }
-    String status = string(object, "status");
-    DeclarativeBenchmarkPlan.Operation operation =
-        DeclarativeBenchmarkPlan.Operation.fromJson(string(object, "operation"));
-    DeclarativeBenchmarkPlan.Measurement measurement =
-        parseMeasurement(required(object, "measurement").getAsJsonObject());
-    return switch (status) {
-      case "runnable" ->
-          new Entry(
-              id,
-              workloadId,
-              engineId,
-              engine.reportEngine(),
-              operation,
-              measurement,
-              parseWorkload(object),
-              null);
-      case "excluded" -> {
-        JsonObject exclusion = required(object, "exclusion").getAsJsonObject();
-        yield new Entry(
-            id,
-            workloadId,
-            engineId,
-            engine.reportEngine(),
-            operation,
-            measurement,
-            null,
-            new Exclusion(string(exclusion, "kind"), string(exclusion, "reason")));
-      }
-      default -> throw new IllegalArgumentException(id + " has unknown status " + status);
-    };
-  }
+    @JvmRecord
+    internal data class Exclusion(val kind: String?, val reason: String?)
 
-  private static DeclarativeBenchmarkPlan.ExpandedWorkload parseWorkload(JsonObject object) {
-    String id = string(object, "workloadId");
-    DeclarativeBenchmarkPlan.Operation operation =
-        DeclarativeBenchmarkPlan.Operation.fromJson(string(object, "operation"));
-    Map<String, DeclarativeBenchmarkPlan.RecipeValue> arguments =
-        parseArguments(required(object, "arguments").getAsJsonObject());
-    DeclarativeBenchmarkPlan.ExpectedResult expected = null;
-    if (object.has("expected")) {
-      JsonObject expectedJson = object.getAsJsonObject("expected");
-      expected =
-          new DeclarativeBenchmarkPlan.ExpectedResult(
-              DeclarativeBenchmarkPlan.ResultType.fromJson(string(expectedJson, "type")),
-              required(expectedJson, "value").deepCopy(),
-              null);
-    }
-    DeclarativeBenchmarkPlan.MatcherLifecycle lifecycle =
-        parseLifecycle(required(object, "lifecycle").getAsJsonObject());
-    DeclarativeBenchmarkPlan.Measurement measurement =
-        parseMeasurement(required(object, "measurement").getAsJsonObject());
-    DeclarativeBenchmarkPlan.InputRepresentation representation =
-        DeclarativeBenchmarkPlan.InputRepresentation.fromJson(
-            string(object, "inputRepresentation"));
-    EnumSet<DeclarativeBenchmarkPlan.Flag> options =
-        EnumSet.noneOf(DeclarativeBenchmarkPlan.Flag.class);
-    for (String option : strings(object, "options")) {
-      options.add(DeclarativeBenchmarkPlan.Flag.fromJson(option));
-    }
-    return new DeclarativeBenchmarkPlan.ExpandedWorkload(
-        id,
-        operation,
-        strings(object, "patterns"),
-        strings(object, "inputs"),
-        Map.of(),
-        arguments,
-        options,
-        EnumSet.noneOf(DeclarativeBenchmarkPlan.Feature.class),
-        EnumSet.of(representation),
-        null,
-        DeclarativeBenchmarkPlan.ResultConsumption.fromJson(string(object, "resultConsumption")),
-        expected,
-        lifecycle,
-        measurement,
-        null,
-        List.of());
-  }
-
-  private static Map<String, DeclarativeBenchmarkPlan.RecipeValue> parseArguments(
-      JsonObject object) {
-    Map<String, DeclarativeBenchmarkPlan.RecipeValue> result = new LinkedHashMap<>();
-    for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-      JsonElement value = entry.getValue();
-      DeclarativeBenchmarkPlan.RecipeValue parsed;
-      if (value.isJsonArray()) {
-        JsonArray array = value.getAsJsonArray();
-        if (array.isEmpty() || array.get(0).getAsJsonPrimitive().isString()) {
-          List<String> strings = new ArrayList<>();
-          array.forEach(item -> strings.add(item.getAsString()));
-          parsed = new DeclarativeBenchmarkPlan.RecipeStringList(strings);
-        } else {
-          List<Integer> integers = new ArrayList<>();
-          array.forEach(item -> integers.add(item.getAsInt()));
-          parsed = new DeclarativeBenchmarkPlan.RecipeIntegerList(integers);
+    @JvmRecord
+    internal data class Entry(
+        val id: String?,
+        val workloadId: String?,
+        val engineId: String?,
+        val reportEngine: String?,
+        val operation: DeclarativeBenchmarkPlan.Operation?,
+        val measurement: DeclarativeBenchmarkPlan.Measurement?,
+        val workload: ExpandedWorkload?,
+        val exclusion: Exclusion?
+    ) {
+        fun runnable(): Boolean {
+            return workload != null
         }
-      } else if (value.getAsJsonPrimitive().isString()) {
-        parsed = new DeclarativeBenchmarkPlan.RecipeString(value.getAsString());
-      } else {
-        parsed = new DeclarativeBenchmarkPlan.RecipeInteger(value.getAsInt());
-      }
-      result.put(entry.getKey(), parsed);
     }
-    return Collections.unmodifiableMap(result);
-  }
 
-  private static DeclarativeBenchmarkPlan.MatcherLifecycle parseLifecycle(JsonObject object) {
-    DeclarativeBenchmarkPlan.MatcherReuse matcher =
-        DeclarativeBenchmarkPlan.MatcherReuse.fromJson(string(object, "matcher"));
-    List<DeclarativeBenchmarkPlan.LifecycleStep> steps = new ArrayList<>();
-    for (JsonElement element : required(object, "steps").getAsJsonArray()) {
-      JsonObject step = element.getAsJsonObject();
-      steps.add(
-          new DeclarativeBenchmarkPlan.LifecycleStep(
-              DeclarativeBenchmarkPlan.LifecycleStepKind.fromJson(string(step, "kind")),
-              optionalInt(step, "start"),
-              optionalInt(step, "end"),
-              optionalBoolean(step, "enabled")));
+    companion object {
+        fun load(): MaterializedExecutionPlan {
+            return parse(BenchmarkData.Companion.get().executionPlan())
+        }
+
+        fun parse(json: JsonObject): MaterializedExecutionPlan {
+            val version: Int = required(json, "version").getAsInt()
+            require(version == ResolvedBenchmarkPlan.VERSION) { "Unsupported execution-plan version: " + version }
+            val engines: MutableMap<String?, Engine> = LinkedHashMap<String?, Engine>()
+            for (element in required(json, "engines").getAsJsonArray()) {
+                val `object` = element.getAsJsonObject()
+                val engine =
+                    Engine(
+                        string(`object`, "id"), string(`object`, "reportEngine"), string(`object`, "runner")
+                    )
+                require(engines.put(engine.id, engine) == null) { "Duplicate materialized engine ID: " + engine.id }
+            }
+
+            val entries: MutableMap<String?, Entry> = LinkedHashMap<String?, Entry>()
+            val workloadCounts: MutableMap<String?, Int?> = LinkedHashMap<String?, Int?>()
+            for (element in required(json, "entries").getAsJsonArray()) {
+                val entry: Entry = parseEntry(element.getAsJsonObject(), engines)
+                require(entries.put(entry.id, entry) == null) { "Duplicate materialized execution ID: " + entry.id }
+                workloadCounts.merge(entry.workloadId, 1) { a: Int?, b: Int? -> Integer.sum(a!!, b!!) }
+            }
+            val expectedWorkloads: Int = required(json, "workloadCount").getAsInt()
+            val expectedEngines: Int = required(json, "engineCount").getAsInt()
+            require(
+                !(engines.size != expectedEngines || workloadCounts.size != expectedWorkloads || entries.size != expectedWorkloads * expectedEngines || workloadCounts.values.stream()
+                    .anyMatch { count: Int? -> count != expectedEngines })
+            ) { "Execution plan does not contain the complete workload/engine join" }
+            return MaterializedExecutionPlan(engines, entries)
+        }
+
+        private fun parseEntry(`object`: JsonObject, engines: MutableMap<String?, Engine>): Entry {
+            val id: String = string(`object`, "id")
+            val workloadId: String = string(`object`, "workloadId")
+            val engineId: String = string(`object`, "engineId")
+            val engine: Engine = engines.get(engineId)!!
+            requireNotNull(engine) { id + " references unknown materialized engine " + engineId }
+            require(id == workloadId + "@" + engineId) { "Malformed materialized execution ID: " + id }
+            require(
+                string(
+                    `object`,
+                    "reportEngine"
+                ) == engine.reportEngine
+            ) { id + " report engine differs from engine declaration" }
+            val status: String = string(`object`, "status")
+            val operation: DeclarativeBenchmarkPlan.Operation =
+                DeclarativeBenchmarkPlan.Operation.Companion.fromJson(string(`object`, "operation"))
+            val measurement: DeclarativeBenchmarkPlan.Measurement =
+                parseMeasurement(required(`object`, "measurement").getAsJsonObject())
+            return when (status) {
+                "runnable" -> Entry(
+                    id,
+                    workloadId,
+                    engineId,
+                    engine.reportEngine,
+                    operation,
+                    measurement,
+                    parseWorkload(`object`),
+                    null
+                )
+
+                "excluded" -> {
+                    val exclusion: JsonObject = required(`object`, "exclusion").getAsJsonObject()
+                    Entry(
+                        id,
+                        workloadId,
+                        engineId,
+                        engine.reportEngine,
+                        operation,
+                        measurement,
+                        null,
+                        Exclusion(string(exclusion, "kind"), string(exclusion, "reason"))
+                    )
+                }
+
+                else -> throw IllegalArgumentException(id + " has unknown status " + status)
+            }
+        }
+
+        private fun parseWorkload(`object`: JsonObject): ExpandedWorkload {
+            val id: String = string(`object`, "workloadId")
+            val operation: DeclarativeBenchmarkPlan.Operation =
+                DeclarativeBenchmarkPlan.Operation.Companion.fromJson(string(`object`, "operation"))
+            val arguments: MutableMap<String?, RecipeValue?> =
+                parseArguments(required(`object`, "arguments").getAsJsonObject())
+            var expected: ExpectedResult? = null
+            if (`object`.has("expected")) {
+                val expectedJson = `object`.getAsJsonObject("expected")
+                expected =
+                    ExpectedResult(
+                        ResultType.Companion.fromJson(string(expectedJson, "type")),
+                        required(expectedJson, "value").deepCopy(),
+                        null
+                    )
+            }
+            val lifecycle: DeclarativeBenchmarkPlan.MatcherLifecycle =
+                parseLifecycle(required(`object`, "lifecycle").getAsJsonObject())
+            val measurement: DeclarativeBenchmarkPlan.Measurement =
+                parseMeasurement(required(`object`, "measurement").getAsJsonObject())
+            val representation: DeclarativeBenchmarkPlan.InputRepresentation =
+                DeclarativeBenchmarkPlan.InputRepresentation.Companion.fromJson(
+                    string(`object`, "inputRepresentation")
+                )
+            val options =
+                EnumSet.noneOf<DeclarativeBenchmarkPlan.Flag?>(DeclarativeBenchmarkPlan.Flag::class.java)
+            for (option in strings(`object`, "options")) {
+                options.add(DeclarativeBenchmarkPlan.Flag.Companion.fromJson(option))
+            }
+            return ExpandedWorkload(
+                id,
+                operation,
+                strings(`object`, "patterns"),
+                strings(`object`, "inputs"),
+                Map.of<String?, ParameterValue?>(),
+                arguments,
+                options,
+                EnumSet.noneOf<DeclarativeBenchmarkPlan.Feature?>(DeclarativeBenchmarkPlan.Feature::class.java),
+                EnumSet.of<DeclarativeBenchmarkPlan.InputRepresentation?>(representation),
+                null,
+                ResultConsumption.Companion.fromJson(string(`object`, "resultConsumption")),
+                expected,
+                lifecycle,
+                measurement,
+                null,
+                mutableListOf<TrialExclusion?>()
+            )
+        }
+
+        private fun parseArguments(
+            `object`: JsonObject
+        ): MutableMap<String?, RecipeValue?> {
+            val result: MutableMap<String?, RecipeValue?> = LinkedHashMap<String?, RecipeValue?>()
+            for (entry in `object`.entrySet()) {
+                val value = entry.value
+                val parsed: RecipeValue?
+                if (value.isJsonArray()) {
+                    val array = value.getAsJsonArray()
+                    if (array.isEmpty() || array.get(0).getAsJsonPrimitive().isString()) {
+                        val strings: MutableList<String?> = ArrayList<String?>()
+                        array.forEach(Consumer { item: JsonElement? -> strings.add(item!!.getAsString()) })
+                        parsed = RecipeStringList(strings)
+                    } else {
+                        val integers: MutableList<Int?> = ArrayList<Int?>()
+                        array.forEach(Consumer { item: JsonElement? -> integers.add(item!!.getAsInt()) })
+                        parsed = RecipeIntegerList(integers)
+                    }
+                } else if (value.getAsJsonPrimitive().isString()) {
+                    parsed = RecipeString(value.getAsString())
+                } else {
+                    parsed = RecipeInteger(value.getAsInt())
+                }
+                result.put(entry.key, parsed)
+            }
+            return Collections.unmodifiableMap<String?, RecipeValue?>(result)
+        }
+
+        private fun parseLifecycle(`object`: JsonObject): DeclarativeBenchmarkPlan.MatcherLifecycle {
+            val matcher: MatcherReuse =
+                MatcherReuse.Companion.fromJson(string(`object`, "matcher"))
+            val steps: MutableList<LifecycleStep?> = ArrayList<LifecycleStep?>()
+            for (element in required(`object`, "steps").getAsJsonArray()) {
+                val step = element.getAsJsonObject()
+                steps.add(
+                    LifecycleStep(
+                        LifecycleStepKind.Companion.fromJson(string(step, "kind")),
+                        optionalInt(step, "start"),
+                        optionalInt(step, "end"),
+                        optionalBoolean(step, "enabled")
+                    )
+                )
+            }
+            return DeclarativeBenchmarkPlan.MatcherLifecycle(matcher, steps)
+        }
+
+        private fun parseMeasurement(`object`: JsonObject): DeclarativeBenchmarkPlan.Measurement {
+            val constraints =
+                EnumSet.noneOf<ExecutionConstraint?>(ExecutionConstraint::class.java)
+            for (constraint in strings(`object`, "constraints")) {
+                constraints.add(ExecutionConstraint.Companion.fromJson(constraint))
+            }
+            return DeclarativeBenchmarkPlan.Measurement(
+                MeasurementMode.Companion.fromJson(string(`object`, "mode")),
+                TimingUnit.Companion.fromJson(string(`object`, "timingUnit")),
+                constraints
+            )
+        }
+
+        private fun required(`object`: JsonObject, name: String?): JsonElement {
+            val value = `object`.get(name)
+            require(!(value == null || value.isJsonNull())) { "Materialized execution plan requires " + name }
+            return value
+        }
+
+        private fun string(`object`: JsonObject, name: String?): String {
+            return required(`object`, name).getAsString()
+        }
+
+        private fun strings(`object`: JsonObject, name: String?): MutableList<String?> {
+            val result: MutableList<String?> = ArrayList<String?>()
+            required(`object`, name).getAsJsonArray()
+                .forEach(Consumer { item: JsonElement? -> result.add(item!!.getAsString()) })
+            return List.copyOf<String?>(result)
+        }
+
+        private fun optionalInt(`object`: JsonObject, name: String?): Int? {
+            return if (`object`.has(name)) `object`.get(name).getAsInt() else null
+        }
+
+        private fun optionalBoolean(`object`: JsonObject, name: String?): Boolean? {
+            return if (`object`.has(name)) `object`.get(name).getAsBoolean() else null
+        }
     }
-    return new DeclarativeBenchmarkPlan.MatcherLifecycle(matcher, steps);
-  }
-
-  private static DeclarativeBenchmarkPlan.Measurement parseMeasurement(JsonObject object) {
-    EnumSet<DeclarativeBenchmarkPlan.ExecutionConstraint> constraints =
-        EnumSet.noneOf(DeclarativeBenchmarkPlan.ExecutionConstraint.class);
-    for (String constraint : strings(object, "constraints")) {
-      constraints.add(DeclarativeBenchmarkPlan.ExecutionConstraint.fromJson(constraint));
-    }
-    return new DeclarativeBenchmarkPlan.Measurement(
-        DeclarativeBenchmarkPlan.MeasurementMode.fromJson(string(object, "mode")),
-        DeclarativeBenchmarkPlan.TimingUnit.fromJson(string(object, "timingUnit")),
-        constraints);
-  }
-
-  private static JsonElement required(JsonObject object, String name) {
-    JsonElement value = object.get(name);
-    if (value == null || value.isJsonNull()) {
-      throw new IllegalArgumentException("Materialized execution plan requires " + name);
-    }
-    return value;
-  }
-
-  private static String string(JsonObject object, String name) {
-    return required(object, name).getAsString();
-  }
-
-  private static List<String> strings(JsonObject object, String name) {
-    List<String> result = new ArrayList<>();
-    required(object, name).getAsJsonArray().forEach(item -> result.add(item.getAsString()));
-    return List.copyOf(result);
-  }
-
-  private static Integer optionalInt(JsonObject object, String name) {
-    return object.has(name) ? object.get(name).getAsInt() : null;
-  }
-
-  private static Boolean optionalBoolean(JsonObject object, String name) {
-    return object.has(name) ? object.get(name).getAsBoolean() : null;
-  }
-
-  record Engine(String id, String reportEngine, String runner) {}
-
-  record Exclusion(String kind, String reason) {}
-
-  record Entry(
-      String id,
-      String workloadId,
-      String engineId,
-      String reportEngine,
-      DeclarativeBenchmarkPlan.Operation operation,
-      DeclarativeBenchmarkPlan.Measurement measurement,
-      DeclarativeBenchmarkPlan.ExpandedWorkload workload,
-      Exclusion exclusion) {
-    boolean runnable() {
-      return workload != null;
-    }
-  }
 }

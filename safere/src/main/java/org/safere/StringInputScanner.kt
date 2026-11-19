@@ -2,392 +2,326 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+internal class StringInputScanner(text: String) : InputScanner {
+    private val text: String
 
-final class StringInputScanner implements InputScanner {
-  private static final int SMALL_SET_SCALAR_PROLOGUE = 16;
-  private static final int SMALL_SET_INITIAL_SEARCH_WINDOW = 64;
-  private static final int SMALL_SET_SEARCH_WINDOW = 4096;
+    init {
+        this.text = text
+    }
 
-  private final String text;
+    fun text(): String {
+        return text
+    }
 
-  StringInputScanner(String text) {
-    this.text = text;
-  }
+    override fun length(): Int {
+        return text.length()
+    }
 
-  String text() {
-    return text;
-  }
+    override fun asciiAt(pos: Int): Int {
+        val c: Char = text.charAt(pos)
+        return if (c.code < 0x80) c.code else -1
+    }
 
-  @Override
-  public int length() {
-    return text.length();
-  }
+    override fun indexOfAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
+        return indexOfAscii(text, ascii, fromIndex, limit)
+    }
 
-  @Override
-  public int asciiAt(int pos) {
-    char c = text.charAt(pos);
-    return c < 0x80 ? c : -1;
-  }
+    override fun indexOfAsciiOrNonAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
+        val end = Math.min(limit, text.length())
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return -1
+    }
 
-  @Override
-  public int indexOfAscii(int ascii, int fromIndex, int limit) {
-    return indexOfAscii(text, ascii, fromIndex, limit);
-  }
+    override fun indexOfAsciiPair(c1: Int, c2: Int, fromIndex: Int, limit: Int): Int {
+        val end = Math.min(limit, text.length())
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return -1
+    }
 
-  static int indexOfAscii(String text, int ascii, int fromIndex, int limit) {
-    if (WorkCounterConfig.ENABLED) {
-      int end = Math.min(limit, text.length());
-      for (int i = Math.max(0, fromIndex); i < end; i++) {
-        WorkCounter.record();
-        if (text.charAt(i) == ascii) {
-          return i;
+    override fun indexOfAsciiPairOrNonAscii(c1: Int, c2: Int, fromIndex: Int, limit: Int): Int {
+        val end = Math.min(limit, text.length())
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return -1
+    }
+
+    override fun indexOfAsciiTriple(c1: Int, c2: Int, c3: Int, fromIndex: Int, limit: Int): Int {
+        val end = Math.min(limit, text.length())
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return -1
+    }
+
+    override fun indexOfAsciiTripleOrNonAscii(c1: Int, c2: Int, c3: Int, fromIndex: Int, limit: Int): Int {
+        val end = Math.min(limit, text.length())
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return -1
+    }
+
+    override fun singleUnitCodePointAt(pos: Int): Int {
+        val c: Char = text.charAt(pos)
+        return if (Character.isHighSurrogate(c)
+            && pos + 1 < text.length() && Character.isLowSurrogate(text.charAt(pos + 1))
+        )
+            -1
+        else
+            c.code
+    }
+
+    override fun singleUnitCodePointBefore(pos: Int): Int {
+        val c: Char = text.charAt(pos - 1)
+        return if (Character.isLowSurrogate(c)
+            && pos >= 2 && Character.isHighSurrogate(text.charAt(pos - 2))
+        )
+            -1
+        else
+            c.code
+    }
+
+    override fun indexOfCharClass(scanInfo: CharClassScanInfo, start: Int): Int {
+        return indexOfCharClass(text, scanInfo, start)
+    }
+
+    override fun indexOfCodePointClass(ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {
+        return indexOfCodePointClass(text, ranges, bitmap0, bitmap1, start, limit)
+    }
+
+    override fun decodeForward(pos: Int): Long {
+        if (pos >= text.length()) {
+            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, text.length())
         }
-      }
-      return -1;
-    }
-    int idx = text.indexOf(ascii, fromIndex);
-    return (idx >= 0 && idx < limit) ? idx : -1;
-  }
-
-  @Override
-  public int indexOfAsciiOrNonAscii(int ascii, int fromIndex, int limit) {
-    int end = Math.min(limit, text.length());
-    for (int i = Math.max(0, fromIndex); i < end; i++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(i);
-      if (ch == ascii || ch >= 0x80) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  @Override
-  public int indexOfAsciiPair(int c1, int c2, int fromIndex, int limit) {
-    int end = Math.min(limit, text.length());
-    for (int i = Math.max(0, fromIndex); i < end; i++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(i);
-      if (ch == c1 || ch == c2) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  @Override
-  public int indexOfAsciiPairOrNonAscii(int c1, int c2, int fromIndex, int limit) {
-    int end = Math.min(limit, text.length());
-    for (int i = Math.max(0, fromIndex); i < end; i++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(i);
-      if (ch == c1 || ch == c2 || ch >= 0x80) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  @Override
-  public int indexOfAsciiTriple(int c1, int c2, int c3, int fromIndex, int limit) {
-    int end = Math.min(limit, text.length());
-    for (int i = Math.max(0, fromIndex); i < end; i++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(i);
-      if (ch == c1 || ch == c2 || ch == c3) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  @Override
-  public int indexOfAsciiTripleOrNonAscii(int c1, int c2, int c3, int fromIndex, int limit) {
-    int end = Math.min(limit, text.length());
-    for (int i = Math.max(0, fromIndex); i < end; i++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(i);
-      if (ch == c1 || ch == c2 || ch == c3 || ch >= 0x80) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  @Override
-  public int singleUnitCodePointAt(int pos) {
-    char c = text.charAt(pos);
-    return Character.isHighSurrogate(c)
-            && pos + 1 < text.length()
-            && Character.isLowSurrogate(text.charAt(pos + 1))
-        ? -1
-        : c;
-  }
-
-  @Override
-  public int singleUnitCodePointBefore(int pos) {
-    char c = text.charAt(pos - 1);
-    return Character.isLowSurrogate(c)
-            && pos >= 2
-            && Character.isHighSurrogate(text.charAt(pos - 2))
-        ? -1
-        : c;
-  }
-
-  @Override
-  public int indexOfCharClass(CharClassScanInfo scanInfo, int start) {
-    return indexOfCharClass(text, scanInfo, start);
-  }
-
-  static int indexOfCharClass(String text, CharClassScanInfo scanInfo, int start) {
-    int position = Math.max(0, start);
-    if (scanInfo instanceof CharClassScanInfo.SmallSet smallSet) {
-      return indexOfSmallSet(text, smallSet.chars(), position);
-    }
-    int[] ranges = scanInfo.ranges();
-    long bitmap0 = scanInfo.bitmap0();
-    long bitmap1 = scanInfo.bitmap1();
-    while (position < text.length()) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      char ch = text.charAt(position);
-      if (InputScanner.classContains(ranges, bitmap0, bitmap1, ch)) {
-        return position;
-      }
-      position++;
-    }
-    return -1;
-  }
-
-  /**
-   * Returns the first index at or after {@code start} of any of {@code chars}, or {@code -1}.
-   *
-   * <p>{@code chars} holds the one to three members of a {@link CharClassScanInfo.SmallSet}. None
-   * is a surrogate, so a code-unit search finds exactly the code points in the set. This is the
-   * small-set search for repeated {@code find()} calls on the {@code String} path: the scanner and
-   * the start accelerator both use it, so both keep the work bound below.
-   */
-  static int indexOfSmallSet(String text, char[] chars, int start) {
-    int length = text.length();
-    int position = Math.max(0, start);
-    if (position >= length) {
-      return -1;
-    }
-    int scalarEnd = position + Math.min(SMALL_SET_SCALAR_PROLOGUE, length - position);
-    for (; position < scalarEnd; position++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      if (isMember(chars, text.charAt(position))) {
-        return position;
-      }
-    }
-    return indexOfSmallSetAfterPrologue(text, chars, position);
-  }
-
-  /**
-   * The windowed part of {@link #indexOfSmallSet}, kept out of line. The prologue above is inlined
-   * into the DFA's start-acceleration call; inlining the whole search there as well doubled the
-   * cost of a full-width citation {@code replaceAll} on 64 KiB of non-matching text, though the
-   * windowed part never ran.
-   */
-  private static int indexOfSmallSetAfterPrologue(String text, char[] chars, int position) {
-    int length = text.length();
-    if (position >= length) {
-      return -1;
-    }
-    if (chars.length == 1) {
-      // A single member needs no bound: a hit advances past all scanned units; a miss ends search.
-      int candidate = text.indexOf(chars[0], position);
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record(candidate >= 0 ? candidate - position + 1 : length - position);
-      }
-      return candidate;
+        val codePoint = text.codePointAt(pos)
+        return InputScanner.Companion.decoded(codePoint, pos + Character.charCount(codePoint))
     }
 
-    // Public String searches use the JVM's accelerated Latin-1 or UTF-16 kernels without copying
-    // the input. Keep each search bounded: an absent member must not rescan the entire remaining
-    // suffix on every find(). Grow from a short first window so nearby matches do not repeatedly
-    // scan a full-sized window for an absent member. Reset to 64 on each call and double after
-    // misses, up to the cap. Failed windows are disjoint; the final window is at most the distance
-    // already scanned in this call plus 64. Thus overrun past a match is bounded by distance
-    // advanced plus 64, giving at most k * (2n + 64m) work for k <= 3 members and m consuming
-    // matches across n input units. Since m <= n, repeated find() work stays linear.
-    int windowLength = SMALL_SET_INITIAL_SEARCH_WINDOW;
-    while (position < length) {
-      int windowEnd = position + Math.min(windowLength, length - position);
-      int searchEnd = windowEnd;
-      int best = -1;
-      for (char target : chars) {
-        int candidate = text.indexOf(target, position, searchEnd);
-        if (WorkCounterConfig.ENABLED) {
-          WorkCounter.record(candidate >= 0 ? candidate - position + 1 : searchEnd - position);
+    override fun decodeForward(pos: Int, limit: Int): Long {
+        if (pos >= limit) {
+            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, limit)
         }
-        if (candidate >= 0) {
-          best = candidate;
-          searchEnd = candidate;
-          if (candidate == position) {
-            return candidate;
-          }
+        val first: Char = text.charAt(pos)
+        val codePoint =
+            if (Character.isHighSurrogate(first)
+                && pos + 1 < limit && Character.isLowSurrogate(text.charAt(pos + 1))
+            )
+                Character.toCodePoint(first, text.charAt(pos + 1))
+            else
+                first.code
+        return InputScanner.Companion.decoded(codePoint, pos + Character.charCount(codePoint))
+    }
+
+    override fun decodeBackward(pos: Int): Long {
+        if (pos <= 0) {
+            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, 0)
         }
-      }
-      if (best >= 0) {
-        return best;
-      }
-      position = windowEnd;
-      windowLength = Math.min(SMALL_SET_SEARCH_WINDOW, windowLength * 2);
+        val codePoint = text.codePointBefore(pos)
+        return InputScanner.Companion.decoded(codePoint, pos - Character.charCount(codePoint))
     }
-    return -1;
-  }
 
-  private static boolean isMember(char[] chars, char ch) {
-    for (char c : chars) {
-      if (c == ch) {
-        return true;
-      }
+    override fun decodeBackward(pos: Int, start: Int): Long {
+        if (pos <= start) {
+            return InputScanner.Companion.decoded(InputScanner.Companion.END_OF_INPUT, start)
+        }
+        val last: Char = text.charAt(pos - 1)
+        val codePoint =
+            if (Character.isLowSurrogate(last)
+                && pos - 2 >= start && Character.isHighSurrogate(text.charAt(pos - 2))
+            )
+                Character.toCodePoint(text.charAt(pos - 2), last)
+            else
+                last.code
+        return InputScanner.Companion.decoded(codePoint, pos - Character.charCount(codePoint))
     }
-    return false;
-  }
 
-  @Override
-  public int indexOfCodePointClass(int[] ranges, long bitmap0, long bitmap1, int start, int limit) {
-    return indexOfCodePointClass(text, ranges, bitmap0, bitmap1, start, limit);
-  }
-
-  static int indexOfCodePointClass(
-      String text, int[] ranges, long bitmap0, long bitmap1, int start, int limit) {
-    int position = Math.max(0, start);
-    int bound = Math.min(limit, text.length());
-    while (position < bound) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      int codePoint = text.codePointAt(position);
-      if (InputScanner.classContains(ranges, bitmap0, bitmap1, codePoint)) {
-        return position;
-      }
-      position += Character.charCount(codePoint);
+    override fun codePointAt(pos: Int): Int {
+        return if (pos >= text.length()) InputScanner.Companion.END_OF_INPUT else text.codePointAt(pos)
     }
-    return -1;
-  }
 
-  @Override
-  public long decodeForward(int pos) {
-    if (pos >= text.length()) {
-      return InputScanner.decoded(END_OF_INPUT, text.length());
+    override fun codePointBefore(pos: Int): Int {
+        return if (pos <= 0) InputScanner.Companion.END_OF_INPUT else text.codePointBefore(pos)
     }
-    int codePoint = text.codePointAt(pos);
-    return InputScanner.decoded(codePoint, pos + Character.charCount(codePoint));
-  }
 
-  @Override
-  public long decodeForward(int pos, int limit) {
-    if (pos >= limit) {
-      return InputScanner.decoded(END_OF_INPUT, limit);
+    override fun isCodePointBoundary(pos: Int): Boolean {
+        if (pos < 0 || pos > text.length()) {
+            return false
+        }
+        return pos == 0 || pos == text.length() || !Character.isLowSurrogate(text.charAt(pos)) || !Character.isHighSurrogate(
+            text.charAt(pos - 1)
+        )
     }
-    char first = text.charAt(pos);
-    int codePoint =
-        Character.isHighSurrogate(first)
-                && pos + 1 < limit
-                && Character.isLowSurrogate(text.charAt(pos + 1))
-            ? Character.toCodePoint(first, text.charAt(pos + 1))
-            : first;
-    return InputScanner.decoded(codePoint, pos + Character.charCount(codePoint));
-  }
 
-  @Override
-  public long decodeBackward(int pos) {
-    if (pos <= 0) {
-      return InputScanner.decoded(END_OF_INPUT, 0);
+    override fun trailingLineTerminatorStart(unixLines: Boolean, logicalEndPos: Int): Int {
+        return trailingLineTerminatorStart(text, unixLines, logicalEndPos)
     }
-    int codePoint = text.codePointBefore(pos);
-    return InputScanner.decoded(codePoint, pos - Character.charCount(codePoint));
-  }
 
-  @Override
-  public long decodeBackward(int pos, int start) {
-    if (pos <= start) {
-      return InputScanner.decoded(END_OF_INPUT, start);
+    override fun positionDependentThreshold(dollarAnchorEnd: Boolean, unixLines: Boolean): Int {
+        var threshold = Integer.MAX_VALUE
+        // Note: the caller handles hasTextAnchor threshold (= 1).
+        if (dollarAnchorEnd) {
+            val trailingTermStart = trailingLineTerminatorStart(unixLines, text.length())
+            if (trailingTermStart >= 0) {
+                threshold = trailingTermStart
+            } else {
+                threshold = text.length()
+            }
+        }
+        return threshold
     }
-    char last = text.charAt(pos - 1);
-    int codePoint =
-        Character.isLowSurrogate(last)
-                && pos - 2 >= start
-                && Character.isHighSurrogate(text.charAt(pos - 2))
-            ? Character.toCodePoint(text.charAt(pos - 2), last)
-            : last;
-    return InputScanner.decoded(codePoint, pos - Character.charCount(codePoint));
-  }
 
-  @Override
-  public int codePointAt(int pos) {
-    return pos >= text.length() ? END_OF_INPUT : text.codePointAt(pos);
-  }
+    companion object {
+        private const val SMALL_SET_SCALAR_PROLOGUE = 16
+        private const val SMALL_SET_INITIAL_SEARCH_WINDOW = 64
+        private const val SMALL_SET_SEARCH_WINDOW = 4096
 
-  @Override
-  public int codePointBefore(int pos) {
-    return pos <= 0 ? END_OF_INPUT : text.codePointBefore(pos);
-  }
+        fun indexOfAscii(text: String, ascii: Int, fromIndex: Int, limit: Int): Int {
+            if (WorkCounterConfig.ENABLED) {
+                val end = Math.min(limit, text.length())
+                /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+                return -1
+            }
+            val idx: Int = text.indexOf(ascii, fromIndex)
+            return if (idx >= 0 && idx < limit) idx else -1
+        }
 
-  @Override
-  public boolean isCodePointBoundary(int pos) {
-    if (pos < 0 || pos > text.length()) {
-      return false;
-    }
-    return pos == 0
-        || pos == text.length()
-        || !Character.isLowSurrogate(text.charAt(pos))
-        || !Character.isHighSurrogate(text.charAt(pos - 1));
-  }
+        fun indexOfCharClass(text: String, scanInfo: CharClassScanInfo, start: Int): Int {
+            var position = Math.max(0, start)
+            if (scanInfo is CharClassScanInfo.SmallSet) {
+                return indexOfSmallSet(text, scanInfo.chars(), position)
+            }
+            val ranges = scanInfo.ranges()
+            val bitmap0 = scanInfo.bitmap0()
+            val bitmap1 = scanInfo.bitmap1()
+            while (position < text.length()) {
+                if (WorkCounterConfig.ENABLED) {
+                    record()
+                }
+                val ch: Char = text.charAt(position)
+                if (InputScanner.Companion.classContains(ranges, bitmap0, bitmap1, ch.code)) {
+                    return position
+                }
+                position++
+            }
+            return -1
+        }
 
-  static int trailingLineTerminatorStart(String text, boolean unixLines, int logicalEndPos) {
-    int len = logicalEndPos;
-    if (len <= 0 || len > text.length()) {
-      return -1;
-    }
-    char ch = text.charAt(len - 1);
-    if (unixLines) {
-      return ch == '\n' ? len - 1 : -1;
-    }
-    if (ch == '\n') {
-      return len >= 2 && text.charAt(len - 2) == '\r' ? len - 2 : len - 1;
-    }
-    if (ch == '\r' || ch == '\u0085' || ch == '\u2028' || ch == '\u2029') {
-      return len - 1;
-    }
-    return -1;
-  }
+        /**
+         * Returns the first index at or after `start` of any of `chars`, or `-1`.
+         * 
+         * 
+         * `chars` holds the one to three members of a [CharClassScanInfo.SmallSet]. None
+         * is a surrogate, so a code-unit search finds exactly the code points in the set. This is the
+         * small-set search for repeated `find()` calls on the `String` path: the scanner and
+         * the start accelerator both use it, so both keep the work bound below.
+         */
+        fun indexOfSmallSet(text: String, chars: CharArray, start: Int): Int {
+            val length: Int = text.length()
+            var position = Math.max(0, start)
+            if (position >= length) {
+                return -1
+            }
+            val scalarEnd = position + Math.min(SMALL_SET_SCALAR_PROLOGUE, length - position)
+            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            return indexOfSmallSetAfterPrologue(text, chars, position)
+        }
 
-  @Override
-  public int trailingLineTerminatorStart(boolean unixLines, int logicalEndPos) {
-    return trailingLineTerminatorStart(text, unixLines, logicalEndPos);
-  }
+        /**
+         * The windowed part of [.indexOfSmallSet], kept out of line. The prologue above is inlined
+         * into the DFA's start-acceleration call; inlining the whole search there as well doubled the
+         * cost of a full-width citation `replaceAll` on 64 KiB of non-matching text, though the
+         * windowed part never ran.
+         */
+        private fun indexOfSmallSetAfterPrologue(text: String, chars: CharArray, position: Int): Int {
+            var position = position
+            val length: Int = text.length()
+            if (position >= length) {
+                return -1
+            }
+            if (chars.length == 1) {
+                // A single member needs no bound: a hit advances past all scanned units; a miss ends search.
+                val candidate: Int = text.indexOf(chars[0].code, position)
+                if (WorkCounterConfig.ENABLED) {
+                    WorkCounter.record((if (candidate >= 0) candidate - position + 1 else length - position).toLong())
+                }
+                return candidate
+            }
 
-  @Override
-  public int positionDependentThreshold(boolean dollarAnchorEnd, boolean unixLines) {
-    int threshold = Integer.MAX_VALUE;
-    // Note: the caller handles hasTextAnchor threshold (= 1).
-    if (dollarAnchorEnd) {
-      int trailingTermStart = trailingLineTerminatorStart(unixLines, text.length());
-      if (trailingTermStart >= 0) {
-        threshold = trailingTermStart;
-      } else {
-        threshold = text.length();
-      }
+            // Public String searches use the JVM's accelerated Latin-1 or UTF-16 kernels without copying
+            // the input. Keep each search bounded: an absent member must not rescan the entire remaining
+            // suffix on every find(). Grow from a short first window so nearby matches do not repeatedly
+            // scan a full-sized window for an absent member. Reset to 64 on each call and double after
+            // misses, up to the cap. Failed windows are disjoint; the final window is at most the distance
+            // already scanned in this call plus 64. Thus overrun past a match is bounded by distance
+            // advanced plus 64, giving at most k * (2n + 64m) work for k <= 3 members and m consuming
+            // matches across n input units. Since m <= n, repeated find() work stays linear.
+            var windowLength: Int = SMALL_SET_INITIAL_SEARCH_WINDOW
+            while (position < length) {
+                val windowEnd = position + Math.min(windowLength, length - position)
+                var searchEnd = windowEnd
+                var best = -1
+                for (target in chars) {
+                    val candidate: Int = text.indexOf(target.code, position, searchEnd)
+                    if (WorkCounterConfig.ENABLED) {
+                        WorkCounter.record((if (candidate >= 0) candidate - position + 1 else searchEnd - position).toLong())
+                    }
+                    if (candidate >= 0) {
+                        best = candidate
+                        searchEnd = candidate
+                        if (candidate == position) {
+                            return candidate
+                        }
+                    }
+                }
+                if (best >= 0) {
+                    return best
+                }
+                position = windowEnd
+                windowLength = Math.min(SMALL_SET_SEARCH_WINDOW, windowLength * 2)
+            }
+            return -1
+        }
+
+        private fun isMember(chars: CharArray, ch: Char): Boolean {
+            for (c in chars) {
+                if (c == ch) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        fun indexOfCodePointClass(
+            text: String, ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int
+        ): Int {
+            var position = Math.max(0, start)
+            val bound = Math.min(limit, text.length())
+            while (position < bound) {
+                if (WorkCounterConfig.ENABLED) {
+                    record()
+                }
+                val codePoint = text.codePointAt(position)
+                if (InputScanner.Companion.classContains(ranges, bitmap0, bitmap1, codePoint)) {
+                    return position
+                }
+                position += Character.charCount(codePoint)
+            }
+            return -1
+        }
+
+        fun trailingLineTerminatorStart(text: String, unixLines: Boolean, logicalEndPos: Int): Int {
+            val len = logicalEndPos
+            if (len <= 0 || len > text.length()) {
+                return -1
+            }
+            val ch: Char = text.charAt(len - 1)
+            if (unixLines) {
+                return if (ch == '\n') len - 1 else -1
+            }
+            if (ch == '\n') {
+                return if (len >= 2 && text.charAt(len - 2) == '\r') len - 2 else len - 1
+            }
+            if (ch == '\r' || ch == '\u0085' || ch == '\u2028' || ch == '\u2029') {
+                return len - 1
+            }
+            return -1
+        }
     }
-    return threshold;
-  }
 }

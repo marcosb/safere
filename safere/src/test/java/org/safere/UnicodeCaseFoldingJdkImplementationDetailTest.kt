@@ -2,55 +2,62 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.stream.Stream;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import java.util.regex.Pattern
+import java.util.stream.Stream
 
 /**
- * Inventory of observed JDK Unicode case-insensitive behavior that appears to depend on {@code
- * java.util.regex} implementation details rather than on specified regex semantics.
- *
- * <p>These cases are intentionally not active SafeRE compatibility requirements. SafeRE treats
+ * Inventory of observed JDK Unicode case-insensitive behavior that appears to depend on `java.util.regex` implementation details rather than on specified regex semantics.
+ * 
+ * 
+ * These cases are intentionally not active SafeRE compatibility requirements. SafeRE treats
  * Unicode case-insensitive character classes as sets closed under Unicode case folding, so these
  * JDK observations are documented here instead of encoded as active SafeRE expectations.
  */
 @Disabled("Observed JDK Unicode case-folding details; not a SafeRE compatibility target")
 @DisplayName("JDK Unicode case-folding implementation-detail inventory")
-class UnicodeCaseFoldingJdkImplementationDetailTest {
+internal class UnicodeCaseFoldingJdkImplementationDetailTest {
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("jdkCaseCases")
+    @DisplayName("selected Unicode case-insensitive patterns have JDK implementation-specific misses")
+    fun selectedUnicodeCaseInsensitivePatternsHaveJdkImplementationSpecificMisses(
+        description: String?, regex: String, input: String
+    ) {
+        val pattern =
+            Pattern.compile(
+                regex, Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+            )
 
-  @ParameterizedTest(name = "[{index}] {0}")
-  @MethodSource("jdkCaseCases")
-  @DisplayName("selected Unicode case-insensitive patterns have JDK implementation-specific misses")
-  void selectedUnicodeCaseInsensitivePatternsHaveJdkImplementationSpecificMisses(
-      String description, String regex, String input) {
-    java.util.regex.Pattern pattern =
-        java.util.regex.Pattern.compile(
-            regex, java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+        Assertions.assertThat(pattern.matcher(input).matches()).`as`(description).isFalse()
+    }
 
-    assertThat(pattern.matcher(input).matches()).as(description).isFalse();
-  }
-
-  private static Stream<Arguments> jdkCaseCases() {
-    return Stream.of(
-        Arguments.of(
-            "JDK does not match Kelvin sign with singleton range [K-K]", "[K-K]", "\u212A"),
-        Arguments.of(
-            "JDK does not match Kelvin sign with uppercase range [A-Z]", "[A-Z]", "\u212A"),
-        Arguments.of(
-            "JDK does not match capital I with dot with singleton range [I-I]", "[I-I]", "\u0130"),
-        Arguments.of(
-            "JDK does not match capital I with dot with uppercase range [A-Z]", "[A-Z]", "\u0130"),
-        Arguments.of("JDK range from dotless I misses dotted I", "[ı-ı]", "İ"),
-        Arguments.of("JDK literal misses Unicode simple fold 1FD3 to 0390", "\u1FD3", "\u0390"),
-        Arguments.of("JDK literal misses Unicode simple fold 1FE3 to 03B0", "\u1FE3", "\u03B0"),
-        Arguments.of("JDK literal misses Unicode simple fold FB05 to FB06", "\uFB05", "\uFB06"));
-  }
+    companion object {
+        private fun jdkCaseCases(): Stream<Arguments?> {
+            return Stream.of<Arguments?>(
+                Arguments.of(
+                    "JDK does not match Kelvin sign with singleton range [K-K]", "[K-K]", "\u212A"
+                ),
+                Arguments.of(
+                    "JDK does not match Kelvin sign with uppercase range [A-Z]", "[A-Z]", "\u212A"
+                ),
+                Arguments.of(
+                    "JDK does not match capital I with dot with singleton range [I-I]", "[I-I]", "\u0130"
+                ),
+                Arguments.of(
+                    "JDK does not match capital I with dot with uppercase range [A-Z]", "[A-Z]", "\u0130"
+                ),
+                Arguments.of("JDK range from dotless I misses dotted I", "[ı-ı]", "İ"),
+                Arguments.of("JDK literal misses Unicode simple fold 1FD3 to 0390", "\u1FD3", "\u0390"),
+                Arguments.of("JDK literal misses Unicode simple fold 1FE3 to 03B0", "\u1FE3", "\u03B0"),
+                Arguments.of("JDK literal misses Unicode simple fold FB05 to FB06", "\uFB05", "\uFB06")
+            )
+        }
+    }
 }

@@ -2,191 +2,180 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.re2ffm
 
-package org.safere.re2ffm;
-
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.lang.ref.Cleaner;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.foreign.Arena
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
+import java.lang.ref.Cleaner
+import java.nio.charset.StandardCharsets
 
 /**
  * A compiled regular expression backed by C++ RE2 via the FFM API. This is a benchmark-oriented
- * wrapper — it supports enough of the {@code java.util.regex.Pattern} API to run the SafeRE
+ * wrapper — it supports enough of the `java.util.regex.Pattern` API to run the SafeRE
  * benchmark suite.
  */
-public final class RE2FfmPattern {
+class RE2FfmPattern private constructor(
+    private val patternString: String?,
+    private val flags: Int,
+    private val nativeHandle: MemorySegment?
+) {
+    private val numGroups: Int
 
-  /** Case-insensitive matching flag, compatible with {@code java.util.regex.Pattern}. */
-  public static final int CASE_INSENSITIVE = 2;
+    init {
+        this.numGroups = Re2Shim.numCapturingGroups(nativeHandle)
 
-  private static final Cleaner CLEANER = Cleaner.create();
-
-  private final String patternString;
-  private final int flags;
-  private final MemorySegment nativeHandle;
-  private final int numGroups;
-
-  private RE2FfmPattern(String patternString, int flags, MemorySegment nativeHandle) {
-    this.patternString = patternString;
-    this.flags = flags;
-    this.nativeHandle = nativeHandle;
-    this.numGroups = Re2Shim.numCapturingGroups(nativeHandle);
-
-    // Register cleanup so the native handle is freed when this object is GC'd.
-    MemorySegment handle = nativeHandle;
-    CLEANER.register(this, () -> Re2Shim.free(handle));
-  }
-
-  /**
-   * Compiles a regular expression.
-   *
-   * @param regex the regular expression
-   * @return a compiled pattern
-   * @throws IllegalArgumentException if the pattern is invalid
-   */
-  public static RE2FfmPattern compile(String regex) {
-    return compile(regex, 0);
-  }
-
-  /**
-   * Compiles a regular expression with the given flags.
-   *
-   * @param regex the regular expression
-   * @param flags compilation flags (e.g., {@link #CASE_INSENSITIVE})
-   * @return a compiled pattern
-   * @throws IllegalArgumentException if the pattern is invalid
-   */
-  public static RE2FfmPattern compile(String regex, int flags) {
-    byte[] utf8 = regex.getBytes(StandardCharsets.UTF_8);
-    MemorySegment handle;
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment patternSeg = arena.allocateFrom(ValueLayout.JAVA_BYTE, utf8);
-      if ((flags & CASE_INSENSITIVE) != 0) {
-        handle = Re2Shim.compileCaseInsensitive(patternSeg, utf8.length);
-      } else {
-        handle = Re2Shim.compile(patternSeg, utf8.length);
-      }
+        // Register cleanup so the native handle is freed when this object is GC'd.
+        val handle = nativeHandle
+        CLEANER.register(this, Runnable { Re2Shim.free(handle) })
     }
-    if (!Re2Shim.ok(handle)) {
-      String error = Re2Shim.error(handle);
-      Re2Shim.free(handle);
-      throw new IllegalArgumentException("RE2 compilation failed: " + error);
+
+    /**
+     * Creates a matcher for this pattern against the given input.
+     * 
+     * @param input the input text
+     * @return a new matcher
+     */
+    fun matcher(input: String?): RE2FfmMatcher {
+        return RE2FfmMatcher(this, input)
     }
-    return new RE2FfmPattern(regex, flags, handle);
-  }
 
-  /**
-   * Creates a matcher for this pattern against the given input.
-   *
-   * @param input the input text
-   * @return a new matcher
-   */
-  public RE2FfmMatcher matcher(String input) {
-    return new RE2FfmMatcher(this, input);
-  }
+    /**
+     * Splits the given input around matches of this pattern.
+     * 
+     * @param input the character sequence to be split
+     * @param limit the result threshold
+     * @return the array of strings computed by splitting the input around matches of this pattern
+     */
+    /**
+     * Splits the given input around matches of this pattern. Trailing empty strings are discarded.
+     * 
+     * @param input the character sequence to be split
+     * @return the array of strings computed by splitting the input around matches of this pattern
+     */
+    @JvmOverloads
+    fun split(input: CharSequence, limit: Int = 0): Array<String?> {
+        val text = input.toString()
+        val inputUtf8: ByteArray = text.getBytes(StandardCharsets.UTF_8)
 
-  /**
-   * Splits the given input around matches of this pattern. Trailing empty strings are discarded.
-   *
-   * @param input the character sequence to be split
-   * @return the array of strings computed by splitting the input around matches of this pattern
-   */
-  public String[] split(CharSequence input) {
-    return split(input, 0);
-  }
+        val matcher = RE2FfmMatcher(this, text, inputUtf8)
 
-  /**
-   * Splits the given input around matches of this pattern.
-   *
-   * @param input the character sequence to be split
-   * @param limit the result threshold
-   * @return the array of strings computed by splitting the input around matches of this pattern
-   */
-  public String[] split(CharSequence input, int limit) {
-    String text = input.toString();
-    byte[] inputUtf8 = text.getBytes(StandardCharsets.UTF_8);
+        // Start with a buffer for the expected matches (or a default of 128).
+        // The buffer size is doubled dynamically inside the loop if the text contains more matches.
+        var maxMatches = if (limit > 0) limit else 128
+        var numMatches: Int
+        val byteOffsets: IntArray?
 
-    RE2FfmMatcher matcher = new RE2FfmMatcher(this, text, inputUtf8);
+        Arena.ofConfined().use { arena ->
+            val textSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, inputUtf8)
+            while (true) {
+                val matchesSeg: MemorySegment = arena.allocate(ValueLayout.JAVA_INT, 2L * maxMatches)
 
-    // Start with a buffer for the expected matches (or a default of 128).
-    // The buffer size is doubled dynamically inside the loop if the text contains more matches.
-    int maxMatches = (limit > 0) ? limit : 128;
-    int numMatches;
-    int[] byteOffsets;
+                numMatches =
+                    Re2Shim.findAll(nativeHandle, textSeg, inputUtf8.length, matchesSeg, maxMatches)
 
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment textSeg = arena.allocateFrom(ValueLayout.JAVA_BYTE, inputUtf8);
-      while (true) {
-        MemorySegment matchesSeg = arena.allocate(ValueLayout.JAVA_INT, 2L * maxMatches);
-
-        numMatches =
-            Re2Shim.findAll(nativeHandle, textSeg, inputUtf8.length, matchesSeg, maxMatches);
-
-        if (numMatches < maxMatches || limit > 0) {
-          byteOffsets = new int[2 * numMatches];
-          MemorySegment.copy(matchesSeg, ValueLayout.JAVA_INT, 0, byteOffsets, 0, 2 * numMatches);
-          break;
+                if (numMatches < maxMatches || limit > 0) {
+                    byteOffsets = IntArray(2 * numMatches)
+                    MemorySegment.copy(matchesSeg, ValueLayout.JAVA_INT, 0, byteOffsets, 0, 2 * numMatches)
+                    break
+                }
+                maxMatches *= 2
+            }
         }
-        maxMatches *= 2;
-      }
+        var parts: MutableList<String?> = ArrayList<String?>()
+        var last = 0
+
+        for (i in 0..<numMatches) {
+            if (limit > 0 && parts.size() >= limit - 1) {
+                break
+            }
+            val startByte = byteOffsets!![2 * i]
+            val endByte = byteOffsets[2 * i + 1]
+
+            val startChar = matcher.byteOffsetToCharOffset(startByte)
+            val endChar = matcher.byteOffsetToCharOffset(endByte)
+
+            if (last == 0 && startChar == 0 && endChar == 0) {
+                continue
+            }
+            parts.add(text.substring(last, startChar))
+            last = endChar
+        }
+
+        if (last == 0) {
+            return arrayOf<String>(text)
+        }
+
+        parts.add(text.substring(last))
+        if (limit == 0) {
+            var end: Int = parts.size()
+            while (end > 0 && parts.get(end - 1)!!.isEmpty()) {
+                end--
+            }
+            parts = parts.subList(0, end)
+        }
+        return parts.toArray<String?>(arrayOfNulls<String>(0))
     }
 
-    List<String> parts = new ArrayList<>();
-    int last = 0;
-
-    for (int i = 0; i < numMatches; i++) {
-      if (limit > 0 && parts.size() >= limit - 1) {
-        break;
-      }
-      int startByte = byteOffsets[2 * i];
-      int endByte = byteOffsets[2 * i + 1];
-
-      int startChar = matcher.byteOffsetToCharOffset(startByte);
-      int endChar = matcher.byteOffsetToCharOffset(endByte);
-
-      if (last == 0 && startChar == 0 && endChar == 0) {
-        continue;
-      }
-      parts.add(text.substring(last, startChar));
-      last = endChar;
+    /** Returns the pattern string.  */
+    fun pattern(): String? {
+        return patternString
     }
 
-    if (last == 0) {
-      return new String[] {text};
+    /** Returns the compilation flags.  */
+    fun flags(): Int {
+        return flags
     }
 
-    parts.add(text.substring(last));
-    if (limit == 0) {
-      int end = parts.size();
-      while (end > 0 && parts.get(end - 1).isEmpty()) {
-        end--;
-      }
-      parts = parts.subList(0, end);
+    /** Returns the native RE2 handle. Package-private for use by [RE2FfmMatcher].  */
+    fun nativeHandle(): MemorySegment? {
+        return nativeHandle
     }
-    return parts.toArray(new String[0]);
-  }
 
-  /** Returns the pattern string. */
-  public String pattern() {
-    return patternString;
-  }
+    /** Returns the number of capturing groups.  */
+    fun numGroups(): Int {
+        return numGroups
+    }
 
-  /** Returns the compilation flags. */
-  public int flags() {
-    return flags;
-  }
+    companion object {
+        /** Case-insensitive matching flag, compatible with `java.util.regex.Pattern`.  */
+        const val CASE_INSENSITIVE: Int = 2
 
-  /** Returns the native RE2 handle. Package-private for use by {@link RE2FfmMatcher}. */
-  MemorySegment nativeHandle() {
-    return nativeHandle;
-  }
+        private val CLEANER: Cleaner = Cleaner.create()
 
-  /** Returns the number of capturing groups. */
-  int numGroups() {
-    return numGroups;
-  }
+        /**
+         * Compiles a regular expression with the given flags.
+         * 
+         * @param regex the regular expression
+         * @param flags compilation flags (e.g., [.CASE_INSENSITIVE])
+         * @return a compiled pattern
+         * @throws IllegalArgumentException if the pattern is invalid
+         */
+        /**
+         * Compiles a regular expression.
+         * 
+         * @param regex the regular expression
+         * @return a compiled pattern
+         * @throws IllegalArgumentException if the pattern is invalid
+         */
+        @JvmOverloads
+        fun compile(regex: String, flags: Int = 0): RE2FfmPattern {
+            val utf8: ByteArray = regex.getBytes(StandardCharsets.UTF_8)
+            val handle: MemorySegment?
+            Arena.ofConfined().use { arena ->
+                val patternSeg: MemorySegment? = arena.allocateFrom(ValueLayout.JAVA_BYTE, utf8)
+                if ((flags and CASE_INSENSITIVE) != 0) {
+                    handle = Re2Shim.compileCaseInsensitive(patternSeg, utf8.length)
+                } else {
+                    handle = Re2Shim.compile(patternSeg, utf8.length)
+                }
+            }
+            if (!Re2Shim.ok(handle)) {
+                val error = Re2Shim.error(handle)
+                Re2Shim.free(handle)
+                throw IllegalArgumentException("RE2 compilation failed: " + error)
+            }
+            return RE2FfmPattern(regex, flags, handle)
+        }
+    }
 }

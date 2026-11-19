@@ -1,288 +1,283 @@
 // Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.crosscheck
 
-package org.safere.crosscheck;
-
-import java.io.ObjectStreamException;
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Objects;
-import java.util.function.Predicate;
-import java.util.regex.PatternSyntaxException;
-import java.util.stream.Stream;
+import org.safere.Pattern
+import java.io.ObjectStreamException
+import java.io.Serializable
+import java.util.*
+import java.util.function.Predicate
+import java.util.regex.PatternSyntaxException
+import java.util.stream.Stream
 
 /**
- * A crosscheck wrapper that compiles and executes regular expressions on both SafeRE and {@code
- * java.util.regex}, comparing results and throwing {@link CrosscheckException} on divergence.
- *
- * <p>This class has the same API as {@link org.safere.Pattern} and {@link java.util.regex.Pattern},
+ * A crosscheck wrapper that compiles and executes regular expressions on both SafeRE and `java.util.regex`, comparing results and throwing [CrosscheckException] on divergence.
+ * 
+ * 
+ * This class has the same API as [Pattern] and [java.util.regex.Pattern],
  * so switching to crosscheck mode requires only changing the import:
- *
+ * 
  * <pre>
- *   // Before:
- *   import org.safere.Pattern;
- *   // After:
- *   import org.safere.crosscheck.Pattern;
- * </pre>
- *
- * <p>When both engines agree, SafeRE's result is returned. When they disagree, a {@link
- * CrosscheckException} is thrown with full details and an API call trace. When SafeRE rejects a
- * pattern that the JDK accepts (e.g., backreferences), an {@link UnsupportedPatternException} is
+ * // Before:
+ * import org.safere.Pattern;
+ * // After:
+ * import org.safere.crosscheck.Pattern;
+</pre> * 
+ * 
+ * 
+ * When both engines agree, SafeRE's result is returned. When they disagree, a [ ] is thrown with full details and an API call trace. When SafeRE rejects a
+ * pattern that the JDK accepts (e.g., backreferences), an [UnsupportedPatternException] is
  * thrown.
  */
-public final class Pattern implements Serializable {
-
-  private static final long serialVersionUID = 1L;
-
-  // Flag constants — identical to java.util.regex.Pattern and org.safere.Pattern.
-  public static final int UNIX_LINES = java.util.regex.Pattern.UNIX_LINES;
-  public static final int CASE_INSENSITIVE = java.util.regex.Pattern.CASE_INSENSITIVE;
-  public static final int COMMENTS = java.util.regex.Pattern.COMMENTS;
-  public static final int MULTILINE = java.util.regex.Pattern.MULTILINE;
-  public static final int LITERAL = java.util.regex.Pattern.LITERAL;
-  public static final int DOTALL = java.util.regex.Pattern.DOTALL;
-  public static final int UNICODE_CASE = java.util.regex.Pattern.UNICODE_CASE;
-  public static final int UNICODE_CHARACTER_CLASS = java.util.regex.Pattern.UNICODE_CHARACTER_CLASS;
-
-  private final org.safere.Pattern saferePattern;
-  private final java.util.regex.Pattern jdkPattern;
-
-  private Pattern(org.safere.Pattern saferePattern, java.util.regex.Pattern jdkPattern) {
-    this.saferePattern = saferePattern;
-    this.jdkPattern = jdkPattern;
-  }
-
-  /**
-   * Compiles the given regular expression on both engines.
-   *
-   * @throws UnsupportedPatternException if SafeRE rejects the pattern but the JDK accepts it
-   * @throws CrosscheckException if the JDK rejects the pattern but SafeRE accepts it
-   * @throws PatternSyntaxException if both engines reject the pattern
-   */
-  public static Pattern compile(String regex) {
-    return compile(regex, 0);
-  }
-
-  /**
-   * Compiles the given regular expression with the given flags on both engines.
-   *
-   * @throws UnsupportedPatternException if SafeRE rejects the pattern but the JDK accepts it
-   * @throws CrosscheckException if the JDK rejects the pattern but SafeRE accepts it
-   * @throws PatternSyntaxException if both engines reject the pattern
-   */
-  public static Pattern compile(String regex, int flags) {
-    org.safere.Pattern sp = null;
-    java.util.regex.Pattern jp = null;
-    PatternSyntaxException safereEx = null;
-    PatternSyntaxException jdkEx = null;
-
-    try {
-      sp = org.safere.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException e) {
-      safereEx = e;
-    }
-    try {
-      jp = java.util.regex.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException e) {
-      jdkEx = e;
+class Pattern private constructor(private val saferePattern: Pattern, private val jdkPattern: java.util.regex.Pattern) :
+    Serializable {
+    /** Creates a crosscheck [Matcher] for the given input.  */
+    fun matcher(input: CharSequence?): Matcher {
+        return Matcher(this, input)
     }
 
-    if (sp != null && jp != null) {
-      // Both compiled successfully.
-      return new Pattern(sp, jp);
-    } else if (safereEx != null && jdkEx != null) {
-      // Both rejected — rethrow SafeRE's exception.
-      throw safereEx;
-    } else if (safereEx != null) {
-      // SafeRE rejected, JDK accepted — unsupported feature.
-      throw UnsupportedPatternException.fromCause(safereEx);
-    } else {
-      // JDK rejected, SafeRE accepted — unexpected divergence.
-      throw new CrosscheckException(
-          "Pattern.compile",
-          quote(regex) + ", " + flags,
-          "compiled successfully",
-          "PatternSyntaxException: " + jdkEx.getMessage(),
-          "(no trace — divergence during compilation)");
+    /** Creates a UTF-8 matcher crosschecked against decoded SafeRE String and JDK matchers.  */
+    fun matcher(input: Utf8Input?): Utf8Matcher {
+        return Utf8Matcher(this, input)
     }
-  }
 
-  /**
-   * Convenience method that compiles the regex and tests if it matches the entire input, on both
-   * engines.
-   */
-  public static boolean matches(String regex, CharSequence input) {
-    boolean sr = org.safere.Pattern.matches(regex, input);
-    boolean jr = java.util.regex.Pattern.matches(regex, input.toString());
-    if (sr != jr) {
-      throw new CrosscheckException(
-          "Pattern.matches",
-          quote(regex) + ", " + quote(input),
-          String.valueOf(sr),
-          String.valueOf(jr),
-          "(no trace — static method)");
+    /** Runs capture-free UTF-8 search and compares it with decoded String and JDK oracles.  */
+    fun find(input: Utf8Input?): Boolean {
+        Objects.requireNonNull<Utf8Input?>(input, "input")
+        val result = saferePattern.find(input!!.delegate())
+        Utf8Matcher.Companion.crosscheckFind(this, input, result)
+        return result
     }
-    return sr;
-  }
 
-  /** Returns a literal pattern string for the given string. Delegates to SafeRE. */
-  public static String quote(String s) {
-    return org.safere.Pattern.quote(s);
-  }
-
-  /** Creates a crosscheck {@link Matcher} for the given input. */
-  public Matcher matcher(CharSequence input) {
-    return new Matcher(this, input);
-  }
-
-  /** Creates a UTF-8 matcher crosschecked against decoded SafeRE String and JDK matchers. */
-  public Utf8Matcher matcher(Utf8Input input) {
-    return new Utf8Matcher(this, input);
-  }
-
-  /** Runs capture-free UTF-8 search and compares it with decoded String and JDK oracles. */
-  public boolean find(Utf8Input input) {
-    Objects.requireNonNull(input, "input");
-    boolean result = saferePattern.find(input.delegate());
-    Utf8Matcher.crosscheckFind(this, input, result);
-    return result;
-  }
-
-  /** Returns the flags this pattern was compiled with. */
-  public int flags() {
-    return saferePattern.flags();
-  }
-
-  /** Returns the regular expression from which this pattern was compiled. */
-  public String pattern() {
-    return saferePattern.pattern();
-  }
-
-  /**
-   * Splits the input around matches of this pattern, comparing results from both engines.
-   *
-   * @throws CrosscheckException if the engines produce different split results
-   */
-  public String[] split(CharSequence input) {
-    return split(input, 0);
-  }
-
-  /**
-   * Splits the input around matches of this pattern with the given limit, comparing results from
-   * both engines.
-   *
-   * @throws CrosscheckException if the engines produce different split results
-   */
-  public String[] split(CharSequence input, int limit) {
-    String[] sr = saferePattern.split(input, limit);
-    String[] jr = jdkPattern.split(input, limit);
-    if (!Arrays.equals(sr, jr)) {
-      throw new CrosscheckException(
-          "Pattern.split",
-          quote(input) + ", " + limit,
-          Arrays.toString(sr),
-          Arrays.toString(jr),
-          "(no trace — Pattern method)");
+    /** Returns the flags this pattern was compiled with.  */
+    fun flags(): Int {
+        return saferePattern.flags()
     }
-    return sr;
-  }
 
-  /**
-   * Splits the input around matches of this pattern, including delimiters, comparing results from
-   * both engines.
-   *
-   * @throws CrosscheckException if the engines produce different split results
-   */
-  public String[] splitWithDelimiters(CharSequence input) {
-    return splitWithDelimiters(input, 0);
-  }
-
-  /**
-   * Splits the input around matches of this pattern with the given limit, including delimiters,
-   * comparing results from both engines.
-   *
-   * @throws CrosscheckException if the engines produce different split results
-   */
-  public String[] splitWithDelimiters(CharSequence input, int limit) {
-    String[] sr = saferePattern.splitWithDelimiters(input, limit);
-    String[] jr = jdkPattern.splitWithDelimiters(input, limit);
-    if (!Arrays.equals(sr, jr)) {
-      throw new CrosscheckException(
-          "Pattern.splitWithDelimiters",
-          quote(input) + ", " + limit,
-          Arrays.toString(sr),
-          Arrays.toString(jr),
-          "(no trace — Pattern method)");
+    /** Returns the regular expression from which this pattern was compiled.  */
+    fun pattern(): String? {
+        return saferePattern.pattern()
     }
-    return sr;
-  }
 
-  /** Splits the input lazily around matches of this pattern. */
-  public Stream<String> splitAsStream(CharSequence input) {
-    return saferePattern.splitAsStream(input);
-  }
-
-  /** Creates a predicate that returns true when this pattern is found in the input. */
-  public Predicate<String> asPredicate() {
-    return input -> matcher(input).find();
-  }
-
-  /** Creates a predicate that returns true when this pattern matches the entire input. */
-  public Predicate<String> asMatchPredicate() {
-    return input -> matcher(input).matches();
-  }
-
-  /** Returns the named capturing groups in this pattern. */
-  public Map<String, Integer> namedGroups() {
-    Map<String, Integer> sr = saferePattern.namedGroups();
-    Map<String, Integer> jr = jdkPattern.namedGroups();
-    if (!Objects.equals(sr, jr)) {
-      throw new CrosscheckException(
-          "Pattern.namedGroups",
-          "",
-          String.valueOf(sr),
-          String.valueOf(jr),
-          "(no trace — Pattern method)");
+    /**
+     * Splits the input around matches of this pattern with the given limit, comparing results from
+     * both engines.
+     * 
+     * @throws CrosscheckException if the engines produce different split results
+     */
+    /**
+     * Splits the input around matches of this pattern, comparing results from both engines.
+     * 
+     * @throws CrosscheckException if the engines produce different split results
+     */
+    @JvmOverloads
+    fun split(input: CharSequence?, limit: Int = 0): Array<String?>? {
+        val sr = saferePattern.split(input, limit)
+        val jr = jdkPattern.split(input, limit)
+        if (!sr.contentEquals(jr)) {
+            throw CrosscheckException(
+                "Pattern.split",
+                quote(input) + ", " + limit,
+                sr.contentToString(),
+                jr.contentToString(),
+                "(no trace — Pattern method)"
+            )
+        }
+        return sr
     }
-    return sr;
-  }
 
-  /** Returns the number of capturing groups in this pattern. */
-  public int numGroups() {
-    return saferePattern.matcher("").groupCount();
-  }
-
-  /** Returns the pattern string. */
-  @Override
-  public String toString() {
-    return saferePattern.toString();
-  }
-
-  private Object writeReplace() throws ObjectStreamException {
-    return new SerializedForm(pattern(), flags());
-  }
-
-  /** Returns the underlying SafeRE pattern (package-private, used by Matcher). */
-  org.safere.Pattern saferePattern() {
-    return saferePattern;
-  }
-
-  /** Returns the underlying JDK pattern (package-private, used by Matcher). */
-  java.util.regex.Pattern jdkPattern() {
-    return jdkPattern;
-  }
-
-  private static String quote(CharSequence s) {
-    return "\"" + s + "\"";
-  }
-
-  private record SerializedForm(String regex, int flags) implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    private Object readResolve() throws ObjectStreamException {
-      return compile(regex, flags);
+    /**
+     * Splits the input around matches of this pattern with the given limit, including delimiters,
+     * comparing results from both engines.
+     * 
+     * @throws CrosscheckException if the engines produce different split results
+     */
+    /**
+     * Splits the input around matches of this pattern, including delimiters, comparing results from
+     * both engines.
+     * 
+     * @throws CrosscheckException if the engines produce different split results
+     */
+    @JvmOverloads
+    fun splitWithDelimiters(input: CharSequence?, limit: Int = 0): Array<String?>? {
+        val sr = saferePattern.splitWithDelimiters(input, limit)
+        val jr = jdkPattern.splitWithDelimiters(input, limit)
+        if (!sr.contentEquals(jr)) {
+            throw CrosscheckException(
+                "Pattern.splitWithDelimiters",
+                quote(input) + ", " + limit,
+                sr.contentToString(),
+                jr.contentToString(),
+                "(no trace — Pattern method)"
+            )
+        }
+        return sr
     }
-  }
+
+    /** Splits the input lazily around matches of this pattern.  */
+    fun splitAsStream(input: CharSequence?): Stream<String?> {
+        return saferePattern.splitAsStream(input)
+    }
+
+    /** Creates a predicate that returns true when this pattern is found in the input.  */
+    fun asPredicate(): Predicate<String?> {
+        return Predicate { input: String? -> matcher(input).find() }
+    }
+
+    /** Creates a predicate that returns true when this pattern matches the entire input.  */
+    fun asMatchPredicate(): Predicate<String?> {
+        return Predicate { input: String? -> matcher(input).matches() }
+    }
+
+    /** Returns the named capturing groups in this pattern.  */
+    fun namedGroups(): MutableMap<String?, Int?>? {
+        val sr = saferePattern.namedGroups()
+        val jr = jdkPattern.namedGroups()
+        if (sr != jr) {
+            throw CrosscheckException(
+                "Pattern.namedGroups",
+                "",
+                sr.toString(),
+                jr.toString(),
+                "(no trace — Pattern method)"
+            )
+        }
+        return sr
+    }
+
+    /** Returns the number of capturing groups in this pattern.  */
+    fun numGroups(): Int {
+        return saferePattern.matcher("").groupCount()
+    }
+
+    /** Returns the pattern string.  */
+    override fun toString(): String {
+        return saferePattern.toString()
+    }
+
+    @Throws(ObjectStreamException::class)
+    private fun writeReplace(): Any {
+        return SerializedForm(pattern(), flags())
+    }
+
+    /** Returns the underlying SafeRE pattern (package-private, used by Matcher).  */
+    fun saferePattern(): Pattern {
+        return saferePattern
+    }
+
+    /** Returns the underlying JDK pattern (package-private, used by Matcher).  */
+    fun jdkPattern(): java.util.regex.Pattern {
+        return jdkPattern
+    }
+
+    @JvmRecord
+    private data class SerializedForm(val regex: String?, val flags: Int) : Serializable {
+        @Throws(ObjectStreamException::class)
+        fun readResolve(): Any {
+            return org.safere.crosscheck.Pattern.Companion.compile(regex!!, flags)
+        }
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+
+        // Flag constants — identical to java.util.regex.Pattern and org.safere.Pattern.
+        val UNIX_LINES: Int = java.util.regex.Pattern.UNIX_LINES
+        @JvmField
+        val CASE_INSENSITIVE: Int = java.util.regex.Pattern.CASE_INSENSITIVE
+        val COMMENTS: Int = java.util.regex.Pattern.COMMENTS
+        val MULTILINE: Int = java.util.regex.Pattern.MULTILINE
+        val LITERAL: Int = java.util.regex.Pattern.LITERAL
+        val DOTALL: Int = java.util.regex.Pattern.DOTALL
+        val UNICODE_CASE: Int = java.util.regex.Pattern.UNICODE_CASE
+        val UNICODE_CHARACTER_CLASS: Int = java.util.regex.Pattern.UNICODE_CHARACTER_CLASS
+
+        /**
+         * Compiles the given regular expression with the given flags on both engines.
+         * 
+         * @throws UnsupportedPatternException if SafeRE rejects the pattern but the JDK accepts it
+         * @throws CrosscheckException if the JDK rejects the pattern but SafeRE accepts it
+         * @throws PatternSyntaxException if both engines reject the pattern
+         */
+        /**
+         * Compiles the given regular expression on both engines.
+         * 
+         * @throws UnsupportedPatternException if SafeRE rejects the pattern but the JDK accepts it
+         * @throws CrosscheckException if the JDK rejects the pattern but SafeRE accepts it
+         * @throws PatternSyntaxException if both engines reject the pattern
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun compile(regex: String, flags: Int = 0): org.safere.crosscheck.Pattern {
+            var sp: Pattern? = null
+            var jp: java.util.regex.Pattern? = null
+            var safereEx: PatternSyntaxException? = null
+            var jdkEx: PatternSyntaxException? = null
+
+            try {
+                sp = Pattern.compile(regex, flags)
+            } catch (e: PatternSyntaxException) {
+                safereEx = e
+            }
+            try {
+                jp = java.util.regex.Pattern.compile(regex, flags)
+            } catch (e: PatternSyntaxException) {
+                jdkEx = e
+            }
+
+            if (sp != null && jp != null) {
+                // Both compiled successfully.
+                return Pattern(sp, jp)
+            } else if (safereEx != null && jdkEx != null) {
+                // Both rejected — rethrow SafeRE's exception.
+                throw safereEx
+            } else if (safereEx != null) {
+                // SafeRE rejected, JDK accepted — unsupported feature.
+                throw UnsupportedPatternException.Companion.fromCause(safereEx)
+            } else {
+                // JDK rejected, SafeRE accepted — unexpected divergence.
+                throw CrosscheckException(
+                    "Pattern.compile",
+                    Companion.quote(regex) + ", " + flags,
+                    "compiled successfully",
+                    "PatternSyntaxException: " + jdkEx!!.message,
+                    "(no trace — divergence during compilation)"
+                )
+            }
+        }
+
+        /**
+         * Convenience method that compiles the regex and tests if it matches the entire input, on both
+         * engines.
+         */
+        @JvmStatic
+        fun matches(regex: String, input: CharSequence): Boolean {
+            val sr = Pattern.matches(regex, input)
+            val jr = java.util.regex.Pattern.matches(regex, input.toString())
+            if (sr != jr) {
+                throw CrosscheckException(
+                    "Pattern.matches",
+                    Companion.quote(regex) + ", " + quote(input),
+                    sr.toString(),
+                    jr.toString(),
+                    "(no trace — static method)"
+                )
+            }
+            return sr
+        }
+
+        /** Returns a literal pattern string for the given string. Delegates to SafeRE.  */
+        @JvmStatic
+        fun quote(s: String): String {
+            return Pattern.quote(s)
+        }
+
+        private fun quote(s: CharSequence?): String {
+            return "\"" + s + "\""
+        }
+    }
 }

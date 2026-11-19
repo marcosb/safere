@@ -2,86 +2,79 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
-
-import java.util.concurrent.TimeUnit;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.*
+import org.safere.Pattern
+import org.safere.crosscheck.Pattern.Companion.compile
+import java.util.concurrent.TimeUnit
 
 /**
- * Measures overhead added by the crosscheck facade for replacement loops that call {@code
- * appendReplacement} once per match.
- *
- * <p>This is a diagnostic benchmark for crosscheck optimization work. The Java benchmark wrapper
+ * Measures overhead added by the crosscheck facade for replacement loops that call `appendReplacement` once per match.
+ * 
+ * 
+ * This is a diagnostic benchmark for crosscheck optimization work. The Java benchmark wrapper
  * excludes it from default no-argument runs; run this class explicitly when needed.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Thread)
-public class CrosscheckOverheadBenchmark {
+class CrosscheckOverheadBenchmark {
+    @Param("16", "128", "1024")
+    var matches: Int = 0
 
-  @Param({"16", "128", "1024"})
-  public int matches;
+    private var text: String? = null
+    private var replacement: String? = null
+    private var saferePattern: Pattern? = null
+    private var jdkPattern: java.util.regex.Pattern? = null
+    private var crosscheckPattern: org.safere.crosscheck.Pattern? = null
 
-  private String text;
-  private String replacement;
-  private org.safere.Pattern saferePattern;
-  private java.util.regex.Pattern jdkPattern;
-  private org.safere.crosscheck.Pattern crosscheckPattern;
+    @Setup
+    fun setup() {
+        val sb = StringBuilder(matches * 12)
+        for (i in 0..<matches) {
+            sb.append("item").append(i).append(';')
+        }
+        text = sb.toString()
+        val data: BenchmarkData = BenchmarkData.Companion.get()
+        replacement = data.getString("configuration.crosscheckOverhead.replacement")
 
-  @Setup
-  public void setup() {
-    StringBuilder sb = new StringBuilder(matches * 12);
-    for (int i = 0; i < matches; i++) {
-      sb.append("item").append(i).append(';');
+        val regex = data.getString("configuration.crosscheckOverhead.pattern")
+        saferePattern = compile(regex)
+        jdkPattern = java.util.regex.Pattern.compile(regex)
+        crosscheckPattern = compile(regex)
     }
-    text = sb.toString();
-    BenchmarkData data = BenchmarkData.get();
-    replacement = data.getString("configuration.crosscheckOverhead.replacement");
 
-    String regex = data.getString("configuration.crosscheckOverhead.pattern");
-    saferePattern = org.safere.Pattern.compile(regex);
-    jdkPattern = java.util.regex.Pattern.compile(regex);
-    crosscheckPattern = org.safere.crosscheck.Pattern.compile(regex);
-  }
-
-  @Benchmark
-  public String appendReplacement_safere() {
-    org.safere.Matcher matcher = saferePattern.matcher(text);
-    StringBuilder sb = new StringBuilder(text.length());
-    while (matcher.find()) {
-      matcher.appendReplacement(sb, replacement);
+    @Benchmark
+    fun appendReplacement_safere(): String {
+        val matcher = saferePattern!!.matcher(text)
+        val sb = StringBuilder(text!!.length)
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, replacement)
+        }
+        matcher.appendTail(sb)
+        return sb.toString()
     }
-    matcher.appendTail(sb);
-    return sb.toString();
-  }
 
-  @Benchmark
-  public String appendReplacement_jdk() {
-    java.util.regex.Matcher matcher = jdkPattern.matcher(text);
-    StringBuilder sb = new StringBuilder(text.length());
-    while (matcher.find()) {
-      matcher.appendReplacement(sb, replacement);
+    @Benchmark
+    fun appendReplacement_jdk(): String {
+        val matcher = jdkPattern!!.matcher(text)
+        val sb = StringBuilder(text!!.length)
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, replacement)
+        }
+        matcher.appendTail(sb)
+        return sb.toString()
     }
-    matcher.appendTail(sb);
-    return sb.toString();
-  }
 
-  @Benchmark
-  public String appendReplacement_crosscheck() {
-    org.safere.crosscheck.Matcher matcher = crosscheckPattern.matcher(text);
-    StringBuilder sb = new StringBuilder(text.length());
-    while (matcher.find()) {
-      matcher.appendReplacement(sb, replacement);
+    @Benchmark
+    fun appendReplacement_crosscheck(): String {
+        val matcher = crosscheckPattern!!.matcher(text)
+        val sb = StringBuilder(text!!.length)
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, replacement!!)
+        }
+        matcher.appendTail(sb)
+        return sb.toString()
     }
-    matcher.appendTail(sb);
-    return sb.toString();
-  }
 }

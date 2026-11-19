@@ -2,52 +2,67 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import org.junit.jupiter.api.extension.ConditionEvaluationResult;
-import org.junit.jupiter.api.extension.ExecutionCondition;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.ConditionEvaluationResult
+import org.junit.jupiter.api.extension.ExecutionCondition
+import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.extension.ExtensionContext
+import java.lang.Boolean
+import java.lang.reflect.AnnotatedElement
+import java.util.function.Function
+import java.util.function.Supplier
+import kotlin.String
 
 /**
  * Controls inclusion and execution of generated crosscheck tests.
- *
- * <p>On a top-level test class, the annotation excludes the entire source file from generation. On
+ * 
+ * 
+ * On a top-level test class, the annotation excludes the entire source file from generation. On
  * a method or nested class, it disables only that element in generated crosscheck runs. Original
  * SafeRE tests remain enabled.
- *
- * <p>The annotation is active only when the generated crosscheck test profile sets the {@code
- * org.safere.crosscheck.generatedTests} system property. Use an issue reference in the reason for
+ * 
+ * 
+ * The annotation is active only when the generated crosscheck test profile sets the `org.safere.crosscheck.generatedTests` system property. Use an issue reference in the reason for
  * fixable SafeRE/JDK divergences, and a plain reason for tests that are intentionally not relevant
  * to crosscheck.
  */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD, ElementType.TYPE})
-@ExtendWith(DisabledForCrosscheckCondition.class)
-@interface DisabledForCrosscheck {
-  /** Explains why this test is disabled in generated crosscheck coverage. */
-  String value();
-}
+@Retention(AnnotationRetention.RUNTIME)
+@Target(
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY_GETTER,
+    AnnotationTarget.PROPERTY_SETTER,
+    AnnotationTarget.CLASS
+)
+@ExtendWith(DisabledForCrosscheckCondition::class)
+internal annotation class DisabledForCrosscheck(
+    /** Explains why this test is disabled in generated crosscheck coverage.  */
+    val value: String
+)
 
-/** JUnit condition backing {@link DisabledForCrosscheck}. */
-final class DisabledForCrosscheckCondition implements ExecutionCondition {
-  static final String GENERATED_TESTS_PROPERTY = "org.safere.crosscheck.generatedTests";
+/** JUnit condition backing [DisabledForCrosscheck].  */
+internal class DisabledForCrosscheckCondition : ExecutionCondition {
+    override fun evaluateExecutionCondition(context: ExtensionContext): ConditionEvaluationResult {
+        if (!Boolean.getBoolean(GENERATED_TESTS_PROPERTY)) {
+            return ConditionEvaluationResult.enabled("not a generated crosscheck test run")
+        }
 
-  @Override
-  public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
-    if (!Boolean.getBoolean(GENERATED_TESTS_PROPERTY)) {
-      return ConditionEvaluationResult.enabled("not a generated crosscheck test run");
+        return context
+            .getElement()
+            .map<DisabledForCrosscheck?>(Function { element: AnnotatedElement? ->
+                element!!.getAnnotation<DisabledForCrosscheck?>(
+                    DisabledForCrosscheck::class.java
+                )
+            })
+            .map<ConditionEvaluationResult>(Function { annotation: DisabledForCrosscheck? ->
+                ConditionEvaluationResult.disabled(
+                    annotation!!.value
+                )
+            })
+            .orElseGet(Supplier { ConditionEvaluationResult.enabled("not disabled for crosscheck") })
     }
 
-    return context
-        .getElement()
-        .map(element -> element.getAnnotation(DisabledForCrosscheck.class))
-        .map(annotation -> ConditionEvaluationResult.disabled(annotation.value()))
-        .orElseGet(() -> ConditionEvaluationResult.enabled("not disabled for crosscheck"));
-  }
+    companion object {
+        const val GENERATED_TESTS_PROPERTY: String = "org.safere.crosscheck.generatedTests"
+    }
 }

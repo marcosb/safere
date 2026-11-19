@@ -2,788 +2,793 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Arrays;
+import java.util.*
 
 /**
  * One-pass NFA execution engine. For patterns where the NFA is deterministic (at most one possible
  * path for any input), this engine extracts submatch boundaries in a single linear pass over the
  * input text — no backtracking, no thread management.
- *
- * <p>A pattern is "one-pass" if, after following all epsilon transitions from any state:
- *
- * <ol>
- *   <li>At most one CHAR_RANGE instruction matches any given input code point.
- *   <li>At most one MATCH instruction is reachable.
- *   <li>No instruction is reachable via two different epsilon paths.
- * </ol>
- *
- * <p>One-pass matching only works for <b>anchored</b> searches. For unanchored searches, use the
+ * 
+ * 
+ * A pattern is "one-pass" if, after following all epsilon transitions from any state:
+ * 
+ * 
+ *  1. At most one CHAR_RANGE instruction matches any given input code point.
+ *  1. At most one MATCH instruction is reachable.
+ *  1. No instruction is reachable via two different epsilon paths.
+ * 
+ * 
+ * 
+ * One-pass matching only works for **anchored** searches. For unanchored searches, use the
  * DFA to find the match region first, then run OnePass on that region.
- *
- * <p>This is a port of RE2's {@code onepass.cc}, adapted for Java's Unicode code point model.
+ * 
+ * 
+ * This is a port of RE2's `onepass.cc`, adapted for Java's Unicode code point model.
  */
-final class OnePass {
+internal class OnePass {
+    // -------------------------------------------------------------------------
+    // Instance fields
+    // -------------------------------------------------------------------------
+    /**
+     * Flattened transition table: `flatActions[stateOffset + eqClass]` = encoded action with
+     * pre-scaled nextStateOffset.
+     */
+    private val flatActions: LongArray
 
-  /**
-   * Maximum number of capture groups the one-pass engine supports (including group 0). This limit
-   * exists because capture group tracking is encoded in a bitmask within each action integer.
-   * Matches RE2's {@code kMaxCap}.
-   */
-  static final int MAX_CAPTURE_GROUPS = 16;
+    /**
+     * Match actions: `matchAction[stateOffset]` = encoded action when at a match state ([ ][.NO_ACTION] otherwise).
+     */
+    private val matchAction: LongArray
 
-  private static final int MAX_CAP_REGS = 2 * MAX_CAPTURE_GROUPS;
+    /** Sorted code point boundaries defining equivalence classes.  */
+    private val boundaries: IntArray
 
-  // OnePass is an optional accelerator. Keep its dense action tables within a fixed raw payload
-  // budget and fall back to the other engines when a pattern would exceed it.
-  private static final int MAX_STATES = 65_000;
-  private static final long MAX_ACTION_BYTES = 16L * 1024L * 1024L;
-  static final long MAX_ACTION_CELLS = MAX_ACTION_BYTES / Long.BYTES;
+    /** Direct lookup table mapping ASCII code points (0–127) to equivalence class indices.  */
+    private val asciiClassMap: IntArray
 
-  // -------------------------------------------------------------------------
-  // Action encoding: each action is packed into a single long.
-  //
-  //   bits  0-13: empty-width flags required for this transition
-  //   bits 14-45: capture mask (which capture registers to set)
-  //   bit     46: match priority
-  //   bits 47-63: next state index
-  //
-  // Special value: NO_ACTION (-1L) means no valid transition.
-  // -------------------------------------------------------------------------
+    /** Whether the program requires end-of-text matching (stripped trailing `$` or \z).  */
+    private val anchorEnd: Boolean
 
-  private static final int EMPTY_BITS = 14;
-  private static final int CAP_SHIFT = EMPTY_BITS;
-  private static final int INDEX_SHIFT = CAP_SHIFT + MAX_CAP_REGS + 1;
-  private static final long EMPTY_MASK = (1L << EMPTY_BITS) - 1;
-  private static final long CAP_REG_MASK = (1L << MAX_CAP_REGS) - 1;
-  private static final long NO_ACTION = -1L;
+    /**
+     * When true, the end anchor was `$` (not `\z`), meaning the match may end before a
+     * trailing line terminator at end of text. Only meaningful when [.anchorEnd] is true.
+     */
+    private val dollarAnchorEnd: Boolean
 
-  /**
-   * Mask covering all "condition" bits in an action (empty-width flags + capture registers). When
-   * {@code (action & CONDITION_MASK) == 0}, both the empty-flags check and the capture application
-   * can be skipped entirely — a single branch instead of two.
-   */
-  private static final long CONDITION_MASK = (1L << (CAP_SHIFT + MAX_CAP_REGS)) - 1;
+    private val dollarAnchorUnixLines: Boolean
 
-  private static final long MATCH_WINS_MASK = 1L << (CAP_SHIFT + MAX_CAP_REGS);
+    /** Whether empty-width checks need the grapheme-cluster boundary flag.  */
+    private val hasGraphemeSemantics: Boolean
 
-  private static long encodeAction(int nextState, int capMask, int emptyFlags) {
-    return encodeAction(nextState, capMask, emptyFlags, false);
-  }
-
-  private static long encodeAction(int nextState, int capMask, int emptyFlags, boolean matchWins) {
-    long action =
-        ((long) nextState << INDEX_SHIFT)
-            | ((capMask & CAP_REG_MASK) << CAP_SHIFT)
-            | (emptyFlags & EMPTY_MASK);
-    if (matchWins) {
-      action |= MATCH_WINS_MASK;
-    }
-    return action;
-  }
-
-  // -------------------------------------------------------------------------
-  // Instance fields
-  // -------------------------------------------------------------------------
-
-  /**
-   * Flattened transition table: {@code flatActions[stateOffset + eqClass]} = encoded action with
-   * pre-scaled nextStateOffset.
-   */
-  private final long[] flatActions;
-
-  /**
-   * Match actions: {@code matchAction[stateOffset]} = encoded action when at a match state ({@link
-   * #NO_ACTION} otherwise).
-   */
-  private final long[] matchAction;
-
-  /** Sorted code point boundaries defining equivalence classes. */
-  private final int[] boundaries;
-
-  /** Direct lookup table mapping ASCII code points (0–127) to equivalence class indices. */
-  private final int[] asciiClassMap;
-
-  /** Whether the program requires end-of-text matching (stripped trailing {@code $} or \z). */
-  private final boolean anchorEnd;
-
-  /**
-   * When true, the end anchor was {@code $} (not {@code \z}), meaning the match may end before a
-   * trailing line terminator at end of text. Only meaningful when {@link #anchorEnd} is true.
-   */
-  private final boolean dollarAnchorEnd;
-
-  private final boolean dollarAnchorUnixLines;
-
-  /** Whether empty-width checks need the grapheme-cluster boundary flag. */
-  private final boolean hasGraphemeSemantics;
-
-  private OnePass(
-      long[] flatActions,
-      long[] matchAction,
-      int[] boundaries,
-      boolean anchorEnd,
-      boolean dollarAnchorEnd,
-      boolean dollarAnchorUnixLines,
-      boolean hasGraphemeSemantics) {
-    this.flatActions = flatActions;
-    this.matchAction = matchAction;
-    this.boundaries = boundaries;
-    this.asciiClassMap = buildAsciiClassMap(boundaries);
-    this.anchorEnd = anchorEnd;
-    this.dollarAnchorEnd = dollarAnchorEnd;
-    this.dollarAnchorUnixLines = dollarAnchorUnixLines;
-    this.hasGraphemeSemantics = hasGraphemeSemantics;
-  }
-
-  // -------------------------------------------------------------------------
-  // Building the one-pass automaton
-  // -------------------------------------------------------------------------
-
-  /**
-   * Attempts to build a one-pass automaton from the compiled program. Returns {@code null} if the
-   * pattern is not one-pass, exceeds the capture group limit, or exceeds the transition-table
-   * memory budget.
-   */
-  static OnePass build(Prog prog) {
-    if (prog.start() == 0) {
-      return null;
-    }
-    if (prog.numCaptures() > MAX_CAPTURE_GROUPS) {
-      return null;
-    }
-    // Case-folding CHAR_RANGE instructions are supported via case-fold boundary expansion.
-
-    int[] boundaries = buildBoundaries(prog);
-    int numClasses = boundaries.length;
-
-    int maxStates = maxOnePassStates(prog);
-    if (maxStates > MAX_STATES || exceedsActionBudget(maxStates, numClasses)) {
-      return null;
+    private constructor(
+        flatActions: LongArray,
+        matchAction: LongArray,
+        boundaries: IntArray,
+        anchorEnd: Boolean,
+        dollarAnchorEnd: Boolean,
+        dollarAnchorUnixLines: Boolean,
+        hasGraphemeSemantics: Boolean
+    ) {
+        this.flatActions = flatActions
+        this.matchAction = matchAction
+        this.boundaries = boundaries
+        this.asciiClassMap = buildAsciiClassMap(boundaries)
+        this.anchorEnd = anchorEnd
+        this.dollarAnchorEnd = dollarAnchorEnd
+        this.dollarAnchorUnixLines = dollarAnchorUnixLines
+        this.hasGraphemeSemantics = hasGraphemeSemantics
     }
 
-    // State table. States are identified by instruction IDs.
-    // nodeMap: instruction ID -> state index (-1 if unallocated).
-    int[] nodeMap = new int[prog.size()];
-    Arrays.fill(nodeMap, -1);
-    BuildTables tables = new BuildTables(numClasses, maxStates);
+    private class BuildTables(numClasses: Int, maxStates: Int) {
+        private val numClasses: Int
+        private val maxStates: Int
+        private var actions = LongArray(0)
+        private var matchActions = LongArray(0)
+        private var allocatedStates = 0
+        private var stateCount = 0
 
-    // BFS worklist of instruction IDs.
-    int[] worklist = new int[maxStates];
-    int workHead = 0;
-    int workTail = 0;
-
-    int startInst = prog.start();
-    nodeMap[startInst] = tables.addState();
-    worklist[workTail++] = startInst;
-
-    // Scratch buffers for BFS and epsilon closure traversal.
-    int[] visitedEpoch = new int[prog.size()];
-    int currentEpoch = 0;
-
-    // Stack entries: triplets of (instId, capMask, emptyFlags).
-    int[] stack = new int[prog.size() * 3];
-
-    int[] nextStates = new int[numClasses];
-    int[] capMasks = new int[numClasses];
-    int[] emptyFlagsList = new int[numClasses];
-
-    while (workHead < workTail) {
-      int instId = worklist[workHead++];
-      int stateIndex = nodeMap[instId];
-
-      currentEpoch++;
-      int stackTop = 0;
-      stack[stackTop++] = instId;
-      stack[stackTop++] = 0; // capMask
-      stack[stackTop++] = 0; // emptyFlags
-
-      Arrays.fill(nextStates, -1);
-      boolean matched = false;
-
-      while (stackTop > 0) {
-        int emptyFlags = stack[--stackTop];
-        int capMask = stack[--stackTop];
-        int id = stack[--stackTop];
-
-        if (id == 0 || id >= prog.size()) {
-          continue;
+        init {
+            this.numClasses = numClasses
+            this.maxStates = maxStates
         }
-        if (visitedEpoch[id] == currentEpoch) {
-          // Same instruction reachable via two epsilon paths -> not one-pass.
-          return null;
+
+        fun stateCount(): Int {
+            return stateCount
         }
-        visitedEpoch[id] = currentEpoch;
 
-        Inst ip = prog.inst(id);
-        switch (ip.op) {
-          case FAIL -> {}
-          case ALT, ALT_MATCH -> {
-            if (stackTop + 6 > stack.length) {
-              stack = Arrays.copyOf(stack, stack.length * 2);
-            }
-            stack[stackTop++] = ip.out;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = emptyFlags;
-            stack[stackTop++] = ip.out1;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = emptyFlags;
-          }
-          case NOP, LOOP_ENTER -> {
-            if (stackTop + 3 > stack.length) {
-              stack = Arrays.copyOf(stack, stack.length * 2);
-            }
-            stack[stackTop++] = ip.out;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = emptyFlags;
-          }
-          case PROGRESS_CHECK -> {
-            if (stackTop + 6 > stack.length) {
-              stack = Arrays.copyOf(stack, stack.length * 2);
-            }
-            stack[stackTop++] = ip.out;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = emptyFlags;
-            stack[stackTop++] = ip.out1;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = emptyFlags;
-          }
-          case CAPTURE -> {
-            if (stackTop + 3 > stack.length) {
-              stack = Arrays.copyOf(stack, stack.length * 2);
-            }
-            int reg = ip.arg;
-            int newCapMask = (reg < MAX_CAP_REGS) ? (capMask | (1 << reg)) : capMask;
-            stack[stackTop++] = ip.out;
-            stack[stackTop++] = newCapMask;
-            stack[stackTop++] = emptyFlags;
-          }
-          case EMPTY_WIDTH -> {
-            if (stackTop + 3 > stack.length) {
-              stack = Arrays.copyOf(stack, stack.length * 2);
-            }
-            int newEmpty = emptyFlags | ip.arg;
-            stack[stackTop++] = ip.out;
-            stack[stackTop++] = capMask;
-            stack[stackTop++] = newEmpty;
-          }
-          case CHAR_RANGE -> {
-            // For each equivalence class this CHAR_RANGE covers, set transition.
-            for (int cls = 0; cls < numClasses; cls++) {
-              int classLo = boundaries[cls];
-              if (!ip.matchesChar(classLo)) {
-                continue;
-              }
+        fun addState(): Int {
+            ensureStateCapacity(stateCount + 1)
+            val state = stateCount++
+            val stateOffset = state * numClasses
+            Arrays.fill(actions, stateOffset, stateOffset + numClasses, NO_ACTION)
+            Arrays.fill(matchActions, stateOffset, stateOffset + numClasses, NO_ACTION)
+            return state
+        }
 
-              // Get or create state for ip.out.
-              int nextState = nodeMap[ip.out];
-              if (nextState == -1) {
-                if (tables.stateCount() >= maxStates) {
-                  return null; // too many states
+        fun action(state: Int, cls: Int): Long {
+            return actions[state * numClasses + cls]
+        }
+
+        fun setAction(state: Int, cls: Int, action: Long) {
+            actions[state * numClasses + cls] = action
+        }
+
+        fun matchAction(state: Int): Long {
+            return matchActions[state * numClasses]
+        }
+
+        fun setMatchAction(state: Int, action: Long) {
+            matchActions[state * numClasses] = action
+        }
+
+        fun actions(): LongArray {
+            return actions
+        }
+
+        fun matchActions(): LongArray {
+            return Arrays.copyOf(matchActions, stateCount * numClasses)
+        }
+
+        fun ensureStateCapacity(minStates: Int) {
+            if (allocatedStates >= minStates) {
+                return
+            }
+            var newStates = Math.max(minStates, Math.max(4, allocatedStates * 2))
+            newStates = Math.min(newStates, maxStates)
+            actions = Arrays.copyOf(actions, Math.toIntExact(newStates.toLong() * numClasses))
+            matchActions = Arrays.copyOf(matchActions, Math.toIntExact(newStates.toLong() * numClasses))
+            allocatedStates = newStates
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Search
+    // -------------------------------------------------------------------------
+    /**
+     * Searches for a match in the given text starting at position 0. Convenience overload that
+     * delegates to [.search].
+     * 
+     * @param text the input text
+     * @param endMatch if true, the match must cover the entire text
+     * @param nsubmatch number of submatch groups to track (including group 0)
+     * @return submatch positions as `int[2*nsubmatch]`, or null if no match
+     */
+    fun search(text: String, endMatch: Boolean, nsubmatch: Int): IntArray? {
+        return search(StringInputScanner(text), 0, text.length(), endMatch, nsubmatch)
+    }
+
+    fun search(text: InputScanner, endMatch: Boolean, nsubmatch: Int): IntArray? {
+        return search(text, 0, text.length(), endMatch, nsubmatch)
+    }
+
+    fun search(text: InputScanner, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?): IntArray? {
+        return search(text, 0, text.length(), endMatch, nsubmatch, reuseGroups)
+    }
+
+    fun search(text: String, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?): IntArray? {
+        return search(StringInputScanner(text), 0, text.length(), endMatch, nsubmatch, reuseGroups)
+    }
+
+    fun search(text: String?, startPos: Int, endPos: Int, endMatch: Boolean, nsubmatch: Int): IntArray? {
+        return search(StringInputScanner(text), startPos, endPos, endMatch, nsubmatch)
+    }
+
+    fun search(
+        text: String?, startPos: Int, endPos: Int, endMatch: Boolean, nsubmatch: Int, reuseGroups: IntArray?
+    ): IntArray? {
+        return search(StringInputScanner(text), startPos, endPos, endMatch, nsubmatch, reuseGroups)
+    }
+
+    @JvmOverloads
+    fun search(
+        text: InputScanner,
+        startPos: Int,
+        endPos: Int,
+        endMatch: Boolean,
+        nsubmatch: Int,
+        reuseGroups: IntArray? = null,
+        scratchCap: IntArray? = null
+    ): IntArray? {
+        val graphemeContext: GraphemeSupport.Context? =
+            GraphemeSupport.Context.Companion.create(text, hasGraphemeSemantics)
+        return search(
+            text, startPos, endPos, endMatch, nsubmatch, reuseGroups, scratchCap, graphemeContext
+        )
+    }
+
+    private fun search(
+        text: InputScanner,
+        startPos: Int,
+        endPos: Int,
+        endMatch: Boolean,
+        nsubmatch: Int,
+        reuseGroups: IntArray?,
+        scratchCap: IntArray?,
+        graphemeContext: GraphemeSupport.Context?
+    ): IntArray? {
+        val ncap = 2 * Math.max(nsubmatch, 1)
+        val cap = if (scratchCap != null && scratchCap.length >= ncap) scratchCap else IntArray(ncap)
+        Arrays.fill(cap, 0, ncap, -1)
+        cap[0] = startPos
+
+        var stateOffset = 0
+        var matched = false
+        val bestCap = if (reuseGroups != null && reuseGroups.length >= ncap) reuseGroups else IntArray(ncap)
+
+        val fa = flatActions
+        val ma = matchAction
+        val ascMap = asciiClassMap
+        val stringText =
+            if (text is StringInputScanner) text.text() else null
+
+        var pos = startPos
+        // Main loop: process characters from startPos to endPos-1.  The match check at endPos is
+        // handled after the loop to avoid a redundant pos >= endPos comparison on every iteration.
+        while (pos < endPos) {
+            // Check match condition at current state BEFORE consuming next character.
+            var shouldCopy = false
+            if (!endMatch && !(anchorEnd && !dollarAnchorEnd)) {
+                val matchAct = ma[stateOffset]
+                if (matchAct != NO_ACTION) {
+                    val reqEmpty = (matchAct and EMPTY_MASK).toInt()
+                    if (reqEmpty == 0
+                        || ((reqEmpty and emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
+                                == 0)
+                    ) {
+                        val capMask = ((matchAct ushr CAP_SHIFT) and CAP_REG_MASK).toInt()
+                        if (capMask != 0) {
+                            applyCaptures(capMask, pos, cap)
+                        }
+                        if (ncap > 1) {
+                            cap[1] = pos
+                        }
+                        matched = true
+                        shouldCopy = true
+                    }
                 }
-                nextState = tables.addState();
-                nodeMap[ip.out] = nextState;
-                worklist[workTail++] = ip.out;
-              }
-
-              if (nextStates[cls] != -1
-                  && (nextStates[cls] != nextState
-                      || capMasks[cls] != capMask
-                      || emptyFlagsList[cls] != emptyFlags)) {
-                // Two different transitions for the same equivalence class -> not one-pass.
-                return null;
-              }
-              nextStates[cls] = nextState;
-              capMasks[cls] = capMask;
-              emptyFlagsList[cls] = emptyFlags;
             }
-          }
-          case CHAR_CLASS -> {
-            // Ranges are sorted and disjoint, and buildBoundaries includes every range start
-            // and end + 1. Walk both ordered lists once: no equivalence class straddles a range
-            // endpoint, so its lower bound determines membership.
-            int cls = 0;
-            for (int ri = 0; ri < ip.ranges.length; ri += 2) {
-              int rLo = ip.ranges[ri];
-              int rHi = ip.ranges[ri + 1];
-              while (cls < numClasses && boundaries[cls] < rLo) {
-                cls++;
-              }
-              for (; cls < numClasses && boundaries[cls] <= rHi; cls++) {
-                int nextState = nodeMap[ip.out];
-                if (nextState == -1) {
-                  if (tables.stateCount() >= maxStates) {
-                    return null;
-                  }
-                  nextState = tables.addState();
-                  nodeMap[ip.out] = nextState;
-                  worklist[workTail++] = ip.out;
+
+            // Read next character — ASCII fast path avoids codePointAt/charCount overhead.
+            val nextPos: Int
+            val cls: Int
+            if (stringText != null) {
+                val ch: Char = stringText.charAt(pos)
+                if (ch.code < 128) {
+                    nextPos = pos + 1
+                    cls = ascMap[ch.code]
+                } else if (Character.isHighSurrogate(ch)
+                    && pos + 1 < endPos && Character.isLowSurrogate(stringText.charAt(pos + 1))
+                ) {
+                    nextPos = pos + 2
+                    cls = classOf(Character.toCodePoint(ch, stringText.charAt(pos + 1)))
+                } else {
+                    nextPos = pos + 1
+                    cls = classOf(ch.code)
+                }
+            } else {
+                val c = text.asciiAt(pos)
+                if (c >= 0) {
+                    nextPos = pos + 1
+                    cls = ascMap[c]
+                } else {
+                    val decoded = text.decodeForward(pos)
+                    val cp: Int = InputScanner.Companion.codePoint(decoded)
+                    nextPos = InputScanner.Companion.position(decoded)
+                    cls = classOf(cp)
+                }
+            }
+
+            // Equivalence classes and state indices are always valid for a well-formed OnePass
+            // automaton, so no bounds check is needed on the flat actions array.
+            val action = fa[stateOffset + cls]
+            if (action == NO_ACTION) {
+                if (shouldCopy) {
+                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                }
+                break
+            }
+
+            if (shouldCopy) {
+                var skipCopy = false
+                if ((action and MATCH_WINS_MASK) == 0L) {
+                    val nextStateOffset = (action ushr INDEX_SHIFT).toInt()
+                    val nextMatchAct = ma[nextStateOffset]
+                    if (nextMatchAct != NO_ACTION && (nextMatchAct and EMPTY_MASK) == 0L) {
+                        skipCopy = true
+                    }
+                }
+                if (!skipCopy) {
+                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                }
+            }
+
+            // Combined condition check: bits below INDEX_SHIFT encode empty-width flags and capture
+            // registers. When all zero, skip both the empty-flags gate and capture application.
+            val conditions = action and CONDITION_MASK
+            if (conditions != 0L) {
+                val reqEmpty = (conditions and EMPTY_MASK).toInt()
+                if (reqEmpty != 0) {
+                    val curEmpty: Int = emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext)
+                    if ((reqEmpty and curEmpty.inv()) != 0) {
+                        break
+                    }
+                }
+                val capMask = ((conditions ushr CAP_SHIFT) and CAP_REG_MASK).toInt()
+                if (capMask != 0) {
+                    applyCaptures(capMask, pos, cap)
+                }
+            }
+            stateOffset = (action ushr INDEX_SHIFT).toInt()
+            pos = nextPos
+        }
+
+        // Final match check at endPos (the position after the last character).
+        if (pos == endPos) {
+            val matchAct = ma[stateOffset]
+            if (matchAct != NO_ACTION) {
+                val reqEmpty = (matchAct and EMPTY_MASK).toInt()
+                if (reqEmpty == 0
+                    || ((reqEmpty and emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext).inv())
+                            == 0)
+                ) {
+                    val capMask = ((matchAct ushr CAP_SHIFT) and CAP_REG_MASK).toInt()
+                    if (capMask != 0) {
+                        applyCaptures(capMask, pos, cap)
+                    }
+                    if (ncap > 1) {
+                        cap[1] = pos
+                    }
+                    matched = true
+                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                }
+            }
+        }
+
+        if (!matched) {
+            return null
+        }
+        if (endMatch && bestCap[1] != endPos) {
+            return null
+        }
+        if (anchorEnd && bestCap[1] != endPos) {
+            // $ (dollarAnchorEnd) allows the match to end before a trailing line terminator.
+            if (!dollarAnchorEnd
+                || !Nfa.Companion.isAtTrailingLineTerminator(text, bestCap[1], dollarAnchorUnixLines)
+            ) {
+                return null
+            }
+        }
+        return bestCap
+    }
+
+    /**
+     * Unanchored search: scans from `startPos` through the text, trying an anchored OnePass
+     * match at each position. Returns the first (leftmost) match found, with longest-match (greedy)
+     * semantics at that position.
+     * 
+     * @param text the full input text
+     * @param startPos first position to try
+     * @param searchLimit upper bound on start positions to try
+     * @param nsubmatch number of submatch groups to track (including group 0)
+     * @return submatch positions relative to `text`, or null if no match
+     */
+    fun searchUnanchored(text: String?, startPos: Int, searchLimit: Int, nsubmatch: Int): IntArray? {
+        return searchUnanchored(StringInputScanner(text), startPos, searchLimit, nsubmatch)
+    }
+
+    fun searchUnanchored(text: InputScanner, startPos: Int, searchLimit: Int, nsubmatch: Int): IntArray? {
+        val textLen = text.length()
+        val limit = Math.min(searchLimit, textLen) + 1
+        val graphemeContext: GraphemeSupport.Context? =
+            GraphemeSupport.Context.Companion.create(text, hasGraphemeSemantics)
+        var start = startPos
+        while (start < limit) {
+            val result = search(text, start, textLen, false, nsubmatch, null, null, graphemeContext)
+            if (result != null) {
+                return result
+            }
+            // Advance to next code point boundary.
+            if (start < textLen) {
+                start = InputScanner.Companion.position(text.decodeForward(start)) - 1
+            }
+            start++
+        }
+        return null
+    }
+
+    /** Maps a code point to its equivalence class index.  */
+    private fun classOf(cp: Int): Int {
+        if (cp < 128 && cp >= 0) {
+            return asciiClassMap[cp]
+        }
+        val idx = Arrays.binarySearch(boundaries, cp)
+        return if (idx >= 0) idx else (-idx - 1) - 1
+    }
+
+    /** Prevents instantiation via no-arg constructor.  */
+    private constructor() {
+        throw AssertionError("non-instantiable")
+    }
+
+    companion object {
+        /**
+         * Maximum number of capture groups the one-pass engine supports (including group 0). This limit
+         * exists because capture group tracking is encoded in a bitmask within each action integer.
+         * Matches RE2's `kMaxCap`.
+         */
+        const val MAX_CAPTURE_GROUPS: Int = 16
+
+        private val MAX_CAP_REGS: Int = 2 * MAX_CAPTURE_GROUPS
+
+        // OnePass is an optional accelerator. Keep its dense action tables within a fixed raw payload
+        // budget and fall back to the other engines when a pattern would exceed it.
+        private const val MAX_STATES = 65000
+        private val MAX_ACTION_BYTES = 16L * 1024L * 1024L
+        val MAX_ACTION_CELLS: Long = MAX_ACTION_BYTES / java.lang.Long.BYTES
+
+        // -------------------------------------------------------------------------
+        // Action encoding: each action is packed into a single long.
+        //
+        //   bits  0-13: empty-width flags required for this transition
+        //   bits 14-45: capture mask (which capture registers to set)
+        //   bit     46: match priority
+        //   bits 47-63: next state index
+        //
+        // Special value: NO_ACTION (-1L) means no valid transition.
+        // -------------------------------------------------------------------------
+        private const val EMPTY_BITS = 14
+        private val CAP_SHIFT: Int = EMPTY_BITS
+        private val INDEX_SHIFT: Int = CAP_SHIFT + MAX_CAP_REGS + 1
+        private val EMPTY_MASK = (1L shl EMPTY_BITS) - 1
+        private val CAP_REG_MASK = (1L shl MAX_CAP_REGS) - 1
+        private val NO_ACTION = -1L
+
+        /**
+         * Mask covering all "condition" bits in an action (empty-width flags + capture registers). When
+         * `(action & CONDITION_MASK) == 0`, both the empty-flags check and the capture application
+         * can be skipped entirely — a single branch instead of two.
+         */
+        private val CONDITION_MASK = (1L shl (CAP_SHIFT + MAX_CAP_REGS)) - 1
+
+        private val MATCH_WINS_MASK = 1L shl (CAP_SHIFT + MAX_CAP_REGS)
+
+        private fun encodeAction(nextState: Int, capMask: Int, emptyFlags: Int, matchWins: Boolean = false): Long {
+            var action =
+                ((nextState.toLong() shl INDEX_SHIFT)
+                        or ((capMask.toLong() and CAP_REG_MASK) shl CAP_SHIFT)
+                        or (emptyFlags.toLong() and EMPTY_MASK))
+            if (matchWins) {
+                action = action or MATCH_WINS_MASK
+            }
+            return action
+        }
+
+        // -------------------------------------------------------------------------
+        // Building the one-pass automaton
+        // -------------------------------------------------------------------------
+        /**
+         * Attempts to build a one-pass automaton from the compiled program. Returns `null` if the
+         * pattern is not one-pass, exceeds the capture group limit, or exceeds the transition-table
+         * memory budget.
+         */
+        fun build(prog: Prog): OnePass? {
+            if (prog.start() == 0) {
+                return null
+            }
+            if (prog.numCaptures() > MAX_CAPTURE_GROUPS) {
+                return null
+            }
+
+            // Case-folding CHAR_RANGE instructions are supported via case-fold boundary expansion.
+            val boundaries: IntArray = buildBoundaries(prog)
+            val numClasses: Int = boundaries.length
+
+            val maxStates: Int = maxOnePassStates(prog)
+            if (maxStates > MAX_STATES || exceedsActionBudget(maxStates, numClasses)) {
+                return null
+            }
+
+            // State table. States are identified by instruction IDs.
+            // nodeMap: instruction ID -> state index (-1 if unallocated).
+            val nodeMap = IntArray(prog.size())
+            Arrays.fill(nodeMap, -1)
+            val tables = BuildTables(numClasses, maxStates)
+
+            // BFS worklist of instruction IDs.
+            val worklist = IntArray(maxStates)
+            var workHead = 0
+            var workTail = 0
+
+            val startInst = prog.start()
+            nodeMap[startInst] = tables.addState()
+            worklist[workTail++] = startInst
+
+            // Scratch buffers for BFS and epsilon closure traversal.
+            val visitedEpoch = IntArray(prog.size())
+            var currentEpoch = 0
+
+            // Stack entries: triplets of (instId, capMask, emptyFlags).
+            var stack = IntArray(prog.size() * 3)
+
+            val nextStates = IntArray(numClasses)
+            val capMasks = IntArray(numClasses)
+            val emptyFlagsList = IntArray(numClasses)
+
+            while (workHead < workTail) {
+                val instId = worklist[workHead++]
+                val stateIndex = nodeMap[instId]
+
+                currentEpoch++
+                var stackTop = 0
+                stack[stackTop++] = instId
+                stack[stackTop++] = 0 // capMask
+                stack[stackTop++] = 0 // emptyFlags
+
+                Arrays.fill(nextStates, -1)
+                var matched = false
+
+                while (stackTop > 0) {
+                    val emptyFlags = stack[--stackTop]
+                    val capMask = stack[--stackTop]
+                    val id = stack[--stackTop]
+
+                    if (id == 0 || id >= prog.size()) {
+                        continue
+                    }
+                    if (visitedEpoch[id] == currentEpoch) {
+                        // Same instruction reachable via two epsilon paths -> not one-pass.
+                        return null
+                    }
+                    visitedEpoch[id] = currentEpoch
+
+                    val ip = prog.inst(id)
+                    when (ip.op) {
+                        InstOp.FAIL -> {}
+                        InstOp.ALT, InstOp.ALT_MATCH -> {
+                            if (stackTop + 6 > stack.length) {
+                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            }
+                            stack[stackTop++] = ip.out
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = emptyFlags
+                            stack[stackTop++] = ip.out1
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = emptyFlags
+                        }
+
+                        InstOp.NOP, InstOp.LOOP_ENTER -> {
+                            if (stackTop + 3 > stack.length) {
+                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            }
+                            stack[stackTop++] = ip.out
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = emptyFlags
+                        }
+
+                        InstOp.PROGRESS_CHECK -> {
+                            if (stackTop + 6 > stack.length) {
+                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            }
+                            stack[stackTop++] = ip.out
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = emptyFlags
+                            stack[stackTop++] = ip.out1
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = emptyFlags
+                        }
+
+                        InstOp.CAPTURE -> {
+                            if (stackTop + 3 > stack.length) {
+                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            }
+                            val reg = ip.arg
+                            val newCapMask = if (reg < MAX_CAP_REGS) (capMask or (1 shl reg)) else capMask
+                            stack[stackTop++] = ip.out
+                            stack[stackTop++] = newCapMask
+                            stack[stackTop++] = emptyFlags
+                        }
+
+                        InstOp.EMPTY_WIDTH -> {
+                            if (stackTop + 3 > stack.length) {
+                                stack = Arrays.copyOf(stack, stack.length * 2)
+                            }
+                            val newEmpty = emptyFlags or ip.arg
+                            stack[stackTop++] = ip.out
+                            stack[stackTop++] = capMask
+                            stack[stackTop++] = newEmpty
+                        }
+
+                        InstOp.CHAR_RANGE -> {
+                            // For each equivalence class this CHAR_RANGE covers, set transition.
+                            for (cls in 0..<numClasses) {
+                                val classLo = boundaries[cls]
+                                if (!ip.matchesChar(classLo)) {
+                                    continue
+                                }
+
+                                // Get or create state for ip.out.
+                                var nextState = nodeMap[ip.out]
+                                if (nextState == -1) {
+                                    if (tables.stateCount() >= maxStates) {
+                                        return null // too many states
+                                    }
+                                    nextState = tables.addState()
+                                    nodeMap[ip.out] = nextState
+                                    worklist[workTail++] = ip.out
+                                }
+
+                                if (nextStates[cls] != -1
+                                    && (nextStates[cls] != nextState || capMasks[cls] != capMask || emptyFlagsList[cls] != emptyFlags)
+                                ) {
+                                    // Two different transitions for the same equivalence class -> not one-pass.
+                                    return null
+                                }
+                                nextStates[cls] = nextState
+                                capMasks[cls] = capMask
+                                emptyFlagsList[cls] = emptyFlags
+                            }
+                        }
+
+                        InstOp.CHAR_CLASS -> {
+                            // Ranges are sorted and disjoint, and buildBoundaries includes every range start
+                            // and end + 1. Walk both ordered lists once: no equivalence class straddles a range
+                            // endpoint, so its lower bound determines membership.
+                            var cls = 0
+                            var ri = 0
+                            while (ri < ip.ranges.length) {
+                                val rLo = ip.ranges[ri]
+                                val rHi = ip.ranges[ri + 1]
+                                while (cls < numClasses && boundaries[cls] < rLo) {
+                                    cls++
+                                }
+                                while (cls < numClasses && boundaries[cls] <= rHi) {
+                                    var nextState = nodeMap[ip.out]
+                                    if (nextState == -1) {
+                                        if (tables.stateCount() >= maxStates) {
+                                            return null
+                                        }
+                                        nextState = tables.addState()
+                                        nodeMap[ip.out] = nextState
+                                        worklist[workTail++] = ip.out
+                                    }
+
+                                    if (nextStates[cls] != -1
+                                        && (nextStates[cls] != nextState || capMasks[cls] != capMask || emptyFlagsList[cls] != emptyFlags)
+                                    ) {
+                                        return null
+                                    }
+                                    nextStates[cls] = nextState
+                                    capMasks[cls] = capMask
+                                    emptyFlagsList[cls] = emptyFlags
+                                    cls++
+                                }
+                                ri += 2
+                            }
+                        }
+
+                        InstOp.MATCH -> {
+                            val action = encodeAction(0, capMask, emptyFlags)
+                            val existing = tables.matchAction(stateIndex)
+                            if (existing != NO_ACTION && existing != action) {
+                                // Two match paths with different conditions -> not one-pass.
+                                return null
+                            }
+                            tables.setMatchAction(stateIndex, action)
+                            matched = true
+                        }
+
+                        else -> {}
+                    }
                 }
 
-                if (nextStates[cls] != -1
-                    && (nextStates[cls] != nextState
-                        || capMasks[cls] != capMask
-                        || emptyFlagsList[cls] != emptyFlags)) {
-                  return null;
+                for (cls in 0..<numClasses) {
+                    if (nextStates[cls] != -1) {
+                        val action: Long =
+                            encodeAction(
+                                nextStates[cls] * numClasses, capMasks[cls], emptyFlagsList[cls], matched
+                            )
+                        val existing = tables.action(stateIndex, cls)
+                        if (existing != NO_ACTION && existing != action) {
+                            return null
+                        }
+                        tables.setAction(stateIndex, cls, action)
+                    }
                 }
-                nextStates[cls] = nextState;
-                capMasks[cls] = capMask;
-                emptyFlagsList[cls] = emptyFlags;
-              }
             }
-          }
-          case MATCH -> {
-            long action = encodeAction(0, capMask, emptyFlags);
-            long existing = tables.matchAction(stateIndex);
-            if (existing != NO_ACTION && existing != action) {
-              // Two match paths with different conditions -> not one-pass.
-              return null;
+
+            return OnePass(
+                tables.actions(),
+                tables.matchActions(),
+                boundaries,
+                prog.anchorEnd(),
+                prog.dollarAnchorEnd(),
+                prog.dollarAnchorUnixLines(),
+                prog.hasGraphemeSemantics()
+            )
+        }
+
+        private fun exceedsActionBudget(maxStates: Int, numClasses: Int): Boolean {
+            // Both dense tables count toward the memory budget. Every offset must also fit in the
+            // action word after the assertion flags, capture mask, and priority bit.
+            val maxCells = Math.min(MAX_ACTION_CELLS / 2, 1L shl (java.lang.Long.SIZE - INDEX_SHIFT))
+            return maxStates > maxCells / numClasses
+        }
+
+        private fun maxOnePassStates(prog: Prog): Int {
+            var maxStates = 1 // start state
+            for (i in 0..<prog.size()) {
+                val inst = prog.inst(i)
+                if (inst.op == InstOp.CHAR_RANGE || inst.op == InstOp.CHAR_CLASS) {
+                    maxStates++
+                }
             }
-            tables.setMatchAction(stateIndex, action);
-            matched = true;
-          }
-          default -> {}
+            return maxStates
         }
-      }
 
-      for (int cls = 0; cls < numClasses; cls++) {
-        if (nextStates[cls] != -1) {
-          long action =
-              encodeAction(
-                  nextStates[cls] * numClasses, capMasks[cls], emptyFlagsList[cls], matched);
-          long existing = tables.action(stateIndex, cls);
-          if (existing != NO_ACTION && existing != action) {
-            return null;
-          }
-          tables.setAction(stateIndex, cls, action);
-        }
-      }
-    }
-
-    return new OnePass(
-        tables.actions(),
-        tables.matchActions(),
-        boundaries,
-        prog.anchorEnd(),
-        prog.dollarAnchorEnd(),
-        prog.dollarAnchorUnixLines(),
-        prog.hasGraphemeSemantics());
-  }
-
-  private static boolean exceedsActionBudget(int maxStates, int numClasses) {
-    // Both dense tables count toward the memory budget. Every offset must also fit in the
-    // action word after the assertion flags, capture mask, and priority bit.
-    long maxCells = Math.min(MAX_ACTION_CELLS / 2, 1L << (Long.SIZE - INDEX_SHIFT));
-    return maxStates > maxCells / numClasses;
-  }
-
-  private static int maxOnePassStates(Prog prog) {
-    int maxStates = 1; // start state
-    for (int i = 0; i < prog.size(); i++) {
-      Inst inst = prog.inst(i);
-      if (inst.op == InstOp.CHAR_RANGE || inst.op == InstOp.CHAR_CLASS) {
-        maxStates++;
-      }
-    }
-    return maxStates;
-  }
-
-  private static final class BuildTables {
-    private final int numClasses;
-    private final int maxStates;
-    private long[] actions = new long[0];
-    private long[] matchActions = new long[0];
-    private int allocatedStates;
-    private int stateCount;
-
-    BuildTables(int numClasses, int maxStates) {
-      this.numClasses = numClasses;
-      this.maxStates = maxStates;
-    }
-
-    int stateCount() {
-      return stateCount;
-    }
-
-    int addState() {
-      ensureStateCapacity(stateCount + 1);
-      int state = stateCount++;
-      int stateOffset = state * numClasses;
-      Arrays.fill(actions, stateOffset, stateOffset + numClasses, NO_ACTION);
-      Arrays.fill(matchActions, stateOffset, stateOffset + numClasses, NO_ACTION);
-      return state;
-    }
-
-    long action(int state, int cls) {
-      return actions[state * numClasses + cls];
-    }
-
-    void setAction(int state, int cls, long action) {
-      actions[state * numClasses + cls] = action;
-    }
-
-    long matchAction(int state) {
-      return matchActions[state * numClasses];
-    }
-
-    void setMatchAction(int state, long action) {
-      matchActions[state * numClasses] = action;
-    }
-
-    long[] actions() {
-      return actions;
-    }
-
-    long[] matchActions() {
-      return Arrays.copyOf(matchActions, stateCount * numClasses);
-    }
-
-    private void ensureStateCapacity(int minStates) {
-      if (allocatedStates >= minStates) {
-        return;
-      }
-      int newStates = Math.max(minStates, Math.max(4, allocatedStates * 2));
-      newStates = Math.min(newStates, maxStates);
-      actions = Arrays.copyOf(actions, Math.toIntExact((long) newStates * numClasses));
-      matchActions = Arrays.copyOf(matchActions, Math.toIntExact((long) newStates * numClasses));
-      allocatedStates = newStates;
-    }
-  }
-
-  /** Builds sorted code point boundaries from all CHAR_RANGE and CHAR_CLASS instructions. */
-  private static int[] buildBoundaries(Prog prog) {
-    IntArrayList bounds = new IntArrayList();
-    bounds.add(0);
-    bounds.add(Utils.MAX_RUNE + 1);
-    for (int i = 0; i < prog.size(); i++) {
-      Inst inst = prog.inst(i);
-      if (inst.op == InstOp.CHAR_RANGE) {
-        bounds.add(inst.lo);
-        if (inst.hi < Utils.MAX_RUNE) {
-          bounds.add(inst.hi + 1);
-        }
-        if (inst.foldCase) {
-          for (int r = inst.lo; r <= inst.hi; r++) {
-            int folded = Inst.simpleFold(r);
-            while (folded != r) {
-              bounds.add(folded);
-              if (folded < Utils.MAX_RUNE) {
-                bounds.add(folded + 1);
-              }
-              folded = Inst.simpleFold(folded);
+        /** Builds sorted code point boundaries from all CHAR_RANGE and CHAR_CLASS instructions.  */
+        private fun buildBoundaries(prog: Prog): IntArray {
+            val bounds = IntArrayList()
+            bounds.add(0)
+            bounds.add(Utils.MAX_RUNE + 1)
+            for (i in 0..<prog.size()) {
+                val inst = prog.inst(i)
+                if (inst.op == InstOp.CHAR_RANGE) {
+                    bounds.add(inst.lo)
+                    if (inst.hi < Utils.MAX_RUNE) {
+                        bounds.add(inst.hi + 1)
+                    }
+                    if (inst.foldCase) {
+                        for (r in inst.lo..inst.hi) {
+                            var folded: Int = Inst.Companion.simpleFold(r)
+                            while (folded != r) {
+                                bounds.add(folded)
+                                if (folded < Utils.MAX_RUNE) {
+                                    bounds.add(folded + 1)
+                                }
+                                folded = Inst.Companion.simpleFold(folded)
+                            }
+                        }
+                    }
+                } else if (inst.op == InstOp.CHAR_CLASS) {
+                    var j = 0
+                    while (j < inst.ranges.length) {
+                        bounds.add(inst.ranges[j])
+                        if (inst.ranges[j + 1] < Utils.MAX_RUNE) {
+                            bounds.add(inst.ranges[j + 1] + 1)
+                        }
+                        j += 2
+                    }
+                }
             }
-          }
+            return bounds.toSortedUniqueArray()
         }
-      } else if (inst.op == InstOp.CHAR_CLASS) {
-        for (int j = 0; j < inst.ranges.length; j += 2) {
-          bounds.add(inst.ranges[j]);
-          if (inst.ranges[j + 1] < Utils.MAX_RUNE) {
-            bounds.add(inst.ranges[j + 1] + 1);
-          }
-        }
-      }
-    }
-    return bounds.toSortedUniqueArray();
-  }
 
-  // -------------------------------------------------------------------------
-  // Search
-  // -------------------------------------------------------------------------
-
-  /**
-   * Searches for a match in the given text starting at position 0. Convenience overload that
-   * delegates to {@link #search(String, int, int, boolean, int)}.
-   *
-   * @param text the input text
-   * @param endMatch if true, the match must cover the entire text
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match
-   */
-  int[] search(String text, boolean endMatch, int nsubmatch) {
-    return search(new StringInputScanner(text), 0, text.length(), endMatch, nsubmatch);
-  }
-
-  int[] search(InputScanner text, boolean endMatch, int nsubmatch) {
-    return search(text, 0, text.length(), endMatch, nsubmatch);
-  }
-
-  int[] search(InputScanner text, boolean endMatch, int nsubmatch, int[] reuseGroups) {
-    return search(text, 0, text.length(), endMatch, nsubmatch, reuseGroups);
-  }
-
-  int[] search(String text, boolean endMatch, int nsubmatch, int[] reuseGroups) {
-    return search(new StringInputScanner(text), 0, text.length(), endMatch, nsubmatch, reuseGroups);
-  }
-
-  int[] search(String text, int startPos, int endPos, boolean endMatch, int nsubmatch) {
-    return search(new StringInputScanner(text), startPos, endPos, endMatch, nsubmatch);
-  }
-
-  int[] search(InputScanner text, int startPos, int endPos, boolean endMatch, int nsubmatch) {
-    return search(text, startPos, endPos, endMatch, nsubmatch, null);
-  }
-
-  int[] search(
-      String text, int startPos, int endPos, boolean endMatch, int nsubmatch, int[] reuseGroups) {
-    return search(new StringInputScanner(text), startPos, endPos, endMatch, nsubmatch, reuseGroups);
-  }
-
-  int[] search(
-      InputScanner text,
-      int startPos,
-      int endPos,
-      boolean endMatch,
-      int nsubmatch,
-      int[] reuseGroups) {
-    return search(text, startPos, endPos, endMatch, nsubmatch, reuseGroups, null);
-  }
-
-  int[] search(
-      InputScanner text,
-      int startPos,
-      int endPos,
-      boolean endMatch,
-      int nsubmatch,
-      int[] reuseGroups,
-      int[] scratchCap) {
-    GraphemeSupport.Context graphemeContext =
-        GraphemeSupport.Context.create(text, hasGraphemeSemantics);
-    return search(
-        text, startPos, endPos, endMatch, nsubmatch, reuseGroups, scratchCap, graphemeContext);
-  }
-
-  private int[] search(
-      InputScanner text,
-      int startPos,
-      int endPos,
-      boolean endMatch,
-      int nsubmatch,
-      int[] reuseGroups,
-      int[] scratchCap,
-      GraphemeSupport.Context graphemeContext) {
-    int ncap = 2 * Math.max(nsubmatch, 1);
-    int[] cap = scratchCap != null && scratchCap.length >= ncap ? scratchCap : new int[ncap];
-    Arrays.fill(cap, 0, ncap, -1);
-    cap[0] = startPos;
-
-    int stateOffset = 0;
-    boolean matched = false;
-    int[] bestCap = reuseGroups != null && reuseGroups.length >= ncap ? reuseGroups : new int[ncap];
-
-    long[] fa = flatActions;
-    long[] ma = matchAction;
-    int[] ascMap = asciiClassMap;
-    String stringText =
-        text instanceof StringInputScanner stringScanner ? stringScanner.text() : null;
-
-    int pos = startPos;
-    // Main loop: process characters from startPos to endPos-1.  The match check at endPos is
-    // handled after the loop to avoid a redundant pos >= endPos comparison on every iteration.
-    while (pos < endPos) {
-      // Check match condition at current state BEFORE consuming next character.
-      boolean shouldCopy = false;
-      if (!endMatch && !(anchorEnd && !dollarAnchorEnd)) {
-        long matchAct = ma[stateOffset];
-        if (matchAct != NO_ACTION) {
-          int reqEmpty = (int) (matchAct & EMPTY_MASK);
-          if (reqEmpty == 0
-              || (reqEmpty & ~Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext))
-                  == 0) {
-            int capMask = (int) ((matchAct >>> CAP_SHIFT) & CAP_REG_MASK);
-            if (capMask != 0) {
-              applyCaptures(capMask, pos, cap);
+        /**
+         * Builds a 128-element lookup table mapping ASCII code points (0–127) to their equivalence class
+         * indices, avoiding binary search for the most common characters.
+         */
+        private fun buildAsciiClassMap(boundaries: IntArray): IntArray {
+            val map = IntArray(128)
+            for (cp in 0..127) {
+                val idx = Arrays.binarySearch(boundaries, cp)
+                map[cp] = if (idx >= 0) idx else (-idx - 1) - 1
             }
-            if (ncap > 1) {
-              cap[1] = pos;
+            return map
+        }
+
+        /** Applies capture register updates from a pre-extracted capture mask at the given position.  */
+        private fun applyCaptures(mask: Int, pos: Int, cap: IntArray) {
+            var mask = mask
+            while (mask != 0) {
+                val reg = Integer.numberOfTrailingZeros(mask)
+                if (reg >= cap.length) {
+                    break
+                }
+                cap[reg] = pos
+                mask = mask and mask - 1 // clear lowest set bit
             }
-            matched = true;
-            shouldCopy = true;
-          }
         }
-      }
-
-      // Read next character — ASCII fast path avoids codePointAt/charCount overhead.
-      int nextPos;
-      int cls;
-      if (stringText != null) {
-        char ch = stringText.charAt(pos);
-        if (ch < 128) {
-          nextPos = pos + 1;
-          cls = ascMap[ch];
-        } else if (Character.isHighSurrogate(ch)
-            && pos + 1 < endPos
-            && Character.isLowSurrogate(stringText.charAt(pos + 1))) {
-          nextPos = pos + 2;
-          cls = classOf(Character.toCodePoint(ch, stringText.charAt(pos + 1)));
-        } else {
-          nextPos = pos + 1;
-          cls = classOf(ch);
-        }
-      } else {
-        int c = text.asciiAt(pos);
-        if (c >= 0) {
-          nextPos = pos + 1;
-          cls = ascMap[c];
-        } else {
-          long decoded = text.decodeForward(pos);
-          int cp = InputScanner.codePoint(decoded);
-          nextPos = InputScanner.position(decoded);
-          cls = classOf(cp);
-        }
-      }
-
-      // Equivalence classes and state indices are always valid for a well-formed OnePass
-      // automaton, so no bounds check is needed on the flat actions array.
-      long action = fa[stateOffset + cls];
-      if (action == NO_ACTION) {
-        if (shouldCopy) {
-          System.arraycopy(cap, 0, bestCap, 0, ncap);
-        }
-        break;
-      }
-
-      if (shouldCopy) {
-        boolean skipCopy = false;
-        if ((action & MATCH_WINS_MASK) == 0) {
-          int nextStateOffset = (int) (action >>> INDEX_SHIFT);
-          long nextMatchAct = ma[nextStateOffset];
-          if (nextMatchAct != NO_ACTION && (nextMatchAct & EMPTY_MASK) == 0) {
-            skipCopy = true;
-          }
-        }
-        if (!skipCopy) {
-          System.arraycopy(cap, 0, bestCap, 0, ncap);
-        }
-      }
-
-      // Combined condition check: bits below INDEX_SHIFT encode empty-width flags and capture
-      // registers. When all zero, skip both the empty-flags gate and capture application.
-      long conditions = action & CONDITION_MASK;
-      if (conditions != 0) {
-        int reqEmpty = (int) (conditions & EMPTY_MASK);
-        if (reqEmpty != 0) {
-          int curEmpty = Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext);
-          if ((reqEmpty & ~curEmpty) != 0) {
-            break;
-          }
-        }
-        int capMask = (int) ((conditions >>> CAP_SHIFT) & CAP_REG_MASK);
-        if (capMask != 0) {
-          applyCaptures(capMask, pos, cap);
-        }
-      }
-      stateOffset = (int) (action >>> INDEX_SHIFT);
-      pos = nextPos;
     }
-
-    // Final match check at endPos (the position after the last character).
-    if (pos == endPos) {
-      long matchAct = ma[stateOffset];
-      if (matchAct != NO_ACTION) {
-        int reqEmpty = (int) (matchAct & EMPTY_MASK);
-        if (reqEmpty == 0
-            || (reqEmpty & ~Nfa.emptyFlags(text, pos, hasGraphemeSemantics, graphemeContext))
-                == 0) {
-          int capMask = (int) ((matchAct >>> CAP_SHIFT) & CAP_REG_MASK);
-          if (capMask != 0) {
-            applyCaptures(capMask, pos, cap);
-          }
-          if (ncap > 1) {
-            cap[1] = pos;
-          }
-          matched = true;
-          System.arraycopy(cap, 0, bestCap, 0, ncap);
-        }
-      }
-    }
-
-    if (!matched) {
-      return null;
-    }
-    if (endMatch && bestCap[1] != endPos) {
-      return null;
-    }
-    if (anchorEnd && bestCap[1] != endPos) {
-      // $ (dollarAnchorEnd) allows the match to end before a trailing line terminator.
-      if (!dollarAnchorEnd
-          || !Nfa.isAtTrailingLineTerminator(text, bestCap[1], dollarAnchorUnixLines)) {
-        return null;
-      }
-    }
-    return bestCap;
-  }
-
-  /**
-   * Unanchored search: scans from {@code startPos} through the text, trying an anchored OnePass
-   * match at each position. Returns the first (leftmost) match found, with longest-match (greedy)
-   * semantics at that position.
-   *
-   * @param text the full input text
-   * @param startPos first position to try
-   * @param searchLimit upper bound on start positions to try
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions relative to {@code text}, or null if no match
-   */
-  int[] searchUnanchored(String text, int startPos, int searchLimit, int nsubmatch) {
-    return searchUnanchored(new StringInputScanner(text), startPos, searchLimit, nsubmatch);
-  }
-
-  int[] searchUnanchored(InputScanner text, int startPos, int searchLimit, int nsubmatch) {
-    int textLen = text.length();
-    int limit = Math.min(searchLimit, textLen) + 1;
-    GraphemeSupport.Context graphemeContext =
-        GraphemeSupport.Context.create(text, hasGraphemeSemantics);
-    for (int start = startPos; start < limit; start++) {
-      int[] result = search(text, start, textLen, false, nsubmatch, null, null, graphemeContext);
-      if (result != null) {
-        return result;
-      }
-      // Advance to next code point boundary.
-      if (start < textLen) {
-        start = InputScanner.position(text.decodeForward(start)) - 1;
-      }
-    }
-    return null;
-  }
-
-  /** Maps a code point to its equivalence class index. */
-  private int classOf(int cp) {
-    if (cp < 128 && cp >= 0) {
-      return asciiClassMap[cp];
-    }
-    int idx = Arrays.binarySearch(boundaries, cp);
-    return (idx >= 0) ? idx : (-idx - 1) - 1;
-  }
-
-  /**
-   * Builds a 128-element lookup table mapping ASCII code points (0–127) to their equivalence class
-   * indices, avoiding binary search for the most common characters.
-   */
-  private static int[] buildAsciiClassMap(int[] boundaries) {
-    int[] map = new int[128];
-    for (int cp = 0; cp < 128; cp++) {
-      int idx = Arrays.binarySearch(boundaries, cp);
-      map[cp] = (idx >= 0) ? idx : (-idx - 1) - 1;
-    }
-    return map;
-  }
-
-  /** Applies capture register updates from a pre-extracted capture mask at the given position. */
-  private static void applyCaptures(int mask, int pos, int[] cap) {
-    while (mask != 0) {
-      int reg = Integer.numberOfTrailingZeros(mask);
-      if (reg >= cap.length) {
-        break;
-      }
-      cap[reg] = pos;
-      mask &= mask - 1; // clear lowest set bit
-    }
-  }
-
-  /** Prevents instantiation via no-arg constructor. */
-  private OnePass() {
-    throw new AssertionError("non-instantiable");
-  }
 }

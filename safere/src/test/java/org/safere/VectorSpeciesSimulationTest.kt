@@ -2,269 +2,286 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
-import java.lang.reflect.Method;
-import java.util.List;
-import org.junit.jupiter.api.Test;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Assumptions
+import org.junit.jupiter.api.Test
+import java.lang.reflect.Method
+import java.nio.charset.StandardCharsets
+import java.util.List
 
 @DisabledForCrosscheck("implementation test uses package-private Vector API internals")
-class VectorSpeciesSimulationTest {
+internal class VectorSpeciesSimulationTest {
+    @JvmRecord
+    private data class SpeciesHandle(val value: Any?)
 
-  private static final boolean VECTOR_AVAILABLE = isVectorApiAvailable();
-  private static final List<SpeciesHandle> BYTE_SPECIES =
-      VECTOR_AVAILABLE ? getSpeciesList("jdk.incubator.vector.ByteVector") : List.of();
-  private static final List<SpeciesHandle> SHORT_SPECIES =
-      VECTOR_AVAILABLE ? getSpeciesList("jdk.incubator.vector.ShortVector") : List.of();
-  private static final Method BYTE_INDEX_OF_ASCII_CLASS =
-      VECTOR_AVAILABLE ? resolveByteIndexOfAsciiClass() : null;
-  private static final Method BYTE_INDEX_OF_IGNORE_CASE =
-      VECTOR_AVAILABLE ? resolveByteIndexOfIgnoreCase() : null;
-  private static final Method SHORT_INDEX_OF_CHAR_CLASS =
-      VECTOR_AVAILABLE ? resolveShortIndexOfCharClass() : null;
+    @Test
+    fun asciiClassMatchingAcrossAllByteVectorSpecies() {
+        Assumptions.assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path")
+        val ranges = intArrayOf('0'.code, '9'.code, 'a'.code, 'z'.code)
+        for (species in BYTE_SPECIES) {
+            for (len in 0..256) {
+                val absent = "A".repeat(len).toByteArray(StandardCharsets.UTF_8)
+                for (start in 0..len) {
+                    Assertions.assertThat(invokeByteIndexOfAsciiClass(species, absent, 0, len, ranges, start))
+                        .`as`("Absent for species %s, len %d, start %d", species, len, start)
+                        .isEqualTo(-1)
+                }
 
-  private record SpeciesHandle(Object value) {}
+                if (len > 0) {
+                    // Match at start
+                    val matchStart = absent.clone()
+                    matchStart[0] = '5'.code.toByte()
+                    Assertions.assertThat(invokeByteIndexOfAsciiClass(species, matchStart, 0, len, ranges, 0))
+                        .`as`("Match start for species %s, len %d", species, len)
+                        .isEqualTo(0)
 
-  private static boolean isVectorApiAvailable() {
-    try {
-      Class.forName("jdk.incubator.vector.ByteVector");
-      return true;
-    } catch (ClassNotFoundException e) {
-      return false;
+                    // Match in middle
+                    val mid = len / 2
+                    val matchMid = absent.clone()
+                    matchMid[mid] = 'b'.code.toByte()
+                    Assertions.assertThat(invokeByteIndexOfAsciiClass(species, matchMid, 0, len, ranges, 0))
+                        .`as`("Match mid for species %s, len %d, mid %d", species, len, mid)
+                        .isEqualTo(mid)
+
+                    // Match at end
+                    val matchEnd = absent.clone()
+                    matchEnd[len - 1] = 'z'.code.toByte()
+                    Assertions.assertThat(invokeByteIndexOfAsciiClass(species, matchEnd, 0, len, ranges, 0))
+                        .`as`("Match end for species %s, len %d", species, len)
+                        .isEqualTo(len - 1)
+                }
+            }
+        }
     }
-  }
 
-  private static List<SpeciesHandle> getSpeciesList(String vectorClassName) {
-    try {
-      Class<?> vectorClass = Class.forName(vectorClassName);
-      return List.of(
-          new SpeciesHandle(vectorClass.getField("SPECIES_64").get(null)),
-          new SpeciesHandle(vectorClass.getField("SPECIES_128").get(null)),
-          new SpeciesHandle(vectorClass.getField("SPECIES_256").get(null)),
-          new SpeciesHandle(vectorClass.getField("SPECIES_512").get(null)));
-    } catch (ReflectiveOperationException | LinkageError e) {
-      throw new ExceptionInInitializerError(e);
+    @Test
+    fun ignoreCaseMatchingAcrossAllByteVectorSpecies() {
+        Assumptions.assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path")
+        val prefix = "needle"
+        val prefixLen = prefix.length
+        val anchorOffset = 0
+        val low = 'n'.code.toByte()
+        val high = 'N'.code.toByte()
+
+        for (species in BYTE_SPECIES) {
+            for (pad in 0..128) {
+                val base = "x".repeat(pad) + "NeEdLe" + "y".repeat(64)
+                val bytes = base.toByteArray(StandardCharsets.UTF_8)
+
+                Assertions.assertThat(
+                    invokeByteIndexOfIgnoreCase(
+                        species, bytes, 0, bytes.size, prefix, prefixLen, anchorOffset, low, high, 0
+                    )
+                )
+                    .`as`("IgnoreCase match for species %s, pad %d", species, pad)
+                    .isEqualTo(pad)
+
+                val absent = "x".repeat(pad + 64).toByteArray(StandardCharsets.UTF_8)
+                Assertions.assertThat(
+                    invokeByteIndexOfIgnoreCase(
+                        species,
+                        absent,
+                        0,
+                        absent.size,
+                        prefix,
+                        prefixLen,
+                        anchorOffset,
+                        low,
+                        high,
+                        0
+                    )
+                )
+                    .`as`("IgnoreCase absent for species %s, pad %d", species, pad)
+                    .isEqualTo(-1)
+            }
+        }
     }
-  }
 
-  private static Method resolveByteIndexOfAsciiClass() {
-    try {
-      Class<?> speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies");
-      Method m =
-          ByteVectorScan.class.getDeclaredMethod(
-              "indexOfAsciiClass",
-              speciesClass,
-              byte[].class,
-              int.class,
-              int.class,
-              int[].class,
-              int.class);
-      m.setAccessible(true);
-      return m;
-    } catch (ReflectiveOperationException | LinkageError e) {
-      throw new ExceptionInInitializerError(e);
+    @Test
+    fun charClassMatchingAcrossAllShortVectorSpecies() {
+        Assumptions.assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path")
+        val ranges = intArrayOf('0'.code, '9'.code, 'A'.code, 'Z'.code)
+        for (species in SHORT_SPECIES) {
+            for (len in 0..128) {
+                val chars = "a".repeat(len).toCharArray()
+                for (start in 0..len) {
+                    Assertions.assertThat(invokeShortIndexOfCharClass(species, chars, 0, len, ranges, start))
+                        .`as`("Short absent for species %s, len %d, start %d", species, len, start)
+                        .isEqualTo(-1)
+                }
+
+                if (len > 0) {
+                    val matchEnd = chars.clone()
+                    matchEnd[len - 1] = '9'
+                    Assertions.assertThat(invokeShortIndexOfCharClass(species, matchEnd, 0, len, ranges, 0))
+                        .`as`("Short end match for species %s, len %d", species, len)
+                        .isEqualTo(len - 1)
+                }
+            }
+        }
     }
-  }
 
-  private static Method resolveByteIndexOfIgnoreCase() {
-    try {
-      Class<?> speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies");
-      Method m =
-          ByteVectorScan.class.getDeclaredMethod(
-              "indexOfIgnoreCase",
-              speciesClass,
-              byte[].class,
-              int.class,
-              int.class,
-              String.class,
-              int.class,
-              int.class,
-              byte.class,
-              byte.class,
-              int.class);
-      m.setAccessible(true);
-      return m;
-    } catch (ReflectiveOperationException | LinkageError e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
+    companion object {
+        private val VECTOR_AVAILABLE: Boolean = isVectorApiAvailable
+        private val BYTE_SPECIES: MutableList<SpeciesHandle> =
+            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ByteVector") else mutableListOf<SpeciesHandle?>()
+        private val SHORT_SPECIES: MutableList<SpeciesHandle> =
+            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ShortVector") else mutableListOf<SpeciesHandle?>()
+        private val BYTE_INDEX_OF_ASCII_CLASS: Method? = if (VECTOR_AVAILABLE) resolveByteIndexOfAsciiClass() else null
+        private val BYTE_INDEX_OF_IGNORE_CASE: Method? = if (VECTOR_AVAILABLE) resolveByteIndexOfIgnoreCase() else null
+        private val SHORT_INDEX_OF_CHAR_CLASS: Method? = if (VECTOR_AVAILABLE) resolveShortIndexOfCharClass() else null
 
-  private static Method resolveShortIndexOfCharClass() {
-    try {
-      Class<?> speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies");
-      Method m =
-          ShortVectorScan.class.getDeclaredMethod(
-              "indexOfCharClass",
-              speciesClass,
-              char[].class,
-              int.class,
-              int.class,
-              int[].class,
-              int.class);
-      m.setAccessible(true);
-      return m;
-    } catch (ReflectiveOperationException | LinkageError e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
+        private val isVectorApiAvailable: Boolean
+            get() {
+                try {
+                    Class.forName("jdk.incubator.vector.ByteVector")
+                    return true
+                } catch (e: ClassNotFoundException) {
+                    return false
+                }
+            }
 
-  private static int invokeByteIndexOfAsciiClass(
-      SpeciesHandle species, byte[] bytes, int offset, int length, int[] ranges, int start) {
-    try {
-      return (int)
-          BYTE_INDEX_OF_ASCII_CLASS.invoke(
-              null, species.value(), bytes, offset, length, ranges, start);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private static int invokeByteIndexOfIgnoreCase(
-      SpeciesHandle species,
-      byte[] bytes,
-      int offset,
-      int length,
-      String prefix,
-      int prefixLen,
-      int anchorOffset,
-      byte low,
-      byte high,
-      int start) {
-    try {
-      return (int)
-          BYTE_INDEX_OF_IGNORE_CASE.invoke(
-              null,
-              species.value(),
-              bytes,
-              offset,
-              length,
-              prefix,
-              prefixLen,
-              anchorOffset,
-              low,
-              high,
-              start);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private static int invokeShortIndexOfCharClass(
-      SpeciesHandle species, char[] chars, int offset, int length, int[] ranges, int start) {
-    try {
-      return (int)
-          SHORT_INDEX_OF_CHAR_CLASS.invoke(
-              null, species.value(), chars, offset, length, ranges, start);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  @Test
-  void asciiClassMatchingAcrossAllByteVectorSpecies() {
-    assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path");
-    int[] ranges = {'0', '9', 'a', 'z'};
-    for (SpeciesHandle species : BYTE_SPECIES) {
-      for (int len = 0; len <= 256; len++) {
-        byte[] absent = "A".repeat(len).getBytes(UTF_8);
-        for (int start = 0; start <= len; start++) {
-          assertThat(invokeByteIndexOfAsciiClass(species, absent, 0, len, ranges, start))
-              .as("Absent for species %s, len %d, start %d", species, len, start)
-              .isEqualTo(-1);
+        private fun getSpeciesList(vectorClassName: String?): MutableList<SpeciesHandle> {
+            try {
+                val vectorClass = Class.forName(vectorClassName)
+                return List.of<SpeciesHandle?>(
+                    SpeciesHandle(vectorClass.getField("SPECIES_64").get(null)),
+                    SpeciesHandle(vectorClass.getField("SPECIES_128").get(null)),
+                    SpeciesHandle(vectorClass.getField("SPECIES_256").get(null)),
+                    SpeciesHandle(vectorClass.getField("SPECIES_512").get(null))
+                )
+            } catch (e: ReflectiveOperationException) {
+                throw ExceptionInInitializerError(e)
+            } catch (e: LinkageError) {
+                throw ExceptionInInitializerError(e)
+            }
         }
 
-        if (len > 0) {
-          // Match at start
-          byte[] matchStart = absent.clone();
-          matchStart[0] = '5';
-          assertThat(invokeByteIndexOfAsciiClass(species, matchStart, 0, len, ranges, 0))
-              .as("Match start for species %s, len %d", species, len)
-              .isEqualTo(0);
-
-          // Match in middle
-          int mid = len / 2;
-          byte[] matchMid = absent.clone();
-          matchMid[mid] = 'b';
-          assertThat(invokeByteIndexOfAsciiClass(species, matchMid, 0, len, ranges, 0))
-              .as("Match mid for species %s, len %d, mid %d", species, len, mid)
-              .isEqualTo(mid);
-
-          // Match at end
-          byte[] matchEnd = absent.clone();
-          matchEnd[len - 1] = 'z';
-          assertThat(invokeByteIndexOfAsciiClass(species, matchEnd, 0, len, ranges, 0))
-              .as("Match end for species %s, len %d", species, len)
-              .isEqualTo(len - 1);
+        private fun resolveByteIndexOfAsciiClass(): Method {
+            try {
+                val speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies")
+                val m =
+                    ByteVectorScan::class.java.getDeclaredMethod(
+                        "indexOfAsciiClass",
+                        speciesClass,
+                        ByteArray::class.java,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        IntArray::class.java,
+                        Int::class.javaPrimitiveType
+                    )
+                m.setAccessible(true)
+                return m
+            } catch (e: ReflectiveOperationException) {
+                throw ExceptionInInitializerError(e)
+            } catch (e: LinkageError) {
+                throw ExceptionInInitializerError(e)
+            }
         }
-      }
-    }
-  }
 
-  @Test
-  void ignoreCaseMatchingAcrossAllByteVectorSpecies() {
-    assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path");
-    String prefix = "needle";
-    int prefixLen = prefix.length();
-    int anchorOffset = 0;
-    byte low = 'n';
-    byte high = 'N';
+        private fun resolveByteIndexOfIgnoreCase(): Method {
+            try {
+                val speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies")
+                val m =
+                    ByteVectorScan::class.java.getDeclaredMethod(
+                        "indexOfIgnoreCase",
+                        speciesClass,
+                        ByteArray::class.java,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        String::class.java,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType
+                    )
+                m.setAccessible(true)
+                return m
+            } catch (e: ReflectiveOperationException) {
+                throw ExceptionInInitializerError(e)
+            } catch (e: LinkageError) {
+                throw ExceptionInInitializerError(e)
+            }
+        }
 
-    for (SpeciesHandle species : BYTE_SPECIES) {
-      for (int pad = 0; pad <= 128; pad++) {
-        String base = "x".repeat(pad) + "NeEdLe" + "y".repeat(64);
-        byte[] bytes = base.getBytes(UTF_8);
+        private fun resolveShortIndexOfCharClass(): Method {
+            try {
+                val speciesClass = Class.forName("jdk.incubator.vector.VectorSpecies")
+                val m =
+                    ShortVectorScan::class.java.getDeclaredMethod(
+                        "indexOfCharClass",
+                        speciesClass,
+                        CharArray::class.java,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        IntArray::class.java,
+                        Int::class.javaPrimitiveType
+                    )
+                m.setAccessible(true)
+                return m
+            } catch (e: ReflectiveOperationException) {
+                throw ExceptionInInitializerError(e)
+            } catch (e: LinkageError) {
+                throw ExceptionInInitializerError(e)
+            }
+        }
 
-        assertThat(
-                invokeByteIndexOfIgnoreCase(
-                    species, bytes, 0, bytes.length, prefix, prefixLen, anchorOffset, low, high, 0))
-            .as("IgnoreCase match for species %s, pad %d", species, pad)
-            .isEqualTo(pad);
+        private fun invokeByteIndexOfAsciiClass(
+            species: SpeciesHandle, bytes: ByteArray?, offset: Int, length: Int, ranges: IntArray?, start: Int
+        ): Int {
+            try {
+                return BYTE_INDEX_OF_ASCII_CLASS!!.invoke(
+                    null, species.value, bytes, offset, length, ranges, start
+                ) as Int
+            } catch (e: Exception) {
+                throw RuntimeException(e)
+            }
+        }
 
-        byte[] absent = "x".repeat(pad + 64).getBytes(UTF_8);
-        assertThat(
-                invokeByteIndexOfIgnoreCase(
-                    species,
-                    absent,
-                    0,
-                    absent.length,
+        private fun invokeByteIndexOfIgnoreCase(
+            species: SpeciesHandle,
+            bytes: ByteArray?,
+            offset: Int,
+            length: Int,
+            prefix: String?,
+            prefixLen: Int,
+            anchorOffset: Int,
+            low: Byte,
+            high: Byte,
+            start: Int
+        ): Int {
+            try {
+                return BYTE_INDEX_OF_IGNORE_CASE!!.invoke(
+                    null,
+                    species.value,
+                    bytes,
+                    offset,
+                    length,
                     prefix,
                     prefixLen,
                     anchorOffset,
                     low,
                     high,
-                    0))
-            .as("IgnoreCase absent for species %s, pad %d", species, pad)
-            .isEqualTo(-1);
-      }
-    }
-  }
-
-  @Test
-  void charClassMatchingAcrossAllShortVectorSpecies() {
-    assumeTrue(VECTOR_AVAILABLE, "Vector API not available on module path");
-    int[] ranges = {'0', '9', 'A', 'Z'};
-    for (SpeciesHandle species : SHORT_SPECIES) {
-      for (int len = 0; len <= 128; len++) {
-        char[] chars = "a".repeat(len).toCharArray();
-        for (int start = 0; start <= len; start++) {
-          assertThat(invokeShortIndexOfCharClass(species, chars, 0, len, ranges, start))
-              .as("Short absent for species %s, len %d, start %d", species, len, start)
-              .isEqualTo(-1);
+                    start
+                ) as Int
+            } catch (e: Exception) {
+                throw RuntimeException(e)
+            }
         }
 
-        if (len > 0) {
-          char[] matchEnd = chars.clone();
-          matchEnd[len - 1] = '9';
-          assertThat(invokeShortIndexOfCharClass(species, matchEnd, 0, len, ranges, 0))
-              .as("Short end match for species %s, len %d", species, len)
-              .isEqualTo(len - 1);
+        private fun invokeShortIndexOfCharClass(
+            species: SpeciesHandle, chars: CharArray?, offset: Int, length: Int, ranges: IntArray?, start: Int
+        ): Int {
+            try {
+                return SHORT_INDEX_OF_CHAR_CLASS!!.invoke(
+                    null, species.value, chars, offset, length, ranges, start
+                ) as Int
+            } catch (e: Exception) {
+                throw RuntimeException(e)
+            }
         }
-      }
     }
-  }
 }

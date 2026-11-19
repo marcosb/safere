@@ -2,29 +2,51 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import java.util.*
+import java.util.Set
 
-import java.util.Objects;
-import java.util.Set;
+/** Immutable static analysis of a compiled pattern.  */
+@JvmRecord
+data class PatternAnalysis(
+    features: MutableSet<PatternFeature?>?,
+    capabilities: MutableSet<PatternCapability?>?,
+    limitations: MutableSet<PatternLimitation?>?,
+    programSize: Int,
+    captureCount: Int
+) {
+    val features: MutableSet<PatternFeature?>?
+    val capabilities: MutableSet<PatternCapability?>?
+    val limitations: MutableSet<PatternLimitation?>?
+    val programSize: Int
+    val captureCount: Int
 
-/** Immutable static analysis of a compiled pattern. */
-public record PatternAnalysis(
-    Set<PatternFeature> features,
-    Set<PatternCapability> capabilities,
-    Set<PatternLimitation> limitations,
-    int programSize,
-    int captureCount) {
-  /** Creates an immutable pattern analysis. */
-  public PatternAnalysis {
-    features = Set.copyOf(Objects.requireNonNull(features, "features"));
-    capabilities = Set.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
-    limitations = Set.copyOf(Objects.requireNonNull(limitations, "limitations"));
-    if (programSize < 0) {
-      throw new IllegalArgumentException("programSize must be non-negative");
+    /** Creates an immutable pattern analysis.  */
+    init {
+        this.captureCount = captureCount
+        this.programSize = programSize
+        var features = features
+        var capabilities = capabilities
+        var limitations = limitations
+        features =
+            Set.copyOf<PatternFeature?>(Objects.requireNonNull<MutableSet<PatternFeature?>?>(features, "features"))
+        capabilities = Set.copyOf<PatternCapability?>(
+            Objects.requireNonNull<MutableSet<PatternCapability?>?>(
+                capabilities,
+                "capabilities"
+            )
+        )
+        limitations = Set.copyOf<PatternLimitation?>(
+            Objects.requireNonNull<MutableSet<PatternLimitation?>?>(
+                limitations,
+                "limitations"
+            )
+        )
+        require(programSize >= 0) { "programSize must be non-negative" }
+        require(captureCount >= 0) { "captureCount must be non-negative" }
+        this.features = features
+        this.capabilities = capabilities
+        this.limitations = limitations
     }
-    if (captureCount < 0) {
-      throw new IllegalArgumentException("captureCount must be non-negative");
-    }
-  }
 }

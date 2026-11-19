@@ -4,350 +4,344 @@
 // Copyright (c) 2009 The Go Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
+import com.google.gson.JsonArray
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import java.nio.charset.StandardCharsets;
-import java.util.Random;
-import java.util.function.Function;
-import org.safere.Matcher;
-import org.safere.Pattern;
-import org.safere.Utf8Input;
-import org.safere.Utf8Matcher;
+/** Prepared schedules and independent capture oracle for adaptive-policy experiments.  */
+internal class AdaptiveCaptureCase(
+    config: JsonObject,
+    scenario: String?,
+    representation: String,
+    trials: Function<String?, CrossEngineBenchmarkPlan.Trial?>,
+    source: Function<String?, Input?>
+) {
+    private val regex: String?
+    private val inputs: Array<Input?>
+    private val groups: IntArray
+    private val readEvery: IntArray
+    private val order: Array<IntArray>
+    private val lifetime: String
+    private val utf8: Boolean
+    private val offsets: Boolean
 
-/** Prepared schedules and independent capture oracle for adaptive-policy experiments. */
-final class AdaptiveCaptureCase {
-  private final String regex;
-  private final CapturePolicyProtocol.Input[] inputs;
-  private final int[] groups;
-  private final int[] readEvery;
-  private final int[][] order;
-  private final String lifetime;
-  private final boolean utf8;
-  private final boolean offsets;
-
-  AdaptiveCaptureCase(
-      JsonObject config,
-      String scenario,
-      String representation,
-      Function<String, CrossEngineBenchmarkPlan.Trial> trials,
-      Function<String, CapturePolicyProtocol.Input> source) {
-    JsonObject definition = config.getAsJsonObject("scenarios").getAsJsonObject(scenario);
-    if (definition == null || !(representation.equals("string") || representation.equals("utf8"))) {
-      throw new IllegalArgumentException("Unknown adaptive scenario or representation");
-    }
-    utf8 = representation.equals("utf8");
-    String trial = definition.get("reference").getAsString() + "@safere-" + representation;
-    regex = trials.apply(trial).workload().patterns().getFirst();
-    groups =
-        definition.getAsJsonArray("groups").asList().stream().mapToInt(v -> v.getAsInt()).toArray();
-    inputs = new CapturePolicyProtocol.Input[2];
-    String[] keys = {
-      definition.get("hitInput").getAsString(), definition.get("missInput").getAsString()
-    };
-    for (int i = 0; i < inputs.length; i++) {
-      inputs[i] = source.apply(keys[i]);
-    }
-    offsets = definition.get("consumption").getAsString().equals("offset");
-    lifetime = definition.get("lifetime").getAsString();
-    JsonArray phases = definition.getAsJsonArray("phases");
-    if (phases.size() != 3) {
-      throw new IllegalArgumentException("Expected exactly three adaptive phases");
-    }
-    readEvery = new int[phases.size()];
-    order = new int[phases.size()][];
-    for (int phase = 0; phase < phases.size(); phase++) {
-      JsonObject phaseConfig = phases.get(phase).getAsJsonObject();
-      readEvery[phase] = phaseConfig.get("readEvery").getAsInt();
-      if (readEvery[phase] < 0) {
-        throw new IllegalArgumentException("Capture-read period must be nonnegative");
-      }
-      order[phase] =
-          schedule(
-              config.get("documentsPerPhase").getAsInt(),
-              phaseConfig.get("hitEvery").getAsInt(),
-              definition.get("order").getAsString(),
-              config.get("scheduleWidth").getAsInt(),
-              config.get("scheduleSeed").getAsLong() + phase);
-    }
-  }
-
-  static AdaptiveCaptureCase load(String scenario, String representation) {
-    BenchmarkData data = BenchmarkData.get();
-    return new AdaptiveCaptureCase(
-        data.investigationConfiguration().getAsJsonObject("adaptive"),
-        scenario,
-        representation,
-        CrossEngineBenchmarkPlan.load()::resolve,
-        key -> new CapturePolicyProtocol.Input(data.getInputString(key), data.getInputBytes(key)));
-  }
-
-  static int[] schedule(int count, int hitEvery, String ordering, int width, long seed) {
-    if (count < 1
-        || hitEvery < 0
-        || width < 1
-        || count % width != 0
-        || (hitEvery > 0 && width % hitEvery != 0)) {
-      throw new IllegalArgumentException("Invalid adaptive document schedule");
-    }
-    int[] slots = new int[count];
-    for (int i = 0; i < count; i++) {
-      boolean hit =
-          hitEvery != 0
-              && (ordering.equals("blocked") ? i % width < width / hitEvery : i % hitEvery == 0);
-      slots[i] = hit ? 0 : 1;
-    }
-    if (ordering.equals("shuffled")) {
-      Random random = new Random(seed);
-      for (int i = slots.length - 1; i > 0; i--) {
-        int other = random.nextInt(i + 1);
-        int swap = slots[i];
-        slots[i] = slots[other];
-        slots[other] = swap;
-      }
-    } else if (!ordering.equals("periodic") && !ordering.equals("blocked")) {
-      throw new IllegalArgumentException("Unknown document ordering");
-    }
-    return slots;
-  }
-
-  Task task(boolean booleanOnly) {
-    return new Task(Pattern.compile(regex), booleanOnly);
-  }
-
-  Shared shared() {
-    return new Shared(Pattern.compile(regex));
-  }
-
-  final class Shared {
-    private final Pattern pattern;
-
-    private Shared(Pattern pattern) {
-      this.pattern = pattern;
+    init {
+        val definition: JsonObject = config.getAsJsonObject("scenarios").getAsJsonObject(scenario)
+        kotlin.require(!(definition == null || !(representation.equals("string") || representation.equals("utf8")))) { "Unknown adaptive scenario or representation" }
+        utf8 = representation.equals("utf8")
+        val trial = definition.get("reference").getAsString() + "@safere-" + representation
+        regex = trials.apply(trial).workload().patterns().getFirst()
+        groups =
+            definition.getAsJsonArray("groups").asList().stream().mapToInt({ v -> v.getAsInt() }).toArray()
+        inputs = arrayOfNulls<Input>(2)
+        val keys = arrayOf<String?>(
+            definition.get("hitInput").getAsString(), definition.get("missInput").getAsString()
+        )
+        for (i in inputs.indices) {
+            inputs[i] = source.apply(keys[i])
+        }
+        offsets = definition.get("consumption").getAsString().equals("offset")
+        lifetime = definition.get("lifetime").getAsString()
+        val phases: JsonArray = definition.getAsJsonArray("phases")
+        kotlin.require(phases.size() === 3) { "Expected exactly three adaptive phases" }
+        readEvery = IntArray(phases.size())
+        order = arrayOfNulls<IntArray>(phases.size())
+        for (phase in 0..<phases.size()) {
+            val phaseConfig: JsonObject = phases.get(phase).getAsJsonObject()
+            readEvery[phase] = phaseConfig.get("readEvery").getAsInt()
+            kotlin.require(readEvery[phase] >= 0) { "Capture-read period must be nonnegative" }
+            order[phase] =
+                org.safere.benchmark.AdaptiveCaptureCase.Companion.schedule(
+                    config.get("documentsPerPhase").getAsInt(),
+                    phaseConfig.get("hitEvery").getAsInt(),
+                    definition.get("order").getAsString(),
+                    config.get("scheduleWidth").getAsInt(),
+                    config.get("scheduleSeed").getAsLong() + phase
+                )
+        }
     }
 
-    Task task(boolean booleanOnly) {
-      return new Task(pattern, booleanOnly);
+    fun task(booleanOnly: Boolean): Task {
+        return org.safere.benchmark.AdaptiveCaptureCase.Task(Pattern.compile(regex), booleanOnly)
     }
-  }
 
-  void validate() {
-    long expected = oracle(false);
-    Task single = task(false);
-    long sampledChecksum = 0;
-    for (int[] phase : order) {
-      for (int i = 0; i < phase.length; i++) {
-        sampledChecksum += single.runOne();
-      }
+    fun shared(): Shared {
+        return org.safere.benchmark.AdaptiveCaptureCase.Shared(Pattern.compile(regex))
     }
-    if (task(false).run(null) != expected
-        || sampledChecksum != expected
-        || task(true).run(null) != oracle(true)) {
-      throw new IllegalStateException("Adaptive capture protocol differs from its JDK oracle");
-    }
-  }
 
-  long oracle(boolean booleanOnly) {
-    java.util.regex.Pattern compiled = java.util.regex.Pattern.compile(regex);
-    long sum = 0;
-    for (int phase = 0; phase < order.length; phase++) {
-      int hits = 0;
-      for (int slot : order[phase]) {
-        java.util.regex.Matcher matcher = compiled.matcher(inputs[slot].text);
-        while (matcher.find()) {
-          sum++;
-          if (!booleanOnly && readEvery[phase] != 0 && hits % readEvery[phase] == 0) {
-            for (int group : groups) {
-              String value = matcher.group(group);
-              sum +=
-                  value == null
-                      ? 0
-                      : offsets
-                          ? (utf8 ? value.getBytes(StandardCharsets.UTF_8).length : value.length())
-                          : value.hashCode();
+    internal inner class Shared private constructor(pattern: Pattern) {
+        private val pattern: Pattern
+
+        init {
+            this.pattern = pattern
+        }
+
+        fun task(booleanOnly: Boolean): Task {
+            return org.safere.benchmark.AdaptiveCaptureCase.Task(pattern, booleanOnly)
+        }
+    }
+
+    fun validate() {
+        val expected = oracle(false)
+        val single = task(false)
+        var sampledChecksum: Long = 0
+        for (phase in order) {
+            for (i in phase.indices) {
+                sampledChecksum += single.runOne()
             }
-          }
-          hits++;
         }
-      }
-    }
-    return sum;
-  }
-
-  final class Task {
-    private final Pattern pattern;
-    private final boolean booleanOnly;
-    private final Cursor[] retained;
-    private final Cursor rotating;
-    private int stepPhase;
-    private int stepDocument;
-    private int stepHits;
-
-    private Task(Pattern pattern, boolean booleanOnly) {
-      this.pattern = pattern;
-      this.booleanOnly = booleanOnly;
-      retained =
-          lifetime.equals("retained") ? new Cursor[] {cursor(0, false), cursor(1, false)} : null;
-      rotating = lifetime.equals("rotating") ? cursor(0, true) : null;
-      if (retained == null && rotating == null && !lifetime.equals("fresh")) {
-        throw new IllegalArgumentException("Unknown adaptive cursor lifetime");
-      }
+        kotlin.check(
+            !(task(false).run(null) != expected || sampledChecksum != expected || task(true).run(null) != oracle(
+                true
+            ))
+        ) { "Adaptive capture protocol differs from its JDK oracle" }
     }
 
-    long run(AdaptivePhaseCounters counters) {
-      long sum = 0;
-      for (int phase = 0; phase < order.length; phase++) {
-        long started = counters == null ? 0 : System.nanoTime();
-        int hits = 0;
-        for (int slot : order[phase]) {
-          Cursor matcher =
-              retained != null ? retained[slot] : rotating != null ? rotating : cursor(slot, false);
-          if (retained != null || rotating != null) {
-            matcher.reset(slot);
-          }
-          while (matcher.find()) {
-            sum++;
-            if (!booleanOnly && readEvery[phase] != 0 && hits % readEvery[phase] == 0) {
-              for (int group : groups) {
-                sum +=
-                    offsets
-                        ? matcher.end(group) - matcher.start(group)
-                        : hash(matcher.group(group));
-              }
+    fun oracle(booleanOnly: Boolean): Long {
+        val compiled: java.util.regex.Pattern = java.util.regex.Pattern.compile(regex)
+        var sum: Long = 0
+        for (phase in order.indices) {
+            var hits = 0
+            for (slot in order[phase]) {
+                val matcher: java.util.regex.Matcher = compiled.matcher(inputs[slot].text)
+                while (matcher.find()) {
+                    sum++
+                    if (!booleanOnly && readEvery[phase] != 0 && hits % readEvery[phase] == 0) {
+                        for (group in groups) {
+                            val value: String? = matcher.group(group)
+                            sum +=
+                                (
+                                        if (value == null)
+                                            0
+                                        else
+                                            if (offsets)
+                                                (if (utf8) value.getBytes(StandardCharsets.UTF_8).length else value.length())
+                                            else
+                                                value.hashCode()).toLong()
+                        }
+                    }
+                    hits++
+                }
             }
-            hits++;
-          }
         }
-        if (counters != null) {
-          counters.record(phase, System.nanoTime() - started, order[phase].length);
-        }
-      }
-      return sum;
+        return sum
     }
 
-    long runOne() {
-      int slot = order[stepPhase][stepDocument];
-      Cursor matcher =
-          retained != null ? retained[slot] : rotating != null ? rotating : cursor(slot, false);
-      if (retained != null || rotating != null) {
-        matcher.reset(slot);
-      }
-      long sum = 0;
-      while (matcher.find()) {
-        sum++;
-        if (!booleanOnly && readEvery[stepPhase] != 0 && stepHits % readEvery[stepPhase] == 0) {
-          for (int group : groups) {
-            sum += offsets ? matcher.end(group) - matcher.start(group) : hash(matcher.group(group));
-          }
-        }
-        stepHits++;
-      }
-      stepDocument++;
-      if (stepDocument == order[stepPhase].length) {
-        stepDocument = 0;
-        stepHits = 0;
-        stepPhase = (stepPhase + 1) % order.length;
-      }
-      return sum;
-    }
+    internal inner class Task private constructor(pattern: Pattern, booleanOnly: Boolean) {
+        private val pattern: Pattern
+        private val booleanOnly: Boolean
+        private val retained: Array<Cursor>?
+        private val rotating: Cursor?
+        private var stepPhase = 0
+        private var stepDocument = 0
+        private var stepHits = 0
 
-    private Cursor cursor(int slot, boolean rotate) {
-      if (!utf8) {
-        Matcher matcher = pattern.matcher(inputs[slot].text);
-        return new Cursor() {
-          @Override
-          public void reset(int next) {
+        init {
+            this.pattern = pattern
+            this.booleanOnly = booleanOnly
+            retained =
+                if (lifetime.equals("retained")) arrayOf<Cursor>(cursor(0, false), cursor(1, false)) else null
+            rotating = if (lifetime.equals("rotating")) cursor(0, true) else null
+            kotlin.require(!(retained == null && rotating == null && !lifetime.equals("fresh"))) { "Unknown adaptive cursor lifetime" }
+        }
+
+        fun run(counters: AdaptivePhaseCounters?): Long {
+            var sum: Long = 0
+            for (phase in order.indices) {
+                val started: Long = if (counters == null) 0 else System.nanoTime()
+                var hits = 0
+                for (slot in order[phase]) {
+                    val matcher =
+                        if (retained != null) retained[slot] else if (rotating != null) rotating else cursor(
+                            slot,
+                            false
+                        )
+                    if (retained != null || rotating != null) {
+                        matcher.reset(slot)
+                    }
+                    while (matcher.find()) {
+                        sum++
+                        if (!booleanOnly && readEvery[phase] != 0 && hits % readEvery[phase] == 0) {
+                            for (group in groups) {
+                                sum +=
+                                    (
+                                            if (offsets)
+                                                matcher.end(group) - matcher.start(group)
+                                            else
+                                                org.safere.benchmark.AdaptiveCaptureCase.Companion.hash(
+                                                    matcher.group(
+                                                        group
+                                                    )
+                                                )).toLong()
+                            }
+                        }
+                        hits++
+                    }
+                }
+                if (counters != null) {
+                    counters.record(phase, System.nanoTime() - started, order[phase].size)
+                }
+            }
+            return sum
+        }
+
+        fun runOne(): Long {
+            val slot = order[stepPhase][stepDocument]
+            val matcher =
+                if (retained != null) retained[slot] else if (rotating != null) rotating else cursor(slot, false)
+            if (retained != null || rotating != null) {
+                matcher.reset(slot)
+            }
+            var sum: Long = 0
+            while (matcher.find()) {
+                sum++
+                if (!booleanOnly && readEvery[stepPhase] != 0 && stepHits % readEvery[stepPhase] == 0) {
+                    for (group in groups) {
+                        sum += (if (offsets) matcher.end(group) - matcher.start(group) else org.safere.benchmark.AdaptiveCaptureCase.Companion.hash(
+                            matcher.group(group)
+                        )).toLong()
+                    }
+                }
+                stepHits++
+            }
+            stepDocument++
+            if (stepDocument == order[stepPhase].size) {
+                stepDocument = 0
+                stepHits = 0
+                stepPhase = (stepPhase + 1) % order.size
+            }
+            return sum
+        }
+
+        private fun cursor(slot: Int, rotate: Boolean): Cursor {
+            if (!utf8) {
+                val matcher: Matcher = pattern.matcher(inputs[slot].text)
+                return object : Cursor {
+                    @Override
+                    override fun reset(next: Int) {
+                        if (rotate) {
+                            matcher.reset(inputs[next].text)
+                        } else {
+                            matcher.reset()
+                        }
+                    }
+
+                    @Override
+                    override fun find(): Boolean {
+                        return matcher.find()
+                    }
+
+                    @Override
+                    override fun start(group: Int): Int {
+                        return matcher.start(group)
+                    }
+
+                    @Override
+                    override fun end(group: Int): Int {
+                        return matcher.end(group)
+                    }
+
+                    @Override
+                    override fun group(group: Int): String {
+                        return matcher.group(group)
+                    }
+                }
+            }
+            val bytes: ByteArray?
+            val split: Int
             if (rotate) {
-              matcher.reset(inputs[next].text);
+                split = inputs[0].bytes.length
+                bytes = ByteArray(split + inputs[1].bytes.length)
+                System.arraycopy(inputs[0].bytes, 0, bytes, 0, split)
+                System.arraycopy(inputs[1].bytes, 0, bytes, split, inputs[1].bytes.length)
             } else {
-              matcher.reset();
+                bytes = inputs[slot].bytes
+                split = 0
             }
-          }
+            val matcher: Utf8Matcher = pattern.matcher(Utf8Input.trusted(bytes))
+            return object : Cursor {
+                @Override
+                override fun reset(next: Int) {
+                    if (rotate) {
+                        matcher.region(if (next == 0) 0 else split, if (next == 0) split else bytes!!.size)
+                    } else {
+                        matcher.reset()
+                    }
+                }
 
-          @Override
-          public boolean find() {
-            return matcher.find();
-          }
+                @Override
+                override fun find(): Boolean {
+                    return matcher.find()
+                }
 
-          @Override
-          public int start(int group) {
-            return matcher.start(group);
-          }
+                @Override
+                override fun start(group: Int): Int {
+                    return matcher.start(group)
+                }
 
-          @Override
-          public int end(int group) {
-            return matcher.end(group);
-          }
+                @Override
+                override fun end(group: Int): Int {
+                    return matcher.end(group)
+                }
 
-          @Override
-          public String group(int group) {
-            return matcher.group(group);
-          }
-        };
-      }
-      byte[] bytes;
-      int split;
-      if (rotate) {
-        split = inputs[0].bytes.length;
-        bytes = new byte[split + inputs[1].bytes.length];
-        System.arraycopy(inputs[0].bytes, 0, bytes, 0, split);
-        System.arraycopy(inputs[1].bytes, 0, bytes, split, inputs[1].bytes.length);
-      } else {
-        bytes = inputs[slot].bytes;
-        split = 0;
-      }
-      Utf8Matcher matcher = pattern.matcher(Utf8Input.trusted(bytes));
-      return new Cursor() {
-        @Override
-        public void reset(int next) {
-          if (rotate) {
-            matcher.region(next == 0 ? 0 : split, next == 0 ? split : bytes.length);
-          } else {
-            matcher.reset();
-          }
+                @Override
+                override fun group(group: Int): String? {
+                    val begin: Int = matcher.start(group)
+                    return if (begin < 0)
+                        null
+                    else
+                        String(bytes, begin, matcher.end(group) - begin, StandardCharsets.UTF_8)
+                }
+            }
         }
-
-        @Override
-        public boolean find() {
-          return matcher.find();
-        }
-
-        @Override
-        public int start(int group) {
-          return matcher.start(group);
-        }
-
-        @Override
-        public int end(int group) {
-          return matcher.end(group);
-        }
-
-        @Override
-        public String group(int group) {
-          int begin = matcher.start(group);
-          return begin < 0
-              ? null
-              : new String(bytes, begin, matcher.end(group) - begin, StandardCharsets.UTF_8);
-        }
-      };
     }
-  }
 
-  private static int hash(String value) {
-    return value == null ? 0 : value.hashCode();
-  }
+    private interface Cursor {
+        fun reset(slot: Int)
 
-  private interface Cursor {
-    void reset(int slot);
+        fun find(): Boolean
 
-    boolean find();
+        fun start(group: Int): Int
 
-    int start(int group);
+        fun end(group: Int): Int
 
-    int end(int group);
+        fun group(group: Int): String?
+    }
 
-    String group(int group);
-  }
+    companion object {
+        fun load(scenario: String?, representation: String): AdaptiveCaptureCase {
+            val data: BenchmarkData = BenchmarkData.get()
+            return org.safere.benchmark.AdaptiveCaptureCase(
+                data.investigationConfiguration().getAsJsonObject("adaptive"),
+                scenario,
+                representation,
+                CrossEngineBenchmarkPlan.load()::resolve,
+                Function { key -> Input(data.getInputString(key), data.getInputBytes(key)) })
+        }
+
+        fun schedule(count: Int, hitEvery: Int, ordering: String, width: Int, seed: Long): IntArray {
+            kotlin.require(!(count < 1 || hitEvery < 0 || width < 1 || count % width != 0 || (hitEvery > 0 && width % hitEvery != 0))) { "Invalid adaptive document schedule" }
+            val slots = IntArray(count)
+            for (i in 0..<count) {
+                val hit =
+                    hitEvery != 0
+                            && (if (ordering.equals("blocked")) i % width < width / hitEvery else i % hitEvery == 0)
+                slots[i] = if (hit) 0 else 1
+            }
+            if (ordering.equals("shuffled")) {
+                val random: Random = Random(seed)
+                for (i in slots.size - 1 downTo 1) {
+                    val other: Int = random.nextInt(i + 1)
+                    val swap = slots[i]
+                    slots[i] = slots[other]
+                    slots[other] = swap
+                }
+            } else kotlin.require(!(!ordering.equals("periodic") && !ordering.equals("blocked"))) { "Unknown document ordering" }
+            return slots
+        }
+
+        private fun hash(value: String?): Int {
+            return if (value == null) 0 else value.hashCode()
+        }
+    }
 }

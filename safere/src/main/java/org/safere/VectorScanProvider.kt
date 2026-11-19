@@ -2,74 +2,80 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
-
-package org.safere;
+package org.safere
 
 /**
  * SIMD scan kernels over a UTF-8 byte array.
- *
- * <p><strong>Naming.</strong> A kernel is named {@code Byte} when it compares for equality, which
- * is exact for all 256 byte values, and {@code Ascii} when it compares for <em>order</em>, which is
- * only correct below {@code 0x80} because {@code byte} is signed. So {@link #indexOfBytePair} and
- * {@link #indexOfByteTriple} accept any bytes even though today's only caller passes ASCII, while
- * {@link #indexOfAsciiClass} takes ranges and genuinely requires them.
- *
- * <p>Match the name to the comparison, not to the caller.
+ * 
+ * 
+ * **Naming.** A kernel is named `Byte` when it compares for equality, which
+ * is exact for all 256 byte values, and `Ascii` when it compares for *order*, which is
+ * only correct below `0x80` because `byte` is signed. So [.indexOfBytePair] and
+ * [.indexOfByteTriple] accept any bytes even though today's only caller passes ASCII, while
+ * [.indexOfAsciiClass] takes ranges and genuinely requires them.
+ * 
+ * 
+ * Match the name to the comparison, not to the caller.
  */
-interface VectorScanProvider {
-  int UNSUPPORTED = -2;
+internal interface VectorScanProvider {
+    /**
+     * Returns the shortest search window, in bytes, for which the `kind` kernel is expected to
+     * beat the SWAR and scalar fallbacks.
+     * 
+     * 
+     * The quantity is a *window* length, not an input length: it is measured over the
+     * region the caller is about to scan, so that a narrow search inside a large input is costed as a
+     * narrow search.
+     */
+    fun minimumWindowLength(kind: ScanKind?): Int
 
-  /**
-   * Returns the shortest search window, in bytes, for which the {@code kind} kernel is expected to
-   * beat the SWAR and scalar fallbacks.
-   *
-   * <p>The quantity is a <em>window</em> length, not an input length: it is measured over the
-   * region the caller is about to scan, so that a narrow search inside a large input is costed as a
-   * narrow search.
-   */
-  int minimumWindowLength(ScanKind kind);
+    /**
+     * Returns the longest search window, in bytes, for which the `kind` kernel is expected to
+     * beat the SWAR and scalar fallbacks. Kernels that remain profitable on arbitrarily long windows
+     * return [Integer.MAX_VALUE].
+     */
+    fun maximumWindowLength(kind: ScanKind?): Int {
+        return Integer.MAX_VALUE
+    }
 
-  /**
-   * Returns the longest search window, in bytes, for which the {@code kind} kernel is expected to
-   * beat the SWAR and scalar fallbacks. Kernels that remain profitable on arbitrarily long windows
-   * return {@link Integer#MAX_VALUE}.
-   */
-  default int maximumWindowLength(ScanKind kind) {
-    return Integer.MAX_VALUE;
-  }
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfByte(bytes: ByteArray?, offset: Int, length: Int, target: Byte, start: Int): Int {
+        return UNSUPPORTED
+    }
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  default int indexOfByte(byte[] bytes, int offset, int length, byte target, int start) {
-    return UNSUPPORTED;
-  }
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfAsciiClass(bytes: ByteArray?, offset: Int, length: Int, ranges: IntArray?, start: Int): Int
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  int indexOfAsciiClass(byte[] bytes, int offset, int length, int[] ranges, int start);
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfBytePair(bytes: ByteArray?, offset: Int, length: Int, b0: Byte, b1: Byte, start: Int): Int {
+        return UNSUPPORTED
+    }
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  default int indexOfBytePair(byte[] bytes, int offset, int length, byte b0, byte b1, int start) {
-    return UNSUPPORTED;
-  }
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfByteTriple(
+        bytes: ByteArray?, offset: Int, length: Int, b0: Byte, b1: Byte, b2: Byte, start: Int
+    ): Int {
+        return UNSUPPORTED
+    }
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  default int indexOfByteTriple(
-      byte[] bytes, int offset, int length, byte b0, byte b1, byte b2, int start) {
-    return UNSUPPORTED;
-  }
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfTeddy(bytes: ByteArray?, offset: Int, length: Int, model: TeddyModel?, start: Int): Int
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  int indexOfTeddy(byte[] bytes, int offset, int length, TeddyModel model, int start);
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfMultiLiteral(
+        bytes: ByteArray?,
+        offset: Int,
+        length: Int,
+        literals: Array<String?>?,
+        anchorChars: CharArray?,
+        anchorOffsets: IntArray?,
+        anchorRanges: IntArray?,
+        minLength: Int,
+        teddyModel: TeddyModel?,
+        start: Int
+    ): Int
 
-  /** Returns a match position, {@code -1} when absent, or {@link #UNSUPPORTED}. */
-  int indexOfMultiLiteral(
-      byte[] bytes,
-      int offset,
-      int length,
-      String[] literals,
-      char[] anchorChars,
-      int[] anchorOffsets,
-      int[] anchorRanges,
-      int minLength,
-      TeddyModel teddyModel,
-      int start);
+    companion object {
+        val UNSUPPORTED: Int = -2
+    }
 }

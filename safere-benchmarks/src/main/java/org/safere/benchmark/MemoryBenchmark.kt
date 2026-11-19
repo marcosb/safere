@@ -2,165 +2,171 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.benchmark
 
-package org.safere.benchmark;
-
-import java.util.Arrays;
-import java.util.Set;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import org.safere.Matcher;
-import org.safere.Pattern;
+import org.safere.Pattern
+import org.safere.benchmark.DeclarativeBenchmarkPlan.ExpandedWorkload
+import org.safere.benchmark.DeclarativeBenchmarkPlan.RecipeString
+import org.safere.crosscheck.Pattern.Companion.compile
+import java.util.*
+import java.util.function.Supplier
+import java.util.stream.Collectors
+import kotlin.math.max
 
 /**
  * Measures the retained heap size of compiled regex patterns across engines (SafeRE, JDK, RE2/J).
- *
- * <p>Uses the heap-delta technique: allocate N instances of a compiled pattern, measure heap growth
+ * 
+ * 
+ * Uses the heap-delta technique: allocate N instances of a compiled pattern, measure heap growth
  * before and after (with forced GC), and divide by N. Multiple trials are run and the median is
  * reported to reduce noise.
- *
- * <p>This is a standalone measurement tool, not a JMH benchmark, because we are measuring one-shot
+ * 
+ * 
+ * This is a standalone measurement tool, not a JMH benchmark, because we are measuring one-shot
  * object sizes rather than per-operation throughput.
- *
- * <p>Run with:
- *
- * <pre>{@code
- * java -Xms256m -Xmx256m -cp safere-benchmarks/target/benchmarks.jar \
- *   org.safere.benchmark.MemoryBenchmark
- * }</pre>
+ * 
+ * 
+ * Run with:
+ * 
+ * <pre>`java -Xms256m -Xmx256m -cp safere-benchmarks/target/benchmarks.jar \   org.safere.benchmark.MemoryBenchmark `</pre>
  */
-public final class MemoryBenchmark {
+object MemoryBenchmark {
+    /** Number of pattern instances to allocate per measurement (amortizes GC noise).  */
+    private const val INSTANCES = 500
 
-  /** Number of pattern instances to allocate per measurement (amortizes GC noise). */
-  private static final int INSTANCES = 500;
+    /** Number of independent measurement trials (take the median).  */
+    private const val TRIALS = 7
 
-  /** Number of independent measurement trials (take the median). */
-  private static final int TRIALS = 7;
+    @Throws(Exception::class)
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val plan: SpecializedBenchmarkPlan = SpecializedBenchmarkPlan.Companion.load()
+        val selected = Arrays.stream<String?>(args).collect(Collectors.toSet())
+        println("=== Declarative retained-memory measurements (bytes) ===")
+        for (trial in plan.retainedMemoryTrials()) {
+            if (!selected.isEmpty() && !selected.contains(trial.id())) {
+                continue
+            }
+            val workload = trial.workload
+            val bytes =
+                when (workload.operation) {
+                    DeclarativeBenchmarkPlan.Operation.COMPILE -> measureRetainedSize(
+                        Supplier {
+                            trial
+                                .variant
+                                .compileForBenchmark(
+                                    workload.patterns.getFirst(), flagSet(workload)
+                                )
+                        })
 
-  private MemoryBenchmark() {}
+                    DeclarativeBenchmarkPlan.Operation.DFA_CACHE_GROWTH -> measureDfaCacheGrowth(
+                        workload.patterns.getFirst(),
+                        BenchmarkData.Companion.get().getInputString(workload.inputIds.getFirst())
+                    )
 
-  public static void main(String[] args) throws Exception {
-    SpecializedBenchmarkPlan plan = SpecializedBenchmarkPlan.load();
-    Set<String> selected = Arrays.stream(args).collect(Collectors.toSet());
-    System.out.println("=== Declarative retained-memory measurements (bytes) ===");
-    for (SpecializedBenchmarkPlan.Trial trial : plan.retainedMemoryTrials()) {
-      if (!selected.isEmpty() && !selected.contains(trial.id())) {
-        continue;
-      }
-      DeclarativeBenchmarkPlan.ExpandedWorkload workload = trial.workload();
-      long bytes =
-          switch (workload.operation()) {
-            case COMPILE ->
-                measureRetainedSize(
-                    () ->
-                        trial
-                            .variant()
-                            .compileForBenchmark(
-                                workload.patterns().getFirst(), flagSet(workload)));
-            case DFA_CACHE_GROWTH ->
-                measureDfaCacheGrowth(
-                    workload.patterns().getFirst(),
-                    BenchmarkData.get().getInputString(workload.inputIds().getFirst()));
-            default ->
-                throw new IllegalArgumentException(
-                    "Unsupported retained-memory operation: " + workload.operation());
-          };
-      System.out.printf("%s %,d%n", trial.id(), bytes);
-    }
-  }
-
-  private static String flagSet(DeclarativeBenchmarkPlan.ExpandedWorkload workload) {
-    DeclarativeBenchmarkPlan.RecipeValue value = workload.arguments().get("flagSet");
-    return value == null ? null : ((DeclarativeBenchmarkPlan.RecipeString) value).value();
-  }
-
-  /**
-   * Measures the retained heap size of an object produced by the given factory, using the
-   * heap-delta technique. Creates {@link #INSTANCES} copies, measures heap growth, divides by
-   * instance count. Runs {@link #TRIALS} trials and returns the median.
-   */
-  private static long measureRetainedSize(Supplier<Object> factory) throws Exception {
-    long[] results = new long[TRIALS];
-
-    for (int trial = 0; trial < TRIALS; trial++) {
-      // Warm up the factory (JIT compile, class loading).
-      for (int i = 0; i < 20; i++) {
-        var _ = factory.get();
-      }
-
-      forceGc();
-      long before = usedMemory();
-
-      // Allocate many instances to amortize per-object GC noise.
-      Object[] holders = new Object[INSTANCES];
-      for (int i = 0; i < INSTANCES; i++) {
-        holders[i] = factory.get();
-      }
-
-      forceGc();
-      long after = usedMemory();
-
-      results[trial] = Math.max(0, (after - before) / INSTANCES);
-
-      // Keep holders alive past the measurement point.
-      if (holders[INSTANCES - 1] == null) {
-        throw new AssertionError("holder should not be null");
-      }
+                    else -> throw IllegalArgumentException(
+                        "Unsupported retained-memory operation: " + workload.operation
+                    )
+                }
+            System.out.printf("%s %,d%n", trial.id(), bytes)
+        }
     }
 
-    Arrays.sort(results);
-    return results[TRIALS / 2]; // median
-  }
-
-  /** Forces garbage collection as thoroughly as possible. */
-  private static void forceGc() throws InterruptedException {
-    for (int i = 0; i < 5; i++) {
-      System.gc();
-      Thread.sleep(50);
-    }
-  }
-
-  /** Returns the currently used heap memory in bytes. */
-  private static long usedMemory() {
-    Runtime rt = Runtime.getRuntime();
-    return rt.totalMemory() - rt.freeMemory();
-  }
-
-  /**
-   * Measures the DFA cache growth for a single compiled SafeRE pattern by measuring heap before and
-   * after running the pattern against text. Uses multiple trials and returns the median.
-   */
-  private static long measureDfaCacheGrowth(String pattern, String text) throws Exception {
-    long[] results = new long[TRIALS];
-
-    for (int trial = 0; trial < TRIALS; trial++) {
-      // Compile the pattern (DFA cache starts empty).
-      Pattern p = Pattern.compile(pattern);
-
-      // Warm up: run a short match so JIT compiles the matching path.
-      p.matcher("warmup").find();
-
-      forceGc();
-      long before = usedMemory();
-
-      // Run matching against large text to populate the DFA state cache.
-      Matcher m = p.matcher(text);
-      while (m.find()) {
-        // DFA states are lazily created during matching.
-      }
-
-      forceGc();
-      long after = usedMemory();
-
-      results[trial] = after - before;
-
-      // Keep pattern alive past the measurement.
-      if (p.pattern() == null) {
-        throw new AssertionError("pattern should not be null");
-      }
+    private fun flagSet(workload: ExpandedWorkload): String? {
+        val value = workload.arguments.get("flagSet")
+        return if (value == null) null else (value as RecipeString).value
     }
 
-    Arrays.sort(results);
-    return results[TRIALS / 2]; // median
-  }
+    /**
+     * Measures the retained heap size of an object produced by the given factory, using the
+     * heap-delta technique. Creates [.INSTANCES] copies, measures heap growth, divides by
+     * instance count. Runs [.TRIALS] trials and returns the median.
+     */
+    @Throws(Exception::class)
+    private fun measureRetainedSize(factory: Supplier<Any?>): Long {
+        val results = LongArray(TRIALS)
+
+        for (trial in 0..<TRIALS) {
+            // Warm up the factory (JIT compile, class loading).
+            for (i in 0..19) {
+                val `_` = factory.get()
+            }
+
+            forceGc()
+            val before = usedMemory()
+
+            // Allocate many instances to amortize per-object GC noise.
+            val holders = arrayOfNulls<Any>(INSTANCES)
+            for (i in 0..<INSTANCES) {
+                holders[i] = factory.get()
+            }
+
+            forceGc()
+            val after = usedMemory()
+
+            results[trial] = max(0, (after - before) / INSTANCES)
+
+            // Keep holders alive past the measurement point.
+            if (holders[INSTANCES - 1] == null) {
+                throw AssertionError("holder should not be null")
+            }
+        }
+
+        Arrays.sort(results)
+        return results[TRIALS / 2] // median
+    }
+
+    /** Forces garbage collection as thoroughly as possible.  */
+    @Throws(InterruptedException::class)
+    private fun forceGc() {
+        for (i in 0..4) {
+            System.gc()
+            Thread.sleep(50)
+        }
+    }
+
+    /** Returns the currently used heap memory in bytes.  */
+    private fun usedMemory(): Long {
+        val rt = Runtime.getRuntime()
+        return rt.totalMemory() - rt.freeMemory()
+    }
+
+    /**
+     * Measures the DFA cache growth for a single compiled SafeRE pattern by measuring heap before and
+     * after running the pattern against text. Uses multiple trials and returns the median.
+     */
+    @Throws(Exception::class)
+    private fun measureDfaCacheGrowth(pattern: String?, text: String?): Long {
+        val results = LongArray(TRIALS)
+
+        for (trial in 0..<TRIALS) {
+            // Compile the pattern (DFA cache starts empty).
+            val p: Pattern = compile(pattern!!)
+
+            // Warm up: run a short match so JIT compiles the matching path.
+            p.matcher("warmup").find()
+
+            forceGc()
+            val before = usedMemory()
+
+            // Run matching against large text to populate the DFA state cache.
+            val m = p.matcher(text)
+            while (m.find()) {
+                // DFA states are lazily created during matching.
+            }
+
+            forceGc()
+            val after = usedMemory()
+
+            results[trial] = after - before
+
+            // Keep pattern alive past the measurement.
+            if (p.pattern() == null) {
+                throw AssertionError("pattern should not be null")
+            }
+        }
+
+        Arrays.sort(results)
+        return results[TRIALS / 2] // median
+    }
 }

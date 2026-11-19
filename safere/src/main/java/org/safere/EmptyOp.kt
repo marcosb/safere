@@ -2,66 +2,63 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
-
-package org.safere;
+package org.safere
 
 /**
- * Bit flags for zero-width (empty) assertions. These are used by {@link InstOp#EMPTY_WIDTH}
+ * Bit flags for zero-width (empty) assertions. These are used by [InstOp.EMPTY_WIDTH]
  * instructions to test conditions at the current position without consuming input.
- *
- * <p>These correspond to RE2's EmptyOp enum in prog.h.
+ * 
+ * 
+ * These correspond to RE2's EmptyOp enum in prog.h.
  */
-final class EmptyOp {
+internal object EmptyOp {
+    /** `^` — beginning of line with the standard line terminator set.  */
+    val BEGIN_LINE: Int = 1 shl 0
 
-  /** {@code ^} — beginning of line with the standard line terminator set. */
-  public static final int BEGIN_LINE = 1 << 0;
+    /** `$` — end of line with the standard line terminator set.  */
+    val END_LINE: Int = 1 shl 1
 
-  /** {@code $} — end of line with the standard line terminator set. */
-  public static final int END_LINE = 1 << 1;
+    /** `\A` — beginning of text.  */
+    val BEGIN_TEXT: Int = 1 shl 2
 
-  /** {@code \A} — beginning of text. */
-  public static final int BEGIN_TEXT = 1 << 2;
+    /** `\z` — end of text.  */
+    val END_TEXT: Int = 1 shl 3
 
-  /** {@code \z} — end of text. */
-  public static final int END_TEXT = 1 << 3;
+    /** `\b` — word boundary.  */
+    val WORD_BOUNDARY: Int = 1 shl 4
 
-  /** {@code \b} — word boundary. */
-  public static final int WORD_BOUNDARY = 1 << 4;
+    /** `\B` — not a word boundary.  */
+    val NON_WORD_BOUNDARY: Int = 1 shl 5
 
-  /** {@code \B} — not a word boundary. */
-  public static final int NON_WORD_BOUNDARY = 1 << 5;
+    /**
+     * `$` without `MULTILINE` — end of text or before a trailing line terminator. JDK's
+     * `$` matches at end-of-input and also just before a final newline at the end of input.
+     * This flag is set at both positions. Distinct from [.END_TEXT] (`\z`), which matches
+     * only at the absolute end.
+     */
+    val DOLLAR_END: Int = 1 shl 6
 
-  /**
-   * {@code $} without {@code MULTILINE} — end of text or before a trailing line terminator. JDK's
-   * {@code $} matches at end-of-input and also just before a final newline at the end of input.
-   * This flag is set at both positions. Distinct from {@link #END_TEXT} ({@code \z}), which matches
-   * only at the absolute end.
-   */
-  public static final int DOLLAR_END = 1 << 6;
+    /** `\b` — Unicode word boundary (when UNICODE_CHARACTER_CLASS is set).  */
+    val UNICODE_WORD_BOUNDARY: Int = 1 shl 7
 
-  /** {@code \b} — Unicode word boundary (when UNICODE_CHARACTER_CLASS is set). */
-  public static final int UNICODE_WORD_BOUNDARY = 1 << 7;
+    /** `\B` — Unicode not a word boundary (when UNICODE_CHARACTER_CLASS is set).  */
+    val UNICODE_NON_WORD_BOUNDARY: Int = 1 shl 8
 
-  /** {@code \B} — Unicode not a word boundary (when UNICODE_CHARACTER_CLASS is set). */
-  public static final int UNICODE_NON_WORD_BOUNDARY = 1 << 8;
+    /** `$` or `\Z` with UNIX_LINES: end of text or before a final LF.  */
+    val UNIX_DOLLAR_END: Int = 1 shl 9
 
-  /** {@code $} or {@code \Z} with UNIX_LINES: end of text or before a final LF. */
-  public static final int UNIX_DOLLAR_END = 1 << 9;
+    /** Multiline `^` with UNIX_LINES.  */
+    val UNIX_BEGIN_LINE: Int = 1 shl 10
 
-  /** Multiline {@code ^} with UNIX_LINES. */
-  public static final int UNIX_BEGIN_LINE = 1 << 10;
+    /** Multiline `$` with UNIX_LINES.  */
+    val UNIX_END_LINE: Int = 1 shl 11
 
-  /** Multiline {@code $} with UNIX_LINES. */
-  public static final int UNIX_END_LINE = 1 << 11;
+    /** `\b{g}` — Unicode extended grapheme cluster boundary.  */
+    val GRAPHEME_CLUSTER_BOUNDARY: Int = 1 shl 12
 
-  /** {@code \b{g}} — Unicode extended grapheme cluster boundary. */
-  public static final int GRAPHEME_CLUSTER_BOUNDARY = 1 << 12;
+    /** Explicit `\b{g}` boundary, including String surrogate-context compatibility.  */
+    val EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY: Int = 1 shl 13
 
-  /** Explicit {@code \b{g}} boundary, including String surrogate-context compatibility. */
-  public static final int EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY = 1 << 13;
-
-  /** All flags combined. */
-  public static final int ALL_FLAGS = (1 << 14) - 1;
-
-  private EmptyOp() {} // Non-instantiable.
+    /** All flags combined.  */
+    val ALL_FLAGS: Int = (1 shl 14) - 1
 }

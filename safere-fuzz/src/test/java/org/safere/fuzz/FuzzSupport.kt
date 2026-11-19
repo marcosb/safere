@@ -2,906 +2,951 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.safere.FuzzDivergenceEvidence
+import org.safere.Matcher
+import org.safere.Pattern
+import java.util.*
+import java.util.concurrent.*
+import java.util.function.Function
+import java.util.regex.MatchResult
+import java.util.regex.PatternSyntaxException
+import kotlin.math.max
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+internal object FuzzSupport {
+    private const val JDK_ORACLE_TIMEOUT_PROPERTY = "safere.fuzz.jdkOracleTimeoutMillis"
+    private const val DEFAULT_JDK_ORACLE_TIMEOUT_MILLIS: Long = 250
+    private val JDK_ORACLE_EXECUTOR: ExecutorService = Executors.newCachedThreadPool(
+        ThreadFactory { runnable: Runnable? ->
+            val thread = Thread(runnable, "safere-jdk-regex-oracle")
+            thread.setDaemon(true)
+            thread
+        })
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
-import java.util.regex.MatchResult;
-import java.util.regex.PatternSyntaxException;
+    private val FLAGS = intArrayOf(
+        Pattern.UNIX_LINES,
+        Pattern.CASE_INSENSITIVE,
+        Pattern.COMMENTS,
+        Pattern.MULTILINE,
+        Pattern.LITERAL,
+        Pattern.DOTALL,
+        Pattern.UNICODE_CASE,
+        Pattern.UNICODE_CHARACTER_CLASS
+    )
 
-final class FuzzSupport {
-  private static final String JDK_ORACLE_TIMEOUT_PROPERTY = "safere.fuzz.jdkOracleTimeoutMillis";
-  private static final long DEFAULT_JDK_ORACLE_TIMEOUT_MILLIS = 250;
-  private static final ExecutorService JDK_ORACLE_EXECUTOR =
-      Executors.newCachedThreadPool(
-          runnable -> {
-            Thread thread = new Thread(runnable, "safere-jdk-regex-oracle");
-            thread.setDaemon(true);
-            return thread;
-          });
+    fun compileCompatibleOrSkip(regex: String, flags: Int): CompiledPattern? {
+        FuzzDivergenceEvidence.begin()
+        var safeRePattern: Pattern? = null
+        var jdkPattern: java.util.regex.Pattern? = null
+        var safeReException: PatternSyntaxException? = null
+        var jdkException: PatternSyntaxException? = null
 
-  private static final int[] FLAGS = {
-    org.safere.Pattern.UNIX_LINES,
-    org.safere.Pattern.CASE_INSENSITIVE,
-    org.safere.Pattern.COMMENTS,
-    org.safere.Pattern.MULTILINE,
-    org.safere.Pattern.LITERAL,
-    org.safere.Pattern.DOTALL,
-    org.safere.Pattern.UNICODE_CASE,
-    org.safere.Pattern.UNICODE_CHARACTER_CLASS
-  };
+        try {
+            safeRePattern = Pattern.compile(regex, flags)
+        } catch (e: PatternSyntaxException) {
+            safeReException = e
+        }
+        try {
+            jdkPattern = java.util.regex.Pattern.compile(regex, flags)
+        } catch (e: PatternSyntaxException) {
+            jdkException = e
+        }
 
-  private FuzzSupport() {}
+        if (safeRePattern != null && jdkPattern != null) {
+            return CompiledPattern(regex, flags, safeRePattern, jdkPattern)
+        }
+        if (safeReException != null && jdkException != null) {
+            return null
+        }
+        if (safeReException != null && isOverCompilerBudget(safeReException)) {
+            return null
+        }
 
-  static CompiledPattern compileCompatibleOrSkip(String regex, int flags) {
-    org.safere.FuzzDivergenceEvidence.begin();
-    org.safere.Pattern safeRePattern = null;
-    java.util.regex.Pattern jdkPattern = null;
-    PatternSyntaxException safeReException = null;
-    PatternSyntaxException jdkException = null;
-
-    try {
-      safeRePattern = org.safere.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException e) {
-      safeReException = e;
+        val safeRe =
+            if (safeReException == null)
+                "compiled successfully"
+            else
+                safeReException.javaClass.getSimpleName() + ": " + safeReException.message
+        val jdk =
+            if (jdkException == null)
+                "compiled successfully"
+            else
+                jdkException.javaClass.getSimpleName() + ": " + jdkException.message
+        throw FuzzFinding.failure(regex, flags, "", "compile", "", "", safeRe, jdk)
     }
-    try {
-      jdkPattern = java.util.regex.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException e) {
-      jdkException = e;
+
+    fun assertFullMatchesJdk(regex: String, flags: Int, inputs: MutableList<String>) {
+        val pattern = compileCompatibleOrSkip(regex, flags)
+        if (pattern == null) {
+            return
+        }
+        for (input in inputs) {
+            pattern.matcher(input).matches()
+        }
     }
 
-    if (safeRePattern != null && jdkPattern != null) {
-      return new CompiledPattern(regex, flags, safeRePattern, jdkPattern);
-    }
-    if (safeReException != null && jdkException != null) {
-      return null;
-    }
-    if (safeReException != null && isOverCompilerBudget(safeReException)) {
-      return null;
+    fun compileOrSkip(regex: String, flags: Int): CompiledPattern? {
+        return compileCompatibleOrSkip(regex, flags)
     }
 
-    String safeRe =
-        safeReException == null
-            ? "compiled successfully"
-            : safeReException.getClass().getSimpleName() + ": " + safeReException.getMessage();
-    String jdk =
-        jdkException == null
-            ? "compiled successfully"
-            : jdkException.getClass().getSimpleName() + ": " + jdkException.getMessage();
-    throw FuzzFinding.failure(regex, flags, "", "compile", "", "", safeRe, jdk);
-  }
-
-  static void assertFullMatchesJdk(String regex, int flags, List<String> inputs) {
-    CompiledPattern pattern = compileCompatibleOrSkip(regex, flags);
-    if (pattern == null) {
-      return;
+    fun jdkOracleCompletesForTesting(regex: String, input: String): Boolean {
+        val pattern = java.util.regex.Pattern.compile(regex)
+        return runJdkOracle<Boolean?>("matches", JdkOracleOperation { pattern.matcher(interruptible(input)).matches() })
+            .available
     }
-    for (String input : inputs) {
-      pattern.matcher(input).matches();
-    }
-  }
 
-  static CompiledPattern compileOrSkip(String regex, int flags) {
-    return compileCompatibleOrSkip(regex, flags);
-  }
-
-  static boolean jdkOracleCompletesForTesting(String regex, String input) {
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);
-    return runJdkOracle("matches", () -> pattern.matcher(interruptible(input)).matches())
-        .available();
-  }
-
-  static boolean jdkOracleStackOverflowIsAvailableForTesting() {
-    return runJdkOracle(
+    fun jdkOracleStackOverflowIsAvailableForTesting(): Boolean {
+        return runJdkOracle<Any?>(
             "stack overflow",
-            () -> {
-              throw new StackOverflowError();
+            JdkOracleOperation {
+                throw StackOverflowError()
             })
-        .available();
-  }
-
-  static int consumeFlags(FuzzedDataProvider data) {
-    int flags = 0;
-    for (int flag : FLAGS) {
-      if (data.consumeBoolean()) {
-        flags |= flag;
-      }
-    }
-    return flags;
-  }
-
-  static int consumeParserFlags(FuzzedDataProvider data) {
-    int flags = 0;
-    if (data.consumeBoolean()) {
-      flags |= org.safere.Pattern.COMMENTS;
-    }
-    if (data.consumeBoolean()) {
-      flags |= org.safere.Pattern.CASE_INSENSITIVE;
-    }
-    if (data.consumeBoolean()) {
-      flags |= org.safere.Pattern.UNICODE_CASE;
-    }
-    if (data.consumeBoolean()) {
-      flags |= org.safere.Pattern.UNICODE_CHARACTER_CLASS;
-    }
-    return flags;
-  }
-
-  record CompiledPattern(
-      String regex,
-      int flags,
-      org.safere.Pattern safeRePattern,
-      java.util.regex.Pattern jdkPattern) {
-
-    MatcherPair matcher(CharSequence input) {
-      return new MatcherPair(
-          regex,
-          flags,
-          input.toString(),
-          safeRePattern.matcher(input),
-          jdkPattern.matcher(interruptible(input)));
+            .available
     }
 
-    void split(CharSequence input) {
-      String inputText = input.toString();
-      JdkOracleResult<String[]> jdk =
-          runJdkOracle("split", () -> jdkPattern.split(interruptible(input)));
-      if (!jdk.available()) {
-        return;
-      }
-      assertArrayEquals("split", inputText, safeRePattern.split(input), jdk.value());
+    fun consumeFlags(data: FuzzedDataProvider): Int {
+        var flags = 0
+        for (flag in FLAGS) {
+            if (data.consumeBoolean()) {
+                flags = flags or flag
+            }
+        }
+        return flags
     }
 
-    void split(CharSequence input, int limit) {
-      String inputText = input.toString();
-      JdkOracleResult<String[]> jdk =
-          runJdkOracle("split(" + limit + ")", () -> jdkPattern.split(interruptible(input), limit));
-      if (!jdk.available()) {
-        return;
-      }
-      assertArrayEquals(
-          "split(" + limit + ")", inputText, safeRePattern.split(input, limit), jdk.value());
+    fun consumeParserFlags(data: FuzzedDataProvider): Int {
+        var flags = 0
+        if (data.consumeBoolean()) {
+            flags = flags or Pattern.COMMENTS
+        }
+        if (data.consumeBoolean()) {
+            flags = flags or Pattern.CASE_INSENSITIVE
+        }
+        if (data.consumeBoolean()) {
+            flags = flags or Pattern.UNICODE_CASE
+        }
+        if (data.consumeBoolean()) {
+            flags = flags or Pattern.UNICODE_CHARACTER_CLASS
+        }
+        return flags
     }
 
-    void splitWithDelimiters(CharSequence input) {
-      String inputText = input.toString();
-      JdkOracleResult<String[]> jdk =
-          runJdkOracle(
-              "splitWithDelimiters", () -> jdkPattern.splitWithDelimiters(interruptible(input), 0));
-      if (!jdk.available()) {
-        return;
-      }
-      assertArrayEquals(
-          "splitWithDelimiters", inputText, safeRePattern.splitWithDelimiters(input), jdk.value());
+    private fun <T> runJdkOracle(
+        operation: String?, jdkOperation: JdkOracleOperation<T?>
+    ): JdkOracleResult<T?> {
+        val task = JDK_ORACLE_EXECUTOR.submit<T?>(Callable { jdkOperation.run() })
+
+        try {
+            return JdkOracleResult<T?>(true, task.get(jdkOracleTimeoutMillis(), TimeUnit.MILLISECONDS))
+        } catch (e: TimeoutException) {
+            task.cancel(true)
+            return unavailableJdkOracle<T?>()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw AssertionError(
+                "interrupted while waiting for JDK regex oracle during " + operation, e
+            )
+        } catch (e: ExecutionException) {
+            val cause = e.cause
+            if (cause is JdkOracleInterruptedException) {
+                return unavailableJdkOracle<T?>()
+            }
+            if (cause is StackOverflowError) {
+                return unavailableJdkOracle<T?>()
+            }
+            if (cause is RuntimeException) {
+                throw cause
+            }
+            if (cause is Error) {
+                throw cause
+            }
+            throw AssertionError("JDK regex oracle failed with checked exception", cause)
+        }
     }
 
-    void splitWithDelimiters(CharSequence input, int limit) {
-      String inputText = input.toString();
-      JdkOracleResult<String[]> jdk =
-          runJdkOracle(
-              "splitWithDelimiters(" + limit + ")",
-              () -> jdkPattern.splitWithDelimiters(interruptible(input), limit));
-      if (!jdk.available()) {
-        return;
-      }
-      assertArrayEquals(
-          "splitWithDelimiters(" + limit + ")",
-          inputText,
-          safeRePattern.splitWithDelimiters(input, limit),
-          jdk.value());
+    private fun <T> unavailableJdkOracle(): JdkOracleResult<T?> {
+        return JdkOracleResult<T?>(false, null)
     }
 
-    private void assertArrayEquals(String operation, String input, String[] safeRe, String[] jdk) {
-      if (!Arrays.equals(safeRe, jdk)) {
-        throw FuzzFinding.failure(
-            regex, flags, input, operation, "", "", describeArray(safeRe), describeArray(jdk));
-      }
-    }
-  }
-
-  static final class MatcherPair {
-    private final String regex;
-    private final int flags;
-    private String input;
-    private String lastReplacement;
-    private final org.safere.Matcher safeReMatcher;
-    private final java.util.regex.Matcher jdkMatcher;
-    private boolean jdkOracleAvailable = true;
-    private final ArrayDeque<String> history = new ArrayDeque<>();
-    private int omittedEvents;
-
-    private void record(String event) {
-      if (history.size() == 256) {
-        history.removeFirst();
-        omittedEvents++;
-      }
-      history.addLast(event.length() > 4096 ? event.substring(0, 4096) + " [truncated]" : event);
+    private fun jdkOracleTimeoutMillis(): Long {
+        val configured = System.getProperty(JDK_ORACLE_TIMEOUT_PROPERTY)
+        if (configured == null) {
+            return DEFAULT_JDK_ORACLE_TIMEOUT_MILLIS
+        }
+        try {
+            return max(1, configured.toLong())
+        } catch (e: NumberFormatException) {
+            throw IllegalArgumentException(
+                JDK_ORACLE_TIMEOUT_PROPERTY + " must be a positive integer", e
+            )
+        }
     }
 
-    MatcherPair(
-        String regex,
-        int flags,
-        String input,
-        org.safere.Matcher safeReMatcher,
-        java.util.regex.Matcher jdkMatcher) {
-      this.regex = regex;
-      this.flags = flags;
-      this.input = input;
-      this.safeReMatcher = safeReMatcher;
-      this.jdkMatcher = jdkMatcher;
-      record("matcher(" + javaStringLiteral(input) + ")");
+    private fun interruptible(delegate: CharSequence): CharSequence {
+        return if (delegate is InterruptibleCharSequence)
+            delegate
+        else
+            InterruptibleCharSequence(delegate)
     }
 
-    boolean matches() {
-      boolean safeRe = safeReMatcher.matches();
-      boolean jdk = runJdkOracle("matches", safeRe, () -> jdkMatcher.matches());
-      assertSame("matches", safeRe, jdk);
-      if (safeRe) {
-        assertMatchState("matches");
-      }
-      return safeRe;
+    private fun checkInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw JdkOracleInterruptedException()
+        }
     }
 
-    boolean lookingAt() {
-      boolean safeRe = safeReMatcher.lookingAt();
-      boolean jdk = runJdkOracle("lookingAt", safeRe, () -> jdkMatcher.lookingAt());
-      assertSame("lookingAt", safeRe, jdk);
-      if (safeRe) {
-        assertMatchState("lookingAt");
-      }
-      return safeRe;
+    private fun isExpectedReplacementException(exception: RuntimeException?): Boolean {
+        return exception is IllegalArgumentException
+                || exception is IndexOutOfBoundsException
     }
 
-    boolean find() {
-      boolean safeRe = safeReMatcher.find();
-      boolean jdk = runJdkOracle("find", safeRe, () -> jdkMatcher.find());
-      assertSame("find", safeRe, jdk);
-      if (safeRe) {
-        assertMatchState("find");
-      }
-      return safeRe;
+    private fun describeArray(values: Array<String?>): String? {
+        return Arrays.stream<String?>(values).map<String?> { obj: String? -> FuzzSupport.javaStringLiteral() }.toList()
+            .toString()
     }
 
-    boolean find(int start) {
-      boolean safeRe = safeReMatcher.find(start);
-      boolean jdk = runJdkOracle("find(" + start + ")", safeRe, () -> jdkMatcher.find(start));
-      assertSame("find(" + start + ")", safeRe, jdk);
-      if (safeRe) {
-        assertMatchState("find(" + start + ")");
-      }
-      return safeRe;
-    }
-
-    MatcherPair reset() {
-      lastReplacement = null;
-      safeReMatcher.reset();
-      runJdkOracle("reset", null, () -> jdkMatcher.reset());
-      return this;
-    }
-
-    MatcherPair reset(CharSequence input) {
-      this.input = input.toString();
-      this.lastReplacement = null;
-      // Never re-enable the oracle: JDK configuration calls skipped while it was unavailable would
-      // leave the two matchers out of sync.
-      safeReMatcher.reset(input);
-      runJdkOracle(
-          "reset(" + javaStringLiteral(this.input) + ")",
-          null,
-          () -> jdkMatcher.reset(interruptible(input)));
-      return this;
-    }
-
-    boolean hasMatch() {
-      boolean safeRe = safeReMatcher.hasMatch();
-      boolean jdk = runJdkOracle("hasMatch", safeRe, () -> jdkMatcher.hasMatch());
-      // #931 also occurs after an explicit terminal find(), outside replacement loops.
-      if (!safeRe && jdk && hasJdkExhaustedEmptyMatchState()) {
-        assertSafeReExhaustedState();
-        return false;
-      }
-      assertSame("hasMatch", safeRe, jdk);
-      return safeRe;
-    }
-
-    int groupCount() {
-      int safeRe = safeReMatcher.groupCount();
-      int jdk = runJdkOracle("groupCount", safeRe, () -> jdkMatcher.groupCount());
-      assertSame("groupCount", safeRe, jdk);
-      return safeRe;
-    }
-
-    String group() {
-      String safeRe = safeReMatcher.group();
-      String jdk = runJdkOracle("group", safeRe, () -> jdkMatcher.group());
-      assertSame("group", safeRe, jdk);
-      return safeRe;
-    }
-
-    String group(int group) {
-      String safeRe = safeReMatcher.group(group);
-      String jdk = runJdkOracle("group(" + group + ")", safeRe, () -> jdkMatcher.group(group));
-      assertSame("group(" + group + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    String group(String name) {
-      String safeRe = safeReMatcher.group(name);
-      String jdk = runJdkOracle("group(" + name + ")", safeRe, () -> jdkMatcher.group(name));
-      assertSame("group(" + name + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    int start() {
-      int safeRe = safeReMatcher.start();
-      int jdk = runJdkOracle("start", safeRe, () -> jdkMatcher.start());
-      assertSame("start", safeRe, jdk);
-      return safeRe;
-    }
-
-    int start(int group) {
-      int safeRe = safeReMatcher.start(group);
-      int jdk = runJdkOracle("start(" + group + ")", safeRe, () -> jdkMatcher.start(group));
-      assertSame("start(" + group + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    int start(String name) {
-      int safeRe = safeReMatcher.start(name);
-      int jdk = runJdkOracle("start(" + name + ")", safeRe, () -> jdkMatcher.start(name));
-      assertSame("start(" + name + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    int end() {
-      int safeRe = safeReMatcher.end();
-      int jdk = runJdkOracle("end", safeRe, () -> jdkMatcher.end());
-      assertSame("end", safeRe, jdk);
-      return safeRe;
-    }
-
-    int end(int group) {
-      int safeRe = safeReMatcher.end(group);
-      int jdk = runJdkOracle("end(" + group + ")", safeRe, () -> jdkMatcher.end(group));
-      assertSame("end(" + group + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    int end(String name) {
-      int safeRe = safeReMatcher.end(name);
-      int jdk = runJdkOracle("end(" + name + ")", safeRe, () -> jdkMatcher.end(name));
-      assertSame("end(" + name + ")", safeRe, jdk);
-      return safeRe;
-    }
-
-    MatcherPair region(int start, int end) {
-      safeReMatcher.region(start, end);
-      runJdkOracle("region(" + start + "," + end + ")", null, () -> jdkMatcher.region(start, end));
-      return this;
-    }
-
-    int regionStart() {
-      int safeRe = safeReMatcher.regionStart();
-      int jdk = runJdkOracle("regionStart", safeRe, () -> jdkMatcher.regionStart());
-      assertSame("regionStart", safeRe, jdk);
-      return safeRe;
-    }
-
-    int regionEnd() {
-      int safeRe = safeReMatcher.regionEnd();
-      int jdk = runJdkOracle("regionEnd", safeRe, () -> jdkMatcher.regionEnd());
-      assertSame("regionEnd", safeRe, jdk);
-      return safeRe;
-    }
-
-    MatcherPair useAnchoringBounds(boolean value) {
-      safeReMatcher.useAnchoringBounds(value);
-      runJdkOracle(
-          "useAnchoringBounds(" + value + ")", null, () -> jdkMatcher.useAnchoringBounds(value));
-      return this;
-    }
-
-    MatcherPair useTransparentBounds(boolean value) {
-      safeReMatcher.useTransparentBounds(value);
-      runJdkOracle(
-          "useTransparentBounds(" + value + ")",
-          null,
-          () -> jdkMatcher.useTransparentBounds(value));
-      return this;
-    }
-
-    boolean hasAnchoringBounds() {
-      boolean safeRe = safeReMatcher.hasAnchoringBounds();
-      boolean jdk =
-          runJdkOracle("hasAnchoringBounds", safeRe, () -> jdkMatcher.hasAnchoringBounds());
-      assertSame("hasAnchoringBounds", safeRe, jdk);
-      return safeRe;
-    }
-
-    boolean hasTransparentBounds() {
-      boolean safeRe = safeReMatcher.hasTransparentBounds();
-      boolean jdk =
-          runJdkOracle("hasTransparentBounds", safeRe, () -> jdkMatcher.hasTransparentBounds());
-      assertSame("hasTransparentBounds", safeRe, jdk);
-      return safeRe;
-    }
-
-    boolean replaceAll(String replacement) {
-      return assertSameReplacementOutcome(
-          "replaceAll",
-          replacement,
-          () -> safeReMatcher.replaceAll(replacement),
-          () -> runJdkOracle("replaceAll", null, () -> jdkMatcher.replaceAll(replacement)));
-    }
-
-    boolean replaceAll(Function<MatchResult, String> replacer) {
-      return assertSameReplacementOutcome(
-          "replaceAll(function)",
-          null,
-          () -> safeReMatcher.replaceAll(replacer),
-          () -> runJdkOracle("replaceAll(function)", null, () -> jdkMatcher.replaceAll(replacer)));
-    }
-
-    boolean replaceFirst(String replacement) {
-      return assertSameReplacementOutcome(
-          "replaceFirst",
-          replacement,
-          () -> safeReMatcher.replaceFirst(replacement),
-          () -> runJdkOracle("replaceFirst", null, () -> jdkMatcher.replaceFirst(replacement)));
-    }
-
-    boolean hasReplacementMatchState() {
-      boolean safeRe;
-      try {
-        safeReMatcher.start();
-        safeRe = true;
-      } catch (IllegalStateException e) {
-        safeRe = false;
-      }
-      boolean jdk =
-          runJdkOracle(
-              "replacement match state",
-              safeRe,
-              () -> {
-                try {
-                  var unused = jdkMatcher.start();
-                  return true;
-                } catch (IllegalStateException e) {
-                  return false;
+    fun javaStringLiteral(value: String): String {
+        val result = StringBuilder(value.length + 2)
+        result.append('"')
+        for (i in 0..<value.length) {
+            val c = value.get(i)
+            when (c) {
+                '\\' -> result.append("\\\\")
+                '"' -> result.append("\\\"")
+                '\b' -> result.append("\\b")
+                '\f' -> result.append("\\f")
+                '\n' -> result.append("\\n")
+                '\r' -> result.append("\\r")
+                '\t' -> result.append("\\t")
+                else -> {
+                    if (c.code < 0x20 || Character.isSurrogate(c)) {
+                        result.append(String.format("\\u%04x", c.code))
+                    } else {
+                        result.append(c)
+                    }
                 }
-              });
-      assertSame("replacement match state", safeRe, jdk);
-      if (safeRe) {
-        assertMatchState("replacement match state");
-      }
-      return safeRe;
-    }
-
-    boolean appendReplacement(StringBuilder output, String replacement) {
-      StringBuilder safeRe = new StringBuilder();
-      StringBuilder jdk = new StringBuilder();
-      lastReplacement = replacement;
-      boolean completed =
-          assertSameReplacementOutcome(
-              "appendReplacement",
-              replacement,
-              () -> {
-                safeReMatcher.appendReplacement(safeRe, replacement);
-                return safeRe.toString();
-              },
-              () -> {
-                runJdkOracle(
-                    "appendReplacement",
-                    null,
-                    () -> jdkMatcher.appendReplacement(jdk, replacement));
-                return jdk.toString();
-              });
-      if (completed) {
-        output.append(safeRe);
-      }
-      return completed;
-    }
-
-    boolean appendReplacement(StringBuffer output, String replacement) {
-      StringBuffer safeRe = new StringBuffer();
-      StringBuffer jdk = new StringBuffer();
-      lastReplacement = replacement;
-      boolean completed =
-          assertSameReplacementOutcome(
-              "appendReplacement",
-              replacement,
-              () -> {
-                safeReMatcher.appendReplacement(safeRe, replacement);
-                return safeRe.toString();
-              },
-              () -> {
-                runJdkOracle(
-                    "appendReplacement",
-                    null,
-                    () -> jdkMatcher.appendReplacement(jdk, replacement));
-                return jdk.toString();
-              });
-      if (completed) {
-        output.append(safeRe);
-      }
-      return completed;
-    }
-
-    void appendTail(StringBuilder output) {
-      StringBuilder safeRe = new StringBuilder();
-      StringBuilder jdk = new StringBuilder();
-      safeReMatcher.appendTail(safeRe);
-      runJdkOracle("appendTail", null, () -> jdkMatcher.appendTail(jdk));
-      if (!jdkOracleAvailable) {
-        output.append(safeRe);
-        return;
-      }
-      assertSame("appendTail", safeRe.toString(), jdk.toString());
-      output.append(safeRe);
-    }
-
-    void appendTail(StringBuffer output) {
-      StringBuffer safeRe = new StringBuffer();
-      StringBuffer jdk = new StringBuffer();
-      safeReMatcher.appendTail(safeRe);
-      runJdkOracle("appendTail", null, () -> jdkMatcher.appendTail(jdk));
-      if (!jdkOracleAvailable) {
-        output.append(safeRe);
-        return;
-      }
-      assertSame("appendTail", safeRe.toString(), jdk.toString());
-      output.append(safeRe);
-    }
-
-    void toMatchResult() {
-      MatchResult safeRe = safeReMatcher.toMatchResult();
-      MatchResult jdk = runJdkOracle("toMatchResult", safeRe, () -> jdkMatcher.toMatchResult());
-      assertMatchResult("toMatchResult", safeRe, jdk);
-    }
-
-    private void assertMatchState(String operation) {
-      assertSame(
-          operation + ".start",
-          safeReMatcher.start(),
-          runJdkOracle(operation + ".start", safeReMatcher.start(), () -> jdkMatcher.start()));
-      assertSame(
-          operation + ".end",
-          safeReMatcher.end(),
-          runJdkOracle(operation + ".end", safeReMatcher.end(), () -> jdkMatcher.end()));
-      int groupCount = groupCount();
-      for (int i = 0; i <= groupCount; i++) {
-        group(i);
-        start(i);
-        end(i);
-      }
-    }
-
-    private void assertMatchResult(String operation, MatchResult safeRe, MatchResult jdk) {
-      assertSame(operation + ".start", safeRe.start(), jdk.start());
-      assertSame(operation + ".end", safeRe.end(), jdk.end());
-      int groupCount = safeRe.groupCount();
-      assertSame(operation + ".groupCount", groupCount, jdk.groupCount());
-      for (int i = 0; i <= groupCount; i++) {
-        assertSame(operation + ".group(" + i + ")", safeRe.group(i), jdk.group(i));
-        assertSame(operation + ".start(" + i + ")", safeRe.start(i), jdk.start(i));
-        assertSame(operation + ".end(" + i + ")", safeRe.end(i), jdk.end(i));
-      }
-    }
-
-    private boolean assertSameReplacementOutcome(
-        String operation,
-        String replacement,
-        StringOperation safeReOperation,
-        StringOperation jdkOperation) {
-      OperationResult<String> safeRe = OperationResult.capture(safeReOperation);
-      if (!jdkOracleAvailable) {
-        return false;
-      }
-      OperationResult<String> jdk = OperationResult.capture(jdkOperation);
-      if (!jdkOracleAvailable) {
-        return false;
-      }
-      if (safeRe.throwable() == null && jdk.throwable() == null) {
-        assertSame(operation, replacement, safeRe.value(), jdk.value());
-        if (operation.equals("replaceAll") || operation.equals("replaceAll(function)")) {
-          assertExhaustedReplacementState();
+            }
         }
-        return true;
-      }
-      if (safeRe.throwable() != null
-          && jdk.throwable() != null
-          && isExpectedReplacementException(safeRe.throwable())
-          && isExpectedReplacementException(jdk.throwable())) {
-        return false;
-      }
-      throw divergence(operation, replacement, safeRe.describe(), jdk.describe());
+        result.append('"')
+        return result.toString()
     }
 
-    private void assertSafeReExhaustedState() {
-      assertThat(safeReMatcher.hasMatch()).as("exhausted state for %s", regex).isFalse();
-      assertThatThrownBy(safeReMatcher::group).isInstanceOf(IllegalStateException.class);
-      assertThatThrownBy(safeReMatcher::start).isInstanceOf(IllegalStateException.class);
-      assertThatThrownBy(safeReMatcher::end).isInstanceOf(IllegalStateException.class);
-      groupCount();
-      for (int group = 0; group <= safeReMatcher.groupCount(); group++) {
-        int index = group;
-        assertThatThrownBy(() -> safeReMatcher.group(index))
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> safeReMatcher.start(index))
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> safeReMatcher.end(index))
-            .isInstanceOf(IllegalStateException.class);
-      }
+    private fun isOverCompilerBudget(safeReException: PatternSyntaxException): Boolean {
+        return safeReException.getDescription() == "compiled program too large"
     }
 
-    private boolean hasJdkExhaustedEmptyMatchState() {
-      boolean defect = OracleDefects.exhaustedEmptyMatch(jdkMatcher);
-      if (defect) OracleDefects.record();
-      return defect;
+    fun consumeIndex(data: FuzzedDataProvider, input: String): Int {
+        return data.consumeInt(0, input.length)
     }
 
-    private void assertExhaustedReplacementState() {
-      assertSafeReExhaustedState();
-      // #931: exclude only the JDK's half-cleared terminal-empty-match state, after a
-      // successful replaceAll. SafeRE must still satisfy every exhausted-state assertion.
-      // Do not waive replacement output, replaceFirst state, or other JDK state shapes.
-      if (!hasJdkExhaustedEmptyMatchState()) {
-        assertThat(jdkMatcher.hasMatch()).isFalse();
-        assertThatThrownBy(jdkMatcher::group).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(jdkMatcher::start).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(jdkMatcher::end).isInstanceOf(IllegalStateException.class);
-      }
+    fun consumeRegion(data: FuzzedDataProvider, input: String): IntArray {
+        val start = consumeIndex(data, input)
+        val end = data.consumeInt(start, input.length)
+        return intArrayOf(start, end)
     }
 
-    private AssertionError divergence(
-        String operation, String replacement, Object safeRe, Object jdk) {
-      return FuzzFinding.failure(
-          regex,
-          flags,
-          input,
-          operation,
-          "region="
-              + safeReMatcher.regionStart()
-              + ":"
-              + safeReMatcher.regionEnd()
-              + " anchoring="
-              + safeReMatcher.hasAnchoringBounds()
-              + " transparent="
-              + safeReMatcher.hasTransparentBounds()
-              + " replacement="
-              + (replacement == null ? "null" : javaStringLiteral(replacement)),
-          "omittedEvents=" + omittedEvents + " " + history,
-          Objects.toString(safeRe),
-          Objects.toString(jdk));
-    }
-
-    private void assertSame(String operation, Object safeRe, Object jdk) {
-      assertSame(operation, lastReplacement, safeRe, jdk);
-    }
-
-    private void assertSame(String operation, String replacement, Object safeRe, Object jdk) {
-      record(
-          operation
-              + " SafeRE="
-              + javaStringLiteral(Objects.toString(safeRe))
-              + " JDK="
-              + javaStringLiteral(Objects.toString(jdk)));
-      if (!Objects.equals(safeRe, jdk)) {
-        throw divergence(operation, replacement, safeRe, jdk);
-      }
-    }
-
-    private <T> T runJdkOracle(String operation, T fallback, JdkOracleOperation<T> jdkOperation) {
-      record(operation);
-      if (!jdkOracleAvailable) {
-        return fallback;
-      }
-      JdkOracleResult<T> result = FuzzSupport.runJdkOracle(operation, jdkOperation);
-      if (!result.available()) {
-        jdkOracleAvailable = false;
-        return fallback;
-      }
-      return result.value();
-    }
-  }
-
-  private record OperationResult<T>(T value, RuntimeException throwable) {
-    static OperationResult<String> capture(StringOperation operation) {
-      try {
-        return new OperationResult<>(operation.run(), null);
-      } catch (RuntimeException e) {
-        return new OperationResult<>(null, e);
-      }
-    }
-
-    String describe() {
-      return throwable == null
-          ? Objects.toString(value)
-          : throwable.getClass().getSimpleName() + ": " + throwable.getMessage();
-    }
-  }
-
-  private interface StringOperation {
-    String run();
-  }
-
-  private interface JdkOracleOperation<T> {
-    T run();
-  }
-
-  private record JdkOracleResult<T>(boolean available, T value) {}
-
-  private static <T> JdkOracleResult<T> runJdkOracle(
-      String operation, JdkOracleOperation<T> jdkOperation) {
-    Future<T> task = JDK_ORACLE_EXECUTOR.submit(jdkOperation::run);
-
-    try {
-      return new JdkOracleResult<>(true, task.get(jdkOracleTimeoutMillis(), TimeUnit.MILLISECONDS));
-    } catch (TimeoutException e) {
-      task.cancel(true);
-      return unavailableJdkOracle();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new AssertionError(
-          "interrupted while waiting for JDK regex oracle during " + operation, e);
-    } catch (ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof JdkOracleInterruptedException) {
-        return unavailableJdkOracle();
-      }
-      if (cause instanceof StackOverflowError) {
-        return unavailableJdkOracle();
-      }
-      if (cause instanceof RuntimeException runtimeException) {
-        throw runtimeException;
-      }
-      if (cause instanceof Error error) {
-        throw error;
-      }
-      throw new AssertionError("JDK regex oracle failed with checked exception", cause);
-    }
-  }
-
-  private static <T> JdkOracleResult<T> unavailableJdkOracle() {
-    return new JdkOracleResult<>(false, null);
-  }
-
-  private static long jdkOracleTimeoutMillis() {
-    String configured = System.getProperty(JDK_ORACLE_TIMEOUT_PROPERTY);
-    if (configured == null) {
-      return DEFAULT_JDK_ORACLE_TIMEOUT_MILLIS;
-    }
-    try {
-      return Math.max(1, Long.parseLong(configured));
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          JDK_ORACLE_TIMEOUT_PROPERTY + " must be a positive integer", e);
-    }
-  }
-
-  private static CharSequence interruptible(CharSequence delegate) {
-    return delegate instanceof InterruptibleCharSequence
-        ? delegate
-        : new InterruptibleCharSequence(delegate);
-  }
-
-  private record InterruptibleCharSequence(CharSequence delegate) implements CharSequence {
-    @Override
-    public int length() {
-      checkInterrupted();
-      return delegate.length();
-    }
-
-    @Override
-    public char charAt(int index) {
-      checkInterrupted();
-      return delegate.charAt(index);
-    }
-
-    @Override
-    public CharSequence subSequence(int start, int end) {
-      checkInterrupted();
-      return new InterruptibleCharSequence(delegate.subSequence(start, end));
-    }
-
-    @Override
-    public String toString() {
-      return delegate.toString();
-    }
-  }
-
-  private static void checkInterrupted() {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new JdkOracleInterruptedException();
-    }
-  }
-
-  private static final class JdkOracleInterruptedException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-  }
-
-  private static boolean isExpectedReplacementException(RuntimeException exception) {
-    return exception instanceof IllegalArgumentException
-        || exception instanceof IndexOutOfBoundsException;
-  }
-
-  private static String describeArray(String[] values) {
-    return Arrays.stream(values).map(FuzzSupport::javaStringLiteral).toList().toString();
-  }
-
-  static String javaStringLiteral(String value) {
-    StringBuilder result = new StringBuilder(value.length() + 2);
-    result.append('"');
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      switch (c) {
-        case '\\' -> result.append("\\\\");
-        case '"' -> result.append("\\\"");
-        case '\b' -> result.append("\\b");
-        case '\f' -> result.append("\\f");
-        case '\n' -> result.append("\\n");
-        case '\r' -> result.append("\\r");
-        case '\t' -> result.append("\\t");
-        default -> {
-          if (c < 0x20 || Character.isSurrogate(c)) {
-            result.append(String.format("\\u%04x", (int) c));
-          } else {
-            result.append(c);
-          }
+    fun consumeUnicodeHeavyString(data: FuzzedDataProvider, maxCodePoints: Int): String {
+        val codePoints = data.consumeInt(0, maxCodePoints)
+        val sb = StringBuilder(codePoints)
+        for (i in 0..<codePoints) {
+            when (data.consumeInt(0, 9)) {
+                0 -> sb.append(data.consumeInt('a'.code, 'z'.code).toChar())
+                1 -> sb.append(data.consumeInt('0'.code, '9'.code).toChar())
+                2 -> sb.append('\n')
+                3 -> sb.append('\r')
+                4 -> sb.append('\u2028')
+                5 -> sb.append('\u0301')
+                6 -> sb.append(Character.toChars(data.consumeInt(0x10000, 0x10FFFF)))
+                7 -> sb.append(data.consumeInt(0xD800, 0xDBFF).toChar())
+                8 -> sb.append(data.consumeInt(0xDC00, 0xDFFF).toChar())
+                9 -> sb.append(data.consumeInt(0x80, 0xFFFD).toChar())
+                else -> throw AssertionError()
+            }
         }
-      }
+        return sb.toString()
     }
-    result.append('"');
-    return result.toString();
-  }
 
-  private static boolean isOverCompilerBudget(PatternSyntaxException safeReException) {
-    return Objects.equals(safeReException.getDescription(), "compiled program too large");
-  }
+    @JvmRecord
+    internal data class CompiledPattern(
+        val regex: String?,
+        val flags: Int,
+        val safeRePattern: Pattern?,
+        val jdkPattern: java.util.regex.Pattern?
+    ) {
+        fun matcher(input: CharSequence): MatcherPair {
+            return MatcherPair(
+                regex,
+                flags,
+                input.toString(),
+                safeRePattern!!.matcher(input),
+                jdkPattern!!.matcher(interruptible(input))
+            )
+        }
 
-  static int consumeIndex(FuzzedDataProvider data, String input) {
-    return data.consumeInt(0, input.length());
-  }
+        fun split(input: CharSequence) {
+            val inputText = input.toString()
+            val jdk =
+                runJdkOracle<Array<String?>?>("split", JdkOracleOperation { jdkPattern!!.split(interruptible(input)) })
+            if (!jdk.available) {
+                return
+            }
+            assertArrayEquals("split", inputText, safeRePattern!!.split(input), jdk.value!!)
+        }
 
-  static int[] consumeRegion(FuzzedDataProvider data, String input) {
-    int start = consumeIndex(data, input);
-    int end = data.consumeInt(start, input.length());
-    return new int[] {start, end};
-  }
+        fun split(input: CharSequence, limit: Int) {
+            val inputText = input.toString()
+            val jdk =
+                runJdkOracle<Array<String?>?>(
+                    "split(" + limit + ")",
+                    JdkOracleOperation { jdkPattern!!.split(interruptible(input), limit) })
+            if (!jdk.available) {
+                return
+            }
+            assertArrayEquals(
+                "split(" + limit + ")", inputText, safeRePattern!!.split(input, limit), jdk.value!!
+            )
+        }
 
-  static String consumeUnicodeHeavyString(FuzzedDataProvider data, int maxCodePoints) {
-    int codePoints = data.consumeInt(0, maxCodePoints);
-    StringBuilder sb = new StringBuilder(codePoints);
-    for (int i = 0; i < codePoints; i++) {
-      switch (data.consumeInt(0, 9)) {
-        case 0 -> sb.append((char) data.consumeInt('a', 'z'));
-        case 1 -> sb.append((char) data.consumeInt('0', '9'));
-        case 2 -> sb.append('\n');
-        case 3 -> sb.append('\r');
-        case 4 -> sb.append('\u2028');
-        case 5 -> sb.append('\u0301');
-        case 6 -> sb.append(Character.toChars(data.consumeInt(0x10000, 0x10FFFF)));
-        case 7 -> sb.append((char) data.consumeInt(0xD800, 0xDBFF));
-        case 8 -> sb.append((char) data.consumeInt(0xDC00, 0xDFFF));
-        case 9 -> sb.append((char) data.consumeInt(0x80, 0xFFFD));
-        default -> throw new AssertionError();
-      }
+        fun splitWithDelimiters(input: CharSequence) {
+            val inputText = input.toString()
+            val jdk =
+                runJdkOracle<Array<String?>?>(
+                    "splitWithDelimiters",
+                    JdkOracleOperation { jdkPattern!!.splitWithDelimiters(interruptible(input), 0) })
+            if (!jdk.available) {
+                return
+            }
+            assertArrayEquals(
+                "splitWithDelimiters", inputText, safeRePattern!!.splitWithDelimiters(input), jdk.value!!
+            )
+        }
+
+        fun splitWithDelimiters(input: CharSequence, limit: Int) {
+            val inputText = input.toString()
+            val jdk =
+                runJdkOracle<Array<String?>?>(
+                    "splitWithDelimiters(" + limit + ")",
+                    JdkOracleOperation { jdkPattern!!.splitWithDelimiters(interruptible(input), limit) })
+            if (!jdk.available) {
+                return
+            }
+            assertArrayEquals(
+                "splitWithDelimiters(" + limit + ")",
+                inputText,
+                safeRePattern!!.splitWithDelimiters(input, limit),
+                jdk.value!!
+            )
+        }
+
+        private fun assertArrayEquals(operation: String?, input: String?, safeRe: Array<String?>, jdk: Array<String?>) {
+            if (!safeRe.contentEquals(jdk)) {
+                throw FuzzFinding.failure(
+                    regex, flags, input, operation, "", "", describeArray(safeRe), describeArray(jdk)
+                )
+            }
+        }
     }
-    return sb.toString();
-  }
+
+    internal class MatcherPair(
+        private val regex: String?,
+        private val flags: Int,
+        private var input: String,
+        private val safeReMatcher: Matcher,
+        private val jdkMatcher: java.util.regex.Matcher
+    ) {
+        private var lastReplacement: String? = null
+        private var jdkOracleAvailable = true
+        private val history = ArrayDeque<String?>()
+        private var omittedEvents = 0
+
+        private fun record(event: String) {
+            if (history.size == 256) {
+                history.removeFirst()
+                omittedEvents++
+            }
+            history.addLast(if (event.length > 4096) event.substring(0, 4096) + " [truncated]" else event)
+        }
+
+        init {
+            record("matcher(" + javaStringLiteral(input) + ")")
+        }
+
+        fun matches(): Boolean {
+            val safeRe = safeReMatcher.matches()
+            val jdk = runJdkOracle<Boolean?>("matches", safeRe, JdkOracleOperation { jdkMatcher.matches() })!!
+            assertSame("matches", safeRe, jdk)
+            if (safeRe) {
+                assertMatchState("matches")
+            }
+            return safeRe
+        }
+
+        fun lookingAt(): Boolean {
+            val safeRe = safeReMatcher.lookingAt()
+            val jdk = runJdkOracle<Boolean?>("lookingAt", safeRe, JdkOracleOperation { jdkMatcher.lookingAt() })!!
+            assertSame("lookingAt", safeRe, jdk)
+            if (safeRe) {
+                assertMatchState("lookingAt")
+            }
+            return safeRe
+        }
+
+        fun find(): Boolean {
+            val safeRe = safeReMatcher.find()
+            val jdk = runJdkOracle<Boolean?>("find", safeRe, JdkOracleOperation { jdkMatcher.find() })!!
+            assertSame("find", safeRe, jdk)
+            if (safeRe) {
+                assertMatchState("find")
+            }
+            return safeRe
+        }
+
+        fun find(start: Int): Boolean {
+            val safeRe = safeReMatcher.find(start)
+            val jdk =
+                runJdkOracle<Boolean?>("find(" + start + ")", safeRe, JdkOracleOperation { jdkMatcher.find(start) })!!
+            assertSame("find(" + start + ")", safeRe, jdk)
+            if (safeRe) {
+                assertMatchState("find(" + start + ")")
+            }
+            return safeRe
+        }
+
+        fun reset(): MatcherPair {
+            lastReplacement = null
+            safeReMatcher.reset()
+            runJdkOracle<java.util.regex.Matcher?>("reset", null, JdkOracleOperation { jdkMatcher.reset() })
+            return this
+        }
+
+        fun reset(input: CharSequence): MatcherPair {
+            this.input = input.toString()
+            this.lastReplacement = null
+            // Never re-enable the oracle: JDK configuration calls skipped while it was unavailable would
+            // leave the two matchers out of sync.
+            safeReMatcher.reset(input)
+            runJdkOracle<java.util.regex.Matcher?>(
+                "reset(" + javaStringLiteral(this.input) + ")",
+                null,
+                JdkOracleOperation { jdkMatcher.reset(interruptible(input)) })
+            return this
+        }
+
+        fun hasMatch(): Boolean {
+            val safeRe = safeReMatcher.hasMatch()
+            val jdk = runJdkOracle<Boolean?>("hasMatch", safeRe, JdkOracleOperation { jdkMatcher.hasMatch() })!!
+            // #931 also occurs after an explicit terminal find(), outside replacement loops.
+            if (!safeRe && jdk && hasJdkExhaustedEmptyMatchState()) {
+                assertSafeReExhaustedState()
+                return false
+            }
+            assertSame("hasMatch", safeRe, jdk)
+            return safeRe
+        }
+
+        fun groupCount(): Int {
+            val safeRe = safeReMatcher.groupCount()
+            val jdk = runJdkOracle<Int?>("groupCount", safeRe, JdkOracleOperation { jdkMatcher.groupCount() })!!
+            assertSame("groupCount", safeRe, jdk)
+            return safeRe
+        }
+
+        fun group(): String? {
+            val safeRe = safeReMatcher.group()
+            val jdk = runJdkOracle<String?>("group", safeRe, JdkOracleOperation { jdkMatcher.group() })
+            assertSame("group", safeRe, jdk)
+            return safeRe
+        }
+
+        fun group(group: Int): String? {
+            val safeRe = safeReMatcher.group(group)
+            val jdk =
+                runJdkOracle<String?>("group(" + group + ")", safeRe, JdkOracleOperation { jdkMatcher.group(group) })
+            assertSame("group(" + group + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun group(name: String): String? {
+            val safeRe = safeReMatcher.group(name)
+            val jdk =
+                runJdkOracle<String?>("group(" + name + ")", safeRe, JdkOracleOperation { jdkMatcher.group(name) })
+            assertSame("group(" + name + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun start(): Int {
+            val safeRe = safeReMatcher.start()
+            val jdk = runJdkOracle<Int?>("start", safeRe, JdkOracleOperation { jdkMatcher.start() })!!
+            assertSame("start", safeRe, jdk)
+            return safeRe
+        }
+
+        fun start(group: Int): Int {
+            val safeRe = safeReMatcher.start(group)
+            val jdk =
+                runJdkOracle<Int?>("start(" + group + ")", safeRe, JdkOracleOperation { jdkMatcher.start(group) })!!
+            assertSame("start(" + group + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun start(name: String): Int {
+            val safeRe = safeReMatcher.start(name)
+            val jdk = runJdkOracle<Int?>("start(" + name + ")", safeRe, JdkOracleOperation { jdkMatcher.start(name) })!!
+            assertSame("start(" + name + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun end(): Int {
+            val safeRe = safeReMatcher.end()
+            val jdk = runJdkOracle<Int?>("end", safeRe, JdkOracleOperation { jdkMatcher.end() })!!
+            assertSame("end", safeRe, jdk)
+            return safeRe
+        }
+
+        fun end(group: Int): Int {
+            val safeRe = safeReMatcher.end(group)
+            val jdk = runJdkOracle<Int?>("end(" + group + ")", safeRe, JdkOracleOperation { jdkMatcher.end(group) })!!
+            assertSame("end(" + group + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun end(name: String): Int {
+            val safeRe = safeReMatcher.end(name)
+            val jdk = runJdkOracle<Int?>("end(" + name + ")", safeRe, JdkOracleOperation { jdkMatcher.end(name) })!!
+            assertSame("end(" + name + ")", safeRe, jdk)
+            return safeRe
+        }
+
+        fun region(start: Int, end: Int): MatcherPair {
+            safeReMatcher.region(start, end)
+            runJdkOracle<java.util.regex.Matcher?>(
+                "region(" + start + "," + end + ")",
+                null,
+                JdkOracleOperation { jdkMatcher.region(start, end) })
+            return this
+        }
+
+        fun regionStart(): Int {
+            val safeRe = safeReMatcher.regionStart()
+            val jdk = runJdkOracle<Int?>("regionStart", safeRe, JdkOracleOperation { jdkMatcher.regionStart() })!!
+            assertSame("regionStart", safeRe, jdk)
+            return safeRe
+        }
+
+        fun regionEnd(): Int {
+            val safeRe = safeReMatcher.regionEnd()
+            val jdk = runJdkOracle<Int?>("regionEnd", safeRe, JdkOracleOperation { jdkMatcher.regionEnd() })!!
+            assertSame("regionEnd", safeRe, jdk)
+            return safeRe
+        }
+
+        fun useAnchoringBounds(value: Boolean): MatcherPair {
+            safeReMatcher.useAnchoringBounds(value)
+            runJdkOracle<java.util.regex.Matcher?>(
+                "useAnchoringBounds(" + value + ")", null, JdkOracleOperation { jdkMatcher.useAnchoringBounds(value) })
+            return this
+        }
+
+        fun useTransparentBounds(value: Boolean): MatcherPair {
+            safeReMatcher.useTransparentBounds(value)
+            runJdkOracle<java.util.regex.Matcher?>(
+                "useTransparentBounds(" + value + ")",
+                null,
+                JdkOracleOperation { jdkMatcher.useTransparentBounds(value) })
+            return this
+        }
+
+        fun hasAnchoringBounds(): Boolean {
+            val safeRe = safeReMatcher.hasAnchoringBounds()
+            val jdk =
+                runJdkOracle<Boolean?>(
+                    "hasAnchoringBounds",
+                    safeRe,
+                    JdkOracleOperation { jdkMatcher.hasAnchoringBounds() })!!
+            assertSame("hasAnchoringBounds", safeRe, jdk)
+            return safeRe
+        }
+
+        fun hasTransparentBounds(): Boolean {
+            val safeRe = safeReMatcher.hasTransparentBounds()
+            val jdk =
+                runJdkOracle<Boolean?>(
+                    "hasTransparentBounds",
+                    safeRe,
+                    JdkOracleOperation { jdkMatcher.hasTransparentBounds() })!!
+            assertSame("hasTransparentBounds", safeRe, jdk)
+            return safeRe
+        }
+
+        fun replaceAll(replacement: String?): Boolean {
+            return assertSameReplacementOutcome(
+                "replaceAll",
+                replacement,
+                StringOperation { safeReMatcher.replaceAll(replacement) },
+                StringOperation {
+                    runJdkOracle<String?>(
+                        "replaceAll",
+                        null,
+                        JdkOracleOperation { jdkMatcher.replaceAll(replacement) })
+                })
+        }
+
+        fun replaceAll(replacer: Function<MatchResult?, String?>): Boolean {
+            return assertSameReplacementOutcome(
+                "replaceAll(function)",
+                null,
+                StringOperation { safeReMatcher.replaceAll(replacer) },
+                StringOperation {
+                    runJdkOracle<String?>(
+                        "replaceAll(function)",
+                        null,
+                        JdkOracleOperation { jdkMatcher.replaceAll(replacer) })
+                })
+        }
+
+        fun replaceFirst(replacement: String): Boolean {
+            return assertSameReplacementOutcome(
+                "replaceFirst",
+                replacement,
+                StringOperation { safeReMatcher.replaceFirst(replacement) },
+                StringOperation {
+                    runJdkOracle<String?>(
+                        "replaceFirst",
+                        null,
+                        JdkOracleOperation { jdkMatcher.replaceFirst(replacement) })
+                })
+        }
+
+        fun hasReplacementMatchState(): Boolean {
+            var safeRe: Boolean
+            try {
+                safeReMatcher.start()
+                safeRe = true
+            } catch (e: IllegalStateException) {
+                safeRe = false
+            }
+            val jdk =
+                runJdkOracle<Boolean?>(
+                    "replacement match state",
+                    safeRe,
+                    JdkOracleOperation {
+                        try {
+                            val unused: Int = jdkMatcher.start()
+                            return@runJdkOracle true
+                        } catch (e: java.lang.IllegalStateException) {
+                            return@runJdkOracle false
+                        }
+                    })!!
+            assertSame("replacement match state", safeRe, jdk)
+            if (safeRe) {
+                assertMatchState("replacement match state")
+            }
+            return safeRe
+        }
+
+        fun appendReplacement(output: StringBuilder, replacement: String): Boolean {
+            val safeRe = StringBuilder()
+            val jdk = StringBuilder()
+            lastReplacement = replacement
+            val completed =
+                assertSameReplacementOutcome(
+                    "appendReplacement",
+                    replacement,
+                    StringOperation {
+                        safeReMatcher.appendReplacement(safeRe, replacement)
+                        safeRe.toString()
+                    },
+                    StringOperation {
+                        runJdkOracle<java.util.regex.Matcher?>(
+                            "appendReplacement",
+                            null,
+                            JdkOracleOperation { jdkMatcher.appendReplacement(jdk, replacement) })
+                        jdk.toString()
+                    })
+            if (completed) {
+                output.append(safeRe)
+            }
+            return completed
+        }
+
+        fun appendReplacement(output: StringBuffer, replacement: String): Boolean {
+            val safeRe = StringBuffer()
+            val jdk = StringBuffer()
+            lastReplacement = replacement
+            val completed =
+                assertSameReplacementOutcome(
+                    "appendReplacement",
+                    replacement,
+                    StringOperation {
+                        safeReMatcher.appendReplacement(safeRe, replacement)
+                        safeRe.toString()
+                    },
+                    StringOperation {
+                        runJdkOracle<java.util.regex.Matcher?>(
+                            "appendReplacement",
+                            null,
+                            JdkOracleOperation { jdkMatcher.appendReplacement(jdk, replacement) })
+                        jdk.toString()
+                    })
+            if (completed) {
+                output.append(safeRe)
+            }
+            return completed
+        }
+
+        fun appendTail(output: StringBuilder) {
+            val safeRe = StringBuilder()
+            val jdk = StringBuilder()
+            safeReMatcher.appendTail(safeRe)
+            runJdkOracle<StringBuilder?>("appendTail", null, JdkOracleOperation { jdkMatcher.appendTail(jdk) })
+            if (!jdkOracleAvailable) {
+                output.append(safeRe)
+                return
+            }
+            assertSame("appendTail", safeRe.toString(), jdk.toString())
+            output.append(safeRe)
+        }
+
+        fun appendTail(output: StringBuffer) {
+            val safeRe = StringBuffer()
+            val jdk = StringBuffer()
+            safeReMatcher.appendTail(safeRe)
+            runJdkOracle<StringBuffer?>("appendTail", null, JdkOracleOperation { jdkMatcher.appendTail(jdk) })
+            if (!jdkOracleAvailable) {
+                output.append(safeRe)
+                return
+            }
+            assertSame("appendTail", safeRe.toString(), jdk.toString())
+            output.append(safeRe)
+        }
+
+        fun toMatchResult() {
+            val safeRe = safeReMatcher.toMatchResult()
+            val jdk = runJdkOracle<MatchResult>(
+                "toMatchResult",
+                safeRe,
+                JdkOracleOperation { jdkMatcher.toMatchResult() })!!
+            assertMatchResult("toMatchResult", safeRe, jdk)
+        }
+
+        private fun assertMatchState(operation: String?) {
+            assertSame(
+                operation + ".start",
+                safeReMatcher.start(),
+                runJdkOracle<Int?>(
+                    operation + ".start",
+                    safeReMatcher.start(),
+                    JdkOracleOperation { jdkMatcher.start() })
+            )
+            assertSame(
+                operation + ".end",
+                safeReMatcher.end(),
+                runJdkOracle<Int?>(operation + ".end", safeReMatcher.end(), JdkOracleOperation { jdkMatcher.end() })
+            )
+            val groupCount = groupCount()
+            for (i in 0..groupCount) {
+                group(i)
+                start(i)
+                end(i)
+            }
+        }
+
+        private fun assertMatchResult(operation: String?, safeRe: MatchResult, jdk: MatchResult) {
+            assertSame(operation + ".start", safeRe.start(), jdk.start())
+            assertSame(operation + ".end", safeRe.end(), jdk.end())
+            val groupCount = safeRe.groupCount()
+            assertSame(operation + ".groupCount", groupCount, jdk.groupCount())
+            for (i in 0..groupCount) {
+                assertSame(operation + ".group(" + i + ")", safeRe.group(i), jdk.group(i))
+                assertSame(operation + ".start(" + i + ")", safeRe.start(i), jdk.start(i))
+                assertSame(operation + ".end(" + i + ")", safeRe.end(i), jdk.end(i))
+            }
+        }
+
+        private fun assertSameReplacementOutcome(
+            operation: String,
+            replacement: String?,
+            safeReOperation: StringOperation,
+            jdkOperation: StringOperation
+        ): Boolean {
+            val safeRe = OperationResult.Companion.capture(safeReOperation)
+            if (!jdkOracleAvailable) {
+                return false
+            }
+            val jdk = OperationResult.Companion.capture(jdkOperation)
+            if (!jdkOracleAvailable) {
+                return false
+            }
+            if (safeRe.throwable == null && jdk.throwable == null) {
+                assertSame(operation, replacement, safeRe.value, jdk.value)
+                if (operation == "replaceAll" || operation == "replaceAll(function)") {
+                    assertExhaustedReplacementState()
+                }
+                return true
+            }
+            if (safeRe.throwable != null && jdk.throwable != null && isExpectedReplacementException(safeRe.throwable)
+                && isExpectedReplacementException(jdk.throwable)
+            ) {
+                return false
+            }
+            throw divergence(operation, replacement, safeRe.describe(), jdk.describe())
+        }
+
+        private fun assertSafeReExhaustedState() {
+            Assertions.assertThat(safeReMatcher.hasMatch()).`as`("exhausted state for %s", regex).isFalse()
+            Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.group() })
+                .isInstanceOf(IllegalStateException::class.java)
+            Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.start() })
+                .isInstanceOf(IllegalStateException::class.java)
+            Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.end() })
+                .isInstanceOf(IllegalStateException::class.java)
+            groupCount()
+            for (group in 0..safeReMatcher.groupCount()) {
+                val index = group
+                Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.group(index) })
+                    .isInstanceOf(IllegalStateException::class.java)
+                Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.start(index) })
+                    .isInstanceOf(IllegalStateException::class.java)
+                Assertions.assertThatThrownBy(ThrowingCallable { safeReMatcher.end(index) })
+                    .isInstanceOf(IllegalStateException::class.java)
+            }
+        }
+
+        private fun hasJdkExhaustedEmptyMatchState(): Boolean {
+            val defect = OracleDefects.exhaustedEmptyMatch(jdkMatcher)
+            if (defect) OracleDefects.record()
+            return defect
+        }
+
+        private fun assertExhaustedReplacementState() {
+            assertSafeReExhaustedState()
+            // #931: exclude only the JDK's half-cleared terminal-empty-match state, after a
+            // successful replaceAll. SafeRE must still satisfy every exhausted-state assertion.
+            // Do not waive replacement output, replaceFirst state, or other JDK state shapes.
+            if (!hasJdkExhaustedEmptyMatchState()) {
+                Assertions.assertThat(jdkMatcher.hasMatch()).isFalse()
+                Assertions.assertThatThrownBy(ThrowingCallable { jdkMatcher.group() })
+                    .isInstanceOf(IllegalStateException::class.java)
+                Assertions.assertThatThrownBy(ThrowingCallable { jdkMatcher.start() })
+                    .isInstanceOf(IllegalStateException::class.java)
+                Assertions.assertThatThrownBy(ThrowingCallable { jdkMatcher.end() })
+                    .isInstanceOf(IllegalStateException::class.java)
+            }
+        }
+
+        private fun divergence(
+            operation: String?, replacement: String?, safeRe: Any?, jdk: Any?
+        ): AssertionError {
+            return FuzzFinding.failure(
+                regex,
+                flags,
+                input,
+                operation,
+                ("region="
+                        + safeReMatcher.regionStart()
+                        + ":"
+                        + safeReMatcher.regionEnd()
+                        + " anchoring="
+                        + safeReMatcher.hasAnchoringBounds()
+                        + " transparent="
+                        + safeReMatcher.hasTransparentBounds()
+                        + " replacement="
+                        + (if (replacement == null) "null" else javaStringLiteral(replacement))),
+                "omittedEvents=" + omittedEvents + " " + history,
+                Objects.toString(safeRe),
+                Objects.toString(jdk)
+            )
+        }
+
+        private fun assertSame(operation: String?, safeRe: Any?, jdk: Any?) {
+            assertSame(operation, lastReplacement, safeRe, jdk)
+        }
+
+        private fun assertSame(operation: String?, replacement: String?, safeRe: Any?, jdk: Any?) {
+            record(
+                (operation
+                        + " SafeRE="
+                        + javaStringLiteral(Objects.toString(safeRe))
+                        + " JDK="
+                        + javaStringLiteral(Objects.toString(jdk)))
+            )
+            if (safeRe != jdk) {
+                throw divergence(operation, replacement, safeRe, jdk)
+            }
+        }
+
+        private fun <T> runJdkOracle(operation: String, fallback: T?, jdkOperation: JdkOracleOperation<T?>): T? {
+            record(operation)
+            if (!jdkOracleAvailable) {
+                return fallback
+            }
+            val result = runJdkOracle<T?>(operation, jdkOperation)
+            if (!result.available) {
+                jdkOracleAvailable = false
+                return fallback
+            }
+            return result.value
+        }
+    }
+
+    @JvmRecord
+    private data class OperationResult<T>(val value: T?, val throwable: RuntimeException?) {
+        fun describe(): String? {
+            return if (throwable == null)
+                Objects.toString(value)
+            else
+                throwable.javaClass.getSimpleName() + ": " + throwable.message
+        }
+
+        companion object {
+            fun capture(operation: StringOperation): OperationResult<String?> {
+                try {
+                    return OperationResult<String?>(operation.run(), null)
+                } catch (e: RuntimeException) {
+                    return OperationResult<String?>(null, e)
+                }
+            }
+        }
+    }
+
+    private interface StringOperation {
+        fun run(): String?
+    }
+
+    private interface JdkOracleOperation<T> {
+        fun run(): T?
+    }
+
+    @JvmRecord
+    private data class JdkOracleResult<T>(val available: Boolean, val value: T?)
+
+    @JvmRecord
+    private data class InterruptibleCharSequence(val delegate: CharSequence?) : CharSequence {
+        override fun length(): Int {
+            checkInterrupted()
+            return delegate!!.length
+        }
+
+        override fun charAt(index: Int): Char {
+            checkInterrupted()
+            return delegate!!.get(index)
+        }
+
+        override fun subSequence(start: Int, end: Int): CharSequence {
+            checkInterrupted()
+            return InterruptibleCharSequence(delegate!!.subSequence(start, end))
+        }
+
+        override fun toString(): String {
+            return delegate.toString()
+        }
+    }
+
+    private object JdkOracleInterruptedException : RuntimeException() {
+        private const val serialVersionUID = 1L
+    }
 }

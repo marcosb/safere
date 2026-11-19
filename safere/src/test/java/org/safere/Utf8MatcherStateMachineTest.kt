@@ -2,559 +2,589 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledForJreRange
+import org.junit.jupiter.api.condition.JRE
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import java.nio.charset.StandardCharsets
+import java.util.*
+import java.util.List
+import java.util.regex.Pattern
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledForJreRange;
-import org.junit.jupiter.api.condition.JRE;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-class Utf8MatcherStateMachineTest {
-  @Test
-  @DisabledForCrosscheck("Opaque grapheme regions follow the independent-substring model")
-  void graphemeContextFollowsOpaqueUtf8RegionChanges() {
-    String input = "x\uD83C\uDDE6\uD83C\uDDE7\uD83C\uDDE8y";
-    byte[] bytes = input.getBytes(UTF_8);
-    for (String regex : List.of("\\b{g}\\X\\b{g}", "\\b{g}\\X\\b{g}($)?")) {
-      Pattern pattern = Pattern.compile(regex);
-      Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(bytes));
-      for (int start : new int[] {0, 1, 5, 9, 13}) {
-        for (int end : new int[] {start, 13, 14}) {
-          matcher.region(start, end);
-          Utf8Matcher substring =
-              pattern.matcher(Utf8Input.validated(Arrays.copyOfRange(bytes, start, end)));
-          List<Integer> expected = new ArrayList<>();
-          while (substring.find()) {
-            expected.add(substring.start());
-            expected.add(substring.end());
-          }
-          List<Integer> actual = new ArrayList<>();
-          while (matcher.find()) {
-            actual.add(matcher.start() - start);
-            actual.add(matcher.end() - start);
-          }
-          assertThat(actual).as("region %s:%s", start, end).isEqualTo(expected);
+internal class Utf8MatcherStateMachineTest {
+    @Test
+    @DisabledForCrosscheck("Opaque grapheme regions follow the independent-substring model")
+    fun graphemeContextFollowsOpaqueUtf8RegionChanges() {
+        val input = "x\uD83C\uDDE6\uD83C\uDDE7\uD83C\uDDE8y"
+        val bytes = input.toByteArray(StandardCharsets.UTF_8)
+        for (regex in mutableListOf<String?>("\\b{g}\\X\\b{g}", "\\b{g}\\X\\b{g}($)?")) {
+            val pattern = Pattern.compile(regex)
+            val matcher = pattern.matcher(Utf8Input.validated(bytes))
+            for (start in intArrayOf(0, 1, 5, 9, 13)) {
+                for (end in intArrayOf(start, 13, 14)) {
+                    matcher.region(start, end)
+                    val substring =
+                        pattern.matcher(Utf8Input.validated(Arrays.copyOfRange(bytes, start, end)))
+                    val expected: MutableList<Int?> = ArrayList<Int?>()
+                    while (substring.find()) {
+                        expected.add(substring.start())
+                        expected.add(substring.end())
+                    }
+                    val actual: MutableList<Int?> = ArrayList<Int?>()
+                    while (matcher.find()) {
+                        actual.add(matcher.start() - start)
+                        actual.add(matcher.end() - start)
+                    }
+                    Assertions.assertThat<Int?>(actual).`as`("region %s:%s", start, end).isEqualTo(expected)
+                }
+            }
         }
-      }
-    }
-  }
-
-  @Test
-  void failedFindPreservesEmptyAnchoredMatchEnd() {
-    Utf8Matcher matcher = matcher("^[ab]*", "😀!a");
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.lookingAt()).isTrue();
-    for (int i = 0; i < 3; i++) {
-      assertThat(matcher.find()).isFalse();
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.start()).isZero();
-      assertThat(matcher.end()).isZero();
-    }
-  }
-
-  @Test
-  void stringSearchInitializationDoesNotCorruptExistingUtf8Matcher() {
-    Pattern pattern = Pattern.compile("XXXXXX");
-    Matcher stringMatcher = pattern.matcher("..XXXXXX");
-    Utf8Matcher utf8Matcher = pattern.matcher(Utf8Input.validated("..XXXXXX".getBytes(UTF_8)));
-
-    assertThat(stringMatcher.find()).isTrue();
-    assertThat(utf8Matcher.find()).isTrue();
-    assertThat(utf8Matcher.start()).isEqualTo(2);
-    assertThat(utf8Matcher.end()).isEqualTo(8);
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"X", "XX", "XXX", "XXXX", "XXXXX", "XXXXXX", "XXXXXXXX", "ééé"})
-  void unanchoredLiteralSearchMatchesStringApiAcrossOffsets(String literal) {
-    for (int prefixLength = 0; prefixLength <= 8; prefixLength++) {
-      String text = ".".repeat(prefixLength) + literal + "!";
-      byte[] bytes = text.getBytes(UTF_8);
-      int expectedStart = ".".repeat(prefixLength).getBytes(UTF_8).length;
-      int expectedEnd = expectedStart + literal.getBytes(UTF_8).length;
-
-      Pattern captureFreePattern = Pattern.compile(literal);
-      Matcher captureFreeStringMatcher = captureFreePattern.matcher(text);
-      assertThat(captureFreeStringMatcher.find())
-          .as("String prefix length %s", prefixLength)
-          .isTrue();
-      assertThat(captureFreePattern.find(Utf8Input.validated(bytes)))
-          .as("capture-free UTF-8 prefix length %s", prefixLength)
-          .isTrue();
-
-      Pattern matcherPattern = Pattern.compile(literal);
-      Matcher stringMatcher = matcherPattern.matcher(text);
-      assertThat(stringMatcher.find()).as("String matcher prefix length %s", prefixLength).isTrue();
-      Utf8Matcher matcher = matcherPattern.matcher(Utf8Input.validated(bytes));
-      assertThat(matcher.find()).as("UTF-8 prefix length %s", prefixLength).isTrue();
-      assertThat(matcher.start()).isEqualTo(expectedStart);
-      assertThat(matcher.end()).isEqualTo(expectedEnd);
-      assertThat(matcher.find()).isFalse();
-    }
-  }
-
-  @Test
-  void repeatedFindReportsByteRelativeGroupBounds() {
-    Utf8Matcher matcher = matcher("(é)|(😀)", "xé😀y");
-
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(1);
-    assertThat(matcher.end()).isEqualTo(3);
-    assertThat(matcher.start(1)).isEqualTo(1);
-    assertThat(matcher.end(1)).isEqualTo(3);
-    assertThat(matcher.start(2)).isEqualTo(-1);
-    assertThat(matcher.end(2)).isEqualTo(-1);
-
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(3);
-    assertThat(matcher.end()).isEqualTo(7);
-    assertThat(matcher.start(1)).isEqualTo(-1);
-    assertThat(matcher.start(2)).isEqualTo(3);
-    assertThat(matcher.end(2)).isEqualTo(7);
-
-    assertThat(matcher.find()).isFalse();
-    assertThat(matcher.find()).isFalse();
-  }
-
-  @Test
-  void keywordAlternationMatchesJdkAcrossUtf8Boundaries() {
-    assertKeywordAlternationMatch(
-        "(?is).*\\b(you|your)\\b.*",
-        "préface You spoke first.\nThen your example ended with YOU!",
-        0);
-    assertKeywordAlternationMatch(
-        "(?is).*\\b(you|your)\\b.*",
-        "é ignore YOU, then keep your answer",
-        "é ignore YOU, ".length());
-    assertKeywordAlternationMatch("(?isU).*\\b(you|your)\\b.*", "éyoué -- your!", 0);
-    assertKeywordAlternationMatch("(?isU).*\\b(you|your)\\b.*", "éyoué -- βyourβ", 0);
-  }
-
-  @Test
-  void keywordAlternationPreservesIndependentUtf8BoundaryModes() {
-    assertKeywordAlternationMatch("(?-U)\\b(?i)(foo|bar)(?U)\\b", "éfoo! fooé bar!", 0);
-    assertKeywordAlternationMatch("(?U)\\b(?i)(foo|bar)(?-U)\\b", "éfoo! fooé bar!", 0);
-  }
-
-  @Test
-  void keywordAlternationFindsAlternativesAndRejectsAdjacentWordCharacters() {
-    String input = "préface error warning2 _timeout failed!";
-    Utf8Matcher matcher = matcher("(?i)\\b(error|warning|timeout|failed)\\b", input);
-
-    assertThat(matcher.find()).isTrue();
-    assertThat(utf8Slice(input, matcher.start(1), matcher.end(1))).isEqualTo("error");
-    assertThat(matcher.find()).isTrue();
-    assertThat(utf8Slice(input, matcher.start(1), matcher.end(1))).isEqualTo("failed");
-    assertThat(matcher.find()).isFalse();
-
-    Pattern absent = Pattern.compile("(?is).*\\b(you|your)\\b.*");
-    Utf8Input absentInput = Utf8Input.validated("é youth yours".getBytes(UTF_8));
-    assertThat(absent.matcher(absentInput).find()).isFalse();
-    assertThat(absent.find(absentInput)).isFalse();
-  }
-
-  @Test
-  void emptyFindAdvancesByOneCodePoint() {
-    Utf8Matcher matcher = matcher("", "😀");
-    List<List<Integer>> bounds = new ArrayList<>();
-
-    while (matcher.find()) {
-      bounds.add(List.of(matcher.start(), matcher.end()));
     }
 
-    assertThat(bounds).containsExactly(List.of(0, 0), List.of(4, 4));
-  }
-
-  @Test
-  void failedFindInvalidatesPreviousResult() {
-    Utf8Matcher matcher = matcher("a", "a");
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.find()).isFalse();
-
-    assertThatThrownBy(matcher::start).isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(matcher::end).isInstanceOf(IllegalStateException.class);
-  }
-
-  @Test
-  void wholeInputAndPrefixMatchesUseUtf8Input() {
-    Utf8Matcher whole = matcher("é😀", "é😀");
-    Utf8Matcher prefix = matcher("é", "é😀");
-
-    assertThat(whole.matches()).isTrue();
-    assertThat(whole.start()).isZero();
-    assertThat(whole.end()).isEqualTo(6);
-    assertThat(prefix.matches()).isFalse();
-    assertThat(prefix.lookingAt()).isTrue();
-    assertThat(prefix.start()).isZero();
-    assertThat(prefix.end()).isEqualTo(2);
-  }
-
-  @Test
-  void resetRestoresWholeInputAndInvalidatesPreviousResult() {
-    Utf8Matcher matcher = matcher("é|😀", "é😀");
-
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isZero();
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(2);
-
-    assertThat(matcher.reset()).isSameAs(matcher);
-    assertThatThrownBy(matcher::start).isInstanceOf(IllegalStateException.class);
-    assertThat(matcher.regionStart()).isZero();
-    assertThat(matcher.regionEnd()).isEqualTo(6);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isZero();
-  }
-
-  @Test
-  void regionUsesRelativeByteOffsetsAndResetRestoresWholeInput() {
-    Utf8Matcher matcher = matcher("😀", "xé😀y");
-
-    assertThat(matcher.region(3, 7)).isSameAs(matcher);
-    assertThat(matcher.regionStart()).isEqualTo(3);
-    assertThat(matcher.regionEnd()).isEqualTo(7);
-    assertThat(matcher.matches()).isTrue();
-    assertThat(matcher.start()).isEqualTo(3);
-    assertThat(matcher.end()).isEqualTo(7);
-
-    matcher.region(3, 8);
-    assertThat(matcher.lookingAt()).isTrue();
-    assertThat(matcher.start()).isEqualTo(3);
-    assertThat(matcher.end()).isEqualTo(7);
-
-    matcher.region(3, 8);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(3);
-    assertThat(matcher.end()).isEqualTo(7);
-
-    matcher.reset();
-    assertThat(matcher.regionStart()).isZero();
-    assertThat(matcher.regionEnd()).isEqualTo(8);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(3);
-  }
-
-  @Test
-  void regionMatchOperationsPreserveBoundarySensitiveCaptures() {
-    record Scenario(String regex, String input, int regionStart, int regionEnd) {}
-
-    for (Scenario scenario :
-        List.of(
-            new Scenario("(\\b(?:a|aa))", "xaa", 1, 3),
-            new Scenario("((?:a|aa)\\b)", "aax", 0, 2))) {
-      for (String operation : List.of("matches", "lookingAt", "find")) {
-        java.util.regex.Matcher oracle =
-            java.util.regex.Pattern.compile(scenario.regex()).matcher(scenario.input());
-        oracle.region(scenario.regionStart(), scenario.regionEnd());
-        boolean expected =
-            switch (operation) {
-              case "matches" -> oracle.matches();
-              case "lookingAt" -> oracle.lookingAt();
-              case "find" -> oracle.find();
-              default -> throw new AssertionError(operation);
-            };
-
-        Utf8Matcher actual = matcher(scenario.regex(), scenario.input());
-        actual.region(scenario.regionStart(), scenario.regionEnd());
-        boolean matched =
-            switch (operation) {
-              case "matches" -> actual.matches();
-              case "lookingAt" -> actual.lookingAt();
-              case "find" -> actual.find();
-              default -> throw new AssertionError(operation);
-            };
-
-        assertThat(matched).as("%s for /%s/", operation, scenario.regex()).isEqualTo(expected);
-        assertThat(actual.start(1))
-            .as("%s capture start for /%s/", operation, scenario.regex())
-            .isEqualTo(oracle.start(1));
-        assertThat(actual.end(1))
-            .as("%s capture end for /%s/", operation, scenario.regex())
-            .isEqualTo(oracle.end(1));
-      }
-    }
-  }
-
-  @Test
-  void regionRejectsInvalidByteRanges() {
-    Utf8Matcher matcher = matcher("é", "xéy");
-
-    assertThatThrownBy(() -> matcher.region(-1, 1)).isInstanceOf(IndexOutOfBoundsException.class);
-    assertThatThrownBy(() -> matcher.region(0, 5)).isInstanceOf(IndexOutOfBoundsException.class);
-    assertThatThrownBy(() -> matcher.region(3, 2)).isInstanceOf(IndexOutOfBoundsException.class);
-    assertThatThrownBy(() -> matcher.region(2, 3))
-        .isInstanceOf(IndexOutOfBoundsException.class)
-        .hasMessageContaining("code-point boundaries");
-  }
-
-  @Test
-  void observationBeforeMatchAndInvalidGroupsThrow() {
-    Utf8Matcher matcher = matcher("(a)", "a");
-
-    assertThatThrownBy(matcher::start).isInstanceOf(IllegalStateException.class);
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.groupCount()).isEqualTo(1);
-    assertThatThrownBy(() -> matcher.start(-1)).isInstanceOf(IndexOutOfBoundsException.class);
-    assertThatThrownBy(() -> matcher.end(2)).isInstanceOf(IndexOutOfBoundsException.class);
-  }
-
-  @Test
-  void patternEntryPointsRejectNullInput() {
-    Pattern pattern = Pattern.compile("a");
-
-    assertThatThrownBy(() -> pattern.matcher((Utf8Input) null))
-        .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(() -> pattern.find((Utf8Input) null))
-        .isInstanceOf(NullPointerException.class);
-  }
-
-  @Test
-  void wholeArrayAndWindowViewsProduceTheSameFindTrace() {
-    byte[] logical = "xé😀y".getBytes(UTF_8);
-    byte[] storage = new byte[logical.length + 6];
-    System.arraycopy(logical, 0, storage, 3, logical.length);
-    Pattern pattern = Pattern.compile("é|😀");
-
-    assertThat(findTrace(pattern.matcher(Utf8Input.validated(logical))))
-        .isEqualTo(findTrace(pattern.matcher(Utf8Input.validated(storage, 3, logical.length))));
-  }
-
-  @Test
-  void inputWindowHidesBackingStorageAndKeepsRelativeBounds() {
-    byte[] logical = "xéy".getBytes(UTF_8);
-    byte[] storage = "before--------after".getBytes(UTF_8);
-    System.arraycopy(logical, 0, storage, 7, logical.length);
-    Utf8Input input = Utf8Input.validated(storage, 7, logical.length);
-
-    Utf8Matcher matcher = Pattern.compile("é").matcher(input);
-
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.start()).isEqualTo(1);
-    assertThat(matcher.end()).isEqualTo(3);
-    assertThat(matcher.find()).isFalse();
-  }
-
-  @Test
-  void patternBooleanSearchUsesUtf8Input() {
-    Pattern pattern = Pattern.compile("😀$");
-
-    assertThat(pattern.find(Utf8Input.validated("x😀".getBytes(UTF_8)))).isTrue();
-    assertThat(pattern.find(Utf8Input.validated("😀x".getBytes(UTF_8)))).isFalse();
-    assertThat(Pattern.compile("(?<letter>é)|😀").find(Utf8Input.validated("xé".getBytes(UTF_8))))
-        .isTrue();
-    assertThat(Pattern.compile("\\Xz").find(Utf8Input.validated("👩‍💻x".getBytes(UTF_8))))
-        .isFalse();
-  }
-
-  @Test
-  void patternBooleanSearchUsesFixedOffsetLiteralCandidates() {
-    Pattern phone = Pattern.compile("\\d{3}/\\d{3}/\\d{4}");
-
-    assertThat(phone.find(Utf8Input.validated("path /api/42".getBytes(UTF_8)))).isFalse();
-    assertThat(phone.find(Utf8Input.validated("path /api then 123/456/7890".getBytes(UTF_8))))
-        .isTrue();
-    assertThat(phone.find(Utf8Input.validated("digits 1234567890".getBytes(UTF_8)))).isFalse();
-  }
-
-  @Test
-  void asciiPrefixClassesAgreeAcrossStringAndUtf8SearchState() {
-    String text = "ébbxqbybbzbb5qbb7bb@qbb";
-    Utf8Input input = Utf8Input.validated(text.getBytes(UTF_8));
-
-    for (String regex : List.of("[x]q?", "[xy]q?", "[xz]q?", "[0-9]q?", "[ace@]q?")) {
-      Pattern pattern = Pattern.compile(regex);
-      Matcher stringMatcher = pattern.matcher(text);
-      Utf8Matcher utf8Matcher = pattern.matcher(input);
-      List<List<Integer>> expected = new ArrayList<>();
-      List<List<Integer>> actual = new ArrayList<>();
-
-      while (stringMatcher.find()) {
-        expected.add(
-            List.of(
-                utf8Offset(text, stringMatcher.start()), utf8Offset(text, stringMatcher.end())));
-      }
-      while (utf8Matcher.find()) {
-        actual.add(List.of(utf8Matcher.start(), utf8Matcher.end()));
-      }
-
-      assertThat(pattern.find(input)).as("direct UTF-8 find for /%s/", regex).isTrue();
-      assertThat(actual).as("repeated UTF-8 find for /%s/", regex).isEqualTo(expected);
-
-      utf8Matcher.region(2, input.length());
-      assertThat(utf8Matcher.find()).as("region find for /%s/", regex).isTrue();
-      utf8Matcher.reset();
-      assertThat(findTrace(utf8Matcher)).as("reset find trace for /%s/", regex).isEqualTo(expected);
-    }
-  }
-
-  @Test
-  void requiredNonAsciiClassRejectsAsciiInputAcrossUtf8EntryPoints() {
-    Pattern pattern = Pattern.compile("[一-龥]{3,}");
-    Utf8Input absent = Utf8Input.trusted("ordinary ASCII text".getBytes(UTF_8));
-    Utf8Input present = Utf8Input.validated("prefix中文测试suffix".getBytes(UTF_8));
-
-    assertThat(pattern.find(absent)).isFalse();
-    assertThat(pattern.matcher(absent).find()).isFalse();
-    assertThat(pattern.find(present)).isTrue();
-    assertThat(pattern.matcher(present).find()).isTrue();
-  }
-
-  @Test
-  void graphemePatternDoesNotSplitMultibyteCodePointInUnanchoredFind() {
-    String input = "\u1e99| 5  \u8ed6";
-    Utf8Matcher utf8Matcher =
-        Pattern.compile(".\\X| /0? ?5-").matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-    List<List<Integer>> actualMatches = new ArrayList<>();
-    while (utf8Matcher.find()) {
-      actualMatches.add(List.of(utf8Matcher.start(), utf8Matcher.end()));
+    @Test
+    fun failedFindPreservesEmptyAnchoredMatchEnd() {
+        val matcher: Utf8Matcher = matcher("^[ab]*", "😀!a")
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.lookingAt()).isTrue()
+        for (i in 0..2) {
+            Assertions.assertThat(matcher.find()).isFalse()
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.start()).isZero()
+            Assertions.assertThat(matcher.end()).isZero()
+        }
     }
 
-    Matcher stringMatcher = Pattern.compile(".\\X| /0? ?5-").matcher(input);
-    List<List<Integer>> expectedMatches = new ArrayList<>();
-    while (stringMatcher.find()) {
-      expectedMatches.add(
-          List.of(
-              utf8Offset(input, stringMatcher.start()), utf8Offset(input, stringMatcher.end())));
+    @Test
+    fun stringSearchInitializationDoesNotCorruptExistingUtf8Matcher() {
+        val pattern = Pattern.compile("XXXXXX")
+        val stringMatcher = pattern.matcher("..XXXXXX")
+        val utf8Matcher = pattern.matcher(Utf8Input.validated("..XXXXXX".toByteArray(StandardCharsets.UTF_8)))
+
+        Assertions.assertThat(stringMatcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.find()).isTrue()
+        Assertions.assertThat(utf8Matcher.start()).isEqualTo(2)
+        Assertions.assertThat(utf8Matcher.end()).isEqualTo(8)
     }
 
-    assertThat(actualMatches).isEqualTo(expectedMatches);
-  }
+    @ParameterizedTest
+    @ValueSource(strings = ["X", "XX", "XXX", "XXXX", "XXXXX", "XXXXXX", "XXXXXXXX", "ééé"])
+    fun unanchoredLiteralSearchMatchesStringApiAcrossOffsets(literal: String) {
+        for (prefixLength in 0..8) {
+            val text = ".".repeat(prefixLength) + literal + "!"
+            val bytes = text.toByteArray(StandardCharsets.UTF_8)
+            val expectedStart = ".".repeat(prefixLength).toByteArray(StandardCharsets.UTF_8).size
+            val expectedEnd = expectedStart + literal.toByteArray(StandardCharsets.UTF_8).size
 
-  @Test
-  void graphemePatternsWorkAcrossUtf8Scalars() {
-    for (String input : List.of("a\r\nb", "a\u0301b", "👩‍💻x", "🇺🇸x")) {
-      assertGraphemePatternsWorkAcrossUtf8Scalars(input);
+            val captureFreePattern = Pattern.compile(literal)
+            val captureFreeStringMatcher = captureFreePattern.matcher(text)
+            Assertions.assertThat(captureFreeStringMatcher.find())
+                .`as`("String prefix length %s", prefixLength)
+                .isTrue()
+            Assertions.assertThat(captureFreePattern.find(Utf8Input.validated(bytes)))
+                .`as`("capture-free UTF-8 prefix length %s", prefixLength)
+                .isTrue()
+
+            val matcherPattern = Pattern.compile(literal)
+            val stringMatcher = matcherPattern.matcher(text)
+            Assertions.assertThat(stringMatcher.find()).`as`("String matcher prefix length %s", prefixLength).isTrue()
+            val matcher = matcherPattern.matcher(Utf8Input.validated(bytes))
+            Assertions.assertThat(matcher.find()).`as`("UTF-8 prefix length %s", prefixLength).isTrue()
+            Assertions.assertThat(matcher.start()).isEqualTo(expectedStart)
+            Assertions.assertThat(matcher.end()).isEqualTo(expectedEnd)
+            Assertions.assertThat(matcher.find()).isFalse()
+        }
     }
-  }
 
-  @Test
-  @DisabledForCrosscheck("SafeRE uses Unicode 17 grapheme rule GB9c while JDK 21 uses Unicode 15.0")
-  void indicConjunctGraphemePatternsWorkAcrossUtf8ScalarsOnEverySupportedJdk() {
-    assertGraphemePatternsWorkAcrossUtf8Scalars("क्‍षx");
-  }
+    @Test
+    fun repeatedFindReportsByteRelativeGroupBounds() {
+        val matcher: Utf8Matcher = matcher("(é)|(😀)", "xé😀y")
 
-  @Test
-  @EnabledForJreRange(min = JRE.JAVA_22)
-  void indicConjunctGraphemePatternsMatchJdk22AndLaterAcrossUtf8Scalars() {
-    assertGraphemePatternsWorkAcrossUtf8Scalars("क्‍षx");
-  }
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(1)
+        Assertions.assertThat(matcher.end()).isEqualTo(3)
+        Assertions.assertThat(matcher.start(1)).isEqualTo(1)
+        Assertions.assertThat(matcher.end(1)).isEqualTo(3)
+        Assertions.assertThat(matcher.start(2)).isEqualTo(-1)
+        Assertions.assertThat(matcher.end(2)).isEqualTo(-1)
 
-  private static void assertGraphemePatternsWorkAcrossUtf8Scalars(String input) {
-    byte[] bytes = input.getBytes(UTF_8);
-    Utf8Matcher clusters = Pattern.compile("\\X").matcher(Utf8Input.validated(bytes));
-    List<List<Integer>> actualClusters = new ArrayList<>();
-    while (clusters.find()) {
-      actualClusters.add(List.of(clusters.start(), clusters.end()));
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(3)
+        Assertions.assertThat(matcher.end()).isEqualTo(7)
+        Assertions.assertThat(matcher.start(1)).isEqualTo(-1)
+        Assertions.assertThat(matcher.start(2)).isEqualTo(3)
+        Assertions.assertThat(matcher.end(2)).isEqualTo(7)
+
+        Assertions.assertThat(matcher.find()).isFalse()
+        Assertions.assertThat(matcher.find()).isFalse()
     }
 
-    Matcher stringClusters = Pattern.compile("\\X").matcher(input);
-    List<List<Integer>> expectedClusters = new ArrayList<>();
-    while (stringClusters.find()) {
-      expectedClusters.add(
-          List.of(
-              utf8Offset(input, stringClusters.start()), utf8Offset(input, stringClusters.end())));
+    @Test
+    fun keywordAlternationMatchesJdkAcrossUtf8Boundaries() {
+        assertKeywordAlternationMatch(
+            "(?is).*\\b(you|your)\\b.*",
+            "préface You spoke first.\nThen your example ended with YOU!",
+            0
+        )
+        assertKeywordAlternationMatch(
+            "(?is).*\\b(you|your)\\b.*",
+            "é ignore YOU, then keep your answer",
+            "é ignore YOU, ".length
+        )
+        assertKeywordAlternationMatch("(?isU).*\\b(you|your)\\b.*", "éyoué -- your!", 0)
+        assertKeywordAlternationMatch("(?isU).*\\b(you|your)\\b.*", "éyoué -- βyourβ", 0)
     }
-    assertThat(actualClusters).as("grapheme clusters for %s", input).isEqualTo(expectedClusters);
 
-    Utf8Matcher boundaries = Pattern.compile("\\b{g}").matcher(Utf8Input.validated(bytes));
-    List<Integer> actualBoundaries = new ArrayList<>();
-    while (boundaries.find()) {
-      actualBoundaries.add(boundaries.start());
+    @Test
+    fun keywordAlternationPreservesIndependentUtf8BoundaryModes() {
+        assertKeywordAlternationMatch("(?-U)\\b(?i)(foo|bar)(?U)\\b", "éfoo! fooé bar!", 0)
+        assertKeywordAlternationMatch("(?U)\\b(?i)(foo|bar)(?-U)\\b", "éfoo! fooé bar!", 0)
     }
-    Matcher stringBoundaries = Pattern.compile("\\b{g}").matcher(input);
-    List<Integer> expectedBoundaries = new ArrayList<>();
-    while (stringBoundaries.find()) {
-      expectedBoundaries.add(utf8Offset(input, stringBoundaries.start()));
+
+    @Test
+    fun keywordAlternationFindsAlternativesAndRejectsAdjacentWordCharacters() {
+        val input = "préface error warning2 _timeout failed!"
+        val matcher: Utf8Matcher = matcher("(?i)\\b(error|warning|timeout|failed)\\b", input)
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(utf8Slice(input, matcher.start(1), matcher.end(1))).isEqualTo("error")
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(utf8Slice(input, matcher.start(1), matcher.end(1))).isEqualTo("failed")
+        Assertions.assertThat(matcher.find()).isFalse()
+
+        val absent = Pattern.compile("(?is).*\\b(you|your)\\b.*")
+        val absentInput = Utf8Input.validated("é youth yours".toByteArray(StandardCharsets.UTF_8))
+        Assertions.assertThat(absent.matcher(absentInput).find()).isFalse()
+        Assertions.assertThat(absent.find(absentInput)).isFalse()
     }
-    assertThat(actualBoundaries)
-        .as("grapheme boundaries for %s", input)
-        .isEqualTo(expectedBoundaries);
-  }
 
-  @Test
-  void caseInsensitiveMultiCharPrefixMatchesAcrossVectorBoundaries() {
-    String pattern = "(?i)http_query";
-    String input =
-        "http_first http_second http_third "
-            + "HTTP_other HTTP_next "
-            + "hTtP_almost "
-            + "HTTP_QUERY_final";
-    Pattern p = Pattern.compile(pattern);
-    Utf8Matcher matcher = p.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
+    @Test
+    fun emptyFindAdvancesByOneCodePoint() {
+        val matcher: Utf8Matcher = matcher("", "😀")
+        val bounds: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
 
-    assertThat(matcher.find()).isTrue();
-    int expectedStart = input.indexOf("HTTP_QUERY");
-    assertThat(matcher.start()).isEqualTo(expectedStart);
-    assertThat(matcher.end()).isEqualTo(expectedStart + "http_query".length());
-    assertThat(matcher.find()).isFalse();
-  }
+        while (matcher.find()) {
+            bounds.add(List.of<Int?>(matcher.start(), matcher.end()))
+        }
 
-  @Test
-  void caseInsensitivePrefixWithRareAnchorHandlesDenseFalseCandidates() {
-    // 't' is very common, 'z' is rare.
-    String pattern = "(?i)the_zone";
-    String noise = "the_alpha the_beta the_gamma the_delta ";
-    String input = noise.repeat(5) + "THE_ZONE";
-    Pattern p = Pattern.compile(pattern);
-    Utf8Matcher matcher = p.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-
-    assertThat(matcher.find()).isTrue();
-    int expectedStart = input.indexOf("THE_ZONE");
-    assertThat(matcher.start()).isEqualTo(expectedStart);
-    assertThat(matcher.end()).isEqualTo(expectedStart + "the_zone".length());
-  }
-
-  private static Utf8Matcher matcher(String pattern, String input) {
-    return Pattern.compile(pattern).matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-  }
-
-  private static void assertKeywordAlternationMatch(String regex, String input, int regionStart) {
-    Pattern pattern = Pattern.compile(regex);
-    java.util.regex.Matcher jdkMatcher =
-        java.util.regex.Pattern.compile(regex).matcher(input).region(regionStart, input.length());
-    int byteRegionStart = utf8Offset(input, regionStart);
-    Utf8Input utf8Input = Utf8Input.validated(input.getBytes(UTF_8));
-    Utf8Matcher utf8Matcher =
-        pattern.matcher(utf8Input).region(byteRegionStart, utf8Input.length());
-
-    boolean jdkFound = jdkMatcher.find();
-    assertThat(pattern.find(utf8Input)).isEqualTo(jdkFound);
-    assertThat(utf8Matcher.find()).isEqualTo(jdkFound);
-    if (!jdkFound) {
-      return;
+        Assertions.assertThat<MutableList<Int?>?>(bounds)
+            .containsExactly(mutableListOf<Int?>(0, 0), mutableListOf<Int?>(4, 4))
     }
-    for (int group = 0; group <= jdkMatcher.groupCount(); group++) {
-      int expectedStart =
-          jdkMatcher.start(group) < 0 ? -1 : utf8Offset(input, jdkMatcher.start(group));
-      int expectedEnd = jdkMatcher.end(group) < 0 ? -1 : utf8Offset(input, jdkMatcher.end(group));
-      assertThat(utf8Matcher.start(group)).as("group %s start", group).isEqualTo(expectedStart);
-      assertThat(utf8Matcher.end(group)).as("group %s end", group).isEqualTo(expectedEnd);
+
+    @Test
+    fun failedFindInvalidatesPreviousResult() {
+        val matcher: Utf8Matcher = matcher("a", "a")
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.find()).isFalse()
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.start() })
+            .isInstanceOf(IllegalStateException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.end() })
+            .isInstanceOf(IllegalStateException::class.java)
     }
-  }
 
-  private static String utf8Slice(String input, int start, int end) {
-    byte[] bytes = input.getBytes(UTF_8);
-    return new String(bytes, start, end - start, UTF_8);
-  }
+    @Test
+    fun wholeInputAndPrefixMatchesUseUtf8Input() {
+        val whole: Utf8Matcher = matcher("é😀", "é😀")
+        val prefix: Utf8Matcher = matcher("é", "é😀")
 
-  private static List<List<Integer>> findTrace(Utf8Matcher matcher) {
-    List<List<Integer>> trace = new ArrayList<>();
-    while (matcher.find()) {
-      trace.add(List.of(matcher.start(), matcher.end()));
+        Assertions.assertThat(whole.matches()).isTrue()
+        Assertions.assertThat(whole.start()).isZero()
+        Assertions.assertThat(whole.end()).isEqualTo(6)
+        Assertions.assertThat(prefix.matches()).isFalse()
+        Assertions.assertThat(prefix.lookingAt()).isTrue()
+        Assertions.assertThat(prefix.start()).isZero()
+        Assertions.assertThat(prefix.end()).isEqualTo(2)
     }
-    return trace;
-  }
 
-  private static int utf8Offset(String text, int utf16Offset) {
-    return text.substring(0, utf16Offset).getBytes(UTF_8).length;
-  }
+    @Test
+    fun resetRestoresWholeInputAndInvalidatesPreviousResult() {
+        val matcher: Utf8Matcher = matcher("é|😀", "é😀")
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isZero()
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(2)
+
+        Assertions.assertThat<Utf8Matcher?>(matcher.reset()).isSameAs(matcher)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.start() })
+            .isInstanceOf(IllegalStateException::class.java)
+        Assertions.assertThat(matcher.regionStart()).isZero()
+        Assertions.assertThat(matcher.regionEnd()).isEqualTo(6)
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isZero()
+    }
+
+    @Test
+    fun regionUsesRelativeByteOffsetsAndResetRestoresWholeInput() {
+        val matcher: Utf8Matcher = matcher("😀", "xé😀y")
+
+        Assertions.assertThat<Utf8Matcher?>(matcher.region(3, 7)).isSameAs(matcher)
+        Assertions.assertThat(matcher.regionStart()).isEqualTo(3)
+        Assertions.assertThat(matcher.regionEnd()).isEqualTo(7)
+        Assertions.assertThat(matcher.matches()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(3)
+        Assertions.assertThat(matcher.end()).isEqualTo(7)
+
+        matcher.region(3, 8)
+        Assertions.assertThat(matcher.lookingAt()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(3)
+        Assertions.assertThat(matcher.end()).isEqualTo(7)
+
+        matcher.region(3, 8)
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(3)
+        Assertions.assertThat(matcher.end()).isEqualTo(7)
+
+        matcher.reset()
+        Assertions.assertThat(matcher.regionStart()).isZero()
+        Assertions.assertThat(matcher.regionEnd()).isEqualTo(8)
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(3)
+    }
+
+    @Test
+    fun regionMatchOperationsPreserveBoundarySensitiveCaptures() {
+        data class Scenario(val regex: String?, val input: String?, val regionStart: Int, val regionEnd: Int)
+
+        for (scenario in List.of<Scenario?>(
+            Scenario("(\\b(?:a|aa))", "xaa", 1, 3),
+            Scenario("((?:a|aa)\\b)", "aax", 0, 2)
+        )) {
+            for (operation in mutableListOf<String?>("matches", "lookingAt", "find")) {
+                val oracle =
+                    Pattern.compile(scenario.regex).matcher(scenario.input)
+                oracle.region(scenario.regionStart, scenario.regionEnd)
+                val expected =
+                    when (operation) {
+                        "matches" -> oracle.matches()
+                        "lookingAt" -> oracle.lookingAt()
+                        "find" -> oracle.find()
+                        else -> throw AssertionError(operation)
+                    }
+
+                val actual: Utf8Matcher = Companion.matcher(scenario.regex, scenario.input!!)
+                actual.region(scenario.regionStart, scenario.regionEnd)
+                val matched =
+                    when (operation) {
+                        "matches" -> actual.matches()
+                        "lookingAt" -> actual.lookingAt()
+                        "find" -> actual.find()
+                        else -> throw AssertionError(operation)
+                    }
+
+                Assertions.assertThat(matched).`as`("%s for /%s/", operation, scenario.regex).isEqualTo(expected)
+                Assertions.assertThat(actual.start(1))
+                    .`as`("%s capture start for /%s/", operation, scenario.regex)
+                    .isEqualTo(oracle.start(1))
+                Assertions.assertThat(actual.end(1))
+                    .`as`("%s capture end for /%s/", operation, scenario.regex)
+                    .isEqualTo(oracle.end(1))
+            }
+        }
+    }
+
+    @Test
+    fun regionRejectsInvalidByteRanges() {
+        val matcher: Utf8Matcher = matcher("é", "xéy")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.region(-1, 1) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.region(0, 5) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.region(3, 2) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.region(2, 3) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+            .hasMessageContaining("code-point boundaries")
+    }
+
+    @Test
+    fun observationBeforeMatchAndInvalidGroupsThrow() {
+        val matcher: Utf8Matcher = matcher("(a)", "a")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.start() })
+            .isInstanceOf(IllegalStateException::class.java)
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.groupCount()).isEqualTo(1)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.start(-1) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.end(2) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+    }
+
+    @Test
+    fun patternEntryPointsRejectNullInput() {
+        val pattern = org.safere.Pattern.compile("a")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { pattern.matcher(null as Utf8Input?) })
+            .isInstanceOf(NullPointerException::class.java)
+        Assertions.assertThatThrownBy(ThrowingCallable { pattern.find(null as Utf8Input?) })
+            .isInstanceOf(NullPointerException::class.java)
+    }
+
+    @Test
+    fun wholeArrayAndWindowViewsProduceTheSameFindTrace() {
+        val logical = "xé😀y".toByteArray(StandardCharsets.UTF_8)
+        val storage = ByteArray(logical.size + 6)
+        System.arraycopy(logical, 0, storage, 3, logical.size)
+        val pattern = org.safere.Pattern.compile("é|😀")
+
+        Assertions.assertThat<MutableList<Int?>?>(findTrace(pattern.matcher(Utf8Input.validated(logical))))
+            .isEqualTo(findTrace(pattern.matcher(Utf8Input.validated(storage, 3, logical.size))))
+    }
+
+    @Test
+    fun inputWindowHidesBackingStorageAndKeepsRelativeBounds() {
+        val logical = "xéy".toByteArray(StandardCharsets.UTF_8)
+        val storage = "before--------after".toByteArray(StandardCharsets.UTF_8)
+        System.arraycopy(logical, 0, storage, 7, logical.size)
+        val input = Utf8Input.validated(storage, 7, logical.size)
+
+        val matcher = org.safere.Pattern.compile("é").matcher(input)
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.start()).isEqualTo(1)
+        Assertions.assertThat(matcher.end()).isEqualTo(3)
+        Assertions.assertThat(matcher.find()).isFalse()
+    }
+
+    @Test
+    fun patternBooleanSearchUsesUtf8Input() {
+        val pattern = org.safere.Pattern.compile("😀$")
+
+        Assertions.assertThat(pattern.find(Utf8Input.validated("x😀".toByteArray(StandardCharsets.UTF_8)))).isTrue()
+        Assertions.assertThat(pattern.find(Utf8Input.validated("😀x".toByteArray(StandardCharsets.UTF_8)))).isFalse()
+        Assertions.assertThat(
+            org.safere.Pattern.compile("(?<letter>é)|😀")
+                .find(Utf8Input.validated("xé".toByteArray(StandardCharsets.UTF_8)))
+        )
+            .isTrue()
+        Assertions.assertThat(
+            org.safere.Pattern.compile("\\Xz").find(Utf8Input.validated("👩‍💻x".toByteArray(StandardCharsets.UTF_8)))
+        )
+            .isFalse()
+    }
+
+    @Test
+    fun patternBooleanSearchUsesFixedOffsetLiteralCandidates() {
+        val phone = org.safere.Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
+
+        Assertions.assertThat(phone.find(Utf8Input.validated("path /api/42".toByteArray(StandardCharsets.UTF_8))))
+            .isFalse()
+        Assertions.assertThat(phone.find(Utf8Input.validated("path /api then 123/456/7890".toByteArray(StandardCharsets.UTF_8))))
+            .isTrue()
+        Assertions.assertThat(phone.find(Utf8Input.validated("digits 1234567890".toByteArray(StandardCharsets.UTF_8))))
+            .isFalse()
+    }
+
+    @Test
+    fun asciiPrefixClassesAgreeAcrossStringAndUtf8SearchState() {
+        val text = "ébbxqbybbzbb5qbb7bb@qbb"
+        val input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
+
+        for (regex in mutableListOf<String?>("[x]q?", "[xy]q?", "[xz]q?", "[0-9]q?", "[ace@]q?")) {
+            val pattern = org.safere.Pattern.compile(regex)
+            val stringMatcher = pattern.matcher(text)
+            val utf8Matcher = pattern.matcher(input)
+            val expected: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+            val actual: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+
+            while (stringMatcher.find()) {
+                expected.add(
+                    List.of<Int?>(
+                        utf8Offset(text, stringMatcher.start()), utf8Offset(text, stringMatcher.end())
+                    )
+                )
+            }
+            while (utf8Matcher.find()) {
+                actual.add(List.of<Int?>(utf8Matcher.start(), utf8Matcher.end()))
+            }
+
+            Assertions.assertThat(pattern.find(input)).`as`("direct UTF-8 find for /%s/", regex).isTrue()
+            Assertions.assertThat<MutableList<Int?>?>(actual).`as`("repeated UTF-8 find for /%s/", regex)
+                .isEqualTo(expected)
+
+            utf8Matcher.region(2, input.length())
+            Assertions.assertThat(utf8Matcher.find()).`as`("region find for /%s/", regex).isTrue()
+            utf8Matcher.reset()
+            Assertions.assertThat<MutableList<Int?>?>(findTrace(utf8Matcher)).`as`("reset find trace for /%s/", regex)
+                .isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun requiredNonAsciiClassRejectsAsciiInputAcrossUtf8EntryPoints() {
+        val pattern = org.safere.Pattern.compile("[一-龥]{3,}")
+        val absent = Utf8Input.trusted("ordinary ASCII text".toByteArray(StandardCharsets.UTF_8))
+        val present = Utf8Input.validated("prefix中文测试suffix".toByteArray(StandardCharsets.UTF_8))
+
+        Assertions.assertThat(pattern.find(absent)).isFalse()
+        Assertions.assertThat(pattern.matcher(absent).find()).isFalse()
+        Assertions.assertThat(pattern.find(present)).isTrue()
+        Assertions.assertThat(pattern.matcher(present).find()).isTrue()
+    }
+
+    @Test
+    fun graphemePatternDoesNotSplitMultibyteCodePointInUnanchoredFind() {
+        val input = "\u1e99| 5  \u8ed6"
+        val utf8Matcher =
+            org.safere.Pattern.compile(".\\X| /0? ?5-")
+                .matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+        val actualMatches: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+        while (utf8Matcher.find()) {
+            actualMatches.add(List.of<Int?>(utf8Matcher.start(), utf8Matcher.end()))
+        }
+
+        val stringMatcher = org.safere.Pattern.compile(".\\X| /0? ?5-").matcher(input)
+        val expectedMatches: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+        while (stringMatcher.find()) {
+            expectedMatches.add(
+                List.of<Int?>(
+                    utf8Offset(input, stringMatcher.start()), utf8Offset(input, stringMatcher.end())
+                )
+            )
+        }
+
+        Assertions.assertThat<MutableList<Int?>?>(actualMatches).isEqualTo(expectedMatches)
+    }
+
+    @Test
+    fun graphemePatternsWorkAcrossUtf8Scalars() {
+        for (input in mutableListOf<String?>("a\r\nb", "a\u0301b", "👩‍💻x", "🇺🇸x")) {
+            Companion.assertGraphemePatternsWorkAcrossUtf8Scalars(input!!)
+        }
+    }
+
+    @Test
+    @DisabledForCrosscheck("SafeRE uses Unicode 17 grapheme rule GB9c while JDK 21 uses Unicode 15.0")
+    fun indicConjunctGraphemePatternsWorkAcrossUtf8ScalarsOnEverySupportedJdk() {
+        assertGraphemePatternsWorkAcrossUtf8Scalars("क्‍षx")
+    }
+
+    @Test
+    @EnabledForJreRange(min = JRE.JAVA_22)
+    fun indicConjunctGraphemePatternsMatchJdk22AndLaterAcrossUtf8Scalars() {
+        assertGraphemePatternsWorkAcrossUtf8Scalars("क्‍षx")
+    }
+
+    @Test
+    fun caseInsensitiveMultiCharPrefixMatchesAcrossVectorBoundaries() {
+        val pattern = "(?i)http_query"
+        val input =
+            ("http_first http_second http_third "
+                    + "HTTP_other HTTP_next "
+                    + "hTtP_almost "
+                    + "HTTP_QUERY_final")
+        val p = org.safere.Pattern.compile(pattern)
+        val matcher = p.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        val expectedStart = input.indexOf("HTTP_QUERY")
+        Assertions.assertThat(matcher.start()).isEqualTo(expectedStart)
+        Assertions.assertThat(matcher.end()).isEqualTo(expectedStart + "http_query".length)
+        Assertions.assertThat(matcher.find()).isFalse()
+    }
+
+    @Test
+    fun caseInsensitivePrefixWithRareAnchorHandlesDenseFalseCandidates() {
+        // 't' is very common, 'z' is rare.
+        val pattern = "(?i)the_zone"
+        val noise = "the_alpha the_beta the_gamma the_delta "
+        val input = noise.repeat(5) + "THE_ZONE"
+        val p = org.safere.Pattern.compile(pattern)
+        val matcher = p.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        val expectedStart = input.indexOf("THE_ZONE")
+        Assertions.assertThat(matcher.start()).isEqualTo(expectedStart)
+        Assertions.assertThat(matcher.end()).isEqualTo(expectedStart + "the_zone".length)
+    }
+
+    companion object {
+        private fun assertGraphemePatternsWorkAcrossUtf8Scalars(input: String) {
+            val bytes = input.toByteArray(StandardCharsets.UTF_8)
+            val clusters = org.safere.Pattern.compile("\\X").matcher(Utf8Input.validated(bytes))
+            val actualClusters: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+            while (clusters.find()) {
+                actualClusters.add(List.of<Int?>(clusters.start(), clusters.end()))
+            }
+
+            val stringClusters = org.safere.Pattern.compile("\\X").matcher(input)
+            val expectedClusters: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+            while (stringClusters.find()) {
+                expectedClusters.add(
+                    List.of<Int?>(
+                        utf8Offset(input, stringClusters.start()), utf8Offset(input, stringClusters.end())
+                    )
+                )
+            }
+            Assertions.assertThat<MutableList<Int?>?>(actualClusters).`as`("grapheme clusters for %s", input)
+                .isEqualTo(expectedClusters)
+
+            val boundaries = org.safere.Pattern.compile("\\b{g}").matcher(Utf8Input.validated(bytes))
+            val actualBoundaries: MutableList<Int?> = ArrayList<Int?>()
+            while (boundaries.find()) {
+                actualBoundaries.add(boundaries.start())
+            }
+            val stringBoundaries = org.safere.Pattern.compile("\\b{g}").matcher(input)
+            val expectedBoundaries: MutableList<Int?> = ArrayList<Int?>()
+            while (stringBoundaries.find()) {
+                expectedBoundaries.add(utf8Offset(input, stringBoundaries.start()))
+            }
+            Assertions.assertThat<Int?>(actualBoundaries)
+                .`as`("grapheme boundaries for %s", input)
+                .isEqualTo(expectedBoundaries)
+        }
+
+        private fun matcher(pattern: String?, input: String): Utf8Matcher {
+            return org.safere.Pattern.compile(pattern)
+                .matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+        }
+
+        private fun assertKeywordAlternationMatch(regex: String, input: String, regionStart: Int) {
+            val pattern = org.safere.Pattern.compile(regex)
+            val jdkMatcher =
+                Pattern.compile(regex).matcher(input).region(regionStart, input.length)
+            val byteRegionStart: Int = utf8Offset(input, regionStart)
+            val utf8Input = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
+            val utf8Matcher =
+                pattern.matcher(utf8Input).region(byteRegionStart, utf8Input.length())
+
+            val jdkFound = jdkMatcher.find()
+            Assertions.assertThat(pattern.find(utf8Input)).isEqualTo(jdkFound)
+            Assertions.assertThat(utf8Matcher.find()).isEqualTo(jdkFound)
+            if (!jdkFound) {
+                return
+            }
+            for (group in 0..jdkMatcher.groupCount()) {
+                val expectedStart =
+                    if (jdkMatcher.start(group) < 0) -1 else utf8Offset(input, jdkMatcher.start(group))
+                val expectedEnd = if (jdkMatcher.end(group) < 0) -1 else utf8Offset(input, jdkMatcher.end(group))
+                Assertions.assertThat(utf8Matcher.start(group)).`as`("group %s start", group).isEqualTo(expectedStart)
+                Assertions.assertThat(utf8Matcher.end(group)).`as`("group %s end", group).isEqualTo(expectedEnd)
+            }
+        }
+
+        private fun utf8Slice(input: String, start: Int, end: Int): String {
+            val bytes = input.toByteArray(StandardCharsets.UTF_8)
+            return String(bytes, start, end - start, StandardCharsets.UTF_8)
+        }
+
+        private fun findTrace(matcher: Utf8Matcher): MutableList<MutableList<Int?>?> {
+            val trace: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
+            while (matcher.find()) {
+                trace.add(List.of<Int?>(matcher.start(), matcher.end()))
+            }
+            return trace
+        }
+
+        private fun utf8Offset(text: String, utf16Offset: Int): Int {
+            return text.substring(0, utf16Offset).toByteArray(StandardCharsets.UTF_8).size
+        }
+    }
 }

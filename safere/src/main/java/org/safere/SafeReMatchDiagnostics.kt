@@ -2,68 +2,70 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
-
-package org.safere;
+package org.safere
 
 /**
  * Receives synchronous, low-cardinality diagnostics about pattern compilation and matching.
- *
- * <p>Callbacks run on the compiling or matching thread. Implementations are responsible for their
+ * 
+ * 
+ * Callbacks run on the compiling or matching thread. Implementations are responsible for their
  * own thread safety, aggregation, storage, and cardinality policy. Public callback exceptions
  * propagate to the caller; operation callbacks run only after matcher state has been finalized.
- *
- * <p>When {@link #NONE} is installed, matching allocates no diagnostics objects. Enabled listeners
+ * 
+ * 
+ * When [.NONE] is installed, matching allocates no diagnostics objects. Enabled listeners
  * receive one bounded event per supported public operation, irrespective of internal engine passes
  * or replacement match count.
- *
- * <p>Supported operations are {@link Matcher#matches()}, {@link Matcher#lookingAt()}, {@link
- * Matcher#find()}, the {@link Matcher} replacement operations, the corresponding matching
- * operations on {@link Utf8Matcher}, and {@link Pattern#find(Utf8Input)}.
+ * 
+ * 
+ * Supported operations are [Matcher.matches], [Matcher.lookingAt], [ ][Matcher.find], the [Matcher] replacement operations, the corresponding matching
+ * operations on [Utf8Matcher], and [Pattern.find].
  */
-public class SafeReMatchDiagnostics {
-  /** Listener used when match diagnostics are disabled. */
-  public static final SafeReMatchDiagnostics NONE = new SafeReMatchDiagnostics(false);
+open class SafeReMatchDiagnostics private constructor(enabled: Boolean) {
+    private val enabled: Boolean
 
-  private final boolean enabled;
+    /** Creates an enabled diagnostics listener.  */
+    protected constructor() : this(true)
 
-  /** Creates an enabled diagnostics listener. */
-  protected SafeReMatchDiagnostics() {
-    this(true);
-  }
+    init {
+        this.enabled = enabled
+    }
 
-  private SafeReMatchDiagnostics(boolean enabled) {
-    this.enabled = enabled;
-  }
+    /**
+     * Called after a pattern is compiled while this listener is installed.
+     * 
+     * @param event immutable pattern compilation event
+     */
+    open fun onPatternCompiled(event: PatternCompiledEvent?) {}
 
-  /** Returns whether the given listener is enabled. */
-  static boolean isEnabled(SafeReMatchDiagnostics listener) {
-    return listener.enabled;
-  }
+    /**
+     * Called after a supported public operation completes normally.
+     * 
+     * @param event immutable operation summary
+     */
+    open fun onOperationCompleted(event: OperationDiagnostics?) {}
 
-  /**
-   * Called after a pattern is compiled while this listener is installed.
-   *
-   * @param event immutable pattern compilation event
-   */
-  public void onPatternCompiled(PatternCompiledEvent event) {}
+    /**
+     * Called when an explicitly instrumented intentional-divergence path is exercised.
+     * 
+     * 
+     * This is evidence about execution, not proof that a JDK mismatch is intentional. Not all
+     * documented divergences have a distinct runtime branch; absence is not proof of agreement.
+     * Callbacks run synchronously after parsing or matcher state finalization. Matching signals are
+     * coalesced per public operation. If parsing fails, notification failures are suppressed on the
+     * original syntax exception; otherwise callback exceptions propagate to the caller.
+     * 
+     * @param divergence the path exercised
+     */
+    open fun onIntentionalDivergence(divergence: IntentionalDivergence?) {}
 
-  /**
-   * Called after a supported public operation completes normally.
-   *
-   * @param event immutable operation summary
-   */
-  public void onOperationCompleted(OperationDiagnostics event) {}
+    companion object {
+        /** Listener used when match diagnostics are disabled.  */
+        val NONE: SafeReMatchDiagnostics = SafeReMatchDiagnostics(false)
 
-  /**
-   * Called when an explicitly instrumented intentional-divergence path is exercised.
-   *
-   * <p>This is evidence about execution, not proof that a JDK mismatch is intentional. Not all
-   * documented divergences have a distinct runtime branch; absence is not proof of agreement.
-   * Callbacks run synchronously after parsing or matcher state finalization. Matching signals are
-   * coalesced per public operation. If parsing fails, notification failures are suppressed on the
-   * original syntax exception; otherwise callback exceptions propagate to the caller.
-   *
-   * @param divergence the path exercised
-   */
-  void onIntentionalDivergence(IntentionalDivergence divergence) {}
+        /** Returns whether the given listener is enabled.  */
+        fun isEnabled(listener: SafeReMatchDiagnostics): Boolean {
+            return listener.enabled
+        }
+    }
 }

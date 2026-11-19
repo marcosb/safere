@@ -2,148 +2,153 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
+import org.junit.jupiter.api.function.Executable
+import org.safere.Pattern
+import org.safere.fuzz.FuzzSupport.CompiledPattern
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
+import java.util.*
+import java.util.List
+import java.util.regex.MatchResult
+import java.util.regex.PatternSyntaxException
+import java.util.stream.Stream
+import kotlin.streams.asStream
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.regex.MatchResult;
-import java.util.regex.PatternSyntaxException;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DynamicTest;
-import org.junit.jupiter.api.TestFactory;
-
-/** Exact reviewed reproductions; never used to suppress a fuzz finding. */
-final class IntentionalReproductionTest {
-  @TestFactory
-  Stream<DynamicTest> replayReviewedCases() throws IOException {
-    List<String> ids;
-    try (var stream = resource("index.txt")) {
-      ids =
-          new String(stream.readAllBytes(), StandardCharsets.UTF_8)
-              .lines()
-              .filter(line -> !line.isBlank() && !line.startsWith("#"))
-              .toList();
+/** Exact reviewed reproductions; never used to suppress a fuzz finding.  */
+internal class IntentionalReproductionTest {
+    @TestFactory
+    @Throws(IOException::class)
+    fun replayReviewedCases(): Stream<DynamicTest?>? {
+        var ids: MutableList<String?>?
+        resource("index.txt").use { stream ->
+            ids =
+                String(stream.readAllBytes(), StandardCharsets.UTF_8).lineSequence().asStream()
+                    .filter { line: String? -> !line!!.isBlank() && !line.startsWith("#") }
+                    .toList()
+        }
+        val selected = System.getProperty("safere.fuzz.reproduction")
+        if (selected != null) {
+            Assertions.assertThat<String?>(ids).`as`("unknown reproduction ID").contains(selected)
+            ids = List.of<String?>(selected)
+        }
+        return ids!!.stream()
+            .map<DynamicTest?> { id: String? -> DynamicTest.dynamicTest(id, Executable { replay(id) }) }
     }
-    String selected = System.getProperty("safere.fuzz.reproduction");
-    if (selected != null) {
-      assertThat(ids).as("unknown reproduction ID").contains(selected);
-      ids = List.of(selected);
-    }
-    return ids.stream().map(id -> DynamicTest.dynamicTest(id, () -> replay(id)));
-  }
 
-  private static java.io.InputStream resource(String name) {
-    return Objects.requireNonNull(
-        IntentionalReproductionTest.class.getResourceAsStream("/intentional-reproductions/" + name),
-        name);
-  }
+    companion object {
+        private fun resource(name: String?): InputStream {
+            return Objects.requireNonNull<InputStream>(
+                IntentionalReproductionTest::class.java.getResourceAsStream("/intentional-reproductions/" + name),
+                name
+            )
+        }
 
-  private static void replay(String id) throws IOException {
-    Properties spec = new Properties();
-    try (var reader = new InputStreamReader(resource(id + ".properties"), StandardCharsets.UTF_8)) {
-      spec.load(reader);
-    }
-    assertThat(spec.getProperty("id")).isEqualTo(id);
-    assertThat(spec.getProperty("rule")).startsWith("INTENTIONAL_DIVERGENCES.md#");
-    assertThat(spec.getProperty("modelTest")).isNotBlank();
-    String regex = required(spec, "regex");
-    String input = required(spec, "input");
-    String operation = required(spec, "operation");
-    int flags = Integer.parseInt(required(spec, "flags"));
-    String safe = safeOutcome(regex, flags, input, operation);
-    String jdk = jdkOutcome(regex, flags, input, operation);
-    assertThat(safe)
-        .as("%s: SafeRE model changed; reclassify this reproduction", id)
-        .isEqualTo(required(spec, "safeRe"));
-    assertThat(jdk)
-        .as("%s: JDK outcome changed; reclassify this reproduction", id)
-        .isEqualTo(required(spec, "jdk"));
-    assertThat(safe).isNotEqualTo(jdk);
-    // The registry classifies only this exact case. Broad comparison must still expose it.
-    assertThatThrownBy(
-            () -> {
-              var compiled = FuzzSupport.compileCompatibleOrSkip(regex, flags);
-              assertThat(compiled).isNotNull();
-              if (operation.equals("matches")) {
-                compiled.matcher(input).matches();
-              } else if (operation.equals("find")) {
-                compiled.matcher(input).find();
-              } else if (!operation.equals("compile")) {
-                throw new IllegalArgumentException(operation);
-              }
-            })
-        .isInstanceOf(AssertionError.class)
-        .hasMessageContaining("divergence");
-  }
+        @Throws(IOException::class)
+        private fun replay(id: String?) {
+            val spec = Properties()
+            InputStreamReader(resource(id + ".properties"), StandardCharsets.UTF_8).use { reader ->
+                spec.load(reader)
+            }
+            Assertions.assertThat(spec.getProperty("id")).isEqualTo(id)
+            Assertions.assertThat(spec.getProperty("rule")).startsWith("INTENTIONAL_DIVERGENCES.md#")
+            Assertions.assertThat(spec.getProperty("modelTest")).isNotBlank()
+            val regex: String = required(spec, "regex")
+            val input: String = required(spec, "input")
+            val operation: String = required(spec, "operation")
+            val flags = required(spec, "flags").toInt()
+            val safe: String = safeOutcome(regex, flags, input, operation)
+            val jdk: String = jdkOutcome(regex, flags, input, operation)
+            Assertions.assertThat(safe)
+                .`as`("%s: SafeRE model changed; reclassify this reproduction", id)
+                .isEqualTo(required(spec, "safeRe"))
+            Assertions.assertThat(jdk)
+                .`as`("%s: JDK outcome changed; reclassify this reproduction", id)
+                .isEqualTo(required(spec, "jdk"))
+            Assertions.assertThat(safe).isNotEqualTo(jdk)
+            // The registry classifies only this exact case. Broad comparison must still expose it.
+            Assertions.assertThatThrownBy(
+                ThrowingCallable {
+                    val compiled = FuzzSupport.compileCompatibleOrSkip(regex, flags)
+                    Assertions.assertThat<CompiledPattern?>(compiled).isNotNull()
+                    if (operation == "matches") {
+                        compiled!!.matcher(input).matches()
+                    } else if (operation == "find") {
+                        compiled!!.matcher(input).find()
+                    } else require(operation == "compile") { operation }
+                })
+                .isInstanceOf(AssertionError::class.java)
+                .hasMessageContaining("divergence")
+        }
 
-  private static String required(Properties spec, String key) {
-    return Objects.requireNonNull(spec.getProperty(key), key);
-  }
+        private fun required(spec: Properties, key: String?): String {
+            return Objects.requireNonNull<String>(spec.getProperty(key), key)
+        }
 
-  private static String safeOutcome(String regex, int flags, String input, String operation) {
-    org.safere.Pattern pattern;
-    try {
-      pattern = org.safere.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException expected) {
-      return "rejected";
-    }
-    if (operation.equals("compile")) {
-      return "accepted";
-    }
-    var matcher = pattern.matcher(input);
-    boolean found =
-        switch (operation) {
-          case "matches" -> matcher.matches();
-          case "find" -> matcher.find();
-          default -> throw new IllegalArgumentException(operation);
-        };
-    return snapshot(found, matcher);
-  }
+        private fun safeOutcome(regex: String?, flags: Int, input: String?, operation: String): String {
+            val pattern: Pattern?
+            try {
+                pattern = Pattern.compile(regex, flags)
+            } catch (expected: PatternSyntaxException) {
+                return "rejected"
+            }
+            if (operation == "compile") {
+                return "accepted"
+            }
+            val matcher = pattern.matcher(input)
+            val found =
+                when (operation) {
+                    "matches" -> matcher.matches()
+                    "find" -> matcher.find()
+                    else -> throw IllegalArgumentException(operation)
+                }
+            return snapshot(found, matcher)
+        }
 
-  private static String jdkOutcome(String regex, int flags, String input, String operation) {
-    java.util.regex.Pattern pattern;
-    try {
-      pattern = java.util.regex.Pattern.compile(regex, flags);
-    } catch (PatternSyntaxException expected) {
-      return "rejected";
-    }
-    if (operation.equals("compile")) {
-      return "accepted";
-    }
-    var matcher = pattern.matcher(input);
-    boolean found =
-        switch (operation) {
-          case "matches" -> matcher.matches();
-          case "find" -> matcher.find();
-          default -> throw new IllegalArgumentException(operation);
-        };
-    return snapshot(found, matcher);
-  }
+        private fun jdkOutcome(regex: String, flags: Int, input: String, operation: String): String {
+            val pattern: java.util.regex.Pattern?
+            try {
+                pattern = java.util.regex.Pattern.compile(regex, flags)
+            } catch (expected: PatternSyntaxException) {
+                return "rejected"
+            }
+            if (operation == "compile") {
+                return "accepted"
+            }
+            val matcher = pattern.matcher(input)
+            val found =
+                when (operation) {
+                    "matches" -> matcher.matches()
+                    "find" -> matcher.find()
+                    else -> throw IllegalArgumentException(operation)
+                }
+            return snapshot(found, matcher)
+        }
 
-  private static String snapshot(boolean found, MatchResult matcher) {
-    StringBuilder result = new StringBuilder(Boolean.toString(found));
-    if (found) {
-      for (int group = 0; group <= matcher.groupCount(); group++) {
-        String text = matcher.group(group);
-        result
-            .append('|')
-            .append(group)
-            .append(':')
-            .append(matcher.start(group))
-            .append(':')
-            .append(matcher.end(group))
-            .append(':')
-            .append(text == null ? "null" : FuzzSupport.javaStringLiteral(text));
-      }
+        private fun snapshot(found: Boolean, matcher: MatchResult): String {
+            val result = StringBuilder(found.toString())
+            if (found) {
+                for (group in 0..matcher.groupCount()) {
+                    val text = matcher.group(group)
+                    result
+                        .append('|')
+                        .append(group)
+                        .append(':')
+                        .append(matcher.start(group))
+                        .append(':')
+                        .append(matcher.end(group))
+                        .append(':')
+                        .append(if (text == null) "null" else FuzzSupport.javaStringLiteral(text))
+                }
+            }
+            return result.toString()
+        }
     }
-    return result.toString();
-  }
 }

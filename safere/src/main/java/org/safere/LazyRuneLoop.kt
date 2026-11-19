@@ -2,8 +2,8 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-/** A lazy single-consumer loop whose exit starts with captures/NOPs and an ASCII literal. */
-record LazyRuneLoop(Inst rune, int exitChar, int exitStart) {}
+/** A lazy single-consumer loop whose exit starts with captures/NOPs and an ASCII literal.  */
+@JvmRecord
+internal data class LazyRuneLoop(val rune: Inst?, val exitChar: Int, val exitStart: Int)

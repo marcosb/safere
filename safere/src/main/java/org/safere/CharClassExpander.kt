@@ -2,255 +2,261 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Locale;
+import java.util.*
 
 /**
  * Expands parsed character-class atoms according to SafeRE's regex flags and Unicode property
  * semantics.
  */
-final class CharClassExpander {
-  private CharClassExpander() {}
-
-  enum CaseFoldPolicy {
-    NONE,
-    ASCII_POSIX,
-    UNICODE_CASED_LETTER_CATEGORY,
-    JAVA_CASED_PROPERTY
-  }
-
-  static final class Group {
-    private final int[][] table;
-    private final CaseFoldPolicy caseFoldPolicy;
-
-    Group(int[][] table, CaseFoldPolicy caseFoldPolicy) {
-      this.table = table;
-      this.caseFoldPolicy = caseFoldPolicy;
+internal object CharClassExpander {
+    fun lookupPerlGroup(name: String?, unicodeCharacterClass: Boolean): Group? {
+        val table =
+            if (unicodeCharacterClass)
+                UnicodeTables.unicodePerlGroups().get(name)
+            else
+                UnicodeTables.PERL_GROUPS.get(name)
+        return if (table == null) null else Group(table, CaseFoldPolicy.NONE)
     }
 
-    int[][] table() {
-      return table;
+    fun lookupUnicodeGroup(name: String, unicodeCharacterClass: Boolean): Group? {
+        var table = JavaCharacterClasses.lookup(name)
+        if (table != null) {
+            return Group(table, javaClassCaseFoldPolicy(name))
+        }
+        table =
+            if (unicodeCharacterClass)
+                UnicodeTables.unicodePosixPropertyGroups().get(name)
+            else
+                UnicodeTables.POSIX_PROPERTY_GROUPS.get(name)
+        if (table != null) {
+            return Group(table, posixPropertyCaseFoldPolicy(name, unicodeCharacterClass))
+        }
+
+        val eq: Int = name.indexOf('='.code)
+        if (eq >= 0) {
+            return lookupKeywordProperty(name.substring(0, eq), name.substring(eq + 1))
+        }
+
+        if (name.startsWith("Is") && name.length() > 2) {
+            val stripped = name.substring(2)
+            table = UnicodeProperties.lookupScriptOrCategory(stripped)
+            if (table != null) {
+                return Group(table, scriptOrCategoryCaseFoldPolicy(stripped))
+            }
+            table = UnicodeProperties.lookupBinaryProperty(stripped)
+            return if (table == null) null else Group(table, binaryPropertyCaseFoldPolicy(stripped))
+        }
+
+        if (name.startsWith("In") && name.length() > 2) {
+            table = UnicodeProperties.lookupBlock(name.substring(2))
+            return if (table == null) null else Group(table, CaseFoldPolicy.NONE)
+        }
+
+        table = UnicodeProperties.lookupCategory(name)
+        return if (table == null) null else Group(table, categoryCaseFoldPolicy(name))
     }
 
-    CaseFoldPolicy caseFoldPolicy() {
-      return caseFoldPolicy;
-    }
-  }
+    fun addPositiveGroup(ccb: CharClassBuilder, group: Group, parseFlags: Int) {
+        if ((parseFlags and ParseFlags.FOLD_CASE) == 0) {
+            CharClassExpander.addPropertyTableWithoutCaseFolding(ccb, group.table()!!, parseFlags)
+            return
+        }
+        when (group.caseFoldPolicy()) {
+            CaseFoldPolicy.ASCII_POSIX -> CharClassExpander.addAsciiFoldedPropertyTable(
+                ccb,
+                group.table()!!,
+                parseFlags
+            )
 
-  static Group lookupPerlGroup(String name, boolean unicodeCharacterClass) {
-    int[][] table =
-        unicodeCharacterClass
-            ? UnicodeTables.unicodePerlGroups().get(name)
-            : UnicodeTables.PERL_GROUPS.get(name);
-    return table == null ? null : new Group(table, CaseFoldPolicy.NONE);
-  }
-
-  static Group lookupUnicodeGroup(String name, boolean unicodeCharacterClass) {
-    int[][] table = JavaCharacterClasses.lookup(name);
-    if (table != null) {
-      return new Group(table, javaClassCaseFoldPolicy(name));
-    }
-    table =
-        unicodeCharacterClass
-            ? UnicodeTables.unicodePosixPropertyGroups().get(name)
-            : UnicodeTables.POSIX_PROPERTY_GROUPS.get(name);
-    if (table != null) {
-      return new Group(table, posixPropertyCaseFoldPolicy(name, unicodeCharacterClass));
+            CaseFoldPolicy.UNICODE_CASED_LETTER_CATEGORY -> addCasedLetterCategoryClosure(ccb)
+            CaseFoldPolicy.JAVA_CASED_PROPERTY -> ccb.addTable(JavaCasedPropertyClosureHolder.TABLE)
+            CaseFoldPolicy.NONE -> CharClassExpander.addPropertyTableWithoutCaseFolding(
+                ccb,
+                group.table()!!,
+                parseFlags
+            )
+        }
     }
 
-    int eq = name.indexOf('=');
-    if (eq >= 0) {
-      return lookupKeywordProperty(name.substring(0, eq), name.substring(eq + 1));
+    fun addNegatedGroup(ccb: CharClassBuilder, group: Group, parseFlags: Int) {
+        if ((parseFlags and ParseFlags.FOLD_CASE) != 0) {
+            val positive = CharClassBuilder()
+            addPositiveGroup(positive, group, parseFlags)
+            val cutnl =
+                (parseFlags and ParseFlags.CLASS_NL) == 0 || (parseFlags and ParseFlags.NEVER_NL) != 0
+            if (cutnl) {
+                positive.addRune('\n'.code)
+            }
+            positive.negate()
+            ccb.addCharClass(positive)
+            return
+        }
+        var next = 0
+        for (row in group.table()!!) {
+            if (next < row[0]) {
+                addRange(ccb, next, row[0] - 1, parseFlags)
+            }
+            next = row[1] + 1
+        }
+        if (next <= Utils.MAX_RUNE) {
+            addRange(ccb, next, Utils.MAX_RUNE, parseFlags)
+        }
     }
 
-    if (name.startsWith("Is") && name.length() > 2) {
-      String stripped = name.substring(2);
-      table = UnicodeProperties.lookupScriptOrCategory(stripped);
-      if (table != null) {
-        return new Group(table, scriptOrCategoryCaseFoldPolicy(stripped));
-      }
-      table = UnicodeProperties.lookupBinaryProperty(stripped);
-      return table == null ? null : new Group(table, binaryPropertyCaseFoldPolicy(stripped));
+    fun addRange(ccb: CharClassBuilder, lo: Int, hi: Int, parseFlags: Int) {
+        val cutnl =
+            (parseFlags and ParseFlags.CLASS_NL) == 0 || (parseFlags and ParseFlags.NEVER_NL) != 0
+        if (cutnl && lo <= '\n'.code && hi >= '\n'.code) {
+            if (lo < '\n'.code) {
+                addRange(ccb, lo, '\n'.code - 1, parseFlags)
+            }
+            if (hi > '\n'.code) {
+                addRange(ccb, '\n'.code + 1, hi, parseFlags)
+            }
+            return
+        }
+
+        if ((parseFlags and ParseFlags.FOLD_CASE) != 0) {
+            if ((parseFlags and ParseFlags.UNICODE_CASE) == 0) {
+                UnicodeCaseFolding.addAsciiFoldedRange(ccb, lo, hi)
+                return
+            }
+            UnicodeCaseFolding.addUnicodeFoldedRange(ccb, lo, hi)
+        } else {
+            ccb.addRange(lo, hi)
+        }
     }
 
-    if (name.startsWith("In") && name.length() > 2) {
-      table = UnicodeProperties.lookupBlock(name.substring(2));
-      return table == null ? null : new Group(table, CaseFoldPolicy.NONE);
+    private fun lookupKeywordProperty(key: String, value: String): Group? {
+        val normalizedKey = normalizePropertyName(key)
+        return when (normalizedKey) {
+            "SCRIPT", "SC" -> {
+                val table = UnicodeProperties.lookupScript(value)
+                if (table == null) null else Group(table, CaseFoldPolicy.NONE)
+            }
+
+            "BLOCK", "BLK" -> {
+                val table = UnicodeProperties.lookupBlock(value)
+                if (table == null) null else Group(table, CaseFoldPolicy.NONE)
+            }
+
+            "GENERALCATEGORY", "GC" -> {
+                val table = UnicodeProperties.lookupCategory(value)
+                if (table == null) null else Group(table, categoryCaseFoldPolicy(value))
+            }
+
+            else -> null
+        }
     }
 
-    table = UnicodeProperties.lookupCategory(name);
-    return table == null ? null : new Group(table, categoryCaseFoldPolicy(name));
-  }
-
-  static void addPositiveGroup(CharClassBuilder ccb, Group group, int parseFlags) {
-    if ((parseFlags & ParseFlags.FOLD_CASE) == 0) {
-      addPropertyTableWithoutCaseFolding(ccb, group.table(), parseFlags);
-      return;
-    }
-    switch (group.caseFoldPolicy()) {
-      case ASCII_POSIX -> addAsciiFoldedPropertyTable(ccb, group.table(), parseFlags);
-      case UNICODE_CASED_LETTER_CATEGORY -> addCasedLetterCategoryClosure(ccb);
-      case JAVA_CASED_PROPERTY -> ccb.addTable(JavaCasedPropertyClosureHolder.TABLE);
-      case NONE -> addPropertyTableWithoutCaseFolding(ccb, group.table(), parseFlags);
-    }
-  }
-
-  static void addNegatedGroup(CharClassBuilder ccb, Group group, int parseFlags) {
-    if ((parseFlags & ParseFlags.FOLD_CASE) != 0) {
-      CharClassBuilder positive = new CharClassBuilder();
-      addPositiveGroup(positive, group, parseFlags);
-      boolean cutnl =
-          (parseFlags & ParseFlags.CLASS_NL) == 0 || (parseFlags & ParseFlags.NEVER_NL) != 0;
-      if (cutnl) {
-        positive.addRune('\n');
-      }
-      positive.negate();
-      ccb.addCharClass(positive);
-      return;
-    }
-    int next = 0;
-    for (int[] row : group.table()) {
-      if (next < row[0]) {
-        addRange(ccb, next, row[0] - 1, parseFlags);
-      }
-      next = row[1] + 1;
-    }
-    if (next <= Utils.MAX_RUNE) {
-      addRange(ccb, next, Utils.MAX_RUNE, parseFlags);
-    }
-  }
-
-  static void addRange(CharClassBuilder ccb, int lo, int hi, int parseFlags) {
-    boolean cutnl =
-        (parseFlags & ParseFlags.CLASS_NL) == 0 || (parseFlags & ParseFlags.NEVER_NL) != 0;
-    if (cutnl && lo <= '\n' && hi >= '\n') {
-      if (lo < '\n') {
-        addRange(ccb, lo, '\n' - 1, parseFlags);
-      }
-      if (hi > '\n') {
-        addRange(ccb, '\n' + 1, hi, parseFlags);
-      }
-      return;
+    private fun addPropertyTableWithoutCaseFolding(
+        ccb: CharClassBuilder, table: Array<IntArray>, parseFlags: Int
+    ) {
+        val noFoldFlags = parseFlags and ParseFlags.FOLD_CASE.inv()
+        if ((noFoldFlags and ParseFlags.CLASS_NL) != 0 && (noFoldFlags and ParseFlags.NEVER_NL) == 0) {
+            ccb.addTable(table)
+            return
+        }
+        for (row in table) {
+            addRange(ccb, row[0], row[1], noFoldFlags)
+        }
     }
 
-    if ((parseFlags & ParseFlags.FOLD_CASE) != 0) {
-      if ((parseFlags & ParseFlags.UNICODE_CASE) == 0) {
-        UnicodeCaseFolding.addAsciiFoldedRange(ccb, lo, hi);
-        return;
-      }
-      UnicodeCaseFolding.addUnicodeFoldedRange(ccb, lo, hi);
-    } else {
-      ccb.addRange(lo, hi);
+    private fun addAsciiFoldedPropertyTable(
+        ccb: CharClassBuilder, table: Array<IntArray>, parseFlags: Int
+    ) {
+        val asciiFoldFlags = parseFlags and ParseFlags.UNICODE_CASE.inv()
+        for (row in table) {
+            addRange(ccb, row[0], row[1], asciiFoldFlags)
+        }
     }
-  }
 
-  private static Group lookupKeywordProperty(String key, String value) {
-    String normalizedKey = normalizePropertyName(key);
-    return switch (normalizedKey) {
-      case "SCRIPT", "SC" -> {
-        int[][] table = UnicodeProperties.lookupScript(value);
-        yield table == null ? null : new Group(table, CaseFoldPolicy.NONE);
-      }
-      case "BLOCK", "BLK" -> {
-        int[][] table = UnicodeProperties.lookupBlock(value);
-        yield table == null ? null : new Group(table, CaseFoldPolicy.NONE);
-      }
-      case "GENERALCATEGORY", "GC" -> {
-        int[][] table = UnicodeProperties.lookupCategory(value);
-        yield table == null ? null : new Group(table, categoryCaseFoldPolicy(value));
-      }
-      default -> null;
-    };
-  }
-
-  private static void addPropertyTableWithoutCaseFolding(
-      CharClassBuilder ccb, int[][] table, int parseFlags) {
-    int noFoldFlags = parseFlags & ~ParseFlags.FOLD_CASE;
-    if ((noFoldFlags & ParseFlags.CLASS_NL) != 0 && (noFoldFlags & ParseFlags.NEVER_NL) == 0) {
-      ccb.addTable(table);
-      return;
+    private fun addCasedLetterCategoryClosure(ccb: CharClassBuilder) {
+        ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Lu"))
+        ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Ll"))
+        ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Lt"))
     }
-    for (int[] row : table) {
-      addRange(ccb, row[0], row[1], noFoldFlags);
+
+    private fun posixPropertyCaseFoldPolicy(
+        name: String?, unicodeCharacterClass: Boolean
+    ): CaseFoldPolicy {
+        if (unicodeCharacterClass) {
+            return when (name) {
+                "Lower", "Upper" -> CaseFoldPolicy.JAVA_CASED_PROPERTY
+                else -> CaseFoldPolicy.NONE
+            }
+        }
+        return CaseFoldPolicy.ASCII_POSIX
     }
-  }
 
-  private static void addAsciiFoldedPropertyTable(
-      CharClassBuilder ccb, int[][] table, int parseFlags) {
-    int asciiFoldFlags = parseFlags & ~ParseFlags.UNICODE_CASE;
-    for (int[] row : table) {
-      addRange(ccb, row[0], row[1], asciiFoldFlags);
+    private fun javaClassCaseFoldPolicy(name: String): CaseFoldPolicy {
+        return when (name) {
+            "javaUpperCase", "javaLowerCase", "javaTitleCase" -> CaseFoldPolicy.JAVA_CASED_PROPERTY
+            else -> CaseFoldPolicy.NONE
+        }
     }
-  }
 
-  private static void addCasedLetterCategoryClosure(CharClassBuilder ccb) {
-    ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Lu"));
-    ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Ll"));
-    ccb.addTable(UnicodeTables.UNICODE_GROUPS.get("Lt"));
-  }
-
-  private static CaseFoldPolicy posixPropertyCaseFoldPolicy(
-      String name, boolean unicodeCharacterClass) {
-    if (unicodeCharacterClass) {
-      return switch (name) {
-        case "Lower", "Upper" -> CaseFoldPolicy.JAVA_CASED_PROPERTY;
-        default -> CaseFoldPolicy.NONE;
-      };
+    private fun scriptOrCategoryCaseFoldPolicy(name: String): CaseFoldPolicy {
+        return if (isCasedLetterCategoryName(name))
+            CaseFoldPolicy.UNICODE_CASED_LETTER_CATEGORY
+        else
+            CaseFoldPolicy.NONE
     }
-    return CaseFoldPolicy.ASCII_POSIX;
-  }
 
-  private static CaseFoldPolicy javaClassCaseFoldPolicy(String name) {
-    return switch (name) {
-      case "javaUpperCase", "javaLowerCase", "javaTitleCase" -> CaseFoldPolicy.JAVA_CASED_PROPERTY;
-      default -> CaseFoldPolicy.NONE;
-    };
-  }
+    private fun categoryCaseFoldPolicy(name: String): CaseFoldPolicy {
+        return when (name) {
+            "Lu", "Ll", "Lt" -> CaseFoldPolicy.UNICODE_CASED_LETTER_CATEGORY
+            else -> CaseFoldPolicy.NONE
+        }
+    }
 
-  private static CaseFoldPolicy scriptOrCategoryCaseFoldPolicy(String name) {
-    return isCasedLetterCategoryName(name)
-        ? CaseFoldPolicy.UNICODE_CASED_LETTER_CATEGORY
-        : CaseFoldPolicy.NONE;
-  }
+    private fun binaryPropertyCaseFoldPolicy(name: String): CaseFoldPolicy {
+        val normalized = normalizePropertyName(name)
+        return when (normalized) {
+            "UPPERCASE", "LOWERCASE", "TITLECASE" -> CaseFoldPolicy.JAVA_CASED_PROPERTY
+            else -> CaseFoldPolicy.NONE
+        }
+    }
 
-  private static CaseFoldPolicy categoryCaseFoldPolicy(String name) {
-    return switch (name) {
-      case "Lu", "Ll", "Lt" -> CaseFoldPolicy.UNICODE_CASED_LETTER_CATEGORY;
-      default -> CaseFoldPolicy.NONE;
-    };
-  }
+    private fun isCasedLetterCategoryName(name: String): Boolean {
+        return when (normalizePropertyName(name)) {
+            "LU", "LL", "LT" -> true
+            else -> false
+        }
+    }
 
-  private static CaseFoldPolicy binaryPropertyCaseFoldPolicy(String name) {
-    String normalized = normalizePropertyName(name);
-    return switch (normalized) {
-      case "UPPERCASE", "LOWERCASE", "TITLECASE" -> CaseFoldPolicy.JAVA_CASED_PROPERTY;
-      default -> CaseFoldPolicy.NONE;
-    };
-  }
+    private fun normalizePropertyName(name: String): String {
+        return name.toUpperCase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "")
+    }
 
-  private static boolean isCasedLetterCategoryName(String name) {
-    return switch (normalizePropertyName(name)) {
-      case "LU", "LL", "LT" -> true;
-      default -> false;
-    };
-  }
+    internal enum class CaseFoldPolicy {
+        NONE,
+        ASCII_POSIX,
+        UNICODE_CASED_LETTER_CATEGORY,
+        JAVA_CASED_PROPERTY
+    }
 
-  private static String normalizePropertyName(String name) {
-    return name.toUpperCase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "");
-  }
+    internal class Group(private val table: Array<IntArray>?, private val caseFoldPolicy: CaseFoldPolicy?) {
+        fun table(): Array<IntArray>? {
+            return table
+        }
 
-  /**
-   * The case-insensitive closure of the cased binary properties: every code point that is
-   * uppercase, lowercase, or titlecase, matching {@code Character.isUpperCase}, {@code
-   * isLowerCase}, and {@code isTitleCase} in the pinned Unicode data.
-   */
-  private static final class JavaCasedPropertyClosureHolder {
-    static final int[][] TABLE =
-        UnicodeTables.mergeRangeTables(
+        fun caseFoldPolicy(): CaseFoldPolicy? {
+            return caseFoldPolicy
+        }
+    }
+
+    /**
+     * The case-insensitive closure of the cased binary properties: every code point that is
+     * uppercase, lowercase, or titlecase, matching `Character.isUpperCase`, `isLowerCase`, and `isTitleCase` in the pinned Unicode data.
+     */
+    private object JavaCasedPropertyClosureHolder {
+        val TABLE: Array<IntArray> = UnicodeTables.mergeRangeTables(
             UnicodeProperties.lookupBinaryProperty("Uppercase"),
             UnicodeProperties.lookupBinaryProperty("Lowercase"),
-            UnicodeProperties.lookupBinaryProperty("Titlecase"));
-  }
+            UnicodeProperties.lookupBinaryProperty("Titlecase")
+        )
+    }
 }

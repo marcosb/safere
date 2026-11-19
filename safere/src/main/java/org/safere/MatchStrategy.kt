@@ -2,22 +2,23 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+/** Stable strategy-level description of matching work.  */
+enum class MatchStrategy {
+    NONE,
+    LITERAL,
+    CHARACTER_CLASS,
+    KEYWORD,
+    SHIFT_DFA,
+    ONE_PASS,
+    DFA,
+    BIT_STATE,
+    NFA,
 
-/** Stable strategy-level description of matching work. */
-public enum MatchStrategy {
-  NONE,
-  LITERAL,
-  CHARACTER_CLASS,
-  KEYWORD,
-  SHIFT_DFA,
-  ONE_PASS,
-  DFA,
-  BIT_STATE,
-  NFA,
-  /** Exact search over ordered literal alternatives. */
-  LITERAL_ALTERNATION,
-  /** Boundary-only rejection of input shorter than the pattern's minimum match length. */
-  LENGTH
+    /** Exact search over ordered literal alternatives.  */
+    LITERAL_ALTERNATION,
+
+    /** Boundary-only rejection of input shorter than the pattern's minimum match length.  */
+    LENGTH
 }

@@ -2,304 +2,292 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Arrays;
+import java.util.*
 
 /**
  * Encapsulates pre-computed character class metadata for scanning, start acceleration, and
  * rejection.
  */
-sealed interface CharClassScanInfo {
+internal interface CharClassScanInfo {
+    fun contains(cp: Int): Boolean
 
-  boolean contains(int cp);
+    fun bitmap0(): Long
 
-  long bitmap0();
+    fun bitmap1(): Long
 
-  long bitmap1();
+    val isAscii: Boolean
 
-  boolean isAscii();
+    fun ranges(): IntArray
 
-  int[] ranges();
-
-  /**
-   * Returns whether this character class is sufficiently selective to drive start acceleration.
-   * Classes with more than 3 characters or single-character classes matching high-frequency
-   * characters (e.g. {@code [ ]}) are not selective and delegate to DFA matching.
-   */
-  default boolean isSelective() {
-    int[] classRanges = ranges();
-    int asciiCount = Long.bitCount(bitmap0()) + Long.bitCount(bitmap1());
-    if (asciiCount > 3) {
-      return false;
-    }
-    if (classRanges.length == 2 && classRanges[0] == classRanges[1]) {
-      int ch = classRanges[0];
-      if (ch < 128 && RarityOracle.byteRarity(ch) <= RarityOracle.POISONOUS_ANCHOR_MAX_RARITY) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Common interface for small character classes whose members can be searched for one {@code char}
-   * at a time: up to three ASCII characters, or up to two BMP characters otherwise.
-   */
-  sealed interface SmallSet permits AsciiSmallSet, UnicodeSmallSet {
-    char[] chars();
-  }
-
-  /** Matches 1, 2, or 3 exact ASCII characters via single-instruction SIMD equality. */
-  // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
-  @SuppressWarnings("ArrayRecordComponent")
-  record AsciiSmallSet(char[] chars, int[] ranges, long bitmap0, long bitmap1)
-      implements CharClassScanInfo, SmallSet {
-    @Override
-    public boolean contains(int cp) {
-      if (cp < 64) {
-        return cp >= 0 && (bitmap0 & (1L << cp)) != 0;
-      }
-      if (cp < 128) {
-        return (bitmap1 & (1L << (cp - 64))) != 0;
-      }
-      return false;
-    }
-
-    @Override
-    public boolean isAscii() {
-      return true;
-    }
-  }
-
-  /**
-   * Matches 1 or 2 non-surrogate BMP characters, at least one of them non-ASCII. The String paths
-   * search a small set one {@code String.indexOf} pass per member and do so for at most two
-   * members, so a larger set would only be misclassified.
-   */
-  // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
-  @SuppressWarnings("ArrayRecordComponent")
-  record UnicodeSmallSet(char[] chars, int[] ranges, long bitmap0, long bitmap1)
-      implements CharClassScanInfo, SmallSet {
-    @Override
-    public boolean contains(int cp) {
-      if (cp < 64) {
-        return cp >= 0 && (bitmap0 & (1L << cp)) != 0;
-      }
-      if (cp < 128) {
-        return (bitmap1 & (1L << (cp - 64))) != 0;
-      }
-      return Matcher.binarySearchRanges(ranges, cp);
-    }
-
-    @Override
-    public boolean isAscii() {
-      return false;
-    }
-  }
-
-  /** Matches contiguous ASCII intervals (1-4 ranges, e.g. [a-zA-Z0-9_]) via SIMD range tests. */
-  // The array is immutable, privately owned scanner metadata; array identity is never observed.
-  @SuppressWarnings("ArrayRecordComponent")
-  record AsciiRanges(int[] ranges, long bitmap0, long bitmap1) implements CharClassScanInfo {
-    @Override
-    public boolean contains(int cp) {
-      if (cp < 64) {
-        return cp >= 0 && (bitmap0 & (1L << cp)) != 0;
-      }
-      if (cp < 128) {
-        return (bitmap1 & (1L << (cp - 64))) != 0;
-      }
-      return false;
-    }
-
-    @Override
-    public boolean isAscii() {
-      return true;
-    }
-  }
-
-  /** Matches arbitrary ASCII character distributions via 128-bit bitmap lookup. */
-  // The array is immutable, privately owned scanner metadata; array identity is never observed.
-  @SuppressWarnings("ArrayRecordComponent")
-  record AsciiBitmapClass(int[] ranges, long bitmap0, long bitmap1) implements CharClassScanInfo {
-    @Override
-    public boolean contains(int cp) {
-      if (cp < 64) {
-        return cp >= 0 && (bitmap0 & (1L << cp)) != 0;
-      }
-      if (cp < 128) {
-        return (bitmap1 & (1L << (cp - 64))) != 0;
-      }
-      return false;
-    }
-
-    @Override
-    public boolean isAscii() {
-      return true;
-    }
-  }
-
-  /**
-   * Matches BMP/Unicode character classes with ASCII acceleration bitmap + binary search ranges.
-   */
-  // The array is immutable, privately owned scanner metadata; array identity is never observed.
-  @SuppressWarnings("ArrayRecordComponent")
-  record UnicodeGeneral(int[] ranges, long bitmap0, long bitmap1) implements CharClassScanInfo {
-    @Override
-    public boolean contains(int cp) {
-      if (cp < 64) {
-        return cp >= 0 && (bitmap0 & (1L << cp)) != 0;
-      }
-      if (cp < 128) {
-        return (bitmap1 & (1L << (cp - 64))) != 0;
-      }
-      return Matcher.binarySearchRanges(ranges, cp);
-    }
-
-    @Override
-    public boolean isAscii() {
-      return false;
-    }
-  }
-
-  static CharClassScanInfo fromAsciiBitmap(AsciiBitmap asciiClass) {
-    if (asciiClass == null || asciiClass.isEmpty()) {
-      return null;
-    }
-    long b0 = asciiClass.bitmap0();
-    long b1 = asciiClass.bitmap1();
-    int count = Long.bitCount(b0) + Long.bitCount(b1);
-    int[] ranges = buildRangesFromBitmaps(b0, b1);
-    if (count > 0 && count <= 3) {
-      char[] chars = new char[count];
-      int idx = 0;
-      for (int i = 0; i < 64; i++) {
-        if ((b0 & (1L << i)) != 0) {
-          chars[idx++] = (char) i;
+    val isSelective: Boolean
+        /**
+         * Returns whether this character class is sufficiently selective to drive start acceleration.
+         * Classes with more than 3 characters or single-character classes matching high-frequency
+         * characters (e.g. `[ ]`) are not selective and delegate to DFA matching.
+         */
+        get() {
+            val classRanges = ranges()
+            val asciiCount = java.lang.Long.bitCount(bitmap0()) + java.lang.Long.bitCount(bitmap1())
+            if (asciiCount > 3) {
+                return false
+            }
+            if (classRanges.length == 2 && classRanges[0] == classRanges[1]) {
+                val ch = classRanges[0]
+                if (ch < 128 && RarityOracle.byteRarity(ch) <= RarityOracle.POISONOUS_ANCHOR_MAX_RARITY) {
+                    return false
+                }
+            }
+            return true
         }
-      }
-      for (int i = 0; i < 64; i++) {
-        if ((b1 & (1L << i)) != 0) {
-          chars[idx++] = (char) (i + 64);
+
+    /**
+     * Common interface for small character classes whose members can be searched for one `char`
+     * at a time: up to three ASCII characters, or up to two BMP characters otherwise.
+     */
+    interface SmallSet {
+        fun chars(): CharArray?
+    }
+
+    /** Matches 1, 2, or 3 exact ASCII characters via single-instruction SIMD equality.  */ // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
+    @JvmRecord
+    data class AsciiSmallSet(val chars: CharArray?, val ranges: IntArray?, val bitmap0: Long, val bitmap1: Long) :
+        CharClassScanInfo, SmallSet {
+        override fun contains(cp: Int): Boolean {
+            if (cp < 64) {
+                return cp >= 0 && (bitmap0 and (1L shl cp)) != 0L
+            }
+            if (cp < 128) {
+                return (bitmap1 and (1L shl (cp - 64))) != 0L
+            }
+            return false
         }
-      }
-      return new AsciiSmallSet(chars, ranges, b0, b1);
-    }
 
-    if (ranges != null && ranges.length / 2 <= 4) {
-      return new AsciiRanges(ranges, b0, b1);
-    }
-    return new AsciiBitmapClass(ranges, b0, b1);
-  }
-
-  static CharClassScanInfo fromCharClass(CharClass cc) {
-    if (cc == null || cc.isEmpty()) {
-      return null;
-    }
-    int numRanges = cc.numRanges();
-    int[] ranges = new int[numRanges * 2];
-    long b0 = 0L;
-    long b1 = 0L;
-    for (int i = 0; i < numRanges; i++) {
-      int lo = cc.lo(i);
-      int hi = cc.hi(i);
-      ranges[i * 2] = lo;
-      ranges[i * 2 + 1] = hi;
-      int start = Math.max(0, lo);
-      int end = Math.min(127, hi);
-      for (int cp = start; cp <= end; cp++) {
-        if (cp < 64) {
-          b0 |= (1L << cp);
-        } else {
-          b1 |= (1L << (cp - 64));
+        override fun isAscii(): Boolean {
+            return true
         }
-      }
     }
 
-    boolean isAscii = numRanges > 0 && cc.hi(numRanges - 1) <= 127;
-    if (isAscii) {
-      int count = Long.bitCount(b0) + Long.bitCount(b1);
-      if (count > 0 && count <= 3) {
-        char[] chars = new char[count];
-        int idx = 0;
-        for (int i = 0; i < 64; i++) {
-          if ((b0 & (1L << i)) != 0) {
-            chars[idx++] = (char) i;
-          }
+    /**
+     * Matches 1 or 2 non-surrogate BMP characters, at least one of them non-ASCII. The String paths
+     * search a small set one `String.indexOf` pass per member and do so for at most two
+     * members, so a larger set would only be misclassified.
+     */
+    // Arrays are immutable, privately owned scanner metadata; array identity is never observed.
+    @JvmRecord
+    data class UnicodeSmallSet(val chars: CharArray?, val ranges: IntArray?, val bitmap0: Long, val bitmap1: Long) :
+        CharClassScanInfo, SmallSet {
+        override fun contains(cp: Int): Boolean {
+            if (cp < 64) {
+                return cp >= 0 && (bitmap0 and (1L shl cp)) != 0L
+            }
+            if (cp < 128) {
+                return (bitmap1 and (1L shl (cp - 64))) != 0L
+            }
+            return Matcher.Companion.binarySearchRanges(ranges, cp)
         }
-        for (int i = 0; i < 64; i++) {
-          if ((b1 & (1L << i)) != 0) {
-            chars[idx++] = (char) (i + 64);
-          }
+
+        override fun isAscii(): Boolean {
+            return false
         }
-        return new AsciiSmallSet(chars, ranges, b0, b1);
-      }
-      if (numRanges <= 4) {
-        return new AsciiRanges(ranges, b0, b1);
-      }
-      return new AsciiBitmapClass(ranges, b0, b1);
     }
 
-    int count = cc.numRunes();
-    if (count > 0 && count <= 2 && cc.hi(numRanges - 1) <= 0xFFFF && !overlapsSurrogates(cc)) {
-      char[] chars = new char[count];
-      int idx = 0;
-      for (int i = 0; i < numRanges; i++) {
-        for (int cp = cc.lo(i); cp <= cc.hi(i); cp++) {
-          chars[idx++] = (char) cp;
+    /** Matches contiguous ASCII intervals (1-4 ranges, e.g. [a-zA-Z0-9_]) via SIMD range tests.  */ // The array is immutable, privately owned scanner metadata; array identity is never observed.
+    @JvmRecord
+    data class AsciiRanges(val ranges: IntArray?, val bitmap0: Long, val bitmap1: Long) : CharClassScanInfo {
+        override fun contains(cp: Int): Boolean {
+            if (cp < 64) {
+                return cp >= 0 && (bitmap0 and (1L shl cp)) != 0L
+            }
+            if (cp < 128) {
+                return (bitmap1 and (1L shl (cp - 64))) != 0L
+            }
+            return false
         }
-      }
-      return new UnicodeSmallSet(chars, ranges, b0, b1);
-    }
 
-    return new UnicodeGeneral(ranges, b0, b1);
-  }
-
-  /**
-   * Whether any member of {@code cc} is a surrogate code point. A lone surrogate in a class matches
-   * only an unpaired surrogate code unit, but a {@code char} search for it would also stop inside
-   * every valid pair, so such classes are not treated as small sets.
-   */
-  private static boolean overlapsSurrogates(CharClass cc) {
-    for (int i = 0; i < cc.numRanges(); i++) {
-      if (cc.lo(i) <= Character.MAX_SURROGATE && cc.hi(i) >= Character.MIN_SURROGATE) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static int[] buildRangesFromBitmaps(long b0, long b1) {
-    int[] temp = new int[128 * 2];
-    int rangeCount = 0;
-    int value = 0;
-    while (value < 128) {
-      boolean contains = value < 64 ? (b0 & (1L << value)) != 0 : (b1 & (1L << (value - 64))) != 0;
-      if (!contains) {
-        value++;
-        continue;
-      }
-      int low = value;
-      while (value + 1 < 128) {
-        int next = value + 1;
-        boolean nextContains =
-            next < 64 ? (b0 & (1L << next)) != 0 : (b1 & (1L << (next - 64))) != 0;
-        if (!nextContains) {
-          break;
+        override fun isAscii(): Boolean {
+            return true
         }
-        value++;
-      }
-      int high = value;
-      temp[rangeCount * 2] = low;
-      temp[rangeCount * 2 + 1] = high;
-      rangeCount++;
-      value++;
     }
-    if (rangeCount == 0) {
-      return new int[0];
+
+    /** Matches arbitrary ASCII character distributions via 128-bit bitmap lookup.  */ // The array is immutable, privately owned scanner metadata; array identity is never observed.
+    @JvmRecord
+    data class AsciiBitmapClass(val ranges: IntArray?, val bitmap0: Long, val bitmap1: Long) : CharClassScanInfo {
+        override fun contains(cp: Int): Boolean {
+            if (cp < 64) {
+                return cp >= 0 && (bitmap0 and (1L shl cp)) != 0L
+            }
+            if (cp < 128) {
+                return (bitmap1 and (1L shl (cp - 64))) != 0L
+            }
+            return false
+        }
+
+        override fun isAscii(): Boolean {
+            return true
+        }
     }
-    return Arrays.copyOf(temp, rangeCount * 2);
-  }
+
+    /**
+     * Matches BMP/Unicode character classes with ASCII acceleration bitmap + binary search ranges.
+     */
+    // The array is immutable, privately owned scanner metadata; array identity is never observed.
+    @JvmRecord
+    data class UnicodeGeneral(val ranges: IntArray?, val bitmap0: Long, val bitmap1: Long) : CharClassScanInfo {
+        override fun contains(cp: Int): Boolean {
+            if (cp < 64) {
+                return cp >= 0 && (bitmap0 and (1L shl cp)) != 0L
+            }
+            if (cp < 128) {
+                return (bitmap1 and (1L shl (cp - 64))) != 0L
+            }
+            return Matcher.Companion.binarySearchRanges(ranges, cp)
+        }
+
+        override fun isAscii(): Boolean {
+            return false
+        }
+    }
+
+    companion object {
+        fun fromAsciiBitmap(asciiClass: AsciiBitmap?): CharClassScanInfo? {
+            if (asciiClass == null || asciiClass.isEmpty()) {
+                return null
+            }
+            val b0 = asciiClass.bitmap0
+            val b1 = asciiClass.bitmap1
+            val count = java.lang.Long.bitCount(b0) + java.lang.Long.bitCount(b1)
+            val ranges: IntArray = buildRangesFromBitmaps(b0, b1)
+            if (count > 0 && count <= 3) {
+                val chars = CharArray(count)
+                var idx = 0
+                for (i in 0..63) {
+                    if ((b0 and (1L shl i)) != 0L) {
+                        chars[idx++] = i.toChar()
+                    }
+                }
+                for (i in 0..63) {
+                    if ((b1 and (1L shl i)) != 0L) {
+                        chars[idx++] = (i + 64).toChar()
+                    }
+                }
+                return AsciiSmallSet(chars, ranges, b0, b1)
+            }
+
+            if (ranges != null && ranges.length / 2 <= 4) {
+                return AsciiRanges(ranges, b0, b1)
+            }
+            return AsciiBitmapClass(ranges, b0, b1)
+        }
+
+        fun fromCharClass(cc: CharClass?): CharClassScanInfo? {
+            if (cc == null || cc.isEmpty()) {
+                return null
+            }
+            val numRanges = cc.numRanges()
+            val ranges = IntArray(numRanges * 2)
+            var b0 = 0L
+            var b1 = 0L
+            for (i in 0..<numRanges) {
+                val lo = cc.lo(i)
+                val hi = cc.hi(i)
+                ranges[i * 2] = lo
+                ranges[i * 2 + 1] = hi
+                val start = Math.max(0, lo)
+                val end = Math.min(127, hi)
+                for (cp in start..end) {
+                    if (cp < 64) {
+                        b0 = b0 or (1L shl cp)
+                    } else {
+                        b1 = b1 or (1L shl (cp - 64))
+                    }
+                }
+            }
+
+            val isAscii = numRanges > 0 && cc.hi(numRanges - 1) <= 127
+            if (isAscii) {
+                val count = java.lang.Long.bitCount(b0) + java.lang.Long.bitCount(b1)
+                if (count > 0 && count <= 3) {
+                    val chars = CharArray(count)
+                    var idx = 0
+                    for (i in 0..63) {
+                        if ((b0 and (1L shl i)) != 0L) {
+                            chars[idx++] = i.toChar()
+                        }
+                    }
+                    for (i in 0..63) {
+                        if ((b1 and (1L shl i)) != 0L) {
+                            chars[idx++] = (i + 64).toChar()
+                        }
+                    }
+                    return AsciiSmallSet(chars, ranges, b0, b1)
+                }
+                if (numRanges <= 4) {
+                    return AsciiRanges(ranges, b0, b1)
+                }
+                return AsciiBitmapClass(ranges, b0, b1)
+            }
+
+            val count = cc.numRunes()
+            if (count > 0 && count <= 2 && cc.hi(numRanges - 1) <= 0xFFFF && !overlapsSurrogates(cc)) {
+                val chars = CharArray(count)
+                var idx = 0
+                for (i in 0..<numRanges) {
+                    for (cp in cc.lo(i)..cc.hi(i)) {
+                        chars[idx++] = cp.toChar()
+                    }
+                }
+                return UnicodeSmallSet(chars, ranges, b0, b1)
+            }
+
+            return UnicodeGeneral(ranges, b0, b1)
+        }
+
+        /**
+         * Whether any member of `cc` is a surrogate code point. A lone surrogate in a class matches
+         * only an unpaired surrogate code unit, but a `char` search for it would also stop inside
+         * every valid pair, so such classes are not treated as small sets.
+         */
+        private fun overlapsSurrogates(cc: CharClass): Boolean {
+            for (i in 0..<cc.numRanges()) {
+                if (cc.lo(i) <= Character.MAX_SURROGATE.code && cc.hi(i) >= Character.MIN_SURROGATE.code) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        fun buildRangesFromBitmaps(b0: Long, b1: Long): IntArray {
+            val temp = IntArray(128 * 2)
+            var rangeCount = 0
+            var value = 0
+            while (value < 128) {
+                val contains = if (value < 64) (b0 and (1L shl value)) != 0L else (b1 and (1L shl (value - 64))) != 0L
+                if (!contains) {
+                    value++
+                    continue
+                }
+                val low = value
+                while (value + 1 < 128) {
+                    val next = value + 1
+                    val nextContains =
+                        if (next < 64) (b0 and (1L shl next)) != 0L else (b1 and (1L shl (next - 64))) != 0L
+                    if (!nextContains) {
+                        break
+                    }
+                    value++
+                }
+                val high = value
+                temp[rangeCount * 2] = low
+                temp[rangeCount * 2 + 1] = high
+                rangeCount++
+                value++
+            }
+            if (rangeCount == 0) {
+                return IntArray(0)
+            }
+            return Arrays.copyOf(temp, rangeCount * 2)
+        }
+    }
 }

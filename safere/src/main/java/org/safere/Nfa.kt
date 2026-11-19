@@ -2,1547 +2,1566 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*
+import java.util.function.Function
 
 /**
  * Pike VM NFA execution engine. Simulates all possible NFA threads in lockstep, tracking submatch
  * boundaries. At most one thread exists per NFA state at any time, guaranteeing linear-time
  * matching.
- *
- * <p>This is a port of RE2's {@code nfa.cc}, adapted for Java's Unicode code point model.
- *
- * <p>Usage:
- *
+ * 
+ * 
+ * This is a port of RE2's `nfa.cc`, adapted for Java's Unicode code point model.
+ * 
+ * 
+ * Usage:
+ * 
  * <pre>
- *   Regexp re = Parser.parse("(\\w+)@(\\w+)", flags);
- *   Prog prog = Compiler.compile(re);
- *   int[] result = Nfa.search(prog, "user@host", Anchor.UNANCHORED,
- *                             MatchKind.FIRST_MATCH, prog.numCaptures());
- *   // result[0..1] = full match, result[2..3] = group 1, etc.
- * </pre>
+ * Regexp re = Parser.parse("(\\w+)@(\\w+)", flags);
+ * Prog prog = Compiler.compile(re);
+ * int[] result = Nfa.search(prog, "user@host", Anchor.UNANCHORED,
+ * MatchKind.FIRST_MATCH, prog.numCaptures());
+ * // result[0..1] = full match, result[2..3] = group 1, etc.
+</pre> * 
  */
-final class Nfa {
-  /** Anchor mode for matching. */
-  enum Anchor {
-    /** Match anywhere in the text. */
-    UNANCHORED,
-    /** Match only at the start of the text. */
-    ANCHORED
-  }
+internal class Nfa {
+    /** Anchor mode for matching.  */
+    internal enum class Anchor {
+        /** Match anywhere in the text.  */
+        UNANCHORED,
 
-  /** Match semantics. */
-  enum MatchKind {
-    /** Leftmost-biased match (Perl-like). Stops at the first match found. */
-    FIRST_MATCH,
-    /** Leftmost-longest match (POSIX-like). Keeps searching for longer matches. */
-    LONGEST_MATCH,
-    /** Match must cover the entire text. Implies anchored + longest. */
-    FULL_MATCH
-  }
-
-  // TODO(#98): Replace int[] with Guava ImmutableIntArray to get proper value semantics.
-  private static final class NfaThread {
-    int id;
-    final int[] capture;
-    int graphemeStart;
-
-    NfaThread(int threadArraySize) {
-      this.capture = new int[threadArraySize];
-    }
-  }
-
-  private static final class QueueState {
-    final NfaThread[] threads;
-    int size = 0;
-
-    final int[] visitedInst;
-    int visitedGeneration = 1;
-    final Set<Long> visitedGrapheme;
-    final boolean hasGraphemeSemantics;
-
-    QueueState(int progSize, boolean hasGraphemeSemantics) {
-      this.threads = new NfaThread[progSize + 1];
-      this.visitedInst = new int[progSize + 1];
-      this.visitedGrapheme = hasGraphemeSemantics ? new HashSet<>() : null;
-      this.hasGraphemeSemantics = hasGraphemeSemantics;
+        /** Match only at the start of the text.  */
+        ANCHORED
     }
 
-    boolean isEmpty() {
-      return size == 0;
+    /** Match semantics.  */
+    internal enum class MatchKind {
+        /** Leftmost-biased match (Perl-like). Stops at the first match found.  */
+        FIRST_MATCH,
+
+        /** Leftmost-longest match (POSIX-like). Keeps searching for longer matches.  */
+        LONGEST_MATCH,
+
+        /** Match must cover the entire text. Implies anchored + longest.  */
+        FULL_MATCH
     }
 
-    void clear() {
-      size = 0;
-      if (hasGraphemeSemantics) {
-        visitedGrapheme.clear();
-      } else {
-        visitedGeneration++;
-        if (visitedGeneration == 0) {
-          Arrays.fill(visitedInst, 0);
-          visitedGeneration = 1;
+    // TODO(#98): Replace int[] with Guava ImmutableIntArray to get proper value semantics.
+    private class NfaThread(threadArraySize: Int) {
+        var id: Int = 0
+        val capture: IntArray
+        var graphemeStart: Int = 0
+
+        init {
+            this.capture = IntArray(threadArraySize)
         }
-      }
-    }
-  }
-
-  private static final class AddToThreadqStack {
-    // High word: -1 for an instruction, a nonnegative restore slot, or an encoded completion.
-    // Low word: instruction ID plus consumed-input bit, or the saved register value.
-    private long[] frames = new long[32];
-    private int size;
-
-    void clear() {
-      size = 0;
     }
 
-    boolean isEmpty() {
-      return size == 0;
-    }
+    private class QueueState(progSize: Int, hasGraphemeSemantics: Boolean) {
+        val threads: Array<NfaThread>
+        var size: Int = 0
 
-    void pushInstruction(int id, boolean consumedInput) {
-      ensureCapacity(size + 1);
-      frames[size++] = (-1L << 32) | ((long) id << 1) | (consumedInput ? 1 : 0);
-    }
+        val visitedInst: IntArray
+        var visitedGeneration: Int = 1
+        val visitedGrapheme: MutableSet<Long?>?
+        val hasGraphemeSemantics: Boolean
 
-    void pushRestore(int restoreIndex, int restoreValue) {
-      ensureCapacity(size + 1);
-      frames[size++] = ((long) restoreIndex << 32) | Integer.toUnsignedLong(restoreValue);
-    }
-
-    void pushCompletion(int instructionId) {
-      ensureCapacity(size + 1);
-      frames[size++] = (long) (-2 - instructionId) << 32;
-    }
-
-    long pop() {
-      return frames[--size];
-    }
-
-    private void ensureCapacity(int minCapacity) {
-      if (minCapacity <= frames.length) {
-        return;
-      }
-      int newCapacity = frames.length * 2;
-      while (newCapacity < minCapacity) {
-        newCapacity *= 2;
-      }
-      frames = Arrays.copyOf(frames, newCapacity);
-    }
-  }
-
-  private Prog prog;
-  private int ncapture;
-
-  /** Total thread array size: ncapture slots for captures + numLoopRegs for progress checks. */
-  private int threadArraySize;
-
-  private boolean longest;
-  private boolean endmatch;
-  private EngineContext context;
-
-  private boolean matched;
-  private int[] bestMatch;
-  private final AddToThreadqStack addToThreadqStack = new AddToThreadqStack();
-
-  // NfaThread pool
-  private NfaThread[] threadPool = new NfaThread[16];
-  private int threadPoolSize = 0;
-
-  // QueueState pool
-  private final List<QueueState> queueStatePool = new ArrayList<>();
-
-  private NfaThread allocThread(int id, int[] captureSource, int graphemeStart) {
-    NfaThread t;
-    if (threadPoolSize > 0) {
-      threadPoolSize--;
-      t = threadPool[threadPoolSize];
-      threadPool[threadPoolSize] = null;
-    } else {
-      t = new NfaThread(threadArraySize);
-    }
-    t.id = id;
-    if (captureSource != null) {
-      System.arraycopy(captureSource, 0, t.capture, 0, threadArraySize);
-    } else {
-      Arrays.fill(t.capture, -1);
-    }
-    t.graphemeStart = graphemeStart;
-    return t;
-  }
-
-  private void freeThread(NfaThread t) {
-    if (threadPool.length <= threadPoolSize) {
-      threadPool = Arrays.copyOf(threadPool, threadPool.length * 2);
-    }
-    threadPool[threadPoolSize] = t;
-    threadPoolSize++;
-  }
-
-  private void freeQueue(QueueState q) {
-    for (int i = 0; i < q.size; i++) {
-      freeThread(q.threads[i]);
-      q.threads[i] = null;
-    }
-    q.clear();
-  }
-
-  private QueueState allocQueueState() {
-    if (!queueStatePool.isEmpty()) {
-      return queueStatePool.remove(queueStatePool.size() - 1);
-    }
-    return new QueueState(prog.size(), prog.hasGraphemeSemantics());
-  }
-
-  private void freeQueueState(QueueState q) {
-    freeQueue(q);
-    queueStatePool.add(q);
-  }
-
-  private Nfa(Prog prog, EngineContext context, int ncapture, boolean longest, boolean endmatch) {
-    this.prog = prog;
-    this.ncapture = ncapture;
-    this.threadArraySize = ncapture + prog.numLoopRegs();
-    this.longest = longest;
-    this.endmatch = endmatch;
-    this.context = context;
-    this.bestMatch = new int[ncapture];
-    Arrays.fill(bestMatch, -1);
-  }
-
-  static Nfa getOrCreate(
-      Nfa cached,
-      Prog prog,
-      EngineContext context,
-      int ncapture,
-      boolean longest,
-      boolean endmatch) {
-    if (cached != null && cached.canReuse(prog, ncapture)) {
-      cached.reset(prog, context, ncapture, longest, endmatch);
-      return cached;
-    }
-    return new Nfa(prog, context, ncapture, longest, endmatch);
-  }
-
-  private boolean canReuse(Prog prog, int ncapture) {
-    int requiredThreadArraySize = ncapture + prog.numLoopRegs();
-    return this.threadArraySize >= requiredThreadArraySize
-        && this.bestMatch.length >= ncapture
-        && this.prog.size() >= prog.size()
-        && this.prog.hasGraphemeSemantics() == prog.hasGraphemeSemantics();
-  }
-
-  private void reset(
-      Prog prog, EngineContext context, int ncapture, boolean longest, boolean endmatch) {
-    this.prog = prog;
-    this.ncapture = ncapture;
-    this.threadArraySize = ncapture + prog.numLoopRegs();
-    this.longest = longest;
-    this.endmatch = endmatch;
-    this.context = context;
-    this.matched = false;
-    if (this.bestMatch.length < ncapture) {
-      this.bestMatch = new int[ncapture];
-    }
-    Arrays.fill(this.bestMatch, 0, ncapture, -1);
-    this.addToThreadqStack.clear();
-  }
-
-  void releaseInputContext() {
-    context = null;
-  }
-
-  int[] runSearch(boolean anchored, MatchKind kind, int nsubmatch, int endPos) {
-    return runSearch(anchored, kind, nsubmatch, endPos, null);
-  }
-
-  int[] runSearch(boolean anchored, MatchKind kind, int nsubmatch, int endPos, int[] reuseGroups) {
-    if (prog.hasGraphemeClusterInstruction()) {
-      doSearchEveryCharPosition(anchored);
-    } else {
-      doSearch(anchored);
-    }
-
-    if (!matched) {
-      return null;
-    }
-    if (kind == MatchKind.FULL_MATCH && bestMatch[1] != endPos) {
-      return null;
-    }
-
-    int nlen = 2 * nsubmatch;
-    int[] result = reuseGroups != null && reuseGroups.length >= nlen ? reuseGroups : new int[nlen];
-    int ncopy = Math.min(ncapture, result.length);
-    System.arraycopy(bestMatch, 0, result, 0, ncopy);
-    if (ncopy < result.length) {
-      Arrays.fill(result, ncopy, result.length, -1);
-    }
-    return result;
-  }
-
-  /**
-   * Searches for a match in the given text, starting from position 0.
-   *
-   * @param prog the compiled program
-   * @param text the input text to search
-   * @param anchor whether to anchor the match at the start
-   * @param kind the match semantics (first, longest, or full)
-   * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match. Positions are char
-   *     indices into the text. {@code result[2*i]} is the start of group i, {@code result[2*i+1]}
-   *     is the end. -1 means the group did not participate.
-   */
-  static int[] search(Prog prog, String text, Anchor anchor, MatchKind kind, int nsubmatch) {
-    return search(prog, text, 0, text.length(), text.length(), anchor, kind, nsubmatch);
-  }
-
-  /**
-   * Searches for a match in the given text, starting from the specified position.
-   *
-   * @param prog the compiled program
-   * @param text the full input text to search
-   * @param startPos the char index in {@code text} at which to begin searching
-   * @param anchor whether to anchor the match at {@code startPos}
-   * @param kind the match semantics (first, longest, or full)
-   * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match. Positions are char
-   *     indices into the full text.
-   */
-  static int[] search(
-      Prog prog, String text, int startPos, Anchor anchor, MatchKind kind, int nsubmatch) {
-    return search(prog, text, startPos, text.length(), text.length(), anchor, kind, nsubmatch);
-  }
-
-  /**
-   * Searches for a match in the given text, with bounded search range.
-   *
-   * @param prog the compiled program
-   * @param text the full input text to search
-   * @param startPos the char index in {@code text} at which to begin searching
-   * @param searchLimit upper bound on where to try new thread starts; only positions up to this
-   *     index start new NFA threads. Active threads may still advance beyond this position. Use
-   *     {@code text.length()} for unbounded search.
-   * @param anchor whether to anchor the match at {@code startPos}
-   * @param kind the match semantics (first, longest, or full)
-   * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match. Positions are char
-   *     indices into the full text.
-   */
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch) {
-    return search(prog, text, startPos, searchLimit, text.length(), anchor, kind, nsubmatch);
-  }
-
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch) {
-    return search(prog, text, startPos, searchLimit, endPos, 0, anchor, kind, nsubmatch);
-  }
-
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int regionStart,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch) {
-    return search(
-        prog, text, startPos, searchLimit, endPos, regionStart, anchor, kind, nsubmatch, null);
-  }
-
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int regionStart,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch,
-      GraphemeSupport.Context graphemeContext) {
-    return search(
-        prog,
-        text,
-        startPos,
-        searchLimit,
-        endPos,
-        regionStart,
-        regionStart,
-        endPos,
-        endPos,
-        0,
-        endPos,
-        anchor,
-        kind,
-        nsubmatch,
-        graphemeContext);
-  }
-
-  static int[] search(
-      Prog prog,
-      InputScanner text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int regionStart,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch,
-      GraphemeSupport.Context graphemeContext) {
-    return search(
-        prog,
-        text,
-        startPos,
-        searchLimit,
-        endPos,
-        regionStart,
-        regionStart,
-        endPos,
-        endPos,
-        0,
-        endPos,
-        anchor,
-        kind,
-        nsubmatch,
-        graphemeContext);
-  }
-
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int consumeRegionStart,
-      int boundaryRegionStart,
-      int boundaryEndPos,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch,
-      GraphemeSupport.Context graphemeContext) {
-    return search(
-        prog,
-        text,
-        startPos,
-        searchLimit,
-        endPos,
-        consumeRegionStart,
-        boundaryRegionStart,
-        boundaryEndPos,
-        endPos,
-        0,
-        endPos,
-        anchor,
-        kind,
-        nsubmatch,
-        graphemeContext);
-  }
-
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int consumeRegionStart,
-      int boundaryRegionStart,
-      int boundaryEndPos,
-      int anchorEndPos,
-      int emptyAnchorStartPos,
-      int emptyAnchorEndPos,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch,
-      GraphemeSupport.Context graphemeContext) {
-    return search(
-        prog,
-        new StringInputScanner(text),
-        startPos,
-        searchLimit,
-        endPos,
-        consumeRegionStart,
-        boundaryRegionStart,
-        boundaryEndPos,
-        anchorEndPos,
-        emptyAnchorStartPos,
-        emptyAnchorEndPos,
-        anchor,
-        kind,
-        nsubmatch,
-        graphemeContext);
-  }
-
-  static int[] search(
-      Prog prog,
-      InputScanner text,
-      int startPos,
-      int searchLimit,
-      int endPos,
-      int consumeRegionStart,
-      int boundaryRegionStart,
-      int boundaryEndPos,
-      int anchorEndPos,
-      int emptyAnchorStartPos,
-      int emptyAnchorEndPos,
-      Anchor anchor,
-      MatchKind kind,
-      int nsubmatch,
-      GraphemeSupport.Context graphemeContext) {
-    if (prog.start() == 0) {
-      return null;
-    }
-
-    boolean anchored = (anchor == Anchor.ANCHORED) || prog.anchorStart();
-    boolean longestMode = (kind != MatchKind.FIRST_MATCH);
-    boolean endmatch = prog.anchorEnd();
-
-    if (kind == MatchKind.FULL_MATCH) {
-      anchored = true;
-      endmatch = true;
-      if (nsubmatch == 0) {
-        nsubmatch = 1;
-      }
-    }
-
-    // We always need at least capture[0..1] to track the match boundaries.
-    int ncapture = 2 * Math.max(nsubmatch, 1);
-
-    EngineContext context =
-        EngineContext.create(
-            prog,
-            text,
-            startPos,
-            searchLimit,
-            endPos,
-            consumeRegionStart,
-            boundaryRegionStart,
-            boundaryEndPos,
-            anchorEndPos,
-            emptyAnchorStartPos,
-            emptyAnchorEndPos,
-            graphemeContext);
-    Nfa nfa = new Nfa(prog, context, ncapture, longestMode, endmatch);
-    return nfa.runSearch(anchored, kind, nsubmatch, endPos);
-  }
-
-  /**
-   * Main search loop. Iterates over each position in the text starting from {@code startPos} (plus
-   * one past the end), stepping the NFA. At each position, starts a new thread if appropriate, then
-   * advances all existing threads by one character.
-   *
-   * @param anchored whether to anchor the search at the context start
-   */
-  private void doSearch(boolean anchored) {
-    InputScanner text = context.text();
-    int startPos = context.searchStart();
-    int searchLimit = context.searchLimit();
-    int endPos = context.endPos();
-    QueueState runq = allocQueueState();
-    QueueState nextq = allocQueueState();
-
-    int[] initialCap = new int[threadArraySize];
-
-    int pos = startPos;
-    while (true) {
-      long decoded = decodeAtConsumeBoundary(text, pos);
-      int cp = InputScanner.codePoint(decoded);
-      int nextPos = InputScanner.position(decoded);
-
-      // Start a new thread if there have not been any matches
-      // (no point starting new threads to the right of an existing match).
-      // Also don't start threads past searchLimit — the DFA has already determined
-      // there's no match starting beyond that position.
-      if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
-        Arrays.fill(initialCap, -1);
-        initialCap[0] = pos;
-        // Always use prog.start() (anchored start). Unanchored matching is achieved
-        // by starting a new thread at each position. The startUnanchored() entry point
-        // (which includes a .*? prefix) is only for the DFA engine.
-        addToThreadq(runq, prog.start(), text, pos, initialCap, false);
-      }
-
-      // If all threads have died, stop if anchored or we already have a match.
-      // For unanchored searches without a match, keep trying new positions.
-      if (runq.isEmpty()) {
-        if (anchored || matched) {
-          break;
+        init {
+            this.threads = arrayOfNulls<NfaThread>(progSize + 1)
+            this.visitedInst = IntArray(progSize + 1)
+            this.visitedGrapheme = if (hasGraphemeSemantics) HashSet<Long?>() else null
+            this.hasGraphemeSemantics = hasGraphemeSemantics
         }
-        // In unanchored mode with no match yet, advance to the next position and try again.
-        if (pos >= endPos) {
-          break;
+
+        val isEmpty: Boolean
+            get() = size == 0
+
+        fun clear() {
+            size = 0
+            if (hasGraphemeSemantics) {
+                visitedGrapheme!!.clear()
+            } else {
+                visitedGeneration++
+                if (visitedGeneration == 0) {
+                    Arrays.fill(visitedInst, 0)
+                    visitedGeneration = 1
+                }
+            }
         }
-        freeQueue(runq);
-        pos = nextPos;
-        continue;
-      }
-
-      boolean done = stepCodePoint(runq, nextq, cp, text, pos, nextPos);
-
-      QueueState tmp = runq;
-      runq = nextq;
-      nextq = tmp;
-      freeQueue(nextq);
-
-      if (done) {
-        break;
-      }
-
-      if (pos >= endPos) {
-        break;
-      }
-
-      pos = nextPos;
     }
 
-    freeQueueState(runq);
-    freeQueueState(nextq);
-  }
+    private class AddToThreadqStack {
+        // High word: -1 for an instruction, a nonnegative restore slot, or an encoded completion.
+        // Low word: instruction ID plus consumed-input bit, or the saved register value.
+        private var frames = LongArray(32)
+        private var size = 0
 
-  /**
-   * Unanchored search variant for programs consuming grapheme clusters.
-   *
-   * <p>Active threads still consume Unicode code points, but new candidate matches are started at
-   * every Java character offset. That matches {@link java.util.regex.Matcher}'s character-index
-   * search contract for grapheme constructs without changing the code-point stepping used by
-   * ordinary SafeRE programs. A boundary assertion alone does not introduce new candidate starts;
-   * programs containing only scalar consumers and {@code \b{g}} use {@link #doSearch}.
-   */
-  private void doSearchEveryCharPosition(boolean anchored) {
-    InputScanner text = context.text();
-    int startPos = context.searchStart();
-    int searchLimit = context.searchLimit();
-    int start = Math.max(0, startPos);
-    QueueState runq = allocQueueState();
+        fun clear() {
+            size = 0
+        }
 
-    QueueState[] delayedBuffer = null;
-    Map<Integer, QueueState> delayedGrapheme = null;
-    if (prog.hasGraphemeSemantics()) {
-      delayedGrapheme = new HashMap<>();
-    } else {
-      delayedBuffer = new QueueState[4];
+        val isEmpty: Boolean
+            get() = size == 0
+
+        fun pushInstruction(id: Int, consumedInput: Boolean) {
+            ensureCapacity(size + 1)
+            frames[size++] = (-1L shl 32) or (id.toLong() shl 1) or (if (consumedInput) 1 else 0).toLong()
+        }
+
+        fun pushRestore(restoreIndex: Int, restoreValue: Int) {
+            ensureCapacity(size + 1)
+            frames[size++] = (restoreIndex.toLong() shl 32) or Integer.toUnsignedLong(restoreValue)
+        }
+
+        fun pushCompletion(instructionId: Int) {
+            ensureCapacity(size + 1)
+            frames[size++] = (-2 - instructionId).toLong() shl 32
+        }
+
+        fun pop(): Long {
+            return frames[--size]
+        }
+
+        fun ensureCapacity(minCapacity: Int) {
+            if (minCapacity <= frames.length) {
+                return
+            }
+            var newCapacity: Int = frames.length * 2
+            while (newCapacity < minCapacity) {
+                newCapacity *= 2
+            }
+            frames = Arrays.copyOf(frames, newCapacity)
+        }
     }
 
-    int[] initialCap = new int[threadArraySize];
+    private var prog: Prog? = null
+    private var ncapture = 0
 
-    int endPos = context.endPos();
-    boolean isUtf8 = text instanceof Utf8InputScanner;
-    int pos = start;
-    while (pos < endPos + 2) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      if (prog.hasGraphemeSemantics()) {
-        mergeDelayedQueue(delayedGrapheme, pos, runq);
-      } else {
-        mergeDelayedQueue(delayedBuffer, pos, runq);
-      }
-      if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
-        Arrays.fill(initialCap, -1);
-        initialCap[0] = pos;
-        addToThreadq(runq, prog.start(), text, pos, initialCap, false);
-      }
+    /** Total thread array size: ncapture slots for captures + numLoopRegs for progress checks.  */
+    private var threadArraySize = 0
 
-      int nextBoundaryPos;
-      if (!runq.isEmpty()) {
-        long stepResult = inputStep(text, pos);
-        int cp = (int) (stepResult >>> 32);
-        int nextPos = (int) stepResult;
-        step(runq, delayedBuffer, delayedGrapheme, cp, text, pos, nextPos);
-        nextBoundaryPos = nextPos;
-      } else {
-        freeQueue(runq);
-        if (isUtf8 && pos < endPos) {
-          long decoded = text.decodeForward(pos);
-          nextBoundaryPos = Math.max(pos + 1, InputScanner.position(decoded));
+    private var longest = false
+    private var endmatch = false
+    private var context: EngineContext? = null
+
+    private var matched = false
+    private var bestMatch: IntArray
+    private val addToThreadqStack = AddToThreadqStack()
+
+    // NfaThread pool
+    private var threadPool: Array<NfaThread> = arrayOfNulls<NfaThread>(16)
+    private var threadPoolSize = 0
+
+    // QueueState pool
+    private val queueStatePool: MutableList<QueueState> = ArrayList<QueueState>()
+
+    private fun allocThread(id: Int, captureSource: IntArray?, graphemeStart: Int): NfaThread {
+        val t: NfaThread
+        if (threadPoolSize > 0) {
+            threadPoolSize--
+            t = threadPool[threadPoolSize]
+            threadPool[threadPoolSize] = null
         } else {
-          nextBoundaryPos = pos + 1;
+            t = NfaThread(threadArraySize)
         }
-      }
-      if (matched
-          && runq.isEmpty()
-          && (prog.hasGraphemeSemantics()
-              ? delayedGrapheme.isEmpty()
-              : isDelayedBufferEmpty(delayedBuffer))) {
-        break;
-      }
-      if (isUtf8 && pos < endPos) {
-        pos = nextBoundaryPos;
-      } else {
-        pos++;
-      }
-    }
-
-    freeQueueState(runq);
-    if (prog.hasGraphemeSemantics()) {
-      for (QueueState q : delayedGrapheme.values()) {
-        freeQueueState(q);
-      }
-      delayedGrapheme.clear();
-    } else {
-      for (int i = 0; i < delayedBuffer.length; i++) {
-        if (delayedBuffer[i] != null) {
-          freeQueueState(delayedBuffer[i]);
-          delayedBuffer[i] = null;
+        t.id = id
+        if (captureSource != null) {
+            System.arraycopy(captureSource, 0, t.capture, 0, threadArraySize)
+        } else {
+            Arrays.fill(t.capture, -1)
         }
-      }
+        t.graphemeStart = graphemeStart
+        return t
     }
-  }
 
-  private static boolean isDelayedBufferEmpty(QueueState[] delayedBuffer) {
-    for (QueueState q : delayedBuffer) {
-      if (q != null && !q.isEmpty()) {
-        return false;
-      }
+    private fun freeThread(t: NfaThread?) {
+        if (threadPool.length <= threadPoolSize) {
+            threadPool = Arrays.copyOf<NfaThread?>(threadPool, threadPool.length * 2)
+        }
+        threadPool[threadPoolSize] = t!!
+        threadPoolSize++
     }
-    return true;
-  }
 
-  private void mergeDelayedQueue(QueueState[] delayedBuffer, int pos, QueueState destination) {
-    int idx = pos % delayedBuffer.length;
-    QueueState source = delayedBuffer[idx];
-    if (source == null) {
-      return;
+    private fun freeQueue(q: QueueState) {
+        for (i in 0..<q.size) {
+            freeThread(q.threads[i])
+            q.threads[i] = null
+        }
+        q.clear()
     }
-    mergeQueues(source, destination, pos);
-    delayedBuffer[idx] = null;
-    freeQueueState(source);
-  }
 
-  private void mergeDelayedQueue(
-      Map<Integer, QueueState> delayedGrapheme, int pos, QueueState destination) {
-    QueueState source = delayedGrapheme.remove(pos);
-    if (source == null) {
-      return;
+    private fun allocQueueState(): QueueState {
+        if (!queueStatePool.isEmpty()) {
+            return queueStatePool.remove(queueStatePool.size() - 1)
+        }
+        return QueueState(prog!!.size(), prog!!.hasGraphemeSemantics())
     }
-    mergeQueues(source, destination, pos);
-    freeQueueState(source);
-  }
 
-  private void mergeQueues(QueueState source, QueueState destination, int pos) {
-    InputScanner text = context.text();
-    for (int i = 0; i < source.size; i++) {
-      NfaThread t = source.threads[i];
-      boolean visited;
-      if (destination.hasGraphemeSemantics) {
-        long key = visitKey(prog.inst(t.id), t.id, text, pos, t.graphemeStart);
-        visited = !destination.visitedGrapheme.add(key);
-      } else {
-        visited = destination.visitedInst[t.id] == destination.visitedGeneration;
-        destination.visitedInst[t.id] = destination.visitedGeneration;
-      }
-      if (visited) {
-        freeThread(t);
-      } else {
-        destination.threads[destination.size++] = t;
-      }
-      source.threads[i] = null;
+    private fun freeQueueState(q: QueueState) {
+        freeQueue(q)
+        queueStatePool.add(q)
     }
-    source.size = 0;
-  }
 
-  private QueueState delayedQueueAt(QueueState[] delayedBuffer, int pos) {
-    int idx = pos % delayedBuffer.length;
-    QueueState q = delayedBuffer[idx];
-    if (q == null) {
-      q = allocQueueState();
-      delayedBuffer[idx] = q;
+    private constructor(prog: Prog, context: EngineContext?, ncapture: Int, longest: Boolean, endmatch: Boolean) {
+        this.prog = prog
+        this.ncapture = ncapture
+        this.threadArraySize = ncapture + prog.numLoopRegs()
+        this.longest = longest
+        this.endmatch = endmatch
+        this.context = context
+        this.bestMatch = IntArray(ncapture)
+        Arrays.fill(bestMatch, -1)
     }
-    return q;
-  }
 
-  private QueueState delayedQueueAt(Map<Integer, QueueState> delayedGrapheme, int pos) {
-    int endPos = context.endPos();
-    if (pos < 0 || pos > endPos + 1) {
-      return null;
+    private fun canReuse(prog: Prog, ncapture: Int): Boolean {
+        val requiredThreadArraySize = ncapture + prog.numLoopRegs()
+        return this.threadArraySize >= requiredThreadArraySize && this.bestMatch.length >= ncapture && this.prog!!.size() >= prog.size() && this.prog!!.hasGraphemeSemantics() == prog.hasGraphemeSemantics()
     }
-    return delayedGrapheme.computeIfAbsent(pos, unused -> allocQueueState());
-  }
 
-  private long visitKey(Inst ip, int id, InputScanner text, int pos, int graphemeStart) {
-    long instructionKey = ((long) id) << GraphemeSupport.visitKeyVariantBits();
-    if (ip.op != InstOp.GRAPHEME_CLUSTER) {
-      return instructionKey;
+    private fun reset(
+        prog: Prog, context: EngineContext?, ncapture: Int, longest: Boolean, endmatch: Boolean
+    ) {
+        this.prog = prog
+        this.ncapture = ncapture
+        this.threadArraySize = ncapture + prog.numLoopRegs()
+        this.longest = longest
+        this.endmatch = endmatch
+        this.context = context
+        this.matched = false
+        if (this.bestMatch.length < ncapture) {
+            this.bestMatch = IntArray(ncapture)
+        }
+        Arrays.fill(this.bestMatch, 0, ncapture, -1)
+        this.addToThreadqStack.clear()
     }
-    return instructionKey
-        | GraphemeSupport.visitVariant(
+
+    fun releaseInputContext() {
+        context = null
+    }
+
+    @JvmOverloads
+    fun runSearch(
+        anchored: Boolean,
+        kind: MatchKind?,
+        nsubmatch: Int,
+        endPos: Int,
+        reuseGroups: IntArray? = null
+    ): IntArray? {
+        if (prog!!.hasGraphemeClusterInstruction()) {
+            doSearchEveryCharPosition(anchored)
+        } else {
+            doSearch(anchored)
+        }
+
+        if (!matched) {
+            return null
+        }
+        if (kind == MatchKind.FULL_MATCH && bestMatch[1] != endPos) {
+            return null
+        }
+
+        val nlen = 2 * nsubmatch
+        val result = if (reuseGroups != null && reuseGroups.length >= nlen) reuseGroups else IntArray(nlen)
+        val ncopy = Math.min(ncapture, result.length)
+        System.arraycopy(bestMatch, 0, result, 0, ncopy)
+        if (ncopy < result.length) {
+            Arrays.fill(result, ncopy, result.length, -1)
+        }
+        return result
+    }
+
+    /**
+     * Main search loop. Iterates over each position in the text starting from `startPos` (plus
+     * one past the end), stepping the NFA. At each position, starts a new thread if appropriate, then
+     * advances all existing threads by one character.
+     * 
+     * @param anchored whether to anchor the search at the context start
+     */
+    private fun doSearch(anchored: Boolean) {
+        val text = context!!.text
+        val startPos = context!!.searchStart
+        val searchLimit = context!!.searchLimit
+        val endPos = context!!.endPos
+        var runq = allocQueueState()
+        var nextq = allocQueueState()
+
+        val initialCap = IntArray(threadArraySize)
+
+        var pos = startPos
+        while (true) {
+            val decoded = decodeAtConsumeBoundary(text, pos)
+            val cp: Int = InputScanner.Companion.codePoint(decoded)
+            val nextPos: Int = InputScanner.Companion.position(decoded)
+
+            // Start a new thread if there have not been any matches
+            // (no point starting new threads to the right of an existing match).
+            // Also don't start threads past searchLimit — the DFA has already determined
+            // there's no match starting beyond that position.
+            if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
+                Arrays.fill(initialCap, -1)
+                initialCap[0] = pos
+                // Always use prog.start() (anchored start). Unanchored matching is achieved
+                // by starting a new thread at each position. The startUnanchored() entry point
+                // (which includes a .*? prefix) is only for the DFA engine.
+                addToThreadq(runq, prog!!.start(), text, pos, initialCap, false)
+            }
+
+            // If all threads have died, stop if anchored or we already have a match.
+            // For unanchored searches without a match, keep trying new positions.
+            if (runq.isEmpty) {
+                if (anchored || matched) {
+                    break
+                }
+                // In unanchored mode with no match yet, advance to the next position and try again.
+                if (pos >= endPos) {
+                    break
+                }
+                freeQueue(runq)
+                pos = nextPos
+                continue
+            }
+
+            val done = stepCodePoint(runq, nextq, cp, text, pos, nextPos)
+
+            val tmp = runq
+            runq = nextq
+            nextq = tmp
+            freeQueue(nextq)
+
+            if (done) {
+                break
+            }
+
+            if (pos >= endPos) {
+                break
+            }
+
+            pos = nextPos
+        }
+
+        freeQueueState(runq)
+        freeQueueState(nextq)
+    }
+
+    /**
+     * Unanchored search variant for programs consuming grapheme clusters.
+     * 
+     * 
+     * Active threads still consume Unicode code points, but new candidate matches are started at
+     * every Java character offset. That matches [java.util.regex.Matcher]'s character-index
+     * search contract for grapheme constructs without changing the code-point stepping used by
+     * ordinary SafeRE programs. A boundary assertion alone does not introduce new candidate starts;
+     * programs containing only scalar consumers and `\b{g}` use [.doSearch].
+     */
+    private fun doSearchEveryCharPosition(anchored: Boolean) {
+        val text = context!!.text
+        val startPos = context!!.searchStart
+        val searchLimit = context!!.searchLimit
+        val start = Math.max(0, startPos)
+        val runq = allocQueueState()
+
+        var delayedBuffer: Array<QueueState?>? = null
+        var delayedGrapheme: MutableMap<Int?, QueueState>? = null
+        if (prog!!.hasGraphemeSemantics()) {
+            delayedGrapheme = HashMap<Int?, QueueState>()
+        } else {
+            delayedBuffer = arrayOfNulls<QueueState>(4)
+        }
+
+        val initialCap = IntArray(threadArraySize)
+
+        val endPos = context!!.endPos
+        val isUtf8 = text is Utf8InputScanner
+        var pos = start
+        while (pos < endPos + 2) {
+            if (WorkCounterConfig.ENABLED) {
+                record()
+            }
+            if (prog!!.hasGraphemeSemantics()) {
+                mergeDelayedQueue(delayedGrapheme!!, pos, runq)
+            } else {
+                mergeDelayedQueue(delayedBuffer!!, pos, runq)
+            }
+            if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
+                Arrays.fill(initialCap, -1)
+                initialCap[0] = pos
+                addToThreadq(runq, prog!!.start(), text, pos, initialCap, false)
+            }
+
+            val nextBoundaryPos: Int
+            if (!runq.isEmpty) {
+                val stepResult = inputStep(text, pos)
+                val cp = (stepResult ushr 32).toInt()
+                val nextPos = stepResult.toInt()
+                step(runq, delayedBuffer!!, delayedGrapheme!!, cp, text, pos, nextPos)
+                nextBoundaryPos = nextPos
+            } else {
+                freeQueue(runq)
+                if (isUtf8 && pos < endPos) {
+                    val decoded = text.decodeForward(pos)
+                    nextBoundaryPos = Math.max(pos + 1, InputScanner.Companion.position(decoded))
+                } else {
+                    nextBoundaryPos = pos + 1
+                }
+            }
+            if (matched
+                && runq.isEmpty
+                && (if (prog!!.hasGraphemeSemantics())
+                    delayedGrapheme!!.isEmpty()
+                else
+                    Companion.isDelayedBufferEmpty(delayedBuffer!!))
+            ) {
+                break
+            }
+            if (isUtf8 && pos < endPos) {
+                pos = nextBoundaryPos
+            } else {
+                pos++
+            }
+        }
+
+        freeQueueState(runq)
+        if (prog!!.hasGraphemeSemantics()) {
+            for (q in delayedGrapheme.values()) {
+                freeQueueState(q)
+            }
+            delayedGrapheme!!.clear()
+        } else {
+            for (i in delayedBuffer!!.indices) {
+                if (delayedBuffer[i] != null) {
+                    freeQueueState(delayedBuffer[i]!!)
+                    delayedBuffer[i] = null
+                }
+            }
+        }
+    }
+
+    private fun mergeDelayedQueue(delayedBuffer: Array<QueueState?>, pos: Int, destination: QueueState) {
+        val idx: Int = pos % delayedBuffer.length
+        val source = delayedBuffer[idx]
+        if (source == null) {
+            return
+        }
+        mergeQueues(source, destination, pos)
+        delayedBuffer[idx] = null
+        freeQueueState(source)
+    }
+
+    private fun mergeDelayedQueue(
+        delayedGrapheme: MutableMap<Int?, QueueState>, pos: Int, destination: QueueState
+    ) {
+        val source = delayedGrapheme.remove(pos)
+        if (source == null) {
+            return
+        }
+        mergeQueues(source, destination, pos)
+        freeQueueState(source)
+    }
+
+    private fun mergeQueues(source: QueueState, destination: QueueState, pos: Int) {
+        val text = context!!.text
+        for (i in 0..<source.size) {
+            val t = source.threads[i]
+            val visited: Boolean
+            if (destination.hasGraphemeSemantics) {
+                val key = visitKey(prog!!.inst(t.id), t.id, text, pos, t.graphemeStart)
+                visited = !destination.visitedGrapheme!!.add(key)
+            } else {
+                visited = destination.visitedInst[t.id] == destination.visitedGeneration
+                destination.visitedInst[t.id] = destination.visitedGeneration
+            }
+            if (visited) {
+                freeThread(t)
+            } else {
+                destination.threads[destination.size++] = t
+            }
+            source.threads[i] = null
+        }
+        source.size = 0
+    }
+
+    private fun delayedQueueAt(delayedBuffer: Array<QueueState?>, pos: Int): QueueState? {
+        val idx: Int = pos % delayedBuffer.length
+        var q = delayedBuffer[idx]
+        if (q == null) {
+            q = allocQueueState()
+            delayedBuffer[idx] = q
+        }
+        return q
+    }
+
+    private fun delayedQueueAt(delayedGrapheme: MutableMap<Int?, QueueState>, pos: Int): QueueState? {
+        val endPos = context!!.endPos
+        if (pos < 0 || pos > endPos + 1) {
+            return null
+        }
+        return delayedGrapheme.computeIfAbsent(pos, Function { unused: Int? -> allocQueueState() })
+    }
+
+    private fun visitKey(ip: Inst, id: Int, text: InputScanner?, pos: Int, graphemeStart: Int): Long {
+        val instructionKey = (id.toLong()) shl GraphemeSupport.Companion.visitKeyVariantBits()
+        if (ip.op != InstOp.GRAPHEME_CLUSTER) {
+            return instructionKey
+        }
+        return (instructionKey
+                or GraphemeSupport.Companion.visitVariant(
             text,
             pos,
             graphemeStart,
-            context.consumeRegionStart(),
-            context.endPos(),
-            context.graphemeContext());
-  }
-
-  private long inputStep(InputScanner text, int pos) {
-    return decodeAtConsumeBoundary(text, pos, context.endPos());
-  }
-
-  private int graphemeNextPos(InputScanner text, int pos) {
-    return GraphemeSupport.graphemeNextPos(text, pos, context.endPos());
-  }
-
-  private long decodeAtConsumeBoundary(InputScanner text, int pos) {
-    return decodeAtConsumeBoundary(text, pos, context.endPos());
-  }
-
-  private static long decodeAtConsumeBoundary(InputScanner text, int pos, int limit) {
-    if (pos < 0 || pos >= limit) {
-      return InputScanner.decoded(-1, nextBoundaryPosition(pos, limit));
+            context!!.consumeRegionStart,
+            context!!.endPos,
+            context!!.graphemeContext
+        ).toLong())
     }
-    long decoded = text.decodeForward(pos);
-    return InputScanner.position(decoded) <= limit ? decoded : text.decodeForward(pos, limit);
-  }
 
-  /**
-   * Accepts a candidate under the end constraints and records it when it wins match selection.
-   *
-   * <p>The caller owns candidate priority, queue lifetime, and whether to stop after acceptance.
-   *
-   * @return whether the candidate satisfies the end constraints, even if an existing longest match
-   *     remains better
-   */
-  private boolean acceptMatch(int[] capture, int pos) {
-    if (endmatch
-        && !(prog.anchorEnd()
-            ? matchesEndPosition(context.text(), pos)
-            : pos == context.endPos())) {
-      return false;
+    private fun inputStep(text: InputScanner, pos: Int): Long {
+        return decodeAtConsumeBoundary(text, pos, context!!.endPos)
     }
-    if (!longest
-        || !matched
-        || capture[0] < bestMatch[0]
-        || (capture[0] == bestMatch[0] && pos > bestMatch[1])) {
-      System.arraycopy(capture, 0, bestMatch, 0, ncapture);
-      bestMatch[1] = pos;
-      matched = true;
+
+    private fun graphemeNextPos(text: InputScanner?, pos: Int): Int {
+        return GraphemeSupport.Companion.graphemeNextPos(text, pos, context!!.endPos)
     }
-    return true;
-  }
 
-  private static int nextBoundaryPosition(int pos, int endPos) {
-    return pos < endPos ? endPos : endPos + 1;
-  }
-
-  /**
-   * Follows all empty transitions from {@code id0} and enqueues consuming/accepting instructions
-   * (CHAR_RANGE and MATCH) into the thread queue.
-   *
-   * @param q the thread queue to add to
-   * @param id starting instruction ID
-   * @param text the input text
-   * @param pos the current position in the text
-   * @param t0 the current capture array (shared — will be cloned before mutation)
-   */
-  private void addToThreadq(
-      QueueState q, int id, InputScanner text, int pos, int[] t0, boolean consumedInput) {
-    AddToThreadqStack stack = addToThreadqStack;
-    stack.clear();
-
-    int cachedFlags = -1;
-
-    // Follow the next instruction directly. Only deferred alternatives and unwind actions need
-    // stack frames; their LIFO order still determines branch priority and register restoration.
-    while (id != 0 || !stack.isEmpty()) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      if (id == 0) {
-        long frame = stack.pop();
-        int restoreIndex = (int) (frame >> 32);
-        if (restoreIndex != -1) {
-          if (restoreIndex >= 0) {
-            t0[restoreIndex] = (int) frame;
-          } else {
-            // This epsilon expansion is complete; later entries at this position are skipped.
-            markExpansionComplete(q, -2 - restoreIndex, text, pos);
-          }
-          continue;
+    /**
+     * Accepts a candidate under the end constraints and records it when it wins match selection.
+     * 
+     * 
+     * The caller owns candidate priority, queue lifetime, and whether to stop after acceptance.
+     * 
+     * @return whether the candidate satisfies the end constraints, even if an existing longest match
+     * remains better
+     */
+    private fun acceptMatch(capture: IntArray, pos: Int): Boolean {
+        if (endmatch
+            && !(if (prog!!.anchorEnd())
+                matchesEndPosition(context!!.text, pos)
+            else
+                pos == context!!.endPos)
+        ) {
+            return false
         }
-        id = (int) frame >>> 1;
-        consumedInput = (frame & 1) != 0;
-        if (id == 0) {
-          continue;
+        if (!longest || !matched || capture[0] < bestMatch[0] || (capture[0] == bestMatch[0] && pos > bestMatch[1])) {
+            System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+            bestMatch[1] = pos
+            matched = true
         }
-      }
+        return true
+    }
 
-      int instructionId = id;
-      id = 0;
-      Inst ip = prog.inst(instructionId);
-      // Loop instructions are excluded from the visited set: progress registers terminate
-      // zero-width iterations, while fresh entries reset only their own loop's register.
-      //
-      // ALT and CAPTURE can be revisited by a final empty iteration with different captures.
-      // With progress loops, NOP and EMPTY_WIDTH are memoized after expansion: a nested visit
-      // can carry changed loop progress and must reach the final empty iteration, but later visits
-      // after completion are redundant. Marking them before expansion loses the loop exit;
-      // omitting memoization entirely enumerates the paths through optional epsilon chains.
-      // Without progress loops, marking on entry is sufficient and avoids completion bookkeeping.
-      if (ip.op != InstOp.PROGRESS_CHECK
-          && ip.op != InstOp.LOOP_ENTER
-          && ip.op != InstOp.ALT
-          && ip.op != InstOp.CAPTURE
-          && ((ip.op != InstOp.NOP && ip.op != InstOp.EMPTY_WIDTH) || prog.numLoopRegs() == 0)) {
-        if (q.hasGraphemeSemantics) {
-          long visitKey = visitKey(ip, instructionId, text, pos, pos);
-          if (!q.visitedGrapheme.add(visitKey)) {
-            continue;
-          }
-        } else {
-          if (q.visitedInst[instructionId] == q.visitedGeneration) {
-            continue;
-          }
-          q.visitedInst[instructionId] = q.visitedGeneration;
-        }
-      } else if (ip.op == InstOp.NOP || ip.op == InstOp.EMPTY_WIDTH) {
-        if (isExpansionComplete(q, instructionId, text, pos)) {
-          continue;
-        }
-        if (ip.op == InstOp.NOP) {
-          stack.pushCompletion(instructionId);
-        }
-      }
+    /**
+     * Follows all empty transitions from `id0` and enqueues consuming/accepting instructions
+     * (CHAR_RANGE and MATCH) into the thread queue.
+     * 
+     * @param q the thread queue to add to
+     * @param id starting instruction ID
+     * @param text the input text
+     * @param pos the current position in the text
+     * @param t0 the current capture array (shared — will be cloned before mutation)
+     */
+    private fun addToThreadq(
+        q: QueueState, id: Int, text: InputScanner, pos: Int, t0: IntArray, consumedInput: Boolean
+    ) {
+        var id = id
+        var consumedInput = consumedInput
+        val stack = addToThreadqStack
+        stack.clear()
 
-      switch (ip.op) {
-        case FAIL -> {}
+        var cachedFlags = -1
 
-        case ALT -> {
-          stack.pushInstruction(ip.out1, consumedInput);
-          id = ip.out;
-        }
-
-        case ALT_MATCH -> {
-          q.threads[q.size++] = allocThread(instructionId, t0, -1);
-          stack.pushInstruction(ip.out, consumedInput);
-          id = ip.out1;
-        }
-
-        case NOP -> id = ip.out;
-
-        case CAPTURE -> {
-          if (ip.arg < ncapture) {
-            int opos = t0[ip.arg];
-            t0[ip.arg] = pos;
-            stack.pushRestore(ip.arg, opos);
-          }
-          id = ip.out;
-        }
-
-        case EMPTY_WIDTH -> {
-          if (cachedFlags == -1) {
-            cachedFlags =
-                emptyFlags(
-                    text,
-                    pos,
-                    prog.hasGraphemeSemantics(),
-                    context.graphemeContext(),
-                    t0[0],
-                    context.boundaryRegionStart(),
-                    consumedInput,
-                    context.emptyAnchorStartPos(),
-                    context.emptyAnchorEndPos(),
-                    context.boundaryEndPos(),
-                    context.boundaryEndPos(),
-                    prog.hasWordBoundary(),
-                    prog.hasTextAnchor());
-          }
-          if ((ip.arg & ~cachedFlags) == 0) {
-            if (prog.numLoopRegs() > 0) {
-              stack.pushCompletion(instructionId);
+        // Follow the next instruction directly. Only deferred alternatives and unwind actions need
+        // stack frames; their LIFO order still determines branch priority and register restoration.
+        while (id != 0 || !stack.isEmpty) {
+            if (WorkCounterConfig.ENABLED) {
+                record()
             }
-            id = ip.out;
-          } else if (prog.numLoopRegs() > 0) {
-            // A failed assertion has no continuation; its expansion is already complete.
-            markExpansionComplete(q, instructionId, text, pos);
-          }
-        }
-
-        case LOOP_ENTER -> {
-          // A fresh entry whose earlier expansion at this position has completed can reach only
-          // what that expansion reached, at lower priority: every enclosing loop register is
-          // either an earlier position (the same behavior) or this position (the enclosing body
-          // was already expanded here). An entry nested inside a still-running expansion of the
-          // same loop is higher priority than that expansion's remaining alternatives, so it is
-          // expanded. Without this, alternating lazy/greedy nesting re-expands each inner loop
-          // once per enclosing iteration, exponentially in the nesting depth.
-          if (isExpansionComplete(q, instructionId, text, pos)) {
-            continue;
-          }
-          int regIdx = ncapture + ip.arg;
-          int saved = t0[regIdx];
-          t0[regIdx] = -1;
-          stack.pushCompletion(instructionId);
-          stack.pushRestore(regIdx, saved);
-          id = ip.out;
-        }
-
-        case PROGRESS_CHECK -> {
-          int reg = ip.arg;
-          int regIdx = ncapture + reg;
-          int saved = t0[regIdx];
-          if (saved == -1) {
-            t0[regIdx] = pos;
-            stack.pushRestore(regIdx, -1);
-            id = ip.out;
-          } else if (saved == pos) {
-            id = ip.out1;
-          } else {
-            t0[regIdx] = pos;
-            stack.pushRestore(regIdx, saved);
-            if (ip.foldCase) {
-              stack.pushInstruction(ip.out, consumedInput);
-              id = ip.out1;
-            } else {
-              stack.pushInstruction(ip.out1, consumedInput);
-              id = ip.out;
+            if (id == 0) {
+                val frame = stack.pop()
+                val restoreIndex = (frame shr 32).toInt()
+                if (restoreIndex != -1) {
+                    if (restoreIndex >= 0) {
+                        t0[restoreIndex] = frame.toInt()
+                    } else {
+                        // This epsilon expansion is complete; later entries at this position are skipped.
+                        markExpansionComplete(q, -2 - restoreIndex, text, pos)
+                    }
+                    continue
+                }
+                id = frame.toInt() ushr 1
+                consumedInput = (frame and 1L) != 0L
+                if (id == 0) {
+                    continue
+                }
             }
-          }
-        }
 
-        case CHAR_RANGE, CHAR_CLASS, GRAPHEME_CLUSTER, MATCH -> {
-          q.threads[q.size++] =
-              allocThread(instructionId, t0, ip.op == InstOp.GRAPHEME_CLUSTER ? pos : -1);
-        }
-      }
-    }
-  }
-
-  private boolean isExpansionComplete(QueueState q, int instructionId, InputScanner text, int pos) {
-    if (q.hasGraphemeSemantics) {
-      return q.visitedGrapheme.contains(
-          visitKey(prog.inst(instructionId), instructionId, text, pos, pos));
-    }
-    return q.visitedInst[instructionId] == q.visitedGeneration;
-  }
-
-  private void markExpansionComplete(QueueState q, int instructionId, InputScanner text, int pos) {
-    if (q.hasGraphemeSemantics) {
-      q.visitedGrapheme.add(visitKey(prog.inst(instructionId), instructionId, text, pos, pos));
-    } else {
-      q.visitedInst[instructionId] = q.visitedGeneration;
-    }
-  }
-
-  /**
-   * Processes all threads in {@code rq} for the current input character. Threads at CHAR_RANGE
-   * instructions that match the character are advanced to the delayed queues. Threads at MATCH
-   * instructions record the match.
-   *
-   * @return true if the search should stop (first-match found and remaining threads cut off)
-   */
-  private boolean step(
-      QueueState rq,
-      QueueState[] delayedBuffer,
-      Map<Integer, QueueState> delayedGrapheme,
-      int cp,
-      InputScanner text,
-      int matchPos,
-      int nextPos) {
-    for (int threadIndex = 0; threadIndex < rq.size; threadIndex++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      NfaThread t = rq.threads[threadIndex];
-      int id = t.id;
-      int[] capture = t.capture;
-
-      if (longest
-          && matched
-          && bestMatch[0] != -1
-          && capture[0] != -1
-          && bestMatch[0] < capture[0]) {
-        continue;
-      }
-
-      Inst ip = prog.inst(id);
-      switch (ip.op) {
-        case CHAR_RANGE -> {
-          if (cp >= 0 && ip.matchesChar(cp)) {
-            QueueState destination =
-                prog.hasGraphemeSemantics()
-                    ? delayedQueueAt(delayedGrapheme, nextPos)
-                    : delayedQueueAt(delayedBuffer, nextPos);
-            if (destination != null) {
-              addToThreadq(destination, ip.out, text, nextPos, capture, true);
-            }
-          }
-        }
-
-        case CHAR_CLASS -> {
-          if (cp >= 0 && ip.matchesCharClass(cp)) {
-            QueueState destination =
-                prog.hasGraphemeSemantics()
-                    ? delayedQueueAt(delayedGrapheme, nextPos)
-                    : delayedQueueAt(delayedBuffer, nextPos);
-            if (destination != null) {
-              addToThreadq(destination, ip.out, text, nextPos, capture, true);
-            }
-          }
-        }
-
-        case GRAPHEME_CLUSTER -> {
-          if (matchPos < context.endPos()) {
-            int graphemeStart =
-                Math.max(
-                    context.consumeRegionStart(),
-                    t.graphemeStart >= 0 ? t.graphemeStart : matchPos);
-            int scalarEnd = graphemeNextPos(text, matchPos);
-            QueueState destination =
-                prog.hasGraphemeSemantics()
-                    ? delayedQueueAt(delayedGrapheme, scalarEnd)
-                    : delayedQueueAt(delayedBuffer, scalarEnd);
-            if (destination != null) {
-              if (scalarEnd == context.endPos()
-                  || GraphemeSupport.isGraphemeClusterBoundary(
-                      text, scalarEnd, graphemeStart, context.graphemeContext())) {
-                addToThreadq(destination, ip.out, text, scalarEnd, capture, true);
-              } else {
-                boolean visited;
-                if (destination.hasGraphemeSemantics) {
-                  long key = visitKey(ip, id, text, scalarEnd, graphemeStart);
-                  visited = !destination.visitedGrapheme.add(key);
+            val instructionId = id
+            id = 0
+            val ip = prog!!.inst(instructionId)
+            // Loop instructions are excluded from the visited set: progress registers terminate
+            // zero-width iterations, while fresh entries reset only their own loop's register.
+            //
+            // ALT and CAPTURE can be revisited by a final empty iteration with different captures.
+            // With progress loops, NOP and EMPTY_WIDTH are memoized after expansion: a nested visit
+            // can carry changed loop progress and must reach the final empty iteration, but later visits
+            // after completion are redundant. Marking them before expansion loses the loop exit;
+            // omitting memoization entirely enumerates the paths through optional epsilon chains.
+            // Without progress loops, marking on entry is sufficient and avoids completion bookkeeping.
+            if (ip.op != InstOp.PROGRESS_CHECK && ip.op != InstOp.LOOP_ENTER && ip.op != InstOp.ALT && ip.op != InstOp.CAPTURE && ((ip.op != InstOp.NOP && ip.op != InstOp.EMPTY_WIDTH) || prog!!.numLoopRegs() == 0)) {
+                if (q.hasGraphemeSemantics) {
+                    val visitKey = visitKey(ip, instructionId, text, pos, pos)
+                    if (!q.visitedGrapheme!!.add(visitKey)) {
+                        continue
+                    }
                 } else {
-                  visited = destination.visitedInst[id] == destination.visitedGeneration;
-                  destination.visitedInst[id] = destination.visitedGeneration;
+                    if (q.visitedInst[instructionId] == q.visitedGeneration) {
+                        continue
+                    }
+                    q.visitedInst[instructionId] = q.visitedGeneration
                 }
-                if (!visited) {
-                  destination.threads[destination.size++] = allocThread(id, capture, graphemeStart);
+            } else if (ip.op == InstOp.NOP || ip.op == InstOp.EMPTY_WIDTH) {
+                if (isExpansionComplete(q, instructionId, text, pos)) {
+                    continue
                 }
-              }
+                if (ip.op == InstOp.NOP) {
+                    stack.pushCompletion(instructionId)
+                }
             }
-          }
-        }
 
-        case MATCH -> {
-          if (acceptMatch(capture, matchPos) && !longest) {
-            // Discard lower-priority threads here; previously queued successors still run.
-            freeQueue(rq);
-            return false;
-          }
-        }
+            when (ip.op) {
+                InstOp.FAIL -> {}
+                InstOp.ALT -> {
+                    stack.pushInstruction(ip.out1, consumedInput)
+                    id = ip.out
+                }
 
-        case ALT_MATCH -> {
-          // Optimization: if this is the first thread and we want the match, take it.
-          if (longest || threadIndex == 0) {
-            System.arraycopy(capture, 0, bestMatch, 0, ncapture);
-            matched = true;
-          }
-        }
+                InstOp.ALT_MATCH -> {
+                    q.threads[q.size++] = allocThread(instructionId, t0, -1)
+                    stack.pushInstruction(ip.out, consumedInput)
+                    id = ip.out1
+                }
 
-        default -> {}
-      }
+                InstOp.NOP -> id = ip.out
+                InstOp.CAPTURE -> {
+                    if (ip.arg < ncapture) {
+                        val opos = t0[ip.arg]
+                        t0[ip.arg] = pos
+                        stack.pushRestore(ip.arg, opos)
+                    }
+                    id = ip.out
+                }
+
+                InstOp.EMPTY_WIDTH -> {
+                    if (cachedFlags == -1) {
+                        cachedFlags =
+                            emptyFlags(
+                                text,
+                                pos,
+                                prog!!.hasGraphemeSemantics(),
+                                context!!.graphemeContext,
+                                t0[0],
+                                context!!.boundaryRegionStart,
+                                consumedInput,
+                                context!!.emptyAnchorStartPos,
+                                context!!.emptyAnchorEndPos,
+                                context!!.boundaryEndPos,
+                                context!!.boundaryEndPos,
+                                prog!!.hasWordBoundary(),
+                                prog!!.hasTextAnchor()
+                            )
+                    }
+                    if ((ip.arg and cachedFlags.inv()) == 0) {
+                        if (prog!!.numLoopRegs() > 0) {
+                            stack.pushCompletion(instructionId)
+                        }
+                        id = ip.out
+                    } else if (prog!!.numLoopRegs() > 0) {
+                        // A failed assertion has no continuation; its expansion is already complete.
+                        markExpansionComplete(q, instructionId, text, pos)
+                    }
+                }
+
+                InstOp.LOOP_ENTER -> {
+                    // A fresh entry whose earlier expansion at this position has completed can reach only
+                    // what that expansion reached, at lower priority: every enclosing loop register is
+                    // either an earlier position (the same behavior) or this position (the enclosing body
+                    // was already expanded here). An entry nested inside a still-running expansion of the
+                    // same loop is higher priority than that expansion's remaining alternatives, so it is
+                    // expanded. Without this, alternating lazy/greedy nesting re-expands each inner loop
+                    // once per enclosing iteration, exponentially in the nesting depth.
+                    if (isExpansionComplete(q, instructionId, text, pos)) {
+                        continue
+                    }
+                    val regIdx = ncapture + ip.arg
+                    val saved = t0[regIdx]
+                    t0[regIdx] = -1
+                    stack.pushCompletion(instructionId)
+                    stack.pushRestore(regIdx, saved)
+                    id = ip.out
+                }
+
+                InstOp.PROGRESS_CHECK -> {
+                    val reg = ip.arg
+                    val regIdx = ncapture + reg
+                    val saved = t0[regIdx]
+                    if (saved == -1) {
+                        t0[regIdx] = pos
+                        stack.pushRestore(regIdx, -1)
+                        id = ip.out
+                    } else if (saved == pos) {
+                        id = ip.out1
+                    } else {
+                        t0[regIdx] = pos
+                        stack.pushRestore(regIdx, saved)
+                        if (ip.foldCase) {
+                            stack.pushInstruction(ip.out, consumedInput)
+                            id = ip.out1
+                        } else {
+                            stack.pushInstruction(ip.out1, consumedInput)
+                            id = ip.out
+                        }
+                    }
+                }
+
+                InstOp.CHAR_RANGE, InstOp.CHAR_CLASS, InstOp.GRAPHEME_CLUSTER, InstOp.MATCH -> {
+                    q.threads[q.size++] =
+                        allocThread(instructionId, t0, if (ip.op == InstOp.GRAPHEME_CLUSTER) pos else -1)
+                }
+            }
+        }
     }
-    freeQueue(rq);
-    return false;
-  }
 
-  private boolean stepCodePoint(
-      QueueState rq, QueueState nq, int cp, InputScanner text, int matchPos, int nextPos) {
-    nq.clear();
-
-    for (int threadIndex = 0; threadIndex < rq.size; threadIndex++) {
-      if (WorkCounterConfig.ENABLED) {
-        WorkCounter.record();
-      }
-      NfaThread t = rq.threads[threadIndex];
-      int id = t.id;
-      int[] capture = t.capture;
-
-      if (longest
-          && matched
-          && bestMatch[0] != -1
-          && capture[0] != -1
-          && bestMatch[0] < capture[0]) {
-        continue;
-      }
-
-      Inst ip = prog.inst(id);
-      switch (ip.op) {
-        case CHAR_RANGE -> {
-          if (cp >= 0 && ip.matchesChar(cp)) {
-            addToThreadq(nq, ip.out, text, nextPos, capture, true);
-          }
+    private fun isExpansionComplete(q: QueueState, instructionId: Int, text: InputScanner?, pos: Int): Boolean {
+        if (q.hasGraphemeSemantics) {
+            return q.visitedGrapheme!!.contains(
+                visitKey(prog!!.inst(instructionId), instructionId, text, pos, pos)
+            )
         }
-
-        case CHAR_CLASS -> {
-          if (cp >= 0 && ip.matchesCharClass(cp)) {
-            addToThreadq(nq, ip.out, text, nextPos, capture, true);
-          }
-        }
-
-        case MATCH -> {
-          if (acceptMatch(capture, matchPos) && !longest) {
-            // Discard lower-priority threads here; previously queued successors still run.
-            freeQueue(rq);
-            return false;
-          }
-        }
-
-        case ALT_MATCH -> {
-          // Optimization: if this is the first thread and we want the match, take it.
-          if (longest || threadIndex == 0) {
-            System.arraycopy(capture, 0, bestMatch, 0, ncapture);
-            matched = true;
-          }
-        }
-
-        default -> {}
-      }
+        return q.visitedInst[instructionId] == q.visitedGeneration
     }
-    freeQueue(rq);
-    return false;
-  }
 
-  private boolean matchesEndPosition(InputScanner text, int matchPos) {
-    if (matchPos == context.anchorEndPos()) {
-      return true;
+    private fun markExpansionComplete(q: QueueState, instructionId: Int, text: InputScanner?, pos: Int) {
+        if (q.hasGraphemeSemantics) {
+            q.visitedGrapheme!!.add(visitKey(prog!!.inst(instructionId), instructionId, text, pos, pos))
+        } else {
+            q.visitedInst[instructionId] = q.visitedGeneration
+        }
     }
-    return prog.dollarAnchorEnd()
-        && isAtTrailingLineTerminator(
+
+    /**
+     * Processes all threads in `rq` for the current input character. Threads at CHAR_RANGE
+     * instructions that match the character are advanced to the delayed queues. Threads at MATCH
+     * instructions record the match.
+     * 
+     * @return true if the search should stop (first-match found and remaining threads cut off)
+     */
+    private fun step(
+        rq: QueueState,
+        delayedBuffer: Array<QueueState?>,
+        delayedGrapheme: MutableMap<Int?, QueueState>,
+        cp: Int,
+        text: InputScanner,
+        matchPos: Int,
+        nextPos: Int
+    ): Boolean {
+        for (threadIndex in 0..<rq.size) {
+            if (WorkCounterConfig.ENABLED) {
+                record()
+            }
+            val t = rq.threads[threadIndex]
+            val id = t.id
+            val capture = t.capture
+
+            if (longest
+                && matched
+                && bestMatch[0] != -1 && capture[0] != -1 && bestMatch[0] < capture[0]
+            ) {
+                continue
+            }
+
+            val ip = prog!!.inst(id)
+            when (ip.op) {
+                InstOp.CHAR_RANGE -> {
+                    if (cp >= 0 && ip.matchesChar(cp)) {
+                        val destination =
+                            if (prog!!.hasGraphemeSemantics())
+                                delayedQueueAt(delayedGrapheme, nextPos)
+                            else
+                                delayedQueueAt(delayedBuffer, nextPos)
+                        if (destination != null) {
+                            addToThreadq(destination, ip.out, text, nextPos, capture, true)
+                        }
+                    }
+                }
+
+                InstOp.CHAR_CLASS -> {
+                    if (cp >= 0 && ip.matchesCharClass(cp)) {
+                        val destination =
+                            if (prog!!.hasGraphemeSemantics())
+                                delayedQueueAt(delayedGrapheme, nextPos)
+                            else
+                                delayedQueueAt(delayedBuffer, nextPos)
+                        if (destination != null) {
+                            addToThreadq(destination, ip.out, text, nextPos, capture, true)
+                        }
+                    }
+                }
+
+                InstOp.GRAPHEME_CLUSTER -> {
+                    if (matchPos < context!!.endPos) {
+                        val graphemeStart =
+                            Math.max(
+                                context!!.consumeRegionStart,
+                                if (t.graphemeStart >= 0) t.graphemeStart else matchPos
+                            )
+                        val scalarEnd = graphemeNextPos(text, matchPos)
+                        val destination =
+                            if (prog!!.hasGraphemeSemantics())
+                                delayedQueueAt(delayedGrapheme, scalarEnd)
+                            else
+                                delayedQueueAt(delayedBuffer, scalarEnd)
+                        if (destination != null) {
+                            if (scalarEnd == context!!.endPos
+                                || GraphemeSupport.Companion.isGraphemeClusterBoundary(
+                                    text, scalarEnd, graphemeStart, context!!.graphemeContext
+                                )
+                            ) {
+                                addToThreadq(destination, ip.out, text, scalarEnd, capture, true)
+                            } else {
+                                val visited: Boolean
+                                if (destination.hasGraphemeSemantics) {
+                                    val key = visitKey(ip, id, text, scalarEnd, graphemeStart)
+                                    visited = !destination.visitedGrapheme!!.add(key)
+                                } else {
+                                    visited = destination.visitedInst[id] == destination.visitedGeneration
+                                    destination.visitedInst[id] = destination.visitedGeneration
+                                }
+                                if (!visited) {
+                                    destination.threads[destination.size++] = allocThread(id, capture, graphemeStart)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                InstOp.MATCH -> {
+                    if (acceptMatch(capture, matchPos) && !longest) {
+                        // Discard lower-priority threads here; previously queued successors still run.
+                        freeQueue(rq)
+                        return false
+                    }
+                }
+
+                InstOp.ALT_MATCH -> {
+                    // Optimization: if this is the first thread and we want the match, take it.
+                    if (longest || threadIndex == 0) {
+                        System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+                        matched = true
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        freeQueue(rq)
+        return false
+    }
+
+    private fun stepCodePoint(
+        rq: QueueState, nq: QueueState, cp: Int, text: InputScanner, matchPos: Int, nextPos: Int
+    ): Boolean {
+        nq.clear()
+
+        for (threadIndex in 0..<rq.size) {
+            if (WorkCounterConfig.ENABLED) {
+                record()
+            }
+            val t = rq.threads[threadIndex]
+            val id = t.id
+            val capture = t.capture
+
+            if (longest
+                && matched
+                && bestMatch[0] != -1 && capture[0] != -1 && bestMatch[0] < capture[0]
+            ) {
+                continue
+            }
+
+            val ip = prog!!.inst(id)
+            when (ip.op) {
+                InstOp.CHAR_RANGE -> {
+                    if (cp >= 0 && ip.matchesChar(cp)) {
+                        addToThreadq(nq, ip.out, text, nextPos, capture, true)
+                    }
+                }
+
+                InstOp.CHAR_CLASS -> {
+                    if (cp >= 0 && ip.matchesCharClass(cp)) {
+                        addToThreadq(nq, ip.out, text, nextPos, capture, true)
+                    }
+                }
+
+                InstOp.MATCH -> {
+                    if (acceptMatch(capture, matchPos) && !longest) {
+                        // Discard lower-priority threads here; previously queued successors still run.
+                        freeQueue(rq)
+                        return false
+                    }
+                }
+
+                InstOp.ALT_MATCH -> {
+                    // Optimization: if this is the first thread and we want the match, take it.
+                    if (longest || threadIndex == 0) {
+                        System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+                        matched = true
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        freeQueue(rq)
+        return false
+    }
+
+    private fun matchesEndPosition(text: InputScanner, matchPos: Int): Boolean {
+        if (matchPos == context!!.anchorEndPos) {
+            return true
+        }
+        return prog!!.dollarAnchorEnd()
+                && isAtTrailingLineTerminator(
             text,
             matchPos,
-            prog.dollarAnchorUnixLines(),
-            Math.min(context.emptyAnchorStartPos(), context.boundaryRegionStart()),
-            context.anchorEndPos());
-  }
-
-  // ---------------------------------------------------------------------------
-  // Empty-width flag computation
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Returns true if the code point is a JDK line terminator character: {@code '\n'}, {@code '\r'},
-   * {@code '\u0085'} (NEXT LINE), {@code '\u2028'} (LINE SEPARATOR), or {@code '\u2029'} (PARAGRAPH
-   * SEPARATOR).
-   */
-  static boolean isLineTerminator(int cp) {
-    return cp == '\n' || cp == '\r' || cp == '\u0085' || cp == '\u2028' || cp == '\u2029';
-  }
-
-  /**
-   * Returns true if {@code pos} is at the start of a trailing line terminator sequence that extends
-   * to the end of the text. Used for non-multiline {@code $} (dollarAnchorEnd) matching.
-   *
-   * @param unixLines if true, only {@code '\n'} is recognized as a line terminator
-   */
-  static boolean isAtTrailingLineTerminator(InputScanner text, int pos, boolean unixLines) {
-    return isAtTrailingLineTerminator(text, pos, unixLines, text.length());
-  }
-
-  static boolean isAtTrailingLineTerminator(
-      InputScanner text, int pos, boolean unixLines, int logicalEndPos) {
-    return isAtTrailingLineTerminator(text, pos, unixLines, 0, logicalEndPos);
-  }
-
-  private static boolean isAtTrailingLineTerminator(
-      InputScanner text, int pos, boolean unixLines, int logicalStartPos, int logicalEndPos) {
-    int terminatorStart = text.trailingLineTerminatorStart(unixLines, logicalEndPos);
-    // A logical context starting at the LF half of CRLF contains a standalone LF.
-    return terminatorStart >= 0
-        && pos < logicalEndPos
-        && pos == Math.max(terminatorStart, logicalStartPos);
-  }
-
-  /**
-   * Computes which empty-width assertions hold at the given position in the text.
-   *
-   * @param text the input text
-   * @param pos the position (char index) to check
-   * @return a bitmask of {@link EmptyOp} flags
-   */
-  static int emptyFlags(String text, int pos) {
-    return emptyFlags(new StringInputScanner(text), pos);
-  }
-
-  static int emptyFlags(InputScanner text, int pos) {
-    return emptyFlags(text, pos, true);
-  }
-
-  static int emptyFlags(InputScanner text, int pos, boolean includeGraphemeClusterBoundary) {
-    return emptyFlags(
-        text, pos, includeGraphemeClusterBoundary, (GraphemeSupport.Context) null, -1, 0, false);
-  }
-
-  static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      GraphemeSupport.Context graphemeContext) {
-    return emptyFlags(text, pos, includeGraphemeClusterBoundary, graphemeContext, true, true);
-  }
-
-  static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      GraphemeSupport.Context graphemeContext,
-      boolean hasWordBoundary,
-      boolean hasTextAnchor) {
-    return emptyFlags(
-        text,
-        pos,
-        includeGraphemeClusterBoundary,
-        graphemeContext,
-        -1,
-        0,
-        false,
-        0,
-        text.length(),
-        text.length(),
-        text.length(),
-        hasWordBoundary,
-        hasTextAnchor);
-  }
-
-  static int emptyFlags(
-      InputScanner text, int pos, boolean includeGraphemeClusterBoundary, int matchStart) {
-    return emptyFlags(
-        text,
-        pos,
-        includeGraphemeClusterBoundary,
-        (GraphemeSupport.Context) null,
-        matchStart,
-        0,
-        false);
-  }
-
-  static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      int matchStart,
-      int regionStart) {
-    return emptyFlags(
-        text, pos, includeGraphemeClusterBoundary, null, matchStart, regionStart, false);
-  }
-
-  private static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      GraphemeSupport.Context graphemeContext,
-      int matchStart,
-      int regionStart,
-      boolean consumedInput) {
-    return emptyFlags(
-        text,
-        pos,
-        includeGraphemeClusterBoundary,
-        graphemeContext,
-        matchStart,
-        regionStart,
-        consumedInput,
-        0,
-        text.length(),
-        text.length(),
-        text.length(),
-        true,
-        true);
-  }
-
-  static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      int matchStart,
-      int regionStart,
-      boolean consumedInput,
-      int anchorStartPos,
-      int anchorEndPos,
-      int boundaryEndPos,
-      boolean hasWordBoundary,
-      boolean hasTextAnchor) {
-    return emptyFlags(
-        text,
-        pos,
-        includeGraphemeClusterBoundary,
-        (GraphemeSupport.Context) null,
-        matchStart,
-        regionStart,
-        consumedInput,
-        anchorStartPos,
-        anchorEndPos,
-        boundaryEndPos,
-        boundaryEndPos,
-        hasWordBoundary,
-        hasTextAnchor);
-  }
-
-  static int emptyFlags(
-      InputScanner text,
-      int pos,
-      boolean includeGraphemeClusterBoundary,
-      GraphemeSupport.Context graphemeContext,
-      int matchStart,
-      int regionStart,
-      boolean consumedInput,
-      int anchorStartPos,
-      int anchorEndPos,
-      int boundaryEndPos,
-      int wordBoundaryEndPos,
-      boolean hasWordBoundary,
-      boolean hasTextAnchor) {
-    int flags = 0;
-
-    if (hasTextAnchor) {
-      flags |= anchorFlags(text, pos, anchorStartPos, anchorEndPos, regionStart);
+            prog!!.dollarAnchorUnixLines(),
+            Math.min(context!!.emptyAnchorStartPos, context!!.boundaryRegionStart),
+            context!!.anchorEndPos
+        )
     }
 
-    // \b and \B
-    if (hasWordBoundary) {
-      int prevCp =
-          pos > regionStart ? InputScanner.codePoint(text.decodeBackward(pos, regionStart)) : -1;
-      boolean prevWord = prevCp >= 0 && isWordChar(prevCp);
-      int nextCp =
-          pos < wordBoundaryEndPos
-              ? InputScanner.codePoint(text.decodeForward(pos, wordBoundaryEndPos))
-              : -1;
-      boolean nextWord = nextCp >= 0 && isWordChar(nextCp);
-      if (prevWord != nextWord) {
-        flags |= EmptyOp.WORD_BOUNDARY;
-      } else {
-        flags |= EmptyOp.NON_WORD_BOUNDARY;
-      }
-
-      // Unicode \b and \B
-      boolean prevUnicodeWord =
-          prevCp >= 0 && (prevCp < 128 ? prevWord : isUnicodeWordChar(prevCp));
-      boolean nextUnicodeWord =
-          nextCp >= 0 && (nextCp < 128 ? nextWord : isUnicodeWordChar(nextCp));
-      if (prevUnicodeWord != nextUnicodeWord) {
-        flags |= EmptyOp.UNICODE_WORD_BOUNDARY;
-      } else {
-        flags |= EmptyOp.UNICODE_NON_WORD_BOUNDARY;
-      }
+    private constructor() {
+        throw AssertionError("non-instantiable")
     }
 
-    if (includeGraphemeClusterBoundary) {
-      flags |=
-          GraphemeSupport.boundaryFlags(
-              text, pos, graphemeContext, matchStart, regionStart, consumedInput, boundaryEndPos);
-    }
-
-    return flags;
-  }
-
-  private static int anchorFlags(
-      InputScanner text, int pos, int anchorStartPos, int anchorEndPos, int regionStart) {
-    int flags = 0;
-    // Anchoring bounds set logical line ends; transparent bounds still expose CRLF context.
-    int lineContextStart = Math.min(anchorStartPos, regionStart);
-    if (pos == anchorStartPos) {
-      flags |= EmptyOp.BEGIN_TEXT;
-      if (pos < anchorEndPos) {
-        flags |= EmptyOp.BEGIN_LINE | EmptyOp.UNIX_BEGIN_LINE;
-      }
-    } else if (pos > anchorStartPos && pos < anchorEndPos) {
-      int prev = text.codePointBefore(pos);
-      if (prev == '\n') {
-        flags |= EmptyOp.BEGIN_LINE | EmptyOp.UNIX_BEGIN_LINE;
-      } else if (prev == '\u0085'
-          || prev == '\u2028'
-          || prev == '\u2029'
-          || (prev == '\r' && text.asciiAt(pos) != '\n')) {
-        flags |= EmptyOp.BEGIN_LINE;
-      }
-    }
-
-    if (pos == anchorEndPos) {
-      flags |=
-          EmptyOp.END_TEXT
-              | EmptyOp.END_LINE
-              | EmptyOp.UNIX_END_LINE
-              | EmptyOp.DOLLAR_END
-              | EmptyOp.UNIX_DOLLAR_END;
-    } else {
-      if (pos >= anchorStartPos && pos < anchorEndPos) {
-        int ch = text.codePointAt(pos);
-        if (ch == '\n') {
-          flags |= EmptyOp.UNIX_END_LINE;
+    companion object {
+        fun getOrCreate(
+            cached: Nfa?,
+            prog: Prog,
+            context: EngineContext?,
+            ncapture: Int,
+            longest: Boolean,
+            endmatch: Boolean
+        ): Nfa {
+            if (cached != null && cached.canReuse(prog, ncapture)) {
+                cached.reset(prog, context, ncapture, longest, endmatch)
+                return cached
+            }
+            return Nfa(prog, context, ncapture, longest, endmatch)
         }
-        // Standard line mode treats CRLF as one atomic terminator.
-        if (isLineTerminator(ch)
-            && !(ch == '\n' && pos > lineContextStart && text.asciiAt(pos - 1) == '\r')) {
-          flags |= EmptyOp.END_LINE;
+
+        /**
+         * Searches for a match in the given text, starting from position 0.
+         * 
+         * @param prog the compiled program
+         * @param text the input text to search
+         * @param anchor whether to anchor the match at the start
+         * @param kind the match semantics (first, longest, or full)
+         * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match. Positions are char
+         * indices into the text. `result[2*i]` is the start of group i, `result[2*i+1]`
+         * is the end. -1 means the group did not participate.
+         */
+        fun search(prog: Prog, text: String, anchor: Anchor?, kind: MatchKind?, nsubmatch: Int): IntArray? {
+            return search(prog, text, 0, text.length(), text.length(), anchor, kind, nsubmatch)
         }
-      }
-      if (isAtTrailingLineTerminator(text, pos, false, lineContextStart, anchorEndPos)) {
-        flags |= EmptyOp.DOLLAR_END;
-      }
-      if (isAtTrailingLineTerminator(text, pos, true, lineContextStart, anchorEndPos)) {
-        flags |= EmptyOp.UNIX_DOLLAR_END;
-      }
+
+        /**
+         * Searches for a match in the given text, starting from the specified position.
+         * 
+         * @param prog the compiled program
+         * @param text the full input text to search
+         * @param startPos the char index in `text` at which to begin searching
+         * @param anchor whether to anchor the match at `startPos`
+         * @param kind the match semantics (first, longest, or full)
+         * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match. Positions are char
+         * indices into the full text.
+         */
+        fun search(
+            prog: Prog, text: String, startPos: Int, anchor: Anchor?, kind: MatchKind?, nsubmatch: Int
+        ): IntArray? {
+            return search(prog, text, startPos, text.length(), text.length(), anchor, kind, nsubmatch)
+        }
+
+        /**
+         * Searches for a match in the given text, with bounded search range.
+         * 
+         * @param prog the compiled program
+         * @param text the full input text to search
+         * @param startPos the char index in `text` at which to begin searching
+         * @param searchLimit upper bound on where to try new thread starts; only positions up to this
+         * index start new NFA threads. Active threads may still advance beyond this position. Use
+         * `text.length()` for unbounded search.
+         * @param anchor whether to anchor the match at `startPos`
+         * @param kind the match semantics (first, longest, or full)
+         * @param nsubmatch number of submatch groups to track (including group 0 for the full match)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match. Positions are char
+         * indices into the full text.
+         */
+        fun search(
+            prog: Prog,
+            text: String,
+            startPos: Int,
+            searchLimit: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int
+        ): IntArray? {
+            return search(prog, text, startPos, searchLimit, text.length(), anchor, kind, nsubmatch)
+        }
+
+        fun search(
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int
+        ): IntArray? {
+            return search(prog, text, startPos, searchLimit, endPos, 0, anchor, kind, nsubmatch)
+        }
+
+        @JvmOverloads
+        fun search(
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            regionStart: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int,
+            graphemeContext: GraphemeSupport.Context? = null
+        ): IntArray? {
+            return search(
+                prog,
+                text,
+                startPos,
+                searchLimit,
+                endPos,
+                regionStart,
+                regionStart,
+                endPos,
+                endPos,
+                0,
+                endPos,
+                anchor,
+                kind,
+                nsubmatch,
+                graphemeContext
+            )
+        }
+
+        fun search(
+            prog: Prog,
+            text: InputScanner?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            regionStart: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int,
+            graphemeContext: GraphemeSupport.Context?
+        ): IntArray? {
+            return search(
+                prog,
+                text,
+                startPos,
+                searchLimit,
+                endPos,
+                regionStart,
+                regionStart,
+                endPos,
+                endPos,
+                0,
+                endPos,
+                anchor,
+                kind,
+                nsubmatch,
+                graphemeContext
+            )
+        }
+
+        fun search(
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            consumeRegionStart: Int,
+            boundaryRegionStart: Int,
+            boundaryEndPos: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int,
+            graphemeContext: GraphemeSupport.Context?
+        ): IntArray? {
+            return search(
+                prog,
+                text,
+                startPos,
+                searchLimit,
+                endPos,
+                consumeRegionStart,
+                boundaryRegionStart,
+                boundaryEndPos,
+                endPos,
+                0,
+                endPos,
+                anchor,
+                kind,
+                nsubmatch,
+                graphemeContext
+            )
+        }
+
+        fun search(
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            consumeRegionStart: Int,
+            boundaryRegionStart: Int,
+            boundaryEndPos: Int,
+            anchorEndPos: Int,
+            emptyAnchorStartPos: Int,
+            emptyAnchorEndPos: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int,
+            graphemeContext: GraphemeSupport.Context?
+        ): IntArray? {
+            return search(
+                prog,
+                StringInputScanner(text),
+                startPos,
+                searchLimit,
+                endPos,
+                consumeRegionStart,
+                boundaryRegionStart,
+                boundaryEndPos,
+                anchorEndPos,
+                emptyAnchorStartPos,
+                emptyAnchorEndPos,
+                anchor,
+                kind,
+                nsubmatch,
+                graphemeContext
+            )
+        }
+
+        fun search(
+            prog: Prog,
+            text: InputScanner?,
+            startPos: Int,
+            searchLimit: Int,
+            endPos: Int,
+            consumeRegionStart: Int,
+            boundaryRegionStart: Int,
+            boundaryEndPos: Int,
+            anchorEndPos: Int,
+            emptyAnchorStartPos: Int,
+            emptyAnchorEndPos: Int,
+            anchor: Anchor?,
+            kind: MatchKind?,
+            nsubmatch: Int,
+            graphemeContext: GraphemeSupport.Context?
+        ): IntArray? {
+            var nsubmatch = nsubmatch
+            if (prog.start() == 0) {
+                return null
+            }
+
+            var anchored = (anchor == Anchor.ANCHORED) || prog.anchorStart()
+            val longestMode = (kind != MatchKind.FIRST_MATCH)
+            var endmatch = prog.anchorEnd()
+
+            if (kind == MatchKind.FULL_MATCH) {
+                anchored = true
+                endmatch = true
+                if (nsubmatch == 0) {
+                    nsubmatch = 1
+                }
+            }
+
+            // We always need at least capture[0..1] to track the match boundaries.
+            val ncapture = 2 * Math.max(nsubmatch, 1)
+
+            val context: EngineContext =
+                EngineContext.Companion.create(
+                    prog,
+                    text,
+                    startPos,
+                    searchLimit,
+                    endPos,
+                    consumeRegionStart,
+                    boundaryRegionStart,
+                    boundaryEndPos,
+                    anchorEndPos,
+                    emptyAnchorStartPos,
+                    emptyAnchorEndPos,
+                    graphemeContext
+                )
+            val nfa = Nfa(prog, context, ncapture, longestMode, endmatch)
+            return nfa.runSearch(anchored, kind, nsubmatch, endPos)
+        }
+
+        private fun isDelayedBufferEmpty(delayedBuffer: Array<QueueState?>): Boolean {
+            for (q in delayedBuffer) {
+                if (q != null && !q.isEmpty) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        private fun decodeAtConsumeBoundary(text: InputScanner, pos: Int, limit: Int = context.endPos): Long {
+            if (pos < 0 || pos >= limit) {
+                return InputScanner.Companion.decoded(-1, nextBoundaryPosition(pos, limit))
+            }
+            val decoded = text.decodeForward(pos)
+            return if (InputScanner.Companion.position(decoded) <= limit) decoded else text.decodeForward(pos, limit)
+        }
+
+        private fun nextBoundaryPosition(pos: Int, endPos: Int): Int {
+            return if (pos < endPos) endPos else endPos + 1
+        }
+
+        // ---------------------------------------------------------------------------
+        // Empty-width flag computation
+        // ---------------------------------------------------------------------------
+        /**
+         * Returns true if the code point is a JDK line terminator character: `'\n'`, `'\r'`,
+         * `'\u0085'` (NEXT LINE), `'\u2028'` (LINE SEPARATOR), or `'\u2029'` (PARAGRAPH
+         * SEPARATOR).
+         */
+        fun isLineTerminator(cp: Int): Boolean {
+            return cp == '\n'.code || cp == '\r'.code || cp == '\u0085'.code || cp == '\u2028'.code || cp == '\u2029'.code
+        }
+
+        /**
+         * Returns true if `pos` is at the start of a trailing line terminator sequence that extends
+         * to the end of the text. Used for non-multiline `$` (dollarAnchorEnd) matching.
+         * 
+         * @param unixLines if true, only `'\n'` is recognized as a line terminator
+         */
+        fun isAtTrailingLineTerminator(text: InputScanner, pos: Int, unixLines: Boolean): Boolean {
+            return isAtTrailingLineTerminator(text, pos, unixLines, text.length())
+        }
+
+        fun isAtTrailingLineTerminator(
+            text: InputScanner, pos: Int, unixLines: Boolean, logicalEndPos: Int
+        ): Boolean {
+            return isAtTrailingLineTerminator(text, pos, unixLines, 0, logicalEndPos)
+        }
+
+        private fun isAtTrailingLineTerminator(
+            text: InputScanner, pos: Int, unixLines: Boolean, logicalStartPos: Int, logicalEndPos: Int
+        ): Boolean {
+            val terminatorStart = text.trailingLineTerminatorStart(unixLines, logicalEndPos)
+            // A logical context starting at the LF half of CRLF contains a standalone LF.
+            return terminatorStart >= 0 && pos < logicalEndPos && pos == Math.max(terminatorStart, logicalStartPos)
+        }
+
+        /**
+         * Computes which empty-width assertions hold at the given position in the text.
+         * 
+         * @param text the input text
+         * @param pos the position (char index) to check
+         * @return a bitmask of [EmptyOp] flags
+         */
+        fun emptyFlags(text: String?, pos: Int): Int {
+            return emptyFlags(StringInputScanner(text), pos)
+        }
+
+        @JvmOverloads
+        fun emptyFlags(text: InputScanner, pos: Int, includeGraphemeClusterBoundary: Boolean = true): Int {
+            return emptyFlags(
+                text, pos, includeGraphemeClusterBoundary, null as GraphemeSupport.Context?, -1, 0, false
+            )
+        }
+
+        @JvmOverloads
+        fun emptyFlags(
+            text: InputScanner,
+            pos: Int,
+            includeGraphemeClusterBoundary: Boolean,
+            graphemeContext: GraphemeSupport.Context?,
+            hasWordBoundary: Boolean = true,
+            hasTextAnchor: Boolean = true
+        ): Int {
+            return emptyFlags(
+                text,
+                pos,
+                includeGraphemeClusterBoundary,
+                graphemeContext,
+                -1,
+                0,
+                false,
+                0,
+                text.length(),
+                text.length(),
+                text.length(),
+                hasWordBoundary,
+                hasTextAnchor
+            )
+        }
+
+        fun emptyFlags(
+            text: InputScanner, pos: Int, includeGraphemeClusterBoundary: Boolean, matchStart: Int
+        ): Int {
+            return emptyFlags(
+                text,
+                pos,
+                includeGraphemeClusterBoundary,
+                null as GraphemeSupport.Context?,
+                matchStart,
+                0,
+                false
+            )
+        }
+
+        fun emptyFlags(
+            text: InputScanner,
+            pos: Int,
+            includeGraphemeClusterBoundary: Boolean,
+            matchStart: Int,
+            regionStart: Int
+        ): Int {
+            return emptyFlags(
+                text, pos, includeGraphemeClusterBoundary, null, matchStart, regionStart, false
+            )
+        }
+
+        private fun emptyFlags(
+            text: InputScanner,
+            pos: Int,
+            includeGraphemeClusterBoundary: Boolean,
+            graphemeContext: GraphemeSupport.Context?,
+            matchStart: Int,
+            regionStart: Int,
+            consumedInput: Boolean
+        ): Int {
+            return emptyFlags(
+                text,
+                pos,
+                includeGraphemeClusterBoundary,
+                graphemeContext,
+                matchStart,
+                regionStart,
+                consumedInput,
+                0,
+                text.length(),
+                text.length(),
+                text.length(),
+                true,
+                true
+            )
+        }
+
+        fun emptyFlags(
+            text: InputScanner,
+            pos: Int,
+            includeGraphemeClusterBoundary: Boolean,
+            matchStart: Int,
+            regionStart: Int,
+            consumedInput: Boolean,
+            anchorStartPos: Int,
+            anchorEndPos: Int,
+            boundaryEndPos: Int,
+            hasWordBoundary: Boolean,
+            hasTextAnchor: Boolean
+        ): Int {
+            return emptyFlags(
+                text,
+                pos,
+                includeGraphemeClusterBoundary,
+                null as GraphemeSupport.Context?,
+                matchStart,
+                regionStart,
+                consumedInput,
+                anchorStartPos,
+                anchorEndPos,
+                boundaryEndPos,
+                boundaryEndPos,
+                hasWordBoundary,
+                hasTextAnchor
+            )
+        }
+
+        fun emptyFlags(
+            text: InputScanner,
+            pos: Int,
+            includeGraphemeClusterBoundary: Boolean,
+            graphemeContext: GraphemeSupport.Context?,
+            matchStart: Int,
+            regionStart: Int,
+            consumedInput: Boolean,
+            anchorStartPos: Int,
+            anchorEndPos: Int,
+            boundaryEndPos: Int,
+            wordBoundaryEndPos: Int,
+            hasWordBoundary: Boolean,
+            hasTextAnchor: Boolean
+        ): Int {
+            var flags = 0
+
+            if (hasTextAnchor) {
+                flags = flags or anchorFlags(text, pos, anchorStartPos, anchorEndPos, regionStart)
+            }
+
+            // \b and \B
+            if (hasWordBoundary) {
+                val prevCp =
+                    if (pos > regionStart) InputScanner.Companion.codePoint(
+                        text.decodeBackward(
+                            pos,
+                            regionStart
+                        )
+                    ) else -1
+                val prevWord = prevCp >= 0 && isWordChar(prevCp)
+                val nextCp =
+                    if (pos < wordBoundaryEndPos)
+                        InputScanner.Companion.codePoint(text.decodeForward(pos, wordBoundaryEndPos))
+                    else
+                        -1
+                val nextWord = nextCp >= 0 && isWordChar(nextCp)
+                if (prevWord != nextWord) {
+                    flags = flags or EmptyOp.WORD_BOUNDARY
+                } else {
+                    flags = flags or EmptyOp.NON_WORD_BOUNDARY
+                }
+
+                // Unicode \b and \B
+                val prevUnicodeWord =
+                    prevCp >= 0 && (if (prevCp < 128) prevWord else isUnicodeWordChar(prevCp))
+                val nextUnicodeWord =
+                    nextCp >= 0 && (if (nextCp < 128) nextWord else isUnicodeWordChar(nextCp))
+                if (prevUnicodeWord != nextUnicodeWord) {
+                    flags = flags or EmptyOp.UNICODE_WORD_BOUNDARY
+                } else {
+                    flags = flags or EmptyOp.UNICODE_NON_WORD_BOUNDARY
+                }
+            }
+
+            if (includeGraphemeClusterBoundary) {
+                flags = flags or
+                        GraphemeSupport.Companion.boundaryFlags(
+                            text, pos, graphemeContext, matchStart, regionStart, consumedInput, boundaryEndPos
+                        )
+            }
+
+            return flags
+        }
+
+        private fun anchorFlags(
+            text: InputScanner, pos: Int, anchorStartPos: Int, anchorEndPos: Int, regionStart: Int
+        ): Int {
+            var flags = 0
+            // Anchoring bounds set logical line ends; transparent bounds still expose CRLF context.
+            val lineContextStart = Math.min(anchorStartPos, regionStart)
+            if (pos == anchorStartPos) {
+                flags = flags or EmptyOp.BEGIN_TEXT
+                if (pos < anchorEndPos) {
+                    flags = flags or (EmptyOp.BEGIN_LINE or EmptyOp.UNIX_BEGIN_LINE)
+                }
+            } else if (pos > anchorStartPos && pos < anchorEndPos) {
+                val prev = text.codePointBefore(pos)
+                if (prev == '\n'.code) {
+                    flags = flags or (EmptyOp.BEGIN_LINE or EmptyOp.UNIX_BEGIN_LINE)
+                } else if (prev == '\u0085'.code || prev == '\u2028'.code || prev == '\u2029'.code || (prev == '\r'.code && text.asciiAt(
+                        pos
+                    ) != '\n'.code)
+                ) {
+                    flags = flags or EmptyOp.BEGIN_LINE
+                }
+            }
+
+            if (pos == anchorEndPos) {
+                flags = flags or
+                        (EmptyOp.END_TEXT
+                                or EmptyOp.END_LINE
+                                or EmptyOp.UNIX_END_LINE
+                                or EmptyOp.DOLLAR_END
+                                or EmptyOp.UNIX_DOLLAR_END)
+            } else {
+                if (pos >= anchorStartPos && pos < anchorEndPos) {
+                    val ch = text.codePointAt(pos)
+                    if (ch == '\n'.code) {
+                        flags = flags or EmptyOp.UNIX_END_LINE
+                    }
+                    // Standard line mode treats CRLF as one atomic terminator.
+                    if (isLineTerminator(ch)
+                        && !(ch == '\n'.code && pos > lineContextStart && text.asciiAt(pos - 1) == '\r'.code)
+                    ) {
+                        flags = flags or EmptyOp.END_LINE
+                    }
+                }
+                if (isAtTrailingLineTerminator(text, pos, false, lineContextStart, anchorEndPos)) {
+                    flags = flags or EmptyOp.DOLLAR_END
+                }
+                if (isAtTrailingLineTerminator(text, pos, true, lineContextStart, anchorEndPos)) {
+                    flags = flags or EmptyOp.UNIX_DOLLAR_END
+                }
+            }
+            return flags
+        }
+
+        /**
+         * Returns true if `pos` is a grapheme cluster boundary for SafeRE's supported approximation
+         * of JDK `\X`.
+         */
+        fun isGraphemeClusterBoundary(text: String?, pos: Int): Boolean {
+            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos)
+        }
+
+        fun isGraphemeClusterBoundary(
+            text: String?, pos: Int, graphemeContext: GraphemeSupport.Context?
+        ): Boolean {
+            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos, graphemeContext)
+        }
+
+        fun isGraphemeClusterBoundary(
+            text: String?, pos: Int, regionStart: Int, graphemeContext: GraphemeSupport.Context?
+        ): Boolean {
+            return GraphemeSupport.Companion.isGraphemeClusterBoundary(text, pos, regionStart, graphemeContext)
+        }
+
+        fun hasGraphemeExtendAt(text: String?, pos: Int): Boolean {
+            return GraphemeSupport.Companion.hasGraphemeExtendAt(text, pos)
+        }
+
+        fun isExtendedPictographicAt(text: String?, pos: Int): Boolean {
+            return GraphemeSupport.Companion.isExtendedPictographicAt(text, pos)
+        }
+
+        /** Returns true if the code point is a word character (`[A-Za-z0-9_]`).  */
+        fun isWordChar(c: Int): Boolean {
+            return Ascii.isWordChar(c)
+        }
+
+        /** Returns true if the code point is a Unicode word character (matching `\w` under UCC).  */
+        fun isUnicodeWordChar(c: Int): Boolean {
+            return Character.isAlphabetic(c)
+                    || Character.getType(c) == Character.NON_SPACING_MARK.toInt() || Character.getType(c) == Character.ENCLOSING_MARK.toInt() || Character.getType(
+                c
+            ) == Character.COMBINING_SPACING_MARK.toInt() || Character.isDigit(c)
+                    || Character.getType(c) == Character.CONNECTOR_PUNCTUATION.toInt() || c == 0x200C // ZWNJ
+                    || c == 0x200D // ZWJ
+        }
     }
-    return flags;
-  }
-
-  /**
-   * Returns true if {@code pos} is a grapheme cluster boundary for SafeRE's supported approximation
-   * of JDK {@code \X}.
-   */
-  static boolean isGraphemeClusterBoundary(String text, int pos) {
-    return GraphemeSupport.isGraphemeClusterBoundary(text, pos);
-  }
-
-  static boolean isGraphemeClusterBoundary(
-      String text, int pos, GraphemeSupport.Context graphemeContext) {
-    return GraphemeSupport.isGraphemeClusterBoundary(text, pos, graphemeContext);
-  }
-
-  static boolean isGraphemeClusterBoundary(
-      String text, int pos, int regionStart, GraphemeSupport.Context graphemeContext) {
-    return GraphemeSupport.isGraphemeClusterBoundary(text, pos, regionStart, graphemeContext);
-  }
-
-  static boolean hasGraphemeExtendAt(String text, int pos) {
-    return GraphemeSupport.hasGraphemeExtendAt(text, pos);
-  }
-
-  static boolean isExtendedPictographicAt(String text, int pos) {
-    return GraphemeSupport.isExtendedPictographicAt(text, pos);
-  }
-
-  /** Returns true if the code point is a word character ({@code [A-Za-z0-9_]}). */
-  static boolean isWordChar(int c) {
-    return Ascii.isWordChar(c);
-  }
-
-  /** Returns true if the code point is a Unicode word character (matching {@code \w} under UCC). */
-  static boolean isUnicodeWordChar(int c) {
-    return Character.isAlphabetic(c)
-        || Character.getType(c) == Character.NON_SPACING_MARK
-        || Character.getType(c) == Character.ENCLOSING_MARK
-        || Character.getType(c) == Character.COMBINING_SPACING_MARK
-        || Character.isDigit(c)
-        || Character.getType(c) == Character.CONNECTOR_PUNCTUATION
-        || c == 0x200C // ZWNJ
-        || c == 0x200D; // ZWJ
-  }
-
-  private Nfa() {
-    throw new AssertionError("non-instantiable");
-  }
 }

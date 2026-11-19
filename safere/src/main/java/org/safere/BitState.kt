@@ -2,1113 +2,1112 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Arrays;
+import java.util.*
 
 /**
  * Bit-state backtracking execution engine. Uses explicit stack-based backtracking with a visited
- * bitmap to guarantee O(|prog| &times; |text|) time complexity, preventing exponential blowup.
- *
- * <p>The visited bitmap tracks which (instruction, position) pairs have been explored. If a pair
+ * bitmap to guarantee O(|prog|  |text|) time complexity, preventing exponential blowup.
+ * 
+ * 
+ * The visited bitmap tracks which (instruction, position) pairs have been explored. If a pair
  * has already been visited, it is skipped — this ensures each pair is processed at most once.
- *
- * <p>BitState is faster than the general NFA (Pike VM) for small-to-medium texts because it avoids
+ * 
+ * 
+ * BitState is faster than the general NFA (Pike VM) for small-to-medium texts because it avoids
  * per-step thread queue management. It is used when:
- *
- * <ul>
- *   <li>The pattern is not one-pass (or requires unanchored matching).
- *   <li>The text is small enough that the visited bitmap fits in memory.
- *   <li>Submatch (capture group) information is needed.
- * </ul>
- *
- * <p>This is a port of RE2's {@code bitstate.cc}, adapted for Java's Unicode code point model.
+ * 
+ * 
+ *  * The pattern is not one-pass (or requires unanchored matching).
+ *  * The text is small enough that the visited bitmap fits in memory.
+ *  * Submatch (capture group) information is needed.
+ * 
+ * 
+ * 
+ * This is a port of RE2's `bitstate.cc`, adapted for Java's Unicode code point model.
  */
-final class BitState {
-
-  /** Default speculative consumption window when no later DFA end hint is available. */
-  static final int SPECULATIVE_WINDOW_SIZE = 256;
-
-  /** Maximum consumption window for a speculative search sized by a forward DFA hint. */
-  static final int MAX_HINTED_WINDOW_SIZE = 2_048;
-
-  /** Maximum bitmap size in bits. Limits the product of prog size × text length. */
-  private static final int MAX_BITMAP_BITS = 256 * 1024;
-
-  /** Maximum BitState jobs to run per instruction/position slot before falling back to NFA. */
-  private static final int MAX_WORK_PER_SLOT = 8;
-
-  /**
-   * Step count at which multi-start searches begin recording non-cycle ALTs for cross-start
-   * pruning. Short searches that finish before this bound skip bitmap maintenance entirely, while
-   * long failing runs activate pruning within the first start and stay linear overall.
-   */
-  private static final long PRUNE_ACTIVATION_STEPS = 64L;
-
-  /**
-   * Returns the maximum text length (in chars) for which BitState can be used with the given
-   * program, or -1 if the program is too large for BitState.
-   */
-  static int maxTextSize(Prog prog) {
-    int instCount = prog.size();
-    if (instCount == 0) {
-      return -1;
-    }
-    return MAX_BITMAP_BITS / instCount - 1;
-  }
-
-  /**
-   * Searches for a match using bit-state backtracking, starting from position 0.
-   *
-   * @param prog the compiled program
-   * @param text the input text
-   * @param anchored if true, match must start at position 0
-   * @param longest if true, find the longest match; otherwise find the first (greedy) match
-   * @param endMatch if true, match must extend to end of text
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match
-   */
-  static int[] search(
-      Prog prog, String text, boolean anchored, boolean longest, boolean endMatch, int nsubmatch) {
-    return search(prog, text, 0, text.length(), anchored, longest, endMatch, nsubmatch);
-  }
-
-  /**
-   * Searches for a match using bit-state backtracking, starting from the specified position.
-   *
-   * @param prog the compiled program
-   * @param text the full input text
-   * @param startPos the char index in {@code text} at which to begin searching
-   * @param anchored if true, match must start at {@code startPos}
-   * @param longest if true, find the longest match; otherwise find the first (greedy) match
-   * @param endMatch if true, match must extend to end of text
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match. Positions are char
-   *     indices into the full text.
-   */
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      boolean anchored,
-      boolean longest,
-      boolean endMatch,
-      int nsubmatch) {
-    return search(prog, text, startPos, text.length(), anchored, longest, endMatch, nsubmatch);
-  }
-
-  /**
-   * Searches for a match using bit-state backtracking, with bounded search range.
-   *
-   * @param prog the compiled program
-   * @param text the full input text
-   * @param startPos the char index in {@code text} at which to begin searching
-   * @param searchLimit upper bound on where to try start positions; only positions up to this index
-   *     are tried. The inner search may still match characters beyond this position. Use {@code
-   *     text.length()} for unbounded search.
-   * @param anchored if true, match must start at {@code startPos}
-   * @param longest if true, find the longest match; otherwise find the first (greedy) match
-   * @param endMatch if true, match must extend to end of text
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match. Positions are char
-   *     indices into the full text.
-   */
-  static int[] search(
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      boolean anchored,
-      boolean longest,
-      boolean endMatch,
-      int nsubmatch) {
-    return search(null, prog, text, startPos, searchLimit, anchored, longest, endMatch, nsubmatch);
-  }
-
-  /**
-   * Searches using bit-state backtracking, optionally reusing a cached instance to avoid
-   * allocations. If {@code cached} is non-null and its arrays are large enough for the current
-   * text, it is reset and reused; otherwise a new instance is created.
-   *
-   * @param cached a previously created BitState to reuse, or null
-   * @param prog the compiled program
-   * @param text the full input text
-   * @param startPos the char index at which to begin searching
-   * @param searchLimit upper bound on start positions to try
-   * @param anchored if true, match must start at {@code startPos}
-   * @param longest if true, find the longest match
-   * @param endMatch if true, match must extend to end of text
-   * @param nsubmatch number of submatch groups to track (including group 0)
-   * @return submatch positions as {@code int[2*nsubmatch]}, or null if no match
-   */
-  static int[] search(
-      BitState cached,
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      boolean anchored,
-      boolean longest,
-      boolean endMatch,
-      int nsubmatch) {
-    return search(
-        cached, prog, text, startPos, searchLimit, anchored, longest, endMatch, nsubmatch, null);
-  }
-
-  /**
-   * Searches using bit-state backtracking, writing successful captures into {@code resultBuffer}
-   * when it is large enough. This keeps the mutable backtracking capture registers separate from
-   * the returned result while allowing tight find loops to avoid one result-array allocation per
-   * match.
-   */
-  static int[] search(
-      BitState cached,
-      Prog prog,
-      String text,
-      int startPos,
-      int searchLimit,
-      boolean anchored,
-      boolean longest,
-      boolean endMatch,
-      int nsubmatch,
-      int[] resultBuffer) {
-    return search(
-        cached,
-        prog,
-        new StringInputScanner(text),
-        startPos,
-        searchLimit,
-        anchored,
-        longest,
-        endMatch,
-        nsubmatch,
-        resultBuffer);
-  }
-
-  static int[] search(
-      BitState cached,
-      Prog prog,
-      InputScanner text,
-      int startPos,
-      int searchLimit,
-      boolean anchored,
-      boolean longest,
-      boolean endMatch,
-      int nsubmatch,
-      int[] resultBuffer) {
-    int textLen = text.length();
-    int maxLen = maxTextSize(prog);
-    if (maxLen < 0 || textLen > maxLen) {
-      return null; // text too large for BitState
+internal class BitState(// -------------------------------------------------------------------------
+    // Instance fields
+    // -------------------------------------------------------------------------
+    private val prog: Prog,
+    text: InputScanner,
+    startPos: Int,
+    endPos: Int,
+    ncap: Int,
+    longest: Boolean,
+    endMatch: Boolean,
+    greedyRunes: Array<Inst?>?
+) {
+    /**
+     * Runs the bit-state search from the given start position, writing successful captures into
+     * `resultBuffer` when it is large enough.
+     */
+    /**
+     * Runs the bit-state search from the given start position.
+     * 
+     * @param startPos the char index at which to begin searching
+     * @param searchLimit upper bound on start positions to try
+     * @param anchored if true, match must start at `startPos`
+     * @return submatch positions, or null if no match
+     */
+    @JvmOverloads
+    fun doSearch(startPos: Int, searchLimit: Int, anchored: Boolean, resultBuffer: IntArray? = null): IntArray? {
+        return doSearch(startPos, searchLimit, anchored, resultBuffer, false)
     }
 
-    if (prog.anchorStart()) {
-      anchored = true;
-    }
-    if (prog.anchorEnd()) {
-      endMatch = true;
-    }
-
-    int ncap = 2 * Math.max(nsubmatch, 1);
-    BitState bs;
-    if (cached != null && cached.canReuse(prog, text, startPos, textLen)) {
-      bs = cached;
-      bs.reset(text, startPos, textLen, ncap, longest, endMatch);
-    } else {
-      bs = new BitState(prog, text, startPos, textLen, ncap, longest, endMatch, prog.greedyRunes());
+    /**
+     * Speculates within the allocated window while assertions still see the full input. A match is
+     * authoritative only if no higher-priority path needs to consume beyond the window. An unresolved
+     * path aborts the whole attempt before a lower-priority match can be returned.
+     */
+    fun doSearchWindow(startPos: Int, searchLimit: Int, anchored: Boolean, resultBuffer: IntArray?): IntArray? {
+        check(!(longest || endMatch || prog.hasGraphemeSemantics())) { "Search windows require unconstrained first-match semantics" }
+        return doSearch(startPos, searchLimit, anchored, resultBuffer, true)
     }
 
-    return bs.doSearch(startPos, searchLimit, anchored, resultBuffer);
-  }
-
-  /**
-   * Returns a BitState instance suitable for the given parameters, either by resetting {@code
-   * cached} (if compatible) or by creating a new one.
-   */
-  static BitState getOrCreate(
-      BitState cached,
-      Prog prog,
-      String text,
-      int startPos,
-      int endPos,
-      int ncap,
-      boolean longest,
-      boolean endMatch) {
-    return getOrCreate(
-        cached, prog, new StringInputScanner(text), startPos, endPos, ncap, longest, endMatch);
-  }
-
-  /**
-   * Returns a BitState instance suitable for the given parameters, either by resetting {@code
-   * cached} (if compatible) or by creating a new one.
-   */
-  static BitState getOrCreate(
-      BitState cached,
-      Prog prog,
-      InputScanner text,
-      int startPos,
-      int endPos,
-      int ncap,
-      boolean longest,
-      boolean endMatch) {
-    if (cached != null && cached.canReuse(prog, text, startPos, endPos)) {
-      cached.reset(text, startPos, endPos, ncap, longest, endMatch);
-      return cached;
-    }
-    return new BitState(prog, text, startPos, endPos, ncap, longest, endMatch, prog.greedyRunes());
-  }
-
-  /**
-   * Runs the bit-state search from the given start position.
-   *
-   * @param startPos the char index at which to begin searching
-   * @param searchLimit upper bound on start positions to try
-   * @param anchored if true, match must start at {@code startPos}
-   * @return submatch positions, or null if no match
-   */
-  int[] doSearch(int startPos, int searchLimit, boolean anchored) {
-    return doSearch(startPos, searchLimit, anchored, null);
-  }
-
-  /**
-   * Runs the bit-state search from the given start position, writing successful captures into
-   * {@code resultBuffer} when it is large enough.
-   */
-  int[] doSearch(int startPos, int searchLimit, boolean anchored, int[] resultBuffer) {
-    return doSearch(startPos, searchLimit, anchored, resultBuffer, false);
-  }
-
-  /**
-   * Speculates within the allocated window while assertions still see the full input. A match is
-   * authoritative only if no higher-priority path needs to consume beyond the window. An unresolved
-   * path aborts the whole attempt before a lower-priority match can be returned.
-   */
-  int[] doSearchWindow(int startPos, int searchLimit, boolean anchored, int[] resultBuffer) {
-    if (longest || endMatch || prog.hasGraphemeSemantics()) {
-      throw new IllegalStateException("Search windows require unconstrained first-match semantics");
-    }
-    return doSearch(startPos, searchLimit, anchored, resultBuffer, true);
-  }
-
-  private int[] doSearch(
-      int startPos, int searchLimit, boolean anchored, int[] resultBuffer, boolean speculative) {
-    this.speculative = speculative;
-    windowExceeded = false;
-    budgetExceeded = false;
-    stepCount = 0;
-    stepBudget = Math.max(4096L, (long) MAX_WORK_PER_SLOT * prog.size() * textSlots);
-    bestMatch = null;
-    matchResult =
-        resultBuffer != null && resultBuffer.length >= ncap ? resultBuffer : new int[ncap];
-    int limit = anchored ? startPos + 1 : Math.min(searchLimit + 1, textLen + 1);
-    pruneAcrossStarts = false;
-    unvisitedKindLimit = ALT;
-    nextStepThreshold =
-        limit - startPos > 1 ? Math.min(stepBudget, PRUNE_ACTIVATION_STEPS) : stepBudget;
-    for (int searchStart = startPos; searchStart < limit; searchStart++) {
-      if (speculative && searchStart > endPos) {
-        windowExceeded = true;
-        return null;
-      }
-      if (trySearch(prog.start(), searchStart)) {
-        return bestMatch;
-      }
-      if (budgetExceeded || windowExceeded) {
-        return null;
-      }
-      if (pruneAcrossStarts) {
-        foldVisitedIntoDead();
-      }
-      if (searchStart < textLen) {
-        searchStart = InputScanner.position(text.decodeForward(searchStart)) - 1;
-      }
-    }
-    return null;
-  }
-
-  // -------------------------------------------------------------------------
-  // Instance fields
-  // -------------------------------------------------------------------------
-
-  private final Prog prog;
-  private final Inst[] instructions;
-  private InputScanner text;
-  private int textLen;
-  private int endPos;
-  private boolean longest;
-  private boolean endMatch;
-  private int ncap;
-  private GraphemeSupport.Context graphemeContext;
-
-  /**
-   * Per-start visited bitmap: bit {@code ((pos - basePos) * progSize + instId)} tracks which (ALT,
-   * position) pairs the current start position's search has reached. Position-major layout keeps
-   * one start's marks contiguous, so folding them into {@link #dead} costs no more than the search
-   * that produced them. Sized for the full text so the instance can be reused across searches with
-   * different start/end bounds.
-   */
-  private final long[] visited;
-
-  /**
-   * Cross-start pruning bitmap, same layout as {@link #visited}: set for every ALT reached by an
-   * earlier start position whose search failed. Whether a match is reachable from an (ALT,
-   * position) pair does not depend on capture values, so a pair that led nowhere from one start
-   * leads nowhere from any later start either. Checking it makes unanchored search linear (RE2 gets
-   * the same effect by never clearing its visited bitmap between starts) while still letting
-   * non-cycle ALTs be revisited within a single start, which capture priority requires.
-   *
-   * <p>PROGRESS_CHECK loop registers do not break this. They only guard nullable loop bodies, so a
-   * first visit's body-only branch still reaches the exit through a zero-width iteration, and a
-   * path that arrives with the register equal to the current position (exit-only) exists only
-   * because the same start already took the body from that position. Either way the failed start
-   * explored every future a later start could have through the pruned pair.
-   *
-   * <p>Allocated unconditionally alongside {@link #visited}, even though anchored-only instances
-   * never use it: lazily allocating it on first unanchored use was tried and measured 40-60% slower
-   * on unanchored searches (the case that actually prunes), for a memory saving that only applies
-   * to anchored-only instances. Not a good trade.
-   */
-  private final long[] dead;
-
-  /** Dirty word ranges of {@link #visited} and {@link #dead}; clears touch only these words. */
-  private int visitedLo;
-
-  private int visitedHi;
-  private int deadLo;
-  private int deadHi;
-
-  private int textSlots;
-  private final int progSize;
-
-  /** Whether the current {@link #doSearch} prunes later starts with {@link #dead}. */
-  private boolean pruneAcrossStarts;
-
-  /**
-   * Highest {@link #altKind} value that {@link #shouldVisit} accepts without touching the bitmaps:
-   * {@link #ALT} while cross-start pruning is inactive, {@link #NOT_ALT} once active.
-   */
-  private byte unvisitedKindLimit;
-
-  /**
-   * Step count at which {@link #trySearch} either activates cross-start pruning or trips {@link
-   * #stepBudget}. Merging both checks keeps a single branch on the hot instruction loop.
-   */
-  private long nextStepThreshold;
-
-  /**
-   * Per-instruction kind for {@link #shouldVisit}: 0 = not an ALT, 1 = ALT, 2 = epsilon-cycle ALT.
-   */
-  private final byte[] altKind;
-
-  /** Straight-line capture/consumer/capture sequences, or null when none exist. */
-  private final CaptureRune[] captureRunes;
-
-  /** Loop entry/check continuations, optionally including one adjacent capture write. */
-  private final LoopEntry[] loopEntries;
-
-  private final LazyRuneLoop[] lazyRuneLoops;
-
-  /** Progress checks immediately following captures, or null when none exist. */
-  private final Inst[] captureProgressChecks;
-
-  /** Consuming bodies of simple greedy loops, or null when none exist. */
-  private final Inst[] greedyRunes;
-
-  private static final byte NOT_ALT = 0;
-  private static final byte ALT = 1;
-  private static final byte CYCLE_ALT = 2;
-
-  /** Current capture registers. */
-  private int[] cap;
-
-  /** Current loop progress-check registers. */
-  private final int[] loopRegs;
-
-  /** Best match found so far. */
-  private int[] bestMatch;
-
-  /** Caller-owned or BitState-owned array that receives successful capture results. */
-  private int[] matchResult;
-
-  /** Work-budget accounting for falling back when BitState backtracking is too expensive. */
-  private long stepBudget;
-
-  private long stepCount;
-  private boolean budgetExceeded;
-  private boolean speculative;
-  private boolean windowExceeded;
-
-  /** Explicit job stack for backtracking. */
-  private int[] jobInstId;
-
-  private int[] jobPos;
-  private int jobCount;
-  private int basePos;
-
-  /** Creates a fresh workspace. Passing null greedy-loop metadata uses ordinary ALT dispatch. */
-  BitState(
-      Prog prog,
-      InputScanner text,
-      int startPos,
-      int endPos,
-      int ncap,
-      boolean longest,
-      boolean endMatch,
-      Inst[] greedyRunes) {
-    this.prog = prog;
-    this.instructions = prog.frozenInstructions();
-    this.text = text;
-    this.textLen = text.length();
-    this.basePos = startPos;
-    this.endPos = endPos;
-    this.longest = longest;
-    this.endMatch = endMatch || prog.anchorEnd();
-    this.ncap = ncap;
-    this.textSlots = (endPos - basePos) + 2;
-    this.progSize = prog.size();
-    this.graphemeContext = GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics());
-
-    boolean[] cycleAlts = prog.epsilonCycleAlts();
-    this.altKind = new byte[progSize];
-    for (int i = 0; i < progSize; i++) {
-      Inst instruction = prog.inst(i);
-      if (cycleAlts[i]) {
-        altKind[i] = CYCLE_ALT;
-      } else {
-        int op = instruction.opCode;
-        if (op == InstOp.OP_ALT || op == InstOp.OP_ALT_MATCH) {
-          altKind[i] = ALT;
+    private fun doSearch(
+        startPos: Int, searchLimit: Int, anchored: Boolean, resultBuffer: IntArray?, speculative: Boolean
+    ): IntArray? {
+        this.speculative = speculative
+        windowExceeded = false
+        budgetExceeded = false
+        stepCount = 0
+        stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size() * textSlots)
+        bestMatch = null
+        matchResult =
+            if (resultBuffer != null && resultBuffer.length >= ncap) resultBuffer else IntArray(ncap)
+        val limit = if (anchored) startPos + 1 else Math.min(searchLimit + 1, textLen + 1)
+        pruneAcrossStarts = false
+        unvisitedKindLimit = ALT
+        nextStepThreshold =
+            if (limit - startPos > 1) Math.min(stepBudget, PRUNE_ACTIVATION_STEPS) else stepBudget
+        var searchStart = startPos
+        while (searchStart < limit) {
+            if (speculative && searchStart > endPos) {
+                windowExceeded = true
+                return null
+            }
+            if (trySearch(prog.start(), searchStart)) {
+                return bestMatch
+            }
+            if (budgetExceeded || windowExceeded) {
+                return null
+            }
+            if (pruneAcrossStarts) {
+                foldVisitedIntoDead()
+            }
+            if (searchStart < textLen) {
+                searchStart = InputScanner.Companion.position(text!!.decodeForward(searchStart)) - 1
+            }
+            searchStart++
         }
-      }
-    }
-    this.captureRunes = prog.captureRunes();
-    this.loopEntries = prog.loopEntries();
-    this.lazyRuneLoops = prog.lazyRuneLoops();
-    this.captureProgressChecks = prog.captureProgressChecks();
-    this.greedyRunes = greedyRunes;
-
-    int totalBits = progSize * textSlots;
-    int visitedLen = (totalBits + 63) / 64;
-    this.visited = new long[visitedLen];
-    this.dead = new long[visitedLen];
-    this.visitedLo = Integer.MAX_VALUE;
-    this.visitedHi = -1;
-    this.deadLo = Integer.MAX_VALUE;
-    this.deadHi = -1;
-
-    this.cap = new int[ncap];
-    Arrays.fill(cap, -1);
-    int nlr = prog.numLoopRegs();
-    this.loopRegs = new int[nlr];
-    if (nlr > 0) {
-      Arrays.fill(loopRegs, -1);
+        return null
     }
 
-    int maxJobs = Math.min(totalBits, 4096);
-    this.jobInstId = new int[maxJobs];
-    this.jobPos = new int[maxJobs];
-    this.jobCount = 0;
-    this.stepBudget = Math.max(4096L, (long) MAX_WORK_PER_SLOT * prog.size() * textSlots);
-    this.nextStepThreshold = this.stepBudget;
-    this.unvisitedKindLimit = ALT;
-    this.stepCount = 0;
-    this.budgetExceeded = false;
-  }
+    private val instructions: Array<Inst>
+    private var text: InputScanner?
+    private var textLen: Int
+    private var endPos: Int
+    private var longest: Boolean
+    private var endMatch: Boolean
+    private var ncap: Int
+    private var graphemeContext: GraphemeSupport.Context?
 
-  /**
-   * Returns true if (instId, pos) should be explored. Records every ALT reached once cross-start
-   * pruning is active so a failed start can prune later ones via {@link #dead}; within one start,
-   * only epsilon-cycle ALTs are blocked.
-   *
-   * <p>Only ALT/ALT_MATCH instructions that participate in epsilon cycles are blocked on revisit.
-   * An epsilon cycle is a path from an ALT back to itself through only epsilon transitions (ALT,
-   * NOP, CAPTURE, EMPTY_WIDTH) — without any CHAR_RANGE to consume input. Only these can cause
-   * infinite loops.
-   *
-   * <p>Non-cycle ALTs can be safely revisited. This is critical for nested quantifiers where an
-   * inner repetition (e.g., {@code .+?}) and an outer repetition (e.g., {@code *}) share the same
-   * ALT entry instruction. If the visited bitmap blocked the shared ALT, the outer repetition could
-   * not re-enter its body, causing a premature match.
-   *
-   * <p>All other instruction types are always revisitable:
-   *
-   * <ul>
-   *   <li>MATCH — terminal, no outgoing edges
-   *   <li>FAIL — terminal, no outgoing edges
-   *   <li>CAPTURE, NOP, EMPTY_WIDTH — epsilon with a single outgoing edge, cannot form cycles alone
-   *   <li>CHAR_RANGE — consumes input (advances position), cannot form cycles
-   * </ul>
-   *
-   * <p>Kept tiny so C2 inlines the array-indexed fast exit across all call sites in {@link
-   * #trySearch}.
-   */
-  @MaxBytecodeSize(
-      value = 35,
-      reason =
-          "C2 always inlines methods of at most MaxInlineSize (35) bytes. trySearch calls this from"
-              + " many sites. At 149 bytes it inflated the hot loop, one of the causes of the 36%"
-              + " short-search regression in #1116. Move new work into shouldVisitTracked.")
-  private boolean shouldVisit(int instId, int pos) {
-    int kind = altKind[instId];
-    return kind <= unvisitedKindLimit || shouldVisitTracked(kind, instId, pos);
-  }
+    /**
+     * Per-start visited bitmap: bit `((pos - basePos) * progSize + instId)` tracks which (ALT,
+     * position) pairs the current start position's search has reached. Position-major layout keeps
+     * one start's marks contiguous, so folding them into [.dead] costs no more than the search
+     * that produced them. Sized for the full text so the instance can be reused across searches with
+     * different start/end bounds.
+     */
+    private val visited: LongArray
 
-  private boolean shouldVisitTracked(int kind, int instId, int pos) {
-    int bit = (pos - basePos) * progSize + instId;
-    int word = bit >>> 6;
-    long mask = 1L << (bit & 63);
-    if (pruneAcrossStarts && (dead[word] & mask) != 0) {
-      return false; // an earlier start already exhausted this pair without matching
-    }
-    long w = visited[word];
-    if ((w & mask) != 0) {
-      // Cycle ALT: block the epsilon loop. Non-cycle ALT: revisitable, and already recorded.
-      return kind == ALT;
-    }
-    visited[word] = w | mask;
-    if (word < visitedLo) {
-      visitedLo = word;
-    }
-    if (word > visitedHi) {
-      visitedHi = word;
-    }
-    return true;
-  }
+    /**
+     * Cross-start pruning bitmap, same layout as [.visited]: set for every ALT reached by an
+     * earlier start position whose search failed. Whether a match is reachable from an (ALT,
+     * position) pair does not depend on capture values, so a pair that led nowhere from one start
+     * leads nowhere from any later start either. Checking it makes unanchored search linear (RE2 gets
+     * the same effect by never clearing its visited bitmap between starts) while still letting
+     * non-cycle ALTs be revisited within a single start, which capture priority requires.
+     * 
+     * 
+     * PROGRESS_CHECK loop registers do not break this. They only guard nullable loop bodies, so a
+     * first visit's body-only branch still reaches the exit through a zero-width iteration, and a
+     * path that arrives with the register equal to the current position (exit-only) exists only
+     * because the same start already took the body from that position. Either way the failed start
+     * explored every future a later start could have through the pruned pair.
+     * 
+     * 
+     * Allocated unconditionally alongside [.visited], even though anchored-only instances
+     * never use it: lazily allocating it on first unanchored use was tried and measured 40-60% slower
+     * on unanchored searches (the case that actually prunes), for a memory saving that only applies
+     * to anchored-only instances. Not a good trade.
+     */
+    private val dead: LongArray
 
-  /** Moves the failed start's marks into {@link #dead} and clears them for the next start. */
-  private void foldVisitedIntoDead() {
-    if (visitedHi < visitedLo) {
-      return;
-    }
-    for (int w = visitedLo; w <= visitedHi; w++) {
-      dead[w] |= visited[w];
-      visited[w] = 0L;
-    }
-    if (visitedLo < deadLo) {
-      deadLo = visitedLo;
-    }
-    if (visitedHi > deadHi) {
-      deadHi = visitedHi;
-    }
-    visitedLo = Integer.MAX_VALUE;
-    visitedHi = -1;
-  }
+    /** Dirty word ranges of [.visited] and [.dead]; clears touch only these words.  */
+    private var visitedLo: Int
 
-  /** Pushes a job onto the stack, growing if needed. */
-  private void push(int instId, int pos) {
-    if (jobCount >= jobInstId.length) {
-      int newLen = jobInstId.length * 2;
-      jobInstId = Arrays.copyOf(jobInstId, newLen);
-      jobPos = Arrays.copyOf(jobPos, newLen);
-    }
-    jobInstId[jobCount] = instId;
-    jobPos[jobCount] = pos;
-    jobCount++;
-  }
+    private var visitedHi: Int
+    private var deadLo: Int
+    private var deadHi: Int
 
-  /** Charges every logical instruction, including instructions executed without a stack job. */
-  private boolean stepWithinBudget() {
-    if (WorkCounterConfig.ENABLED) {
-      WorkCounter.record();
-    }
-    return ++stepCount <= nextStepThreshold || onStepThresholdExceeded();
-  }
+    private var textSlots: Int
+    private val progSize: Int
 
-  private boolean onStepThresholdExceeded() {
-    if (stepCount > stepBudget) {
-      budgetExceeded = true;
-      return false;
-    }
-    pruneAcrossStarts = true;
-    unvisitedKindLimit = NOT_ALT;
-    nextStepThreshold = stepBudget;
-    return true;
-  }
+    /** Whether the current [.doSearch] prunes later starts with [.dead].  */
+    private var pruneAcrossStarts = false
 
-  /**
-   * Attempts a search starting from the given instruction and position. Returns true if a match is
-   * found (stored in {@link #bestMatch}).
-   */
-  private boolean trySearch(int startInst, int startPos) {
-    boolean matched = false;
+    /**
+     * Highest [.altKind] value that [.shouldVisit] accepts without touching the bitmaps:
+     * [.ALT] while cross-start pruning is inactive, [.NOT_ALT] once active.
+     */
+    private var unvisitedKindLimit: Byte
 
-    // Initialize captures and loop registers.
-    Arrays.fill(cap, -1);
-    if (ncap > 0) {
-      cap[0] = startPos;
-    }
-    if (loopRegs.length > 0) {
-      Arrays.fill(loopRegs, -1);
-    }
+    /**
+     * Step count at which [.trySearch] either activates cross-start pruning or trips [ ][.stepBudget]. Merging both checks keeps a single branch on the hot instruction loop.
+     */
+    private var nextStepThreshold: Long
 
-    // Seed the search.
-    jobCount = 0;
-    if (shouldVisit(startInst, startPos)) {
-      push(startInst, startPos);
-    }
+    /**
+     * Per-instruction kind for [.shouldVisit]: 0 = not an ALT, 1 = ALT, 2 = epsilon-cycle ALT.
+     */
+    private val altKind: ByteArray
 
-    while (jobCount > 0) {
-      jobCount--;
-      int id = jobInstId[jobCount];
-      int pos = jobPos[jobCount];
-      // Keep immediate continuations local. The stack contains deferred alternatives and
-      // register restores; every instruction still consumes the same logical work budget.
-      while (true) {
-        if (!stepWithinBudget()) {
-          return false;
-        }
+    /** Straight-line capture/consumer/capture sequences, or null when none exist.  */
+    private val captureRunes: Array<CaptureRune?>?
 
-        // Negative IDs are restore sentinels: cap or loopReg restore on backtrack.
-        // Capture sentinels use -(reg+1) where reg < ncap.
-        // Loop-reg sentinels use -(ncap+reg+1) where reg is the loop register index.
-        if (id < 0) {
-          int idx = -id - 1;
-          if (idx < ncap) {
-            cap[idx] = pos;
-          } else {
-            loopRegs[idx - ncap] = pos;
-          }
-          break;
-        }
+    /** Loop entry/check continuations, optionally including one adjacent capture write.  */
+    private val loopEntries: Array<LoopEntry?>?
 
-        Inst ip = instructions[id];
-        switch (ip.opCode) {
-          case InstOp.OP_FAIL -> {}
+    private val lazyRuneLoops: Array<LazyRuneLoop?>?
 
-          case InstOp.OP_ALT, InstOp.OP_ALT_MATCH -> {
-            Inst rune = greedyRunes == null ? null : greedyRunes[id];
-            if (rune != null) {
-              runGreedyLoop(id, ip, rune, pos);
-              if (budgetExceeded || windowExceeded) {
-                return false;
-              }
-              break;
-            }
-            LazyRuneLoop loop = lazyRuneLoops == null ? null : lazyRuneLoops[id];
-            if (loop != null) {
-              pos = skipFailedLazyExits(loop, id, pos);
-              if (pos < 0) {
-                if (budgetExceeded) {
-                  return false;
-                }
-                break;
-              }
-            }
-            // Push second alternative first (it will be tried if first fails).
-            if (shouldVisit(ip.out1, pos)) {
-              push(ip.out1, pos);
-            }
-            // Follow the first alternative immediately at higher priority.
-            if (shouldVisit(ip.out, pos)) {
-              id = ip.out;
-              continue;
-            }
-          }
+    /** Progress checks immediately following captures, or null when none exist.  */
+    private val captureProgressChecks: Array<Inst?>?
 
-          case InstOp.OP_NOP -> {
-            if (shouldVisit(ip.out, pos)) {
-              id = ip.out;
-              continue;
-            }
-          }
+    /** Consuming bodies of simple greedy loops, or null when none exist.  */
+    private val greedyRunes: Array<Inst?>?
 
-          case InstOp.OP_CAPTURE -> {
-            int reg = ip.arg;
-            if (reg < ncap) {
-              // Push restore sentinel: if we backtrack past this, undo the capture.
-              push(-(reg + 1), cap[reg]);
-              cap[reg] = pos;
-            }
-            CaptureRune fused = captureRunes == null ? null : captureRunes[id];
-            if (fused != null) {
-              // These two successors are not alternatives, assertions, or loop instructions.
-              // Execute the same writes/restores and budget charges without redispatching them.
-              // Charge each logical successor before continuation pruning, including revisits,
-              // so the budget conservatively accounts for all fused work.
-              if (!stepWithinBudget()) {
-                return false;
-              }
-              if (pos < endPos) {
-                int cp = WorkCounterConfig.ENABLED ? -1 : text.asciiAt(pos);
-                int nextPos = pos + 1;
-                if (cp < 0) {
-                  long decoded = text.decodeForward(pos);
-                  cp = InputScanner.codePoint(decoded);
-                  nextPos = InputScanner.position(decoded);
-                  if (speculative && nextPos > endPos) {
-                    windowExceeded = true;
-                    return false;
-                  }
-                }
-                Inst rune = fused.rune();
-                boolean matches =
-                    rune.opCode == InstOp.OP_CHAR_RANGE
-                        ? rune.matchesChar(cp)
-                        : rune.matchesCharClass(cp);
-                if (matches) {
-                  if (!stepWithinBudget()) {
-                    return false;
-                  }
-                  int endRegister = fused.endRegister();
-                  if (endRegister < ncap) {
-                    push(-(endRegister + 1), cap[endRegister]);
-                    cap[endRegister] = nextPos;
-                  }
-                  if (shouldVisit(fused.out(), nextPos)) {
-                    id = fused.out();
-                    pos = nextPos;
-                    continue;
-                  }
-                }
-              } else if (speculative && endPos < textLen) {
-                windowExceeded = true;
-                return false;
-              }
+    /** Current capture registers.  */
+    private var cap: IntArray
+
+    /** Current loop progress-check registers.  */
+    private val loopRegs: IntArray
+
+    /** Best match found so far.  */
+    private var bestMatch: IntArray?
+
+    /** Caller-owned or BitState-owned array that receives successful capture results.  */
+    private var matchResult: IntArray
+
+    /** Work-budget accounting for falling back when BitState backtracking is too expensive.  */
+    private var stepBudget: Long
+
+    private var stepCount: Long
+    private var budgetExceeded: Boolean
+    private var speculative = false
+    private var windowExceeded = false
+
+    /** Explicit job stack for backtracking.  */
+    private var jobInstId: IntArray
+
+    private var jobPos: IntArray
+    private var jobCount: Int
+    private var basePos: Int
+
+    /** Creates a fresh workspace. Passing null greedy-loop metadata uses ordinary ALT dispatch.  */
+    init {
+        this.instructions = prog.frozenInstructions()
+        this.text = text
+        this.textLen = text.length()
+        this.basePos = startPos
+        this.endPos = endPos
+        this.longest = longest
+        this.endMatch = endMatch || prog.anchorEnd()
+        this.ncap = ncap
+        this.textSlots = (endPos - basePos) + 2
+        this.progSize = prog.size()
+        this.graphemeContext = GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+
+        val cycleAlts = prog.epsilonCycleAlts()
+        this.altKind = ByteArray(progSize)
+        for (i in 0..<progSize) {
+            val instruction = prog.inst(i)
+            if (cycleAlts[i]) {
+                altKind[i] = CYCLE_ALT
             } else {
-              Inst check = captureProgressChecks == null ? null : captureProgressChecks[id];
-              if (check != null) {
-                // CAPTURE has already installed its undo. The adjacent check cannot be pruned,
-                // so execute it with the same work charge and register/alternative ordering.
+                val op = instruction.opCode
+                if (op == InstOp.Companion.OP_ALT || op == InstOp.Companion.OP_ALT_MATCH) {
+                    altKind[i] = ALT
+                }
+            }
+        }
+        this.captureRunes = prog.captureRunes()
+        this.loopEntries = prog.loopEntries()
+        this.lazyRuneLoops = prog.lazyRuneLoops()
+        this.captureProgressChecks = prog.captureProgressChecks()
+        this.greedyRunes = greedyRunes
+
+        val totalBits = progSize * textSlots
+        val visitedLen = (totalBits + 63) / 64
+        this.visited = LongArray(visitedLen)
+        this.dead = LongArray(visitedLen)
+        this.visitedLo = Integer.MAX_VALUE
+        this.visitedHi = -1
+        this.deadLo = Integer.MAX_VALUE
+        this.deadHi = -1
+
+        this.cap = IntArray(ncap)
+        Arrays.fill(cap, -1)
+        val nlr = prog.numLoopRegs()
+        this.loopRegs = IntArray(nlr)
+        if (nlr > 0) {
+            Arrays.fill(loopRegs, -1)
+        }
+
+        val maxJobs = Math.min(totalBits, 4096)
+        this.jobInstId = IntArray(maxJobs)
+        this.jobPos = IntArray(maxJobs)
+        this.jobCount = 0
+        this.stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size() * textSlots)
+        this.nextStepThreshold = this.stepBudget
+        this.unvisitedKindLimit = ALT
+        this.stepCount = 0
+        this.budgetExceeded = false
+    }
+
+    /**
+     * Returns true if (instId, pos) should be explored. Records every ALT reached once cross-start
+     * pruning is active so a failed start can prune later ones via [.dead]; within one start,
+     * only epsilon-cycle ALTs are blocked.
+     * 
+     * 
+     * Only ALT/ALT_MATCH instructions that participate in epsilon cycles are blocked on revisit.
+     * An epsilon cycle is a path from an ALT back to itself through only epsilon transitions (ALT,
+     * NOP, CAPTURE, EMPTY_WIDTH) — without any CHAR_RANGE to consume input. Only these can cause
+     * infinite loops.
+     * 
+     * 
+     * Non-cycle ALTs can be safely revisited. This is critical for nested quantifiers where an
+     * inner repetition (e.g., `.+?`) and an outer repetition (e.g., `*`) share the same
+     * ALT entry instruction. If the visited bitmap blocked the shared ALT, the outer repetition could
+     * not re-enter its body, causing a premature match.
+     * 
+     * 
+     * All other instruction types are always revisitable:
+     * 
+     * 
+     *  * MATCH — terminal, no outgoing edges
+     *  * FAIL — terminal, no outgoing edges
+     *  * CAPTURE, NOP, EMPTY_WIDTH — epsilon with a single outgoing edge, cannot form cycles alone
+     *  * CHAR_RANGE — consumes input (advances position), cannot form cycles
+     * 
+     * 
+     * 
+     * Kept tiny so C2 inlines the array-indexed fast exit across all call sites in [ ][.trySearch].
+     */
+    @MaxBytecodeSize(
+        value = 35, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. trySearch calls this from"
+                + " many sites. At 149 bytes it inflated the hot loop, one of the causes of the 36%"
+                + " short-search regression in #1116. Move new work into shouldVisitTracked.")
+    )
+    private fun shouldVisit(instId: Int, pos: Int): Boolean {
+        val kind = altKind[instId].toInt()
+        return kind <= unvisitedKindLimit || shouldVisitTracked(kind, instId, pos)
+    }
+
+    private fun shouldVisitTracked(kind: Int, instId: Int, pos: Int): Boolean {
+        val bit = (pos - basePos) * progSize + instId
+        val word = bit ushr 6
+        val mask = 1L shl (bit and 63)
+        if (pruneAcrossStarts && (dead[word] and mask) != 0L) {
+            return false // an earlier start already exhausted this pair without matching
+        }
+        val w = visited[word]
+        if ((w and mask) != 0L) {
+            // Cycle ALT: block the epsilon loop. Non-cycle ALT: revisitable, and already recorded.
+            return kind == ALT.toInt()
+        }
+        visited[word] = w or mask
+        if (word < visitedLo) {
+            visitedLo = word
+        }
+        if (word > visitedHi) {
+            visitedHi = word
+        }
+        return true
+    }
+
+    /** Moves the failed start's marks into [.dead] and clears them for the next start.  */
+    private fun foldVisitedIntoDead() {
+        if (visitedHi < visitedLo) {
+            return
+        }
+        for (w in visitedLo..visitedHi) {
+            dead[w] = dead[w] or visited[w]
+            visited[w] = 0L
+        }
+        if (visitedLo < deadLo) {
+            deadLo = visitedLo
+        }
+        if (visitedHi > deadHi) {
+            deadHi = visitedHi
+        }
+        visitedLo = Integer.MAX_VALUE
+        visitedHi = -1
+    }
+
+    /** Pushes a job onto the stack, growing if needed.  */
+    private fun push(instId: Int, pos: Int) {
+        if (jobCount >= jobInstId.length) {
+            val newLen: Int = jobInstId.length * 2
+            jobInstId = Arrays.copyOf(jobInstId, newLen)
+            jobPos = Arrays.copyOf(jobPos, newLen)
+        }
+        jobInstId[jobCount] = instId
+        jobPos[jobCount] = pos
+        jobCount++
+    }
+
+    /** Charges every logical instruction, including instructions executed without a stack job.  */
+    private fun stepWithinBudget(): Boolean {
+        if (WorkCounterConfig.ENABLED) {
+            record()
+        }
+        return ++stepCount <= nextStepThreshold || onStepThresholdExceeded()
+    }
+
+    private fun onStepThresholdExceeded(): Boolean {
+        if (stepCount > stepBudget) {
+            budgetExceeded = true
+            return false
+        }
+        pruneAcrossStarts = true
+        unvisitedKindLimit = NOT_ALT
+        nextStepThreshold = stepBudget
+        return true
+    }
+
+    /**
+     * Attempts a search starting from the given instruction and position. Returns true if a match is
+     * found (stored in [.bestMatch]).
+     */
+    private fun trySearch(startInst: Int, startPos: Int): Boolean {
+        var matched = false
+
+        // Initialize captures and loop registers.
+        Arrays.fill(cap, -1)
+        if (ncap > 0) {
+            cap[0] = startPos
+        }
+        if (loopRegs.length > 0) {
+            Arrays.fill(loopRegs, -1)
+        }
+
+        // Seed the search.
+        jobCount = 0
+        if (shouldVisit(startInst, startPos)) {
+            push(startInst, startPos)
+        }
+
+        while (jobCount > 0) {
+            jobCount--
+            var id = jobInstId[jobCount]
+            var pos = jobPos[jobCount]
+            // Keep immediate continuations local. The stack contains deferred alternatives and
+            // register restores; every instruction still consumes the same logical work budget.
+            while (true) {
                 if (!stepWithinBudget()) {
-                  return false;
+                    return false
                 }
-                int next = progressContinuation(check, pos);
-                if (next >= 0) {
-                  id = next;
-                  continue;
+
+                // Negative IDs are restore sentinels: cap or loopReg restore on backtrack.
+                // Capture sentinels use -(reg+1) where reg < ncap.
+                // Loop-reg sentinels use -(ncap+reg+1) where reg is the loop register index.
+                if (id < 0) {
+                    val idx = -id - 1
+                    if (idx < ncap) {
+                        cap[idx] = pos
+                    } else {
+                        loopRegs[idx - ncap] = pos
+                    }
+                    break
                 }
-              } else if (shouldVisit(ip.out, pos)) {
-                id = ip.out;
-                continue;
-              }
-            }
-          }
 
-          case InstOp.OP_EMPTY_WIDTH -> {
-            int curFlags = Nfa.emptyFlags(text, pos, prog.hasGraphemeSemantics(), graphemeContext);
-            if ((ip.arg & ~curFlags) == 0) {
-              if (shouldVisit(ip.out, pos)) {
-                id = ip.out;
-                continue;
-              }
-            }
-          }
+                val ip = instructions[id]
+                when (ip.opCode) {
+                    InstOp.Companion.OP_FAIL -> {}
+                    InstOp.Companion.OP_ALT, InstOp.Companion.OP_ALT_MATCH -> {
+                        val rune = if (greedyRunes == null) null else greedyRunes[id]
+                        if (rune != null) {
+                            runGreedyLoop(id, ip, rune, pos)
+                            if (budgetExceeded || windowExceeded) {
+                                return false
+                            }
+                            break
+                        }
+                        val loop = if (lazyRuneLoops == null) null else lazyRuneLoops[id]
+                        if (loop != null) {
+                            pos = skipFailedLazyExits(loop, id, pos)
+                            if (pos < 0) {
+                                if (budgetExceeded) {
+                                    return false
+                                }
+                                break
+                            }
+                        }
+                        // Push second alternative first (it will be tried if first fails).
+                        if (shouldVisit(ip.out1, pos)) {
+                            push(ip.out1, pos)
+                        }
+                        // Follow the first alternative immediately at higher priority.
+                        if (shouldVisit(ip.out, pos)) {
+                            id = ip.out
+                            continue
+                        }
+                    }
 
-          case InstOp.OP_LOOP_ENTER -> {
-            int reg = ip.arg;
-            push(-(ncap + reg + 1), loopRegs[reg]);
-            loopRegs[reg] = -1;
-            LoopEntry entry = loopEntries == null ? null : loopEntries[id];
-            if (entry != null) {
-              // The adjacent check observes the register just reset by this entry, so it must
-              // enter the body. Keep one restore of the original value: the intermediate -1
-              // cannot be observed by an alternative. Still charge both logical instructions.
-              if (!stepWithinBudget()) {
-                return false;
-              }
-              loopRegs[reg] = pos;
-              int capture = entry.captureRegister();
-              if (capture >= 0) {
-                if (!stepWithinBudget()) {
-                  return false;
+                    InstOp.Companion.OP_NOP -> {
+                        if (shouldVisit(ip.out, pos)) {
+                            id = ip.out
+                            continue
+                        }
+                    }
+
+                    InstOp.Companion.OP_CAPTURE -> {
+                        val reg = ip.arg
+                        if (reg < ncap) {
+                            // Push restore sentinel: if we backtrack past this, undo the capture.
+                            push(-(reg + 1), cap[reg])
+                            cap[reg] = pos
+                        }
+                        val fused = if (captureRunes == null) null else captureRunes[id]
+                        if (fused != null) {
+                            // These two successors are not alternatives, assertions, or loop instructions.
+                            // Execute the same writes/restores and budget charges without redispatching them.
+                            // Charge each logical successor before continuation pruning, including revisits,
+                            // so the budget conservatively accounts for all fused work.
+                            if (!stepWithinBudget()) {
+                                return false
+                            }
+                            if (pos < endPos) {
+                                var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
+                                var nextPos = pos + 1
+                                if (cp < 0) {
+                                    val decoded = text!!.decodeForward(pos)
+                                    cp = InputScanner.Companion.codePoint(decoded)
+                                    nextPos = InputScanner.Companion.position(decoded)
+                                    if (speculative && nextPos > endPos) {
+                                        windowExceeded = true
+                                        return false
+                                    }
+                                }
+                                val rune = fused.rune
+                                val matches =
+                                    if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE)
+                                        rune.matchesChar(cp)
+                                    else
+                                        rune.matchesCharClass(cp)
+                                if (matches) {
+                                    if (!stepWithinBudget()) {
+                                        return false
+                                    }
+                                    val endRegister = fused.endRegister
+                                    if (endRegister < ncap) {
+                                        push(-(endRegister + 1), cap[endRegister])
+                                        cap[endRegister] = nextPos
+                                    }
+                                    if (shouldVisit(fused.out, nextPos)) {
+                                        id = fused.out
+                                        pos = nextPos
+                                        continue
+                                    }
+                                }
+                            } else if (speculative && endPos < textLen) {
+                                windowExceeded = true
+                                return false
+                            }
+                        } else {
+                            val check = if (captureProgressChecks == null) null else captureProgressChecks[id]
+                            if (check != null) {
+                                // CAPTURE has already installed its undo. The adjacent check cannot be pruned,
+                                // so execute it with the same work charge and register/alternative ordering.
+                                if (!stepWithinBudget()) {
+                                    return false
+                                }
+                                val next = progressContinuation(check, pos)
+                                if (next >= 0) {
+                                    id = next
+                                    continue
+                                }
+                            } else if (shouldVisit(ip.out, pos)) {
+                                id = ip.out
+                                continue
+                            }
+                        }
+                    }
+
+                    InstOp.Companion.OP_EMPTY_WIDTH -> {
+                        val curFlags: Int = emptyFlags(text, pos, prog.hasGraphemeSemantics(), graphemeContext)
+                        if ((ip.arg and curFlags.inv()) == 0) {
+                            if (shouldVisit(ip.out, pos)) {
+                                id = ip.out
+                                continue
+                            }
+                        }
+                    }
+
+                    InstOp.Companion.OP_LOOP_ENTER -> {
+                        val reg = ip.arg
+                        push(-(ncap + reg + 1), loopRegs[reg])
+                        loopRegs[reg] = -1
+                        val entry = if (loopEntries == null) null else loopEntries[id]
+                        if (entry != null) {
+                            // The adjacent check observes the register just reset by this entry, so it must
+                            // enter the body. Keep one restore of the original value: the intermediate -1
+                            // cannot be observed by an alternative. Still charge both logical instructions.
+                            if (!stepWithinBudget()) {
+                                return false
+                            }
+                            loopRegs[reg] = pos
+                            val capture = entry.captureRegister
+                            if (capture >= 0) {
+                                if (!stepWithinBudget()) {
+                                    return false
+                                }
+                                if (capture < ncap) {
+                                    push(-(capture + 1), cap[capture])
+                                    cap[capture] = pos
+                                }
+                            }
+                            if (shouldVisit(entry.out, pos)) {
+                                id = entry.out
+                                continue
+                            }
+                            break
+                        }
+                        if (shouldVisit(ip.out, pos)) {
+                            id = ip.out
+                            continue
+                        }
+                    }
+
+                    InstOp.Companion.OP_PROGRESS_CHECK -> {
+                        val next = progressContinuation(ip, pos)
+                        if (next >= 0) {
+                            id = next
+                            continue
+                        }
+                    }
+
+                    InstOp.Companion.OP_CHAR_RANGE -> {
+                        if (pos < endPos) {
+                            var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
+                            var nextPos = pos + 1
+                            if (cp < 0) {
+                                val decoded = text!!.decodeForward(pos)
+                                cp = InputScanner.Companion.codePoint(decoded)
+                                nextPos = InputScanner.Companion.position(decoded)
+                                if (speculative && nextPos > endPos) {
+                                    windowExceeded = true
+                                    return false
+                                }
+                            }
+                            if (ip.matchesChar(cp)) {
+                                if (shouldVisit(ip.out, nextPos)) {
+                                    id = ip.out
+                                    pos = nextPos
+                                    continue
+                                }
+                            }
+                        } else if (speculative && endPos < textLen) {
+                            windowExceeded = true
+                            return false
+                        }
+                    }
+
+                    InstOp.Companion.OP_CHAR_CLASS -> {
+                        if (pos < endPos) {
+                            var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
+                            var nextPos = pos + 1
+                            if (cp < 0) {
+                                val decoded = text!!.decodeForward(pos)
+                                cp = InputScanner.Companion.codePoint(decoded)
+                                nextPos = InputScanner.Companion.position(decoded)
+                                if (speculative && nextPos > endPos) {
+                                    windowExceeded = true
+                                    return false
+                                }
+                            }
+                            if (ip.matchesCharClass(cp)) {
+                                if (shouldVisit(ip.out, nextPos)) {
+                                    id = ip.out
+                                    pos = nextPos
+                                    continue
+                                }
+                            }
+                        } else if (speculative && endPos < textLen) {
+                            windowExceeded = true
+                            return false
+                        }
+                    }
+
+                    InstOp.Companion.OP_MATCH -> {
+                        if (endMatch && pos != endPos) {
+                            // $ (dollarAnchorEnd) allows ending before a trailing line terminator at the actual
+                            // text end. Use text.length() (not endPos) because dollarAnchorEnd is a property of
+                            // the text boundary, not the search range.
+                            if (!prog.dollarAnchorEnd()
+                                || !Nfa.Companion.isAtTrailingLineTerminator(text, pos, prog.dollarAnchorUnixLines())
+                            ) {
+                                break // must match at the end boundary
+                            }
+                        }
+                        if (ncap > 1) {
+                            cap[1] = pos // match end
+                        }
+
+                        if (!matched || (longest && pos > bestMatch!![1])) {
+                            matched = true
+                            System.arraycopy(cap, 0, matchResult, 0, ncap)
+                            bestMatch = matchResult
+                        }
+
+                        if (!longest) {
+                            return true // first match is sufficient
+                        }
+                    }
+
+                    else -> {}
                 }
-                if (capture < ncap) {
-                  push(-(capture + 1), cap[capture]);
-                  cap[capture] = pos;
+                break
+            }
+        }
+
+        return matched
+    }
+
+    /**
+     * Executes a greedy ALT/consumer cycle without redispatching each instruction. The entry ALT has
+     * already been charged. Keep every deferred exit and visitation in the original order, and charge
+     * each logical instruction so pruning activation and the work limit remain unchanged. Keep the
+     * helper small because HotSpot can inline it into the main interpreter loop when it is hot.
+     */
+    private fun runGreedyLoop(id: Int, alt: Inst, rune: Inst, pos: Int) {
+        var pos = pos
+        while (true) {
+            if (shouldVisit(alt.out1, pos)) {
+                push(alt.out1, pos)
+            }
+            if (!shouldVisit(alt.out, pos) || !stepWithinBudget()) {
+                return
+            }
+            if (pos >= endPos) {
+                if (speculative && endPos < textLen) {
+                    windowExceeded = true
                 }
-              }
-              if (shouldVisit(entry.out(), pos)) {
-                id = entry.out();
-                continue;
-              }
-              break;
+                return
             }
-            if (shouldVisit(ip.out, pos)) {
-              id = ip.out;
-              continue;
-            }
-          }
-
-          case InstOp.OP_PROGRESS_CHECK -> {
-            int next = progressContinuation(ip, pos);
-            if (next >= 0) {
-              id = next;
-              continue;
-            }
-          }
-
-          case InstOp.OP_CHAR_RANGE -> {
-            if (pos < endPos) {
-              int cp = WorkCounterConfig.ENABLED ? -1 : text.asciiAt(pos);
-              int nextPos = pos + 1;
-              if (cp < 0) {
-                long decoded = text.decodeForward(pos);
-                cp = InputScanner.codePoint(decoded);
-                nextPos = InputScanner.position(decoded);
+            var cp = if (WorkCounterConfig.ENABLED) -1 else text!!.asciiAt(pos)
+            var nextPos = pos + 1
+            if (cp < 0) {
+                val decoded = text!!.decodeForward(pos)
+                cp = InputScanner.Companion.codePoint(decoded)
+                nextPos = InputScanner.Companion.position(decoded)
                 if (speculative && nextPos > endPos) {
-                  windowExceeded = true;
-                  return false;
+                    windowExceeded = true
+                    return
                 }
-              }
-              if (ip.matchesChar(cp)) {
-                if (shouldVisit(ip.out, nextPos)) {
-                  id = ip.out;
-                  pos = nextPos;
-                  continue;
+            }
+            val matches =
+                if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE) rune.matchesChar(cp) else rune.matchesCharClass(cp)
+            if (!matches || !shouldVisit(id, nextPos) || !stepWithinBudget()) {
+                return
+            }
+            pos = nextPos
+        }
+    }
+
+    /** Skips only exits that necessarily fail before any assertion or branch can be reached.  */
+    private fun skipFailedLazyExits(loop: LazyRuneLoop, id: Int, pos: Int): Int {
+        var pos = pos
+        val rune = loop.rune
+        var steps = 0
+        while (pos < endPos) {
+            val cp = text!!.asciiAt(pos)
+            if (cp < 0 || cp == loop.exitChar || !(if (rune.opCode == InstOp.Companion.OP_CHAR_RANGE)
+                    rune.matchesChar(cp)
+                else
+                    rune.matchesCharClass(cp))
+            ) {
+                break
+            }
+            if (steps == 0) {
+                // The failed literal and the body each take one step. Walk the compiled exit once
+                // to count its NOPs, captures, and restores of active capture registers.
+                steps = 2
+                var exit = instructions[loop.exitStart]
+                while (exit.opCode == InstOp.Companion.OP_CAPTURE || exit.opCode == InstOp.Companion.OP_NOP) {
+                    steps++
+                    if (exit.opCode == InstOp.Companion.OP_CAPTURE && exit.arg < ncap) {
+                        steps++
+                    }
+                    exit = instructions[exit.out]
                 }
-              }
-            } else if (speculative && endPos < textLen) {
-              windowExceeded = true;
-              return false;
             }
-          }
-
-          case InstOp.OP_CHAR_CLASS -> {
-            if (pos < endPos) {
-              int cp = WorkCounterConfig.ENABLED ? -1 : text.asciiAt(pos);
-              int nextPos = pos + 1;
-              if (cp < 0) {
-                long decoded = text.decodeForward(pos);
-                cp = InputScanner.codePoint(decoded);
-                nextPos = InputScanner.position(decoded);
-                if (speculative && nextPos > endPos) {
-                  windowExceeded = true;
-                  return false;
-                }
-              }
-              if (ip.matchesCharClass(cp)) {
-                if (shouldVisit(ip.out, nextPos)) {
-                  id = ip.out;
-                  pos = nextPos;
-                  continue;
-                }
-              }
-            } else if (speculative && endPos < textLen) {
-              windowExceeded = true;
-              return false;
+            if (WorkCounterConfig.ENABLED) {
+                // The interpreter decodes the byte once for the failed literal and once for the body.
+                WorkCounter.record((steps + (if (text is Utf8InputScanner) 2 else 0)).toLong())
             }
-          }
-
-          case InstOp.OP_MATCH -> {
-            if (endMatch && pos != endPos) {
-              // $ (dollarAnchorEnd) allows ending before a trailing line terminator at the actual
-              // text end. Use text.length() (not endPos) because dollarAnchorEnd is a property of
-              // the text boundary, not the search range.
-              if (!prog.dollarAnchorEnd()
-                  || !Nfa.isAtTrailingLineTerminator(text, pos, prog.dollarAnchorUnixLines())) {
-                break; // must match at the end boundary
-              }
+            // No tracked ALT intervenes between the two consumers. Check the budget before the
+            // next ALT visit so that it observes the same pruning state as ordinary dispatch.
+            stepCount += steps.toLong()
+            if (stepCount > nextStepThreshold && !onStepThresholdExceeded()) {
+                return -1
             }
-            if (ncap > 1) {
-              cap[1] = pos; // match end
+            pos++
+            // Keep cross-start pruning and logical ALT charges identical to the interpreter. At the
+            // window edge resume ordinary dispatch, which retains speculative bailout semantics.
+            if (!shouldVisit(id, pos) || !stepWithinBudget()) {
+                return -1
             }
-
-            if (!matched || (longest && pos > bestMatch[1])) {
-              matched = true;
-              System.arraycopy(cap, 0, matchResult, 0, ncap);
-              bestMatch = matchResult;
-            }
-
-            if (!longest) {
-              return true; // first match is sufficient
-            }
-          }
-
-          default -> {}
         }
-        break;
-      }
+        return pos
     }
 
-    return matched;
-  }
-
-  /**
-   * Executes a greedy ALT/consumer cycle without redispatching each instruction. The entry ALT has
-   * already been charged. Keep every deferred exit and visitation in the original order, and charge
-   * each logical instruction so pruning activation and the work limit remain unchanged. Keep the
-   * helper small because HotSpot can inline it into the main interpreter loop when it is hot.
-   */
-  private void runGreedyLoop(int id, Inst alt, Inst rune, int pos) {
-    while (true) {
-      if (shouldVisit(alt.out1, pos)) {
-        push(alt.out1, pos);
-      }
-      if (!shouldVisit(alt.out, pos) || !stepWithinBudget()) {
-        return;
-      }
-      if (pos >= endPos) {
-        if (speculative && endPos < textLen) {
-          windowExceeded = true;
+    /** Executes one progress check, returning a continuation or -1 when none is eligible.  */
+    private fun progressContinuation(check: Inst, pos: Int): Int {
+        val reg = check.arg
+        val saved = loopRegs[reg]
+        if (saved == -1) {
+            // First visit: must enter the body at least once.
+            push(-(ncap + reg + 1), saved)
+            loopRegs[reg] = pos
+            return if (shouldVisit(check.out, pos)) check.out else -1
         }
-        return;
-      }
-      int cp = WorkCounterConfig.ENABLED ? -1 : text.asciiAt(pos);
-      int nextPos = pos + 1;
-      if (cp < 0) {
-        long decoded = text.decodeForward(pos);
-        cp = InputScanner.codePoint(decoded);
-        nextPos = InputScanner.position(decoded);
-        if (speculative && nextPos > endPos) {
-          windowExceeded = true;
-          return;
+        if (saved == pos) {
+            // Zero-width body match: only exit.
+            return if (shouldVisit(check.out1, pos)) check.out1 else -1
         }
-      }
-      boolean matches =
-          rune.opCode == InstOp.OP_CHAR_RANGE ? rune.matchesChar(cp) : rune.matchesCharClass(cp);
-      if (!matches || !shouldVisit(id, nextPos) || !stepWithinBudget()) {
-        return;
-      }
-      pos = nextPos;
-    }
-  }
-
-  /** Skips only exits that necessarily fail before any assertion or branch can be reached. */
-  private int skipFailedLazyExits(LazyRuneLoop loop, int id, int pos) {
-    Inst rune = loop.rune();
-    int steps = 0;
-    while (pos < endPos) {
-      int cp = text.asciiAt(pos);
-      if (cp < 0
-          || cp == loop.exitChar()
-          || !(rune.opCode == InstOp.OP_CHAR_RANGE
-              ? rune.matchesChar(cp)
-              : rune.matchesCharClass(cp))) {
-        break;
-      }
-      if (steps == 0) {
-        // The failed literal and the body each take one step. Walk the compiled exit once
-        // to count its NOPs, captures, and restores of active capture registers.
-        steps = 2;
-        Inst exit = instructions[loop.exitStart()];
-        while (exit.opCode == InstOp.OP_CAPTURE || exit.opCode == InstOp.OP_NOP) {
-          steps++;
-          if (exit.opCode == InstOp.OP_CAPTURE && exit.arg < ncap) {
-            steps++;
-          }
-          exit = instructions[exit.out];
+        push(-(ncap + reg + 1), saved)
+        loopRegs[reg] = pos
+        val preferred = if (check.foldCase) check.out1 else check.out
+        val deferred = if (check.foldCase) check.out else check.out1
+        if (shouldVisit(deferred, pos)) {
+            push(deferred, pos)
         }
-      }
-      if (WorkCounterConfig.ENABLED) {
-        // The interpreter decodes the byte once for the failed literal and once for the body.
-        WorkCounter.record(steps + (text instanceof Utf8InputScanner ? 2 : 0));
-      }
-      // No tracked ALT intervenes between the two consumers. Check the budget before the
-      // next ALT visit so that it observes the same pruning state as ordinary dispatch.
-      stepCount += steps;
-      if (stepCount > nextStepThreshold && !onStepThresholdExceeded()) {
-        return -1;
-      }
-      pos++;
-      // Keep cross-start pruning and logical ALT charges identical to the interpreter. At the
-      // window edge resume ordinary dispatch, which retains speculative bailout semantics.
-      if (!shouldVisit(id, pos) || !stepWithinBudget()) {
-        return -1;
-      }
+        return if (shouldVisit(preferred, pos)) preferred else -1
     }
-    return pos;
-  }
 
-  /** Executes one progress check, returning a continuation or -1 when none is eligible. */
-  private int progressContinuation(Inst check, int pos) {
-    int reg = check.arg;
-    int saved = loopRegs[reg];
-    if (saved == -1) {
-      // First visit: must enter the body at least once.
-      push(-(ncap + reg + 1), saved);
-      loopRegs[reg] = pos;
-      return shouldVisit(check.out, pos) ? check.out : -1;
+    /** Returns whether the previous search stopped because BitState exceeded its work budget.  */
+    fun budgetExceeded(): Boolean {
+        return budgetExceeded
     }
-    if (saved == pos) {
-      // Zero-width body match: only exit.
-      return shouldVisit(check.out1, pos) ? check.out1 : -1;
-    }
-    push(-(ncap + reg + 1), saved);
-    loopRegs[reg] = pos;
-    int preferred = check.foldCase ? check.out1 : check.out;
-    int deferred = check.foldCase ? check.out : check.out1;
-    if (shouldVisit(deferred, pos)) {
-      push(deferred, pos);
-    }
-    return shouldVisit(preferred, pos) ? preferred : -1;
-  }
 
-  /** Returns whether the previous search stopped because BitState exceeded its work budget. */
-  boolean budgetExceeded() {
-    return budgetExceeded;
-  }
-
-  /** Returns whether the last speculative search encountered an unresolved path. */
-  boolean windowExceeded() {
-    return windowExceeded;
-  }
-
-  /** Returns the current work budget. Package-private for testing. */
-  long stepBudgetForTesting() {
-    return stepBudget;
-  }
-
-  /** Returns the logical instruction charges from the last search. */
-  long stepCountForTesting() {
-    return stepCount;
-  }
-
-  /**
-   * Returns whether this BitState can be reused for the given parameters. Reuse is possible when
-   * the program is the same and the search buffers are large enough for the requested range.
-   * Capture storage can grow separately when a group-zero search is followed by capture extraction.
-   */
-  boolean canReuse(Prog prog, InputScanner text, int startPos, int endPos) {
-    if (this.prog != prog) {
-      return false;
+    /** Returns whether the last speculative search encountered an unresolved path.  */
+    fun windowExceeded(): Boolean {
+        return windowExceeded
     }
-    int newTextSlots = (endPos - startPos) + 2;
-    int totalBits = prog.size() * newTextSlots;
-    int requiredVisitedLen = (totalBits + 63) / 64;
-    return visited.length >= requiredVisitedLen && jobInstId.length >= Math.min(totalBits, 4096);
-  }
 
-  /** Clears input-dependent references before this object enters the Pattern-level reuse cache. */
-  void releaseInput() {
-    text = null;
-    graphemeContext = null;
-  }
+    /** Returns the current work budget. Package-private for testing.  */
+    fun stepBudgetForTesting(): Long {
+        return stepBudget
+    }
 
-  /**
-   * Resets this BitState for a new search, clearing the visited bitmap and capture arrays without
-   * reallocating search buffers. Capture storage grows on demand. The caller must verify {@link
-   * #canReuse} first.
-   */
-  private void reset(
-      InputScanner text, int startPos, int endPos, int ncap, boolean longest, boolean endMatch) {
-    this.text = text;
-    this.textLen = text.length();
-    this.basePos = startPos;
-    this.endPos = endPos;
-    this.longest = longest;
-    this.endMatch = endMatch || prog.anchorEnd();
-    this.ncap = ncap;
-    this.textSlots = (endPos - basePos) + 2;
-    this.graphemeContext = GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics());
-    this.bestMatch = null;
-    this.jobCount = 0;
-    if (visitedHi >= visitedLo) {
-      Arrays.fill(visited, visitedLo, visitedHi + 1, 0L);
-      visitedLo = Integer.MAX_VALUE;
-      visitedHi = -1;
+    /** Returns the logical instruction charges from the last search.  */
+    fun stepCountForTesting(): Long {
+        return stepCount
     }
-    if (deadHi >= deadLo) {
-      Arrays.fill(dead, deadLo, deadHi + 1, 0L);
-      deadLo = Integer.MAX_VALUE;
-      deadHi = -1;
+
+    /**
+     * Returns whether this BitState can be reused for the given parameters. Reuse is possible when
+     * the program is the same and the search buffers are large enough for the requested range.
+     * Capture storage can grow separately when a group-zero search is followed by capture extraction.
+     */
+    fun canReuse(prog: Prog, text: InputScanner?, startPos: Int, endPos: Int): Boolean {
+        if (this.prog != prog) {
+            return false
+        }
+        val newTextSlots = (endPos - startPos) + 2
+        val totalBits = prog.size() * newTextSlots
+        val requiredVisitedLen = (totalBits + 63) / 64
+        return visited.length >= requiredVisitedLen && jobInstId.length >= Math.min(totalBits, 4096)
     }
-    if (cap.length < ncap) {
-      cap = new int[ncap];
+
+    /** Clears input-dependent references before this object enters the Pattern-level reuse cache.  */
+    fun releaseInput() {
+        text = null
+        graphemeContext = null
     }
-    Arrays.fill(cap, 0, ncap, -1);
-    if (loopRegs.length > 0) {
-      Arrays.fill(loopRegs, -1);
+
+    /**
+     * Resets this BitState for a new search, clearing the visited bitmap and capture arrays without
+     * reallocating search buffers. Capture storage grows on demand. The caller must verify [ ][.canReuse] first.
+     */
+    private fun reset(
+        text: InputScanner, startPos: Int, endPos: Int, ncap: Int, longest: Boolean, endMatch: Boolean
+    ) {
+        this.text = text
+        this.textLen = text.length()
+        this.basePos = startPos
+        this.endPos = endPos
+        this.longest = longest
+        this.endMatch = endMatch || prog.anchorEnd()
+        this.ncap = ncap
+        this.textSlots = (endPos - basePos) + 2
+        this.graphemeContext = GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+        this.bestMatch = null
+        this.jobCount = 0
+        if (visitedHi >= visitedLo) {
+            Arrays.fill(visited, visitedLo, visitedHi + 1, 0L)
+            visitedLo = Integer.MAX_VALUE
+            visitedHi = -1
+        }
+        if (deadHi >= deadLo) {
+            Arrays.fill(dead, deadLo, deadHi + 1, 0L)
+            deadLo = Integer.MAX_VALUE
+            deadHi = -1
+        }
+        if (cap.length < ncap) {
+            cap = IntArray(ncap)
+        }
+        Arrays.fill(cap, 0, ncap, -1)
+        if (loopRegs.length > 0) {
+            Arrays.fill(loopRegs, -1)
+        }
     }
-  }
+
+    companion object {
+        /** Default speculative consumption window when no later DFA end hint is available.  */
+        const val SPECULATIVE_WINDOW_SIZE: Int = 256
+
+        /** Maximum consumption window for a speculative search sized by a forward DFA hint.  */
+        const val MAX_HINTED_WINDOW_SIZE: Int = 2048
+
+        /** Maximum bitmap size in bits. Limits the product of prog size × text length.  */
+        private val MAX_BITMAP_BITS = 256 * 1024
+
+        /** Maximum BitState jobs to run per instruction/position slot before falling back to NFA.  */
+        private const val MAX_WORK_PER_SLOT = 8
+
+        /**
+         * Step count at which multi-start searches begin recording non-cycle ALTs for cross-start
+         * pruning. Short searches that finish before this bound skip bitmap maintenance entirely, while
+         * long failing runs activate pruning within the first start and stay linear overall.
+         */
+        private const val PRUNE_ACTIVATION_STEPS = 64L
+
+        /**
+         * Returns the maximum text length (in chars) for which BitState can be used with the given
+         * program, or -1 if the program is too large for BitState.
+         */
+        fun maxTextSize(prog: Prog): Int {
+            val instCount = prog.size()
+            if (instCount == 0) {
+                return -1
+            }
+            return MAX_BITMAP_BITS / instCount - 1
+        }
+
+        /**
+         * Searches for a match using bit-state backtracking, starting from position 0.
+         * 
+         * @param prog the compiled program
+         * @param text the input text
+         * @param anchored if true, match must start at position 0
+         * @param longest if true, find the longest match; otherwise find the first (greedy) match
+         * @param endMatch if true, match must extend to end of text
+         * @param nsubmatch number of submatch groups to track (including group 0)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match
+         */
+        fun search(
+            prog: Prog, text: String, anchored: Boolean, longest: Boolean, endMatch: Boolean, nsubmatch: Int
+        ): IntArray? {
+            return search(prog, text, 0, text.length(), anchored, longest, endMatch, nsubmatch)
+        }
+
+        /**
+         * Searches for a match using bit-state backtracking, starting from the specified position.
+         * 
+         * @param prog the compiled program
+         * @param text the full input text
+         * @param startPos the char index in `text` at which to begin searching
+         * @param anchored if true, match must start at `startPos`
+         * @param longest if true, find the longest match; otherwise find the first (greedy) match
+         * @param endMatch if true, match must extend to end of text
+         * @param nsubmatch number of submatch groups to track (including group 0)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match. Positions are char
+         * indices into the full text.
+         */
+        fun search(
+            prog: Prog,
+            text: String,
+            startPos: Int,
+            anchored: Boolean,
+            longest: Boolean,
+            endMatch: Boolean,
+            nsubmatch: Int
+        ): IntArray? {
+            return search(prog, text, startPos, text.length(), anchored, longest, endMatch, nsubmatch)
+        }
+
+        /**
+         * Searches for a match using bit-state backtracking, with bounded search range.
+         * 
+         * @param prog the compiled program
+         * @param text the full input text
+         * @param startPos the char index in `text` at which to begin searching
+         * @param searchLimit upper bound on where to try start positions; only positions up to this index
+         * are tried. The inner search may still match characters beyond this position. Use `text.length()` for unbounded search.
+         * @param anchored if true, match must start at `startPos`
+         * @param longest if true, find the longest match; otherwise find the first (greedy) match
+         * @param endMatch if true, match must extend to end of text
+         * @param nsubmatch number of submatch groups to track (including group 0)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match. Positions are char
+         * indices into the full text.
+         */
+        fun search(
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            anchored: Boolean,
+            longest: Boolean,
+            endMatch: Boolean,
+            nsubmatch: Int
+        ): IntArray? {
+            return search(null, prog, text, startPos, searchLimit, anchored, longest, endMatch, nsubmatch)
+        }
+
+        /**
+         * Searches using bit-state backtracking, writing successful captures into `resultBuffer`
+         * when it is large enough. This keeps the mutable backtracking capture registers separate from
+         * the returned result while allowing tight find loops to avoid one result-array allocation per
+         * match.
+         */
+        /**
+         * Searches using bit-state backtracking, optionally reusing a cached instance to avoid
+         * allocations. If `cached` is non-null and its arrays are large enough for the current
+         * text, it is reset and reused; otherwise a new instance is created.
+         * 
+         * @param cached a previously created BitState to reuse, or null
+         * @param prog the compiled program
+         * @param text the full input text
+         * @param startPos the char index at which to begin searching
+         * @param searchLimit upper bound on start positions to try
+         * @param anchored if true, match must start at `startPos`
+         * @param longest if true, find the longest match
+         * @param endMatch if true, match must extend to end of text
+         * @param nsubmatch number of submatch groups to track (including group 0)
+         * @return submatch positions as `int[2*nsubmatch]`, or null if no match
+         */
+        @JvmOverloads
+        fun search(
+            cached: BitState?,
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            searchLimit: Int,
+            anchored: Boolean,
+            longest: Boolean,
+            endMatch: Boolean,
+            nsubmatch: Int,
+            resultBuffer: IntArray? = null
+        ): IntArray? {
+            return search(
+                cached,
+                prog,
+                StringInputScanner(text),
+                startPos,
+                searchLimit,
+                anchored,
+                longest,
+                endMatch,
+                nsubmatch,
+                resultBuffer
+            )
+        }
+
+        fun search(
+            cached: BitState?,
+            prog: Prog,
+            text: InputScanner,
+            startPos: Int,
+            searchLimit: Int,
+            anchored: Boolean,
+            longest: Boolean,
+            endMatch: Boolean,
+            nsubmatch: Int,
+            resultBuffer: IntArray?
+        ): IntArray? {
+            var anchored = anchored
+            var endMatch = endMatch
+            val textLen = text.length()
+            val maxLen: Int = maxTextSize(prog)
+            if (maxLen < 0 || textLen > maxLen) {
+                return null // text too large for BitState
+            }
+
+            if (prog.anchorStart()) {
+                anchored = true
+            }
+            if (prog.anchorEnd()) {
+                endMatch = true
+            }
+
+            val ncap = 2 * Math.max(nsubmatch, 1)
+            val bs: BitState?
+            if (cached != null && cached.canReuse(prog, text, startPos, textLen)) {
+                bs = cached
+                bs.reset(text, startPos, textLen, ncap, longest, endMatch)
+            } else {
+                bs = BitState(prog, text, startPos, textLen, ncap, longest, endMatch, prog.greedyRunes())
+            }
+
+            return bs.doSearch(startPos, searchLimit, anchored, resultBuffer)
+        }
+
+        /**
+         * Returns a BitState instance suitable for the given parameters, either by resetting `cached` (if compatible) or by creating a new one.
+         */
+        fun getOrCreate(
+            cached: BitState?,
+            prog: Prog,
+            text: String?,
+            startPos: Int,
+            endPos: Int,
+            ncap: Int,
+            longest: Boolean,
+            endMatch: Boolean
+        ): BitState {
+            return getOrCreate(
+                cached, prog, StringInputScanner(text), startPos, endPos, ncap, longest, endMatch
+            )
+        }
+
+        /**
+         * Returns a BitState instance suitable for the given parameters, either by resetting `cached` (if compatible) or by creating a new one.
+         */
+        fun getOrCreate(
+            cached: BitState?,
+            prog: Prog,
+            text: InputScanner,
+            startPos: Int,
+            endPos: Int,
+            ncap: Int,
+            longest: Boolean,
+            endMatch: Boolean
+        ): BitState {
+            if (cached != null && cached.canReuse(prog, text, startPos, endPos)) {
+                cached.reset(text, startPos, endPos, ncap, longest, endMatch)
+                return cached
+            }
+            return BitState(prog, text, startPos, endPos, ncap, longest, endMatch, prog.greedyRunes())
+        }
+
+        private const val NOT_ALT: Byte = 0
+        private const val ALT: Byte = 1
+        private const val CYCLE_ALT: Byte = 2
+    }
 }

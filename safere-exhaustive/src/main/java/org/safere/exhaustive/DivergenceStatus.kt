@@ -2,12 +2,11 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.exhaustive
 
-package org.safere.exhaustive;
-
-/** Classification status for exhaustive-sweep divergences. */
-enum DivergenceStatus {
-  KNOWN_INTENTIONAL,
-  EXPECTED_ZERO,
-  UNKNOWN
+/** Classification status for exhaustive-sweep divergences.  */
+internal enum class DivergenceStatus {
+    KNOWN_INTENTIONAL,
+    EXPECTED_ZERO,
+    UNKNOWN
 }

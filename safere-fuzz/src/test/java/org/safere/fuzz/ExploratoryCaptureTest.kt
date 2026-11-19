@@ -2,69 +2,75 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
+import org.safere.Pattern
+import org.safere.fuzz.FuzzSupport.MatcherPair
+import java.util.function.Function
+import java.util.regex.MatchResult
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.junit.jupiter.api.Test;
-
-/** Intentional reproductions are model tests, not passing differential seeds. */
-final class ExploratoryCaptureTest {
-  @Test
-  void failedStartCapturesFollowSafeReModelAndRemainExploratoryFindings() {
-    for (String regex : new String[] {"(?:(a){1})*$", "(?:(?<item>a){2})*$"}) {
-      var matcher = org.safere.Pattern.compile(regex).matcher("aab");
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.start()).isEqualTo(3);
-      assertThat(matcher.group(1)).isNull();
-      assertThat(matcher.start(1)).isEqualTo(-1);
-      assertThat(matcher.end(1)).isEqualTo(-1);
-      assertThatThrownBy(() -> FuzzSupport.compileOrSkip(regex, 0).matcher("aab").find())
-          .isInstanceOf(AssertionError.class)
-          .hasMessageContaining("divergence");
+/** Intentional reproductions are model tests, not passing differential seeds.  */
+internal class ExploratoryCaptureTest {
+    @Test
+    fun failedStartCapturesFollowSafeReModelAndRemainExploratoryFindings() {
+        for (regex in arrayOf<String>("(?:(a){1})*$", "(?:(?<item>a){2})*$")) {
+            val matcher = Pattern.compile(regex).matcher("aab")
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.start()).isEqualTo(3)
+            Assertions.assertThat(matcher.group(1)).isNull()
+            Assertions.assertThat(matcher.start(1)).isEqualTo(-1)
+            Assertions.assertThat(matcher.end(1)).isEqualTo(-1)
+            Assertions.assertThatThrownBy(ThrowingCallable {
+                FuzzSupport.compileOrSkip(regex, 0).matcher("aab").find()
+            })
+                .isInstanceOf(AssertionError::class.java)
+                .hasMessageContaining("divergence")
+        }
     }
-  }
 
-  @Test
-  void sameStartCaptureResidueRemainsAVisibleFinding() {
-    String regex = "(?:(?:())*{0}{1}?{1}|a).";
-    var matcher = org.safere.Pattern.compile(regex).matcher("ab");
-    assertThat(matcher.matches()).isTrue();
-    assertThat(matcher.group(1)).isNull();
-    assertThatThrownBy(() -> FuzzSupport.compileOrSkip(regex, 0).matcher("ab").matches())
-        .isInstanceOf(AssertionError.class);
-  }
+    @Test
+    fun sameStartCaptureResidueRemainsAVisibleFinding() {
+        val regex = "(?:(?:())*{0}{1}?{1}|a)."
+        val matcher = Pattern.compile(regex).matcher("ab")
+        Assertions.assertThat(matcher.matches()).isTrue()
+        Assertions.assertThat(matcher.group(1)).isNull()
+        Assertions.assertThatThrownBy(ThrowingCallable { FuzzSupport.compileOrSkip(regex, 0).matcher("ab").matches() })
+            .isInstanceOf(AssertionError::class.java)
+    }
 
-  @Test
-  void missingQuantifiedCaptureIsNoLongerABlindSpot() {
-    var pair =
-        new FuzzSupport.MatcherPair(
-            "(a)?b$",
-            0,
-            "ab",
-            org.safere.Pattern.compile("()??ab$").matcher("ab"),
-            java.util.regex.Pattern.compile("(a)?b$").matcher("ab"));
-    assertThatThrownBy(pair::matches).isInstanceOf(AssertionError.class);
-  }
+    @Test
+    fun missingQuantifiedCaptureIsNoLongerABlindSpot() {
+        val pair =
+            MatcherPair(
+                "(a)?b$",
+                0,
+                "ab",
+                Pattern.compile("()??ab$").matcher("ab"),
+                java.util.regex.Pattern.compile("(a)?b$").matcher("ab")
+            )
+        Assertions.assertThatThrownBy(ThrowingCallable { pair.matches() }).isInstanceOf(AssertionError::class.java)
+    }
 
-  @Test
-  void replacementDifferencesAreNotWaived() {
-    String regex = "(?:(?<item>a){1})*$";
-    assertThat(org.safere.Pattern.compile(regex).matcher("ab").replaceAll("${item}"))
-        .isEqualTo("ab");
-    assertThatThrownBy(
-            () -> FuzzSupport.compileOrSkip(regex, 0).matcher("ab").replaceAll("${item}"))
-        .isInstanceOf(AssertionError.class);
-    assertThatThrownBy(
-            () -> FuzzSupport.compileOrSkip(regex, 0).matcher("ab").replaceFirst("${item}"))
-        .isInstanceOf(AssertionError.class);
-    assertThatThrownBy(
-            () ->
+    @Test
+    fun replacementDifferencesAreNotWaived() {
+        val regex = "(?:(?<item>a){1})*$"
+        Assertions.assertThat(Pattern.compile(regex).matcher("ab").replaceAll("\${item}"))
+            .isEqualTo("ab")
+        Assertions.assertThatThrownBy(
+            ThrowingCallable { FuzzSupport.compileOrSkip(regex, 0).matcher("ab").replaceAll("\${item}") })
+            .isInstanceOf(AssertionError::class.java)
+        Assertions.assertThatThrownBy(
+            ThrowingCallable { FuzzSupport.compileOrSkip(regex, 0).matcher("ab").replaceFirst("\${item}") })
+            .isInstanceOf(AssertionError::class.java)
+        Assertions.assertThatThrownBy(
+            ThrowingCallable {
                 FuzzSupport.compileOrSkip(regex, 0)
                     .matcher("ab")
-                    .replaceAll(result -> result.group(1) == null ? "empty" : "captured"))
-        .isInstanceOf(AssertionError.class);
-  }
+                    .replaceAll(Function { result: MatchResult? -> if (result!!.group(1) == null) "empty" else "captured" })
+            })
+            .isInstanceOf(AssertionError::class.java)
+    }
 }

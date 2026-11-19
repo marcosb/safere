@@ -2,325 +2,347 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.tools.unicode
 
-package org.safere.tools.unicode;
+import com.ibm.icu.lang.CharacterProperties
+import com.ibm.icu.lang.UCharacter
+import com.ibm.icu.lang.UCharacter.GraphemeClusterBreak
+import com.ibm.icu.lang.UCharacter.IndicConjunctBreak
+import com.ibm.icu.lang.UCharacterCategory
+import com.ibm.icu.lang.UProperty
+import com.ibm.icu.text.UnicodeSet
+import java.io.IOException
+import java.io.PrintWriter
+import java.lang.String
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.function.Function
+import java.util.function.IntFunction
+import java.util.function.IntPredicate
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.Comparator
+import kotlin.IllegalArgumentException
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.Throws
+import kotlin.arrayOf
+import kotlin.arrayOfNulls
+import kotlin.check
+import kotlin.code
+import kotlin.collections.ArrayList
+import kotlin.collections.LinkedHashMap
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.getValue
+import kotlin.collections.indices
+import kotlin.collections.minus
+import kotlin.collections.sort
+import kotlin.compareTo
+import kotlin.getValue
+import kotlin.intArrayOf
+import kotlin.require
+import kotlin.sequences.minus
+import kotlin.text.StringBuilder
+import kotlin.text.indexOf
+import kotlin.text.isEmpty
+import kotlin.text.split
+import kotlin.text.startsWith
+import kotlin.text.substring
+import kotlin.text.toLowerCase
+import kotlin.text.trimIndent
 
-import com.ibm.icu.lang.CharacterProperties;
-import com.ibm.icu.lang.UCharacter;
-import com.ibm.icu.lang.UCharacter.GraphemeClusterBreak;
-import com.ibm.icu.lang.UCharacter.IndicConjunctBreak;
-import com.ibm.icu.lang.UCharacterCategory;
-import com.ibm.icu.lang.UProperty;
-import com.ibm.icu.text.UnicodeSet;
-import com.ibm.icu.util.VersionInfo;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.IntPredicate;
-
-/** Generates checked-in Unicode tables from public JDK APIs and ICU4J Unicode data. */
-public final class UnicodeTableGenerator {
-  private static final int MAX_CODE_POINT = Character.MAX_CODE_POINT;
-  private static final String DEFAULT_OUTPUT =
-      "safere/src/main/java/org/safere/UnicodeGeneratedTables.java";
-  private static final Path DEFAULT_UNICODE_LICENSE =
-      Path.of("safere/src/main/resources/META-INF/LICENSE-Unicode.txt");
-  private static final String USAGE =
-      """
+/** Generates checked-in Unicode tables from public JDK APIs and ICU4J Unicode data.  */
+object UnicodeTableGenerator {
+    private val MAX_CODE_POINT = Character.MAX_CODE_POINT
+    private const val DEFAULT_OUTPUT = "safere/src/main/java/org/safere/UnicodeGeneratedTables.java"
+    private val DEFAULT_UNICODE_LICENSE: Path = Path.of("safere/src/main/resources/META-INF/LICENSE-Unicode.txt")
+    private val USAGE: String = """
       Usage: UnicodeTableGenerator [options] [output-file]
 
       Options:
         --unicode-license=FILE             Unicode license text (default: %s)
+      
       """
-          .formatted(DEFAULT_UNICODE_LICENSE);
+        .trimIndent()
+        .formatted(DEFAULT_UNICODE_LICENSE)
 
-  private static final String[] CATEGORY_ABBREVS = {
-    "Cn", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Me", "Mc", "Nd", "Nl", "No", "Zs", "Zl", "Zp", "Cc",
-    "Cf", null, "Co", "Cs", "Pd", "Ps", "Pe", "Pc", "Po", "Sm", "Sc", "Sk", "So", "Pi", "Pf"
-  };
+    private val CATEGORY_ABBREVS = arrayOf<String?>(
+        "Cn", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Me", "Mc", "Nd", "Nl", "No", "Zs", "Zl", "Zp", "Cc",
+        "Cf", null, "Co", "Cs", "Pd", "Ps", "Pe", "Pc", "Po", "Sm", "Sc", "Sk", "So", "Pi", "Pf"
+    )
 
-  private static final int[][] MAJOR_CATEGORY_TYPES = {
-    {1, 2, 3, 4, 5},
-    {6, 7, 8},
-    {9, 10, 11},
-    {20, 21, 22, 23, 24, 29, 30},
-    {25, 26, 27, 28},
-    {12, 13, 14},
-    {0, 15, 16, 18, 19},
-  };
+    private val MAJOR_CATEGORY_TYPES = arrayOf<IntArray?>(
+        intArrayOf(1, 2, 3, 4, 5),
+        intArrayOf(6, 7, 8),
+        intArrayOf(9, 10, 11),
+        intArrayOf(20, 21, 22, 23, 24, 29, 30),
+        intArrayOf(25, 26, 27, 28),
+        intArrayOf(12, 13, 14),
+        intArrayOf(0, 15, 16, 18, 19),
+    )
 
-  private static final String[] MAJOR_CATEGORY_NAMES = {"L", "M", "N", "P", "S", "Z", "C"};
+    private val MAJOR_CATEGORY_NAMES = arrayOf<String?>("L", "M", "N", "P", "S", "Z", "C")
 
-  private UnicodeTableGenerator() {}
-
-  public static void main(String[] args) throws IOException {
-    Options options = Options.parse(args);
-    GeneratedTables tables = buildTables(options);
-    Path output = options.output().toAbsolutePath();
-    Files.createDirectories(output.getParent());
-    try (PrintWriter out =
-        new PrintWriter(Files.newBufferedWriter(output, StandardCharsets.UTF_8))) {
-      writeJava(out, tables);
-    }
-  }
-
-  /** Command-line options for table generation. */
-  record Options(Path output, Path unicodeLicense) {
-    static Options parse(String... args) {
-      Path output = null;
-      Path unicodeLicense = null;
-      for (String arg : args) {
-        if (!arg.startsWith("--")) {
-          if (output != null) {
-            throw new IllegalArgumentException(USAGE);
-          }
-          output = Path.of(arg);
-          continue;
+    @Throws(IOException::class)
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val options: Options = Options.Companion.parse(*args)
+        val tables = buildTables(options)
+        val output = options.output!!.toAbsolutePath()
+        Files.createDirectories(output.getParent())
+        PrintWriter(Files.newBufferedWriter(output, StandardCharsets.UTF_8)).use { out ->
+            writeJava(out, tables)
         }
-        int equals = arg.indexOf('=');
-        if (equals < 0 || equals == arg.length() - 1) {
-          throw new IllegalArgumentException(USAGE);
+    }
+
+    @Throws(IOException::class)
+    private fun buildTables(options: Options): GeneratedTables {
+        val categoryTables = buildCategoryTables()
+        val categories: MutableMap<String?, Array<IntArray?>?> = LinkedHashMap<String?, Array<IntArray?>?>()
+        for (i in CATEGORY_ABBREVS.indices) {
+            if (CATEGORY_ABBREVS[i] != null && categoryTables[i].length > 0) {
+                categories.put(CATEGORY_ABBREVS[i], categoryTables[i])
+            }
         }
-        String value = arg.substring(equals + 1);
-        unicodeLicense =
-            switch (arg.substring(0, equals)) {
-              case "--unicode-license" -> Path.of(value);
-              default -> throw new IllegalArgumentException(USAGE);
-            };
-      }
-      return new Options(
-          output != null ? output : Path.of(DEFAULT_OUTPUT),
-          unicodeLicense != null ? unicodeLicense : DEFAULT_UNICODE_LICENSE);
-    }
-  }
+        for (i in MAJOR_CATEGORY_NAMES.indices) {
+            categories.put(
+                MAJOR_CATEGORY_NAMES[i],
+                UnicodeTableGenerator.mergeSubcategories(categoryTables, MAJOR_CATEGORY_TYPES[i]!!)
+            )
+        }
 
-  private static GeneratedTables buildTables(Options options) throws IOException {
-    int[][][] categoryTables = buildCategoryTables();
-    Map<String, int[][]> categories = new LinkedHashMap<>();
-    for (int i = 0; i < CATEGORY_ABBREVS.length; i++) {
-      if (CATEGORY_ABBREVS[i] != null && categoryTables[i].length > 0) {
-        categories.put(CATEGORY_ABBREVS[i], categoryTables[i]);
-      }
-    }
-    for (int i = 0; i < MAJOR_CATEGORY_NAMES.length; i++) {
-      categories.put(
-          MAJOR_CATEGORY_NAMES[i], mergeSubcategories(categoryTables, MAJOR_CATEGORY_TYPES[i]));
+        return GeneratedTables(
+            unicodeDataVersion(),
+            Files.readAllLines(options.unicodeLicense, StandardCharsets.UTF_8),
+            categories,
+            buildScriptTables(),
+            buildBlockTables(),
+            buildBinaryPropertyTables(),
+            buildGraphemeTables(),
+            buildJavaClassTables()
+        )
     }
 
-    return new GeneratedTables(
-        unicodeDataVersion(),
-        Files.readAllLines(options.unicodeLicense(), StandardCharsets.UTF_8),
-        categories,
-        buildScriptTables(),
-        buildBlockTables(),
-        buildBinaryPropertyTables(),
-        buildGraphemeTables(),
-        buildJavaClassTables());
-  }
-
-  private static String unicodeDataVersion() {
-    VersionInfo version = UCharacter.getUnicodeVersion();
-    return String.format(
-        Locale.ROOT, "%d.%d.%d", version.getMajor(), version.getMinor(), version.getMilli());
-  }
-
-  private static int[][][] buildCategoryTables() {
-    RangeBuilder[] builders = new RangeBuilder[CATEGORY_ABBREVS.length];
-    for (int i = 0; i < builders.length; i++) {
-      builders[i] = new RangeBuilder();
+    private fun unicodeDataVersion(): String {
+        val version = UCharacter.getUnicodeVersion()
+        return String.format(
+            Locale.ROOT, "%d.%d.%d", version.getMajor(), version.getMinor(), version.getMilli()
+        )
     }
 
-    for (int cp = 0; cp <= MAX_CODE_POINT; cp++) {
-      int type = Character.getType(cp);
-      if (type >= 0 && type < builders.length) {
-        builders[type].add(cp);
-      }
+    private fun buildCategoryTables(): Array<Array<IntArray?>?> {
+        val builders: Array<RangeBuilder?> = arrayOfNulls<RangeBuilder>(CATEGORY_ABBREVS.length)
+        for (i in builders.indices) {
+            builders[i] = RangeBuilder()
+        }
+
+        for (cp in 0..MAX_CODE_POINT) {
+            val type = Character.getType(cp)
+            if (type >= 0 && type < builders.length) {
+                builders[type]!!.add(cp)
+            }
+        }
+
+        val tables = arrayOfNulls<Array<IntArray?>>(builders.length)
+        for (i in builders.indices) {
+            tables[i] = builders[i]!!.build()
+        }
+        return tables
     }
 
-    int[][][] tables = new int[builders.length][][];
-    for (int i = 0; i < builders.length; i++) {
-      tables[i] = builders[i].build();
-    }
-    return tables;
-  }
+    private fun buildScriptTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+        val builders: MutableMap<Character.UnicodeScript?, RangeBuilder?> =
+            EnumMap<Character.UnicodeScript?, RangeBuilder?>(Character.UnicodeScript::class.java)
+        for (cp in 0..MAX_CODE_POINT) {
+            val script = Character.UnicodeScript.of(cp)
+            builders.computeIfAbsent(script, Function { unused: Character.UnicodeScript? -> RangeBuilder() })!!.add(cp)
+        }
 
-  private static Map<String, int[][]> buildScriptTables() {
-    Map<Character.UnicodeScript, RangeBuilder> builders =
-        new EnumMap<>(Character.UnicodeScript.class);
-    for (int cp = 0; cp <= MAX_CODE_POINT; cp++) {
-      Character.UnicodeScript script = Character.UnicodeScript.of(cp);
-      builders.computeIfAbsent(script, unused -> new RangeBuilder()).add(cp);
-    }
-
-    Map<String, int[][]> tables = new LinkedHashMap<>();
-    for (Character.UnicodeScript script : Character.UnicodeScript.values()) {
-      RangeBuilder builder = builders.get(script);
-      if (builder != null) {
-        tables.put(scriptName(script), builder.build());
-      }
-    }
-    return tables;
-  }
-
-  private static Map<String, int[][]> buildBlockTables() {
-    Map<Character.UnicodeBlock, RangeBuilder> builders = new LinkedHashMap<>();
-    for (int cp = 0; cp <= MAX_CODE_POINT; cp++) {
-      Character.UnicodeBlock block = Character.UnicodeBlock.of(cp);
-      if (block != null) {
-        builders.computeIfAbsent(block, unused -> new RangeBuilder()).add(cp);
-      }
+        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        for (script in Character.UnicodeScript.values()) {
+            val builder = builders.get(script)
+            if (builder != null) {
+                tables.put(scriptName(script), builder.build())
+            }
+        }
+        return tables
     }
 
-    Map<String, int[][]> tables = new LinkedHashMap<>();
-    List<Character.UnicodeBlock> blocks = new ArrayList<>(builders.keySet());
-    blocks.sort((a, b) -> blockName(a).compareTo(blockName(b)));
-    for (Character.UnicodeBlock block : blocks) {
-      tables.put(blockName(block), builders.get(block).build());
+    private fun buildBlockTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+        val builders: MutableMap<Character.UnicodeBlock?, RangeBuilder?> =
+            LinkedHashMap<Character.UnicodeBlock?, RangeBuilder?>()
+        for (cp in 0..MAX_CODE_POINT) {
+            val block = Character.UnicodeBlock.of(cp)
+            if (block != null) {
+                builders.computeIfAbsent(block, Function { unused: Character.UnicodeBlock? -> RangeBuilder() })!!
+                    .add(cp)
+            }
+        }
+
+        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        val blocks: MutableList<Character.UnicodeBlock> = ArrayList<Character.UnicodeBlock>(builders.keySet())
+        blocks.sort(Comparator { a: Character.UnicodeBlock?, b: Character.UnicodeBlock? ->
+            UnicodeTableGenerator.blockName(
+                a!!
+            ).compareTo(UnicodeTableGenerator.blockName(b!!))
+        })
+        for (block in blocks) {
+            tables.put(blockName(block), builders.get(block)!!.build())
+        }
+        return tables
     }
-    return tables;
-  }
 
-  private static Map<String, int[][]> buildBinaryPropertyTables() {
-    Map<String, IntPredicate> predicates = new LinkedHashMap<>();
-    predicates.put("Alphabetic", Character::isAlphabetic);
-    predicates.put("Ideographic", Character::isIdeographic);
-    predicates.put("Letter", Character::isLetter);
-    predicates.put("Lowercase", Character::isLowerCase);
-    predicates.put("Uppercase", Character::isUpperCase);
-    predicates.put("Titlecase", Character::isTitleCase);
-    predicates.put("Punctuation", UnicodeTableGenerator::isPunctuation);
-    predicates.put("Control", cp -> Character.getType(cp) == Character.CONTROL);
-    // Use Unicode data rather than Java's differing whitespace definition.
-    predicates.put(
-        "White_Space", CharacterProperties.getBinaryPropertySet(UProperty.WHITE_SPACE)::contains);
-    predicates.put("Digit", Character::isDigit);
-    // JDK regex also accepts other decimal digits; preserve Unicode Hex_Digit.
-    predicates.put(
-        "Hex_Digit", CharacterProperties.getBinaryPropertySet(UProperty.HEX_DIGIT)::contains);
-    predicates.put("Join_Control", cp -> cp == 0x200C || cp == 0x200D);
-    predicates.put("Noncharacter_Code_Point", UnicodeTableGenerator::isNoncharacterCodePoint);
-    predicates.put("Assigned", Character::isDefined);
-    predicates.put("Emoji", Character::isEmoji);
-    predicates.put("Emoji_Presentation", Character::isEmojiPresentation);
-    predicates.put("Emoji_Modifier", Character::isEmojiModifier);
-    predicates.put("Emoji_Modifier_Base", Character::isEmojiModifierBase);
-    predicates.put("Emoji_Component", Character::isEmojiComponent);
+    private fun buildBinaryPropertyTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+        val predicates: MutableMap<kotlin.String?, IntPredicate?> = LinkedHashMap<kotlin.String?, IntPredicate?>()
+        predicates.put("Alphabetic", IntPredicate { codePoint: Int -> Character.isAlphabetic(codePoint) })
+        predicates.put("Ideographic", IntPredicate { codePoint: Int -> Character.isIdeographic(codePoint) })
+        predicates.put("Letter", IntPredicate { codePoint: Int -> Character.isLetter(codePoint) })
+        predicates.put("Lowercase", IntPredicate { codePoint: Int -> Character.isLowerCase(codePoint) })
+        predicates.put("Uppercase", IntPredicate { codePoint: Int -> Character.isUpperCase(codePoint) })
+        predicates.put("Titlecase", IntPredicate { codePoint: Int -> Character.isTitleCase(codePoint) })
+        predicates.put("Punctuation", IntPredicate { obj: Int -> UnicodeTableGenerator.isPunctuation() })
+        predicates.put("Control", IntPredicate { cp: Int -> Character.getType(cp) == Character.CONTROL.toInt() })
+        // Use Unicode data rather than Java's differing whitespace definition.
+        predicates.put(
+            "White_Space",
+            IntPredicate { c: Int -> CharacterProperties.getBinaryPropertySet(UProperty.WHITE_SPACE).contains(c) })
+        predicates.put("Digit", IntPredicate { codePoint: Int -> Character.isDigit(codePoint) })
+        // JDK regex also accepts other decimal digits; preserve Unicode Hex_Digit.
+        predicates.put(
+            "Hex_Digit",
+            IntPredicate { c: Int -> CharacterProperties.getBinaryPropertySet(UProperty.HEX_DIGIT).contains(c) })
+        predicates.put("Join_Control", IntPredicate { cp: Int -> cp == 0x200C || cp == 0x200D })
+        predicates.put(
+            "Noncharacter_Code_Point",
+            IntPredicate { obj: Int -> UnicodeTableGenerator.isNoncharacterCodePoint() })
+        predicates.put("Assigned", IntPredicate { codePoint: Int -> Character.isDefined(codePoint) })
+        predicates.put("Emoji", IntPredicate { codePoint: Int -> Character.isEmoji(codePoint) })
+        predicates.put(
+            "Emoji_Presentation",
+            IntPredicate { codePoint: Int -> Character.isEmojiPresentation(codePoint) })
+        predicates.put("Emoji_Modifier", IntPredicate { codePoint: Int -> Character.isEmojiModifier(codePoint) })
+        predicates.put(
+            "Emoji_Modifier_Base",
+            IntPredicate { codePoint: Int -> Character.isEmojiModifierBase(codePoint) })
+        predicates.put("Emoji_Component", IntPredicate { codePoint: Int -> Character.isEmojiComponent(codePoint) })
 
-    Map<String, int[][]> tables = new LinkedHashMap<>();
-    for (Map.Entry<String, IntPredicate> entry : predicates.entrySet()) {
-      tables.put(entry.getKey(), buildRanges(entry.getValue()));
+        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        for (entry in predicates.entrySet()) {
+            tables.put(entry.getKey(), buildRanges(entry.getValue()))
+        }
+        tables.put(
+            "Extended_Pictographic",
+            toRanges(CharacterProperties.getBinaryPropertySet(UProperty.EXTENDED_PICTOGRAPHIC))
+        )
+        return tables
     }
-    tables.put(
-        "Extended_Pictographic",
-        toRanges(CharacterProperties.getBinaryPropertySet(UProperty.EXTENDED_PICTOGRAPHIC)));
-    return tables;
-  }
 
-  /**
-   * Builds the {@code \p{java...}} classes that can't be composed from the general categories and
-   * binary properties. The rest are composed at runtime in {@code JavaCharacterClasses}.
-   */
-  private static Map<String, int[][]> buildJavaClassTables() {
-    Map<String, int[][]> tables = new LinkedHashMap<>();
-    // Bidi_Mirrored isn't exposed as a binary property, since java.util.regex doesn't support it.
-    tables.put("javaMirrored", buildRanges(Character::isMirrored));
-    // Keep identifier exceptions in the generated data too: their membership can change when
-    // Unicode changes categories. Subtract the categories already included by the Java rules.
-    UnicodeSet idStart = CharacterProperties.getBinaryPropertySet(UProperty.ID_START);
-    UnicodeSet idContinue = CharacterProperties.getBinaryPropertySet(UProperty.ID_CONTINUE);
-    tables.put(
-        "javaUnicodeIdentifierStartExtra",
-        buildRanges(
-            cp ->
-                idStart.contains(cp)
-                    && !UCharacter.isLetter(cp)
-                    && UCharacter.getType(cp) != UCharacterCategory.LETTER_NUMBER));
-    tables.put(
-        "javaUnicodeIdentifierPartExtra",
-        buildRanges(
-            cp ->
-                idContinue.contains(cp)
-                    && !UCharacter.isLetterOrDigit(cp)
-                    && UCharacter.getType(cp) != UCharacterCategory.LETTER_NUMBER
-                    && UCharacter.getType(cp) != UCharacterCategory.CONNECTOR_PUNCTUATION
-                    && UCharacter.getType(cp) != UCharacterCategory.COMBINING_SPACING_MARK
-                    && UCharacter.getType(cp) != UCharacterCategory.NON_SPACING_MARK
-                    && !UCharacter.isIdentifierIgnorable(cp)));
+    /**
+     * Builds the `\p{java...}` classes that can't be composed from the general categories and
+     * binary properties. The rest are composed at runtime in `JavaCharacterClasses`.
+     */
+    private fun buildJavaClassTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        // Bidi_Mirrored isn't exposed as a binary property, since java.util.regex doesn't support it.
+        tables.put("javaMirrored", buildRanges(IntPredicate { codePoint: Int -> Character.isMirrored(codePoint) }))
+        // Keep identifier exceptions in the generated data too: their membership can change when
+        // Unicode changes categories. Subtract the categories already included by the Java rules.
+        val idStart = CharacterProperties.getBinaryPropertySet(UProperty.ID_START)
+        val idContinue = CharacterProperties.getBinaryPropertySet(UProperty.ID_CONTINUE)
+        tables.put(
+            "javaUnicodeIdentifierStartExtra",
+            buildRanges(
+                IntPredicate { cp: Int ->
+                    idStart.contains(cp)
+                            && !UCharacter.isLetter(cp) && UCharacter.getType(cp) != UCharacterCategory.LETTER_NUMBER.toInt()
+                })
+        )
+        tables.put(
+            "javaUnicodeIdentifierPartExtra",
+            buildRanges(
+                IntPredicate { cp: Int ->
+                    idContinue.contains(cp)
+                            && !UCharacter.isLetterOrDigit(cp) && UCharacter.getType(cp) != UCharacterCategory.LETTER_NUMBER.toInt() && UCharacter.getType(
+                        cp
+                    ) != UCharacterCategory.CONNECTOR_PUNCTUATION.toInt() && UCharacter.getType(cp) != UCharacterCategory.COMBINING_SPACING_MARK.toInt() && UCharacter.getType(
+                        cp
+                    ) != UCharacterCategory.NON_SPACING_MARK.toInt() && !UCharacter.isIdentifierIgnorable(cp)
+                })
+        )
 
-    return tables;
-  }
-
-  static Map<String, int[][]> buildGraphemeTables() {
-    Map<String, int[][]> tables = new LinkedHashMap<>();
-    UnicodeSet control =
-        new UnicodeSet()
-            .applyIntPropertyValue(UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.CONTROL)
-            .addAll(
-                new UnicodeSet()
-                    .applyIntPropertyValue(
-                        UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.CR))
-            .addAll(
-                new UnicodeSet()
-                    .applyIntPropertyValue(
-                        UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.LF));
-    tables.put("Control", toRanges(control));
-    tables.put("Extend", graphemeBreakRanges(GraphemeClusterBreak.EXTEND));
-    tables.put("Prepend", graphemeBreakRanges(GraphemeClusterBreak.PREPEND));
-    tables.put("SpacingMark", graphemeBreakRanges(GraphemeClusterBreak.SPACING_MARK));
-    tables.put("L", graphemeBreakRanges(GraphemeClusterBreak.L));
-    tables.put("V", graphemeBreakRanges(GraphemeClusterBreak.V));
-    tables.put("T", graphemeBreakRanges(GraphemeClusterBreak.T));
-    tables.put("LV", graphemeBreakRanges(GraphemeClusterBreak.LV));
-    tables.put("LVT", graphemeBreakRanges(GraphemeClusterBreak.LVT));
-    tables.put("InCB_Linker", indicConjunctBreakRanges(IndicConjunctBreak.LINKER));
-    tables.put("InCB_Consonant", indicConjunctBreakRanges(IndicConjunctBreak.CONSONANT));
-    tables.put("InCB_Extend", indicConjunctBreakRanges(IndicConjunctBreak.EXTEND));
-    return tables;
-  }
-
-  private static int[][] graphemeBreakRanges(int value) {
-    return toRanges(
-        new UnicodeSet().applyIntPropertyValue(UProperty.GRAPHEME_CLUSTER_BREAK, value));
-  }
-
-  // ICU's IndicConjunctBreak constants are declared in property-value order, and ICU's
-  // PropNumbersTest checks that each ordinal equals the corresponding UProperty value.
-  @SuppressWarnings("EnumOrdinal")
-  private static int[][] indicConjunctBreakRanges(IndicConjunctBreak value) {
-    return toRanges(
-        new UnicodeSet().applyIntPropertyValue(UProperty.INDIC_CONJUNCT_BREAK, value.ordinal()));
-  }
-
-  private static int[][] toRanges(UnicodeSet set) {
-    if (set.isEmpty()) {
-      throw new IllegalStateException("Empty UnicodeSet for property");
+        return tables
     }
-    List<int[]> ranges = new ArrayList<>();
-    for (UnicodeSet.EntryRange range : set.ranges()) {
-      ranges.add(new int[] {range.codepoint, range.codepointEnd});
-    }
-    return ranges.toArray(int[][]::new);
-  }
 
-  private static void writeJava(PrintWriter out, GeneratedTables tables) throws IOException {
-    String header =
-        """
+    fun buildGraphemeTables(): MutableMap<kotlin.String?, Array<IntArray?>?> {
+        val tables: MutableMap<kotlin.String?, Array<IntArray?>?> = LinkedHashMap<kotlin.String?, Array<IntArray?>?>()
+        val control =
+            UnicodeSet()
+                .applyIntPropertyValue(UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.CONTROL)
+                .addAll(
+                    UnicodeSet()
+                        .applyIntPropertyValue(
+                            UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.CR
+                        )
+                )
+                .addAll(
+                    UnicodeSet()
+                        .applyIntPropertyValue(
+                            UProperty.GRAPHEME_CLUSTER_BREAK, GraphemeClusterBreak.LF
+                        )
+                )
+        tables.put("Control", toRanges(control))
+        tables.put("Extend", graphemeBreakRanges(GraphemeClusterBreak.EXTEND))
+        tables.put("Prepend", graphemeBreakRanges(GraphemeClusterBreak.PREPEND))
+        tables.put("SpacingMark", graphemeBreakRanges(GraphemeClusterBreak.SPACING_MARK))
+        tables.put("L", graphemeBreakRanges(GraphemeClusterBreak.L))
+        tables.put("V", graphemeBreakRanges(GraphemeClusterBreak.V))
+        tables.put("T", graphemeBreakRanges(GraphemeClusterBreak.T))
+        tables.put("LV", graphemeBreakRanges(GraphemeClusterBreak.LV))
+        tables.put("LVT", graphemeBreakRanges(GraphemeClusterBreak.LVT))
+        tables.put("InCB_Linker", indicConjunctBreakRanges(IndicConjunctBreak.LINKER))
+        tables.put("InCB_Consonant", indicConjunctBreakRanges(IndicConjunctBreak.CONSONANT))
+        tables.put("InCB_Extend", indicConjunctBreakRanges(IndicConjunctBreak.EXTEND))
+        return tables
+    }
+
+    private fun graphemeBreakRanges(value: Int): Array<IntArray?>? {
+        return toRanges(
+            UnicodeSet().applyIntPropertyValue(UProperty.GRAPHEME_CLUSTER_BREAK, value)
+        )
+    }
+
+    // ICU's IndicConjunctBreak constants are declared in property-value order, and ICU's
+    // PropNumbersTest checks that each ordinal equals the corresponding UProperty value.
+    private fun indicConjunctBreakRanges(value: IndicConjunctBreak): Array<IntArray?>? {
+        return toRanges(
+            UnicodeSet().applyIntPropertyValue(UProperty.INDIC_CONJUNCT_BREAK, value.ordinal())
+        )
+    }
+
+    private fun toRanges(set: UnicodeSet): Array<IntArray?>? {
+        check(!set.isEmpty()) { "Empty UnicodeSet for property" }
+        val ranges: MutableList<IntArray?> = ArrayList<IntArray?>()
+        for (range in set.ranges()) {
+            ranges.add(intArrayOf(range.codepoint, range.codepointEnd))
+        }
+        return ranges.toArray<IntArray?>(IntFunction { _Dummy_.__Array__() })
+    }
+
+    @Throws(IOException::class)
+    private fun writeJava(out: PrintWriter, tables: GeneratedTables) {
+        val header =
+            """
         // This file is part of a Java port of RE2 (https://github.com/google/re2).
         // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
         // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
         // Licensed under the BSD 3-Clause License (see LICENSE file).
-        """;
-    String declaration =
-        """
+        
+        """.trimIndent()
+        val declaration: kotlin.String =
+            """
 
         // WARNING: This file is automatically generated. Do not edit by hand.
         // To regenerate, run:
@@ -336,31 +358,35 @@ public final class UnicodeTableGenerator {
         final class UnicodeGeneratedTables {
           static final String GENERATOR_JAVA_VERSION = "%s";
           static final String UNICODE_DATA_VERSION = "%s";
+        
         """
-            .formatted(javaVersion(), tables.unicodeDataVersion());
-    out.print(header);
-    out.println("// Unicode data copyright and permission notice:");
-    for (String line : tables.unicodeLicense()) {
-      out.println(line.isEmpty() ? "//" : "// " + line);
-    }
-    out.println();
-    out.println(declaration);
-    out.println();
+                .trimIndent()
+                .formatted(javaVersion(), tables.unicodeDataVersion)
+        out.print(header)
+        out.println("// Unicode data copyright and permission notice:")
+        for (line in tables.unicodeLicense!!) {
+            out.println(if (line.isEmpty()) "//" else "// " + line)
+        }
+        out.println()
+        out.println(declaration)
+        out.println()
 
-    writeInlineMap(out, "CATEGORIES", tables.categories(), "category");
-    writeInlineMap(out, "SCRIPTS", tables.scripts(), "script");
-    writeInlineMap(out, "BLOCKS", tables.blocks(), "block");
-    writeInlineMap(out, "BINARY_PROPERTIES", tables.binaryProperties(), "property");
-    out.println(
-        "  // Grapheme segmentation classes; internal only, not exposed as \\p{...} names.");
-    writeInlineMap(out, "GRAPHEME_PROPERTIES", tables.graphemeProperties(), "grapheme");
-    out.println(
-        "  // java* classes that can't be composed from the tables above; internal only, looked up"
-            + " by JavaCharacterClasses.");
-    writeInlineMap(out, "JAVA_CHARACTER_CLASSES", tables.javaClasses(), "javaClass");
+        UnicodeTableGenerator.writeInlineMap(out, "CATEGORIES", tables.categories!!, "category")
+        UnicodeTableGenerator.writeInlineMap(out, "SCRIPTS", tables.scripts!!, "script")
+        UnicodeTableGenerator.writeInlineMap(out, "BLOCKS", tables.blocks!!, "block")
+        UnicodeTableGenerator.writeInlineMap(out, "BINARY_PROPERTIES", tables.binaryProperties!!, "property")
+        out.println(
+            "  // Grapheme segmentation classes; internal only, not exposed as \\p{...} names."
+        )
+        UnicodeTableGenerator.writeInlineMap(out, "GRAPHEME_PROPERTIES", tables.graphemeProperties!!, "grapheme")
+        out.println(
+            "  // java* classes that can't be composed from the tables above; internal only, looked up"
+                    + " by JavaCharacterClasses."
+        )
+        UnicodeTableGenerator.writeInlineMap(out, "JAVA_CHARACTER_CLASSES", tables.javaClasses!!, "javaClass")
 
-    String middle =
-        """
+        val middle =
+            """
           private UnicodeGeneratedTables() {}
 
           static Map<String, int[][]> unicodeGroups() {
@@ -369,169 +395,208 @@ public final class UnicodeTableGenerator {
             groups.putAll(SCRIPTS);
             return Collections.unmodifiableMap(groups);
           }
-        """;
-    out.println(middle);
-    out.println();
+        
+        """.trimIndent()
+        out.println(middle)
+        out.println()
 
-    writeTableMethods(out, "category", tables.categories());
-    writeTableMethods(out, "script", tables.scripts());
-    writeTableMethods(out, "property", tables.binaryProperties());
-    writeTableMethods(out, "grapheme", tables.graphemeProperties());
-    writeTableMethods(out, "javaClass", tables.javaClasses());
+        UnicodeTableGenerator.writeTableMethods(out, "category", tables.categories)
+        UnicodeTableGenerator.writeTableMethods(out, "script", tables.scripts)
+        UnicodeTableGenerator.writeTableMethods(out, "property", tables.binaryProperties)
+        UnicodeTableGenerator.writeTableMethods(out, "grapheme", tables.graphemeProperties)
+        UnicodeTableGenerator.writeTableMethods(out, "javaClass", tables.javaClasses)
 
-    out.println("}");
-  }
-
-  private static void writeInlineMap(
-      PrintWriter out, String name, Map<String, int[][]> tables, String prefix) {
-    out.println("  // Include explicit type arguments to ofEntries to avoid JDK-8221301");
-    out.println(
-        "  static final Map<String, int[][]> " + name + " = Map.<String, int[][]>ofEntries(");
-    int count = 0;
-    for (Map.Entry<String, int[][]> entry : tables.entrySet()) {
-      String key = entry.getKey();
-      String entryStr;
-      if (prefix.equals("block")) {
-        int[][] ranges = entry.getValue();
-        entryStr =
-            String.format(
-                Locale.ROOT,
-                "    Map.entry(\"%s\", new int[][] {{0x%x, 0x%x}})",
-                key,
-                ranges[0][0],
-                ranges[0][1]);
-      } else {
-        entryStr = "    Map.entry(\"%s\", %s_%s())".formatted(key, prefix, safeIdentifier(key));
-      }
-      out.print(entryStr);
-      if (++count < tables.size()) {
-        out.println(",");
-      } else {
-        out.println();
-      }
-    }
-    out.println("  );");
-    out.println();
-  }
-
-  private static void writeTableMethods(
-      PrintWriter out, String prefix, Map<String, int[][]> tables) {
-    for (Map.Entry<String, int[][]> entry : tables.entrySet()) {
-      String name = entry.getKey();
-      int[][] ranges = entry.getValue();
-      out.println("  private static int[][] %s_%s() {".formatted(prefix, safeIdentifier(name)));
-      out.println("    return new int[][] {");
-      for (int[] range : ranges) {
-        out.println(String.format(Locale.ROOT, "      {0x%x, 0x%x},", range[0], range[1]));
-      }
-      out.println("    };");
-      out.println("  }");
-      out.println();
-    }
-  }
-
-  private static String safeIdentifier(String name) {
-    return name.replaceAll("[^a-zA-Z0-9_]", "_");
-  }
-
-  private static int[][] buildRanges(IntPredicate predicate) {
-    RangeBuilder builder = new RangeBuilder();
-    for (int cp = 0; cp <= MAX_CODE_POINT; cp++) {
-      if (predicate.test(cp)) {
-        builder.add(cp);
-      }
-    }
-    return builder.build();
-  }
-
-  private static int[][] mergeSubcategories(int[][][] allTables, int[] types) {
-    List<int[]> ranges = new ArrayList<>();
-    for (int type : types) {
-      Collections.addAll(ranges, allTables[type]);
-    }
-    ranges.sort((a, b) -> a[0] != b[0] ? Integer.compare(a[0], b[0]) : Integer.compare(a[1], b[1]));
-    RangeBuilder builder = new RangeBuilder();
-    for (int[] range : ranges) {
-      builder.addRange(range[0], range[1]);
-    }
-    return builder.build();
-  }
-
-  private static boolean isPunctuation(int cp) {
-    int type = Character.getType(cp);
-    return type == Character.CONNECTOR_PUNCTUATION
-        || type == Character.DASH_PUNCTUATION
-        || type == Character.START_PUNCTUATION
-        || type == Character.END_PUNCTUATION
-        || type == Character.OTHER_PUNCTUATION
-        || type == Character.INITIAL_QUOTE_PUNCTUATION
-        || type == Character.FINAL_QUOTE_PUNCTUATION;
-  }
-
-  private static boolean isNoncharacterCodePoint(int cp) {
-    return (cp >= 0xFDD0 && cp <= 0xFDEF)
-        || ((cp & 0xFFFE) == 0xFFFE && cp <= Character.MAX_CODE_POINT);
-  }
-
-  private static String scriptName(Character.UnicodeScript script) {
-    if (script == Character.UnicodeScript.SIGNWRITING) {
-      return "SignWriting";
-    }
-    return toTitleSnake(script.name());
-  }
-
-  private static String blockName(Character.UnicodeBlock block) {
-    return toTitleSnake(block.toString());
-  }
-
-  private static String toTitleSnake(String upperSnake) {
-    StringBuilder result = new StringBuilder(upperSnake.length());
-    for (String part : upperSnake.split("_", -1)) {
-      if (!result.isEmpty()) {
-        result.append('_');
-      }
-      result.append(Character.toUpperCase(part.charAt(0)));
-      if (part.length() > 1) {
-        result.append(part.substring(1).toLowerCase(Locale.ROOT));
-      }
-    }
-    return result.toString();
-  }
-
-  private static String javaVersion() {
-    return Runtime.version() + " (" + System.getProperty("java.vendor") + ")";
-  }
-
-  private record GeneratedTables(
-      String unicodeDataVersion,
-      List<String> unicodeLicense,
-      Map<String, int[][]> categories,
-      Map<String, int[][]> scripts,
-      Map<String, int[][]> blocks,
-      Map<String, int[][]> binaryProperties,
-      Map<String, int[][]> graphemeProperties,
-      Map<String, int[][]> javaClasses) {}
-
-  private static final class RangeBuilder {
-    private final List<int[]> ranges = new ArrayList<>();
-
-    void add(int cp) {
-      addRange(cp, cp);
+        out.println("}")
     }
 
-    void addRange(int lo, int hi) {
-      if (!ranges.isEmpty()) {
-        int[] last = ranges.get(ranges.size() - 1);
-        if (lo <= last[1] + 1) {
-          last[1] = Math.max(last[1], hi);
-          return;
+    private fun writeInlineMap(
+        out: PrintWriter,
+        name: kotlin.String?,
+        tables: MutableMap<kotlin.String?, Array<IntArray?>?>,
+        prefix: kotlin.String
+    ) {
+        out.println("  // Include explicit type arguments to ofEntries to avoid JDK-8221301")
+        out.println(
+            "  static final Map<String, int[][]> " + name + " = Map.<String, int[][]>ofEntries("
+        )
+        var count = 0
+        for (entry in tables.entrySet()) {
+            val key: kotlin.String = entry.getKey()
+            val entryStr: kotlin.String?
+            if (prefix == "block") {
+                val ranges: Array<IntArray?> = entry.getValue()
+                entryStr =
+                    String.format(
+                        Locale.ROOT,
+                        "    Map.entry(\"%s\", new int[][] {{0x%x, 0x%x}})",
+                        key,
+                        ranges[0]!![0],
+                        ranges[0]!![1]
+                    )
+            } else {
+                entryStr = "    Map.entry(\"%s\", %s_%s())".formatted(key, prefix, safeIdentifier(key))
+            }
+            out.print(entryStr)
+            if (++count < tables.size()) {
+                out.println(",")
+            } else {
+                out.println()
+            }
         }
-      }
-      ranges.add(new int[] {lo, hi});
+        out.println("  );")
+        out.println()
     }
 
-    int[][] build() {
-      return ranges.toArray(new int[0][]);
+    private fun writeTableMethods(
+        out: PrintWriter, prefix: kotlin.String?, tables: MutableMap<kotlin.String?, Array<IntArray?>?>
+    ) {
+        for (entry in tables.entrySet()) {
+            val name: kotlin.String = entry.getKey()
+            val ranges: Array<IntArray> = entry.getValue()
+            out.println("  private static int[][] %s_%s() {".formatted(prefix, safeIdentifier(name)))
+            out.println("    return new int[][] {")
+            for (range in ranges) {
+                out.println(String.format(Locale.ROOT, "      {0x%x, 0x%x},", range[0], range[1]))
+            }
+            out.println("    };")
+            out.println("  }")
+            out.println()
+        }
     }
-  }
+
+    private fun safeIdentifier(name: kotlin.String): kotlin.String {
+        return name.replaceAll("[^a-zA-Z0-9_]", "_")
+    }
+
+    private fun buildRanges(predicate: IntPredicate): Array<IntArray?> {
+        val builder = RangeBuilder()
+        for (cp in 0..MAX_CODE_POINT) {
+            if (predicate.test(cp)) {
+                builder.add(cp)
+            }
+        }
+        return builder.build()
+    }
+
+    private fun mergeSubcategories(allTables: Array<Array<IntArray?>?>, types: IntArray): Array<IntArray?> {
+        val ranges: MutableList<IntArray> = ArrayList<IntArray>()
+        for (type in types) {
+            Collections.addAll<IntArray?>(ranges, *allTables[type])
+        }
+        ranges.sort(Comparator { a: IntArray, b: IntArray ->
+            if (a[0] != b[0]) Integer.compare(
+                a[0],
+                b[0]
+            ) else Integer.compare(a[1], b[1])
+        })
+        val builder = RangeBuilder()
+        for (range in ranges) {
+            builder.addRange(range[0], range[1])
+        }
+        return builder.build()
+    }
+
+    private fun isPunctuation(cp: Int): Boolean {
+        val type = Character.getType(cp)
+        return type == Character.CONNECTOR_PUNCTUATION.toInt() || type == Character.DASH_PUNCTUATION.toInt() || type == Character.START_PUNCTUATION.toInt() || type == Character.END_PUNCTUATION.toInt() || type == Character.OTHER_PUNCTUATION.toInt() || type == Character.INITIAL_QUOTE_PUNCTUATION.toInt() || type == Character.FINAL_QUOTE_PUNCTUATION.toInt()
+    }
+
+    private fun isNoncharacterCodePoint(cp: Int): Boolean {
+        return (cp >= 0xFDD0 && cp <= 0xFDEF)
+                || ((cp and 0xFFFE) == 0xFFFE && cp <= Character.MAX_CODE_POINT)
+    }
+
+    private fun scriptName(script: Character.UnicodeScript): kotlin.String {
+        if (script == Character.UnicodeScript.SIGNWRITING) {
+            return "SignWriting"
+        }
+        return toTitleSnake(script.name())
+    }
+
+    private fun blockName(block: Character.UnicodeBlock): kotlin.String {
+        return toTitleSnake(block.toString())
+    }
+
+    private fun toTitleSnake(upperSnake: kotlin.String): kotlin.String {
+        val result: StringBuilder = StringBuilder(upperSnake.length())
+        for (part in upperSnake.split("_", -1)) {
+            if (!result.isEmpty()) {
+                result.append('_')
+            }
+            result.append(Character.toUpperCase(part.charAt(0)))
+            if (part.length() > 1) {
+                result.append(part.substring(1).toLowerCase(Locale.ROOT))
+            }
+        }
+        return result.toString()
+    }
+
+    private fun javaVersion(): kotlin.String {
+        return Runtime.version().toString() + " (" + System.getProperty("java.vendor") + ")"
+    }
+
+    /** Command-line options for table generation.  */
+    @JvmRecord
+    internal data class Options(val output: Path?, val unicodeLicense: Path?) {
+        companion object {
+            fun parse(vararg args: kotlin.String): Options {
+                var output: Path? = null
+                var unicodeLicense: Path? = null
+                for (arg in args) {
+                    if (!arg.startsWith("--")) {
+                        require(output == null) { USAGE }
+                        output = Path.of(arg)
+                        continue
+                    }
+                    val equals: Int = arg.indexOf('='.code)
+                    require(!(equals < 0 || equals == arg.length() - 1)) { USAGE }
+                    val value = arg.substring(equals + 1)
+                    unicodeLicense =
+                        when (arg.substring(0, equals)) {
+                            "--unicode-license" -> Path.of(value)
+                            else -> throw IllegalArgumentException(USAGE)
+                        }
+                }
+                return Options(
+                    if (output != null) output else Path.of(DEFAULT_OUTPUT),
+                    if (unicodeLicense != null) unicodeLicense else DEFAULT_UNICODE_LICENSE
+                )
+            }
+        }
+    }
+
+    @JvmRecord
+    private data class GeneratedTables(
+        val unicodeDataVersion: kotlin.String?,
+        val unicodeLicense: MutableList<kotlin.String>?,
+        val categories: MutableMap<kotlin.String?, Array<IntArray?>?>?,
+        val scripts: MutableMap<kotlin.String?, Array<IntArray?>?>?,
+        val blocks: MutableMap<kotlin.String?, Array<IntArray?>?>?,
+        val binaryProperties: MutableMap<kotlin.String?, Array<IntArray?>?>?,
+        val graphemeProperties: MutableMap<kotlin.String?, Array<IntArray?>?>?,
+        val javaClasses: MutableMap<kotlin.String?, Array<IntArray?>?>?
+    )
+
+    private class RangeBuilder {
+        private val ranges: MutableList<IntArray> = ArrayList<IntArray>()
+
+        fun add(cp: Int) {
+            addRange(cp, cp)
+        }
+
+        fun addRange(lo: Int, hi: Int) {
+            if (!ranges.isEmpty()) {
+                val last = ranges.get(ranges.size() - 1)
+                if (lo <= last[1] + 1) {
+                    last[1] = Math.max(last[1], hi)
+                    return
+                }
+            }
+            ranges.add(intArrayOf(lo, hi))
+        }
+
+        fun build(): Array<IntArray?> {
+            return ranges.toArray<IntArray?>(arrayOfNulls<IntArray>(0))
+        }
+    }
 }

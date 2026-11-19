@@ -2,449 +2,436 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
-
-import java.util.ConcurrentModificationException;
-import java.util.Map;
+import java.util.*
 
 /**
  * A stateful matcher over UTF-8 input whose reported positions are relative byte offsets.
- *
- * <p>The matcher retains its borrowed input and is not thread-safe. The caller must not mutate the
+ * 
+ * 
+ * The matcher retains its borrowed input and is not thread-safe. The caller must not mutate the
  * input storage while this matcher is in use. Pattern and replacement behavior follows SafeRE's
  * documented Java-oriented semantics; coordinates are UTF-8 byte offsets.
  */
-public final class Utf8Matcher {
-  private final Pattern pattern;
-  private final ArrayUtf8Input input;
-  private final Matcher delegate;
-  private int appendPosition;
-  private boolean replacementFailed;
-  private Utf8Input cachedReplacement;
-  private ReplacementSegment[] cachedTemplate;
-  private boolean cachedTemplateNeedsCaptures;
-  private int modCount;
-  private boolean appending;
+class Utf8Matcher internal constructor(pattern: Pattern?, input: Utf8Input?) {
+    private val pattern: Pattern
+    private val input: ArrayUtf8Input
+    private val delegate: Matcher
+    private var appendPosition = 0
+    private var replacementFailed = false
+    private var cachedReplacement: Utf8Input? = null
+    private var cachedTemplate: Array<ReplacementSegment>
+    private var cachedTemplateNeedsCaptures = false
+    private var modCount = 0
+    private var appending = false
 
-  Utf8Matcher(Pattern pattern, Utf8Input input) {
-    this.pattern = requireNonNull(pattern, "pattern");
-    this.input = (ArrayUtf8Input) requireNonNull(input, "input");
-    delegate = new Matcher(pattern, this.input.scanner());
-  }
-
-  /**
-   * Attempts to match the entire input against this pattern.
-   *
-   * @return whether the entire input matches
-   */
-  public boolean matches() {
-    beginMatchOperation();
-    return delegate.matches();
-  }
-
-  /**
-   * Attempts to match a prefix of the input against this pattern.
-   *
-   * @return whether an input prefix matches
-   */
-  public boolean lookingAt() {
-    beginMatchOperation();
-    return delegate.lookingAt();
-  }
-
-  /**
-   * Attempts to find the next subsequence matching this pattern.
-   *
-   * @return whether a match was found
-   */
-  public boolean find() {
-    beginMatchOperation();
-    return delegate.find();
-  }
-
-  /**
-   * Resets this matcher to search the whole retained input from its beginning.
-   *
-   * @return this matcher
-   */
-  public Utf8Matcher reset() {
-    beginMatchOperation();
-    delegate.reset();
-    resetReplacementState();
-    return this;
-  }
-
-  /**
-   * Sets the byte-offset range searched by this matcher and resets its match state.
-   *
-   * <p>Both offsets must be UTF-8 code-point boundaries in the retained input.
-   *
-   * @param start relative byte offset at the start of the region
-   * @param end relative byte offset after the end of the region
-   * @return this matcher
-   * @throws IndexOutOfBoundsException if the range is invalid or either offset is not a code-point
-   *     boundary
-   */
-  public Utf8Matcher region(int start, int end) {
-    if (start < 0 || end < start || end > input.length()) {
-      throw new IndexOutOfBoundsException(
-          "start=" + start + ", end=" + end + ", length=" + input.length());
+    init {
+        this.pattern = Objects.requireNonNull<Pattern>(pattern, "pattern")
+        this.input = Objects.requireNonNull<Utf8Input?>(input, "input") as ArrayUtf8Input
+        delegate = Matcher(pattern, this.input.scanner())
     }
-    Utf8InputScanner scanner = input.scanner();
-    if (!scanner.isCodePointBoundary(start) || !scanner.isCodePointBoundary(end)) {
-      throw new IndexOutOfBoundsException(
-          "Region offsets must be UTF-8 code-point boundaries: start=" + start + ", end=" + end);
+
+    /**
+     * Attempts to match the entire input against this pattern.
+     * 
+     * @return whether the entire input matches
+     */
+    fun matches(): Boolean {
+        beginMatchOperation()
+        return delegate.matches()
     }
-    beginMatchOperation();
-    delegate.region(start, end);
-    resetReplacementState();
-    return this;
-  }
 
-  /**
-   * Returns the relative byte offset at the start of this matcher's region.
-   *
-   * @return the region start
-   */
-  public int regionStart() {
-    return delegate.regionStart();
-  }
-
-  /**
-   * Returns the relative byte offset after the end of this matcher's region.
-   *
-   * @return the region end
-   */
-  public int regionEnd() {
-    return delegate.regionEnd();
-  }
-
-  /**
-   * Returns the relative byte offset where the previous match started.
-   *
-   * @return the start of group zero
-   * @throws IllegalStateException if there is no current successful match
-   */
-  public int start() {
-    return delegate.start();
-  }
-
-  /**
-   * Returns the relative byte offset where the specified group started.
-   *
-   * @param group capture group index
-   * @return the group start, or {@code -1} if the group did not participate
-   * @throws IllegalStateException if there is no current successful match
-   * @throws IndexOutOfBoundsException if {@code group} is invalid
-   */
-  public int start(int group) {
-    return delegate.start(group);
-  }
-
-  /**
-   * Returns the relative byte offset after the previous match.
-   *
-   * @return the end of group zero
-   * @throws IllegalStateException if there is no current successful match
-   */
-  public int end() {
-    return delegate.end();
-  }
-
-  /**
-   * Returns the relative byte offset after the specified group.
-   *
-   * @param group capture group index
-   * @return the group end, or {@code -1} if the group did not participate
-   * @throws IllegalStateException if there is no current successful match
-   * @throws IndexOutOfBoundsException if {@code group} is invalid
-   */
-  public int end(int group) {
-    return delegate.end(group);
-  }
-
-  /**
-   * Returns the number of capturing groups in the pattern.
-   *
-   * @return the capture group count
-   */
-  public int groupCount() {
-    return delegate.groupCount();
-  }
-
-  /**
-   * Appends the whole input to {@code sink}, replacing every matching subsequence.
-   *
-   * <p>This method resets the matcher before searching, discarding any active region and prior
-   * append position. Existing sink contents are retained. If there are no matches, the original
-   * input is appended without parsing the replacement. Empty matches advance by a Unicode scalar.
-   * On successful return, there is no current match.
-   *
-   * <p>Output is written synchronously and cannot be rolled back. If a sink callback throws,
-   * replacement output may be partial and further append operations require a reset.
-   *
-   * @param sink synchronous destination for output ranges
-   * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
-   * @throws NullPointerException if either argument is null
-   * @throws IllegalArgumentException if a match is found and the replacement is malformed
-   * @throws IndexOutOfBoundsException if a match is found and a numbered group reference is invalid
-   * @throws ConcurrentModificationException if a sink callback advances this matcher
-   */
-  public void replaceAll(Utf8Sink sink, Utf8Input replacement) {
-    replace(sink, replacement, true);
-  }
-
-  /**
-   * Appends the whole input to {@code sink}, replacing only the first matching subsequence.
-   *
-   * <p>This method resets the matcher before searching, discarding any active region and prior
-   * append position. Existing sink contents are retained. If there are no matches, the original
-   * input is appended without parsing the replacement. On successful return, the replaced match
-   * remains current if one was found, and a subsequent {@link #find()} searches for the next match.
-   *
-   * <p>Output is written synchronously and cannot be rolled back. If a sink callback throws,
-   * replacement output may be partial and further append operations require a reset.
-   *
-   * @param sink synchronous destination for output ranges
-   * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
-   * @throws NullPointerException if either argument is null
-   * @throws IllegalArgumentException if a match is found and the replacement is malformed
-   * @throws IndexOutOfBoundsException if a match is found and a numbered group reference is invalid
-   * @throws ConcurrentModificationException if a sink callback advances this matcher
-   */
-  public void replaceFirst(Utf8Sink sink, Utf8Input replacement) {
-    replace(sink, replacement, false);
-  }
-
-  private void replace(Utf8Sink sink, Utf8Input replacement, boolean all) {
-    requireNonNull(sink, "sink");
-    requireNonNull(replacement, "replacement");
-    reset();
-    // The first find applies whole-input and anchored prefix/class rejection. This uses the
-    // regular matcher pipeline; String has separate literal, character-class and DFA replacement
-    // loops.
-    if (find()) {
-      do {
-        appendReplacement(sink, replacement);
-      } while (all && find());
+    /**
+     * Attempts to match a prefix of the input against this pattern.
+     * 
+     * @return whether an input prefix matches
+     */
+    fun lookingAt(): Boolean {
+        beginMatchOperation()
+        return delegate.lookingAt()
     }
-    appendTail(sink);
-  }
 
-  /**
-   * Appends the unmatched prefix and expanded replacement for the current match.
-   *
-   * @param sink synchronous destination for output ranges
-   * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
-   * @return this matcher
-   * @throws IllegalStateException if no match is current or replacement previously failed
-   * @throws ConcurrentModificationException if a sink callback advances this matcher
-   */
-  public Utf8Matcher appendReplacement(Utf8Sink sink, Utf8Input replacement) {
-    requireNonNull(sink, "sink");
-    requireNonNull(replacement, "replacement");
-    if (replacementFailed) {
-      throw new IllegalStateException("Replacement failed");
+    /**
+     * Attempts to find the next subsequence matching this pattern.
+     * 
+     * @return whether a match was found
+     */
+    fun find(): Boolean {
+        beginMatchOperation()
+        return delegate.find()
     }
-    beginAppend();
-    int expectedModCount = modCount;
-    try {
-      ReplacementSegment[] template = replacementTemplate(replacement);
-      // Group 0 bounds don't require resolving inner captures, which can be much more expensive.
-      int[] bounds = cachedTemplateNeedsCaptures ? captureBounds() : new int[] {start(), end()};
-      appendRange(sink, appendPosition, bounds[0], expectedModCount);
-      for (ReplacementSegment segment : template) {
-        switch (segment) {
-          case ReplacementSegment.Literal literal -> {
-            sink.append(literal.bytes(), literal.offset(), literal.length());
-            checkForConcurrentModification(expectedModCount);
-          }
-          case ReplacementSegment.GroupRef(var group) ->
-              appendGroup(sink, bounds, group, expectedModCount);
-          case ReplacementSegment.NamedGroupRef(var group) ->
-              appendGroup(sink, bounds, group, expectedModCount);
+
+    /**
+     * Resets this matcher to search the whole retained input from its beginning.
+     * 
+     * @return this matcher
+     */
+    fun reset(): Utf8Matcher {
+        beginMatchOperation()
+        delegate.reset()
+        resetReplacementState()
+        return this
+    }
+
+    /**
+     * Sets the byte-offset range searched by this matcher and resets its match state.
+     * 
+     * 
+     * Both offsets must be UTF-8 code-point boundaries in the retained input.
+     * 
+     * @param start relative byte offset at the start of the region
+     * @param end relative byte offset after the end of the region
+     * @return this matcher
+     * @throws IndexOutOfBoundsException if the range is invalid or either offset is not a code-point
+     * boundary
+     */
+    fun region(start: Int, end: Int): Utf8Matcher {
+        if (start < 0 || end < start || end > input.length()) {
+            throw IndexOutOfBoundsException(
+                "start=" + start + ", end=" + end + ", length=" + input.length()
+            )
         }
-      }
-      appendPosition = bounds[1];
-      return this;
-    } catch (RuntimeException | Error e) {
-      replacementFailed = true;
-      throw e;
-    } finally {
-      appending = false;
+        val scanner = input.scanner()
+        if (!scanner.isCodePointBoundary(start) || !scanner.isCodePointBoundary(end)) {
+            throw IndexOutOfBoundsException(
+                "Region offsets must be UTF-8 code-point boundaries: start=" + start + ", end=" + end
+            )
+        }
+        beginMatchOperation()
+        delegate.region(start, end)
+        resetReplacementState()
+        return this
     }
-  }
 
-  /**
-   * Appends the part of the input following the last replacement.
-   *
-   * @param sink synchronous destination for the remaining input
-   * @throws IllegalStateException if replacement previously failed
-   * @throws ConcurrentModificationException if a sink callback advances this matcher
-   */
-  public void appendTail(Utf8Sink sink) {
-    requireNonNull(sink, "sink");
-    if (replacementFailed) {
-      throw new IllegalStateException("Replacement failed");
+    /**
+     * Returns the relative byte offset at the start of this matcher's region.
+     * 
+     * @return the region start
+     */
+    fun regionStart(): Int {
+        return delegate.regionStart()
     }
-    beginAppend();
-    int expectedModCount = modCount;
-    try {
-      appendRange(sink, appendPosition, input.length(), expectedModCount);
-      appendPosition = input.length();
-    } catch (RuntimeException | Error e) {
-      replacementFailed = true;
-      throw e;
-    } finally {
-      appending = false;
+
+    /**
+     * Returns the relative byte offset after the end of this matcher's region.
+     * 
+     * @return the region end
+     */
+    fun regionEnd(): Int {
+        return delegate.regionEnd()
     }
-  }
 
-  private void appendGroup(Utf8Sink sink, int[] bounds, int group, int expectedModCount) {
-    int start = bounds[group * 2];
-    if (start >= 0) {
-      appendRange(sink, start, bounds[group * 2 + 1], expectedModCount);
+    /**
+     * Returns the relative byte offset where the previous match started.
+     * 
+     * @return the start of group zero
+     * @throws IllegalStateException if there is no current successful match
+     */
+    fun start(): Int {
+        return delegate.start()
     }
-  }
 
-  private int[] captureBounds() {
-    int[] bounds = new int[(groupCount() + 1) * 2];
-    for (int group = 0; group <= groupCount(); group++) {
-      bounds[group * 2] = start(group);
-      bounds[group * 2 + 1] = end(group);
+    /**
+     * Returns the relative byte offset where the specified group started.
+     * 
+     * @param group capture group index
+     * @return the group start, or `-1` if the group did not participate
+     * @throws IllegalStateException if there is no current successful match
+     * @throws IndexOutOfBoundsException if `group` is invalid
+     */
+    fun start(group: Int): Int {
+        return delegate.start(group)
     }
-    return bounds;
-  }
 
-  private void appendRange(Utf8Sink sink, int start, int end, int expectedModCount) {
-    input.appendRange(sink, start, end);
-    checkForConcurrentModification(expectedModCount);
-  }
-
-  private void beginAppend() {
-    if (appending) {
-      throw new ConcurrentModificationException();
+    /**
+     * Returns the relative byte offset after the previous match.
+     * 
+     * @return the end of group zero
+     * @throws IllegalStateException if there is no current successful match
+     */
+    fun end(): Int {
+        return delegate.end()
     }
-    appending = true;
-  }
 
-  private void beginMatchOperation() {
-    if (appending) {
-      throw new ConcurrentModificationException();
+    /**
+     * Returns the relative byte offset after the specified group.
+     * 
+     * @param group capture group index
+     * @return the group end, or `-1` if the group did not participate
+     * @throws IllegalStateException if there is no current successful match
+     * @throws IndexOutOfBoundsException if `group` is invalid
+     */
+    fun end(group: Int): Int {
+        return delegate.end(group)
     }
-    modCount++;
-  }
 
-  private void resetReplacementState() {
-    appendPosition = 0;
-    replacementFailed = false;
-  }
-
-  private void checkForConcurrentModification(int expectedModCount) {
-    if (modCount != expectedModCount) {
-      throw new ConcurrentModificationException();
+    /**
+     * Returns the number of capturing groups in the pattern.
+     * 
+     * @return the capture group count
+     */
+    fun groupCount(): Int {
+        return delegate.groupCount()
     }
-  }
 
-  private ReplacementSegment[] replacementTemplate(Utf8Input replacement) {
-    if (replacement != cachedReplacement) {
-      ArrayUtf8Input replacementInput = (ArrayUtf8Input) replacement;
-      if (isPlainLiteralReplacement(replacementInput)) {
-        Utf8InputScanner scanner = replacementInput.scanner();
-        cachedTemplate =
-            new ReplacementSegment[] {
-              new ReplacementSegment.Literal(scanner.bytes(), scanner.offset(), scanner.length())
-            };
-        cachedTemplateNeedsCaptures = false;
-        cachedReplacement = replacement;
-        return cachedTemplate;
-      }
-      String text = replacementInput.decode();
-      int groupCount = groupCount();
-      Matcher.ReplacementSegment[] parsed = Matcher.compileReplacementTemplate(text, groupCount);
-      ReplacementSegment[] compiled = new ReplacementSegment[parsed.length];
-      Map<String, Integer> namedGroups = pattern.namedGroups();
-      boolean needsCaptures = false;
-      for (int index = 0; index < parsed.length; index++) {
-        compiled[index] =
-            switch (parsed[index]) {
-              case Matcher.ReplacementSegment.Literal(var literal) ->
-                  new ReplacementSegment.Literal(literal.getBytes(UTF_8));
-              case Matcher.ReplacementSegment.GroupRef(var group) -> {
-                if (group > groupCount) {
-                  throw new IndexOutOfBoundsException(
-                      "No group " + group + " (groupCount=" + groupCount + ")");
+    /**
+     * Appends the whole input to `sink`, replacing every matching subsequence.
+     * 
+     * 
+     * This method resets the matcher before searching, discarding any active region and prior
+     * append position. Existing sink contents are retained. If there are no matches, the original
+     * input is appended without parsing the replacement. Empty matches advance by a Unicode scalar.
+     * On successful return, there is no current match.
+     * 
+     * 
+     * Output is written synchronously and cannot be rolled back. If a sink callback throws,
+     * replacement output may be partial and further append operations require a reset.
+     * 
+     * @param sink synchronous destination for output ranges
+     * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
+     * @throws NullPointerException if either argument is null
+     * @throws IllegalArgumentException if a match is found and the replacement is malformed
+     * @throws IndexOutOfBoundsException if a match is found and a numbered group reference is invalid
+     * @throws ConcurrentModificationException if a sink callback advances this matcher
+     */
+    fun replaceAll(sink: Utf8Sink?, replacement: Utf8Input?) {
+        replace(sink, replacement, true)
+    }
+
+    /**
+     * Appends the whole input to `sink`, replacing only the first matching subsequence.
+     * 
+     * 
+     * This method resets the matcher before searching, discarding any active region and prior
+     * append position. Existing sink contents are retained. If there are no matches, the original
+     * input is appended without parsing the replacement. On successful return, the replaced match
+     * remains current if one was found, and a subsequent [.find] searches for the next match.
+     * 
+     * 
+     * Output is written synchronously and cannot be rolled back. If a sink callback throws,
+     * replacement output may be partial and further append operations require a reset.
+     * 
+     * @param sink synchronous destination for output ranges
+     * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
+     * @throws NullPointerException if either argument is null
+     * @throws IllegalArgumentException if a match is found and the replacement is malformed
+     * @throws IndexOutOfBoundsException if a match is found and a numbered group reference is invalid
+     * @throws ConcurrentModificationException if a sink callback advances this matcher
+     */
+    fun replaceFirst(sink: Utf8Sink?, replacement: Utf8Input?) {
+        replace(sink, replacement, false)
+    }
+
+    private fun replace(sink: Utf8Sink?, replacement: Utf8Input?, all: Boolean) {
+        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        Objects.requireNonNull<Utf8Input?>(replacement, "replacement")
+        reset()
+        // The first find applies whole-input and anchored prefix/class rejection. This uses the
+        // regular matcher pipeline; String has separate literal, character-class and DFA replacement
+        // loops.
+        if (find()) {
+            do {
+                appendReplacement(sink, replacement)
+            } while (all && find())
+        }
+        appendTail(sink)
+    }
+
+    /**
+     * Appends the unmatched prefix and expanded replacement for the current match.
+     * 
+     * @param sink synchronous destination for output ranges
+     * @param replacement UTF-8 replacement using SafeRE's String replacement syntax
+     * @return this matcher
+     * @throws IllegalStateException if no match is current or replacement previously failed
+     * @throws ConcurrentModificationException if a sink callback advances this matcher
+     */
+    fun appendReplacement(sink: Utf8Sink?, replacement: Utf8Input?): Utf8Matcher {
+        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        Objects.requireNonNull<Utf8Input?>(replacement, "replacement")
+        check(!replacementFailed) { "Replacement failed" }
+        beginAppend()
+        val expectedModCount = modCount
+        try {
+            val template = replacementTemplate(replacement)
+            // Group 0 bounds don't require resolving inner captures, which can be much more expensive.
+            val bounds = if (cachedTemplateNeedsCaptures) captureBounds() else intArrayOf(start(), end())
+            appendRange(sink, appendPosition, bounds[0], expectedModCount)
+            for (segment in template) {
+                when (segment) {
+                    -> {
+                        sink!!.append(literal.bytes(), literal.offset(), literal.length())
+                        checkForConcurrentModification(expectedModCount)
+                    }
+
+                    -> appendGroup(sink, bounds, group, expectedModCount)
+                    -> appendGroup(sink, bounds, group, expectedModCount)
                 }
-                needsCaptures |= group != 0;
-                yield new ReplacementSegment.GroupRef(group);
-              }
-              case Matcher.ReplacementSegment.NamedGroupRef(var name) -> {
-                Integer group = namedGroups.get(name);
-                if (group == null) {
-                  throw new IllegalArgumentException("No group with name <" + name + ">");
-                }
-                needsCaptures |= group != 0;
-                yield new ReplacementSegment.NamedGroupRef(group);
-              }
-            };
-      }
-      cachedTemplate = compiled;
-      cachedTemplateNeedsCaptures = needsCaptures;
-      cachedReplacement = replacement;
-    }
-    return cachedTemplate;
-  }
-
-  private static boolean isPlainLiteralReplacement(ArrayUtf8Input replacement) {
-    Utf8InputScanner scanner = replacement.scanner();
-    byte[] bytes = scanner.bytes();
-    int end = scanner.offset() + scanner.length();
-    for (int index = scanner.offset(); index < end; index++) {
-      byte value = bytes[index];
-      // Keep malformed, trusted non-ASCII replacements on the decoding path so their existing
-      // replacement-character behavior is preserved. ASCII is valid without a validation pass.
-      if (value == '$' || value == '\\' || (value < 0 && !replacement.validated())) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private sealed interface ReplacementSegment {
-    final class Literal implements ReplacementSegment {
-      private final byte[] bytes;
-      private final int offset;
-      private final int length;
-
-      Literal(byte[] bytes) {
-        this(bytes, 0, bytes.length);
-      }
-
-      Literal(byte[] bytes, int offset, int length) {
-        this.bytes = bytes;
-        this.offset = offset;
-        this.length = length;
-      }
-
-      byte[] bytes() {
-        return bytes;
-      }
-
-      int offset() {
-        return offset;
-      }
-
-      int length() {
-        return length;
-      }
+            }
+            appendPosition = bounds[1]
+            return this
+        } catch (e: RuntimeException) {
+            replacementFailed = true
+            throw e
+        } catch (e: Error) {
+            replacementFailed = true
+            throw e
+        } finally {
+            appending = false
+        }
     }
 
-    record GroupRef(int group) implements ReplacementSegment {}
+    /**
+     * Appends the part of the input following the last replacement.
+     * 
+     * @param sink synchronous destination for the remaining input
+     * @throws IllegalStateException if replacement previously failed
+     * @throws ConcurrentModificationException if a sink callback advances this matcher
+     */
+    fun appendTail(sink: Utf8Sink?) {
+        Objects.requireNonNull<Utf8Sink?>(sink, "sink")
+        check(!replacementFailed) { "Replacement failed" }
+        beginAppend()
+        val expectedModCount = modCount
+        try {
+            appendRange(sink, appendPosition, input.length(), expectedModCount)
+            appendPosition = input.length()
+        } catch (e: RuntimeException) {
+            replacementFailed = true
+            throw e
+        } catch (e: Error) {
+            replacementFailed = true
+            throw e
+        } finally {
+            appending = false
+        }
+    }
 
-    record NamedGroupRef(int group) implements ReplacementSegment {}
-  }
+    private fun appendGroup(sink: Utf8Sink?, bounds: IntArray, group: Int, expectedModCount: Int) {
+        val start = bounds[group * 2]
+        if (start >= 0) {
+            appendRange(sink, start, bounds[group * 2 + 1], expectedModCount)
+        }
+    }
+
+    private fun captureBounds(): IntArray {
+        val bounds = IntArray((groupCount() + 1) * 2)
+        /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+        return bounds
+    }
+
+    private fun appendRange(sink: Utf8Sink?, start: Int, end: Int, expectedModCount: Int) {
+        input.appendRange(sink, start, end)
+        checkForConcurrentModification(expectedModCount)
+    }
+
+    private fun beginAppend() {
+        if (appending) {
+            throw ConcurrentModificationException()
+        }
+        appending = true
+    }
+
+    private fun beginMatchOperation() {
+        if (appending) {
+            throw ConcurrentModificationException()
+        }
+        modCount++
+    }
+
+    private fun resetReplacementState() {
+        appendPosition = 0
+        replacementFailed = false
+    }
+
+    private fun checkForConcurrentModification(expectedModCount: Int) {
+        if (modCount != expectedModCount) {
+            throw ConcurrentModificationException()
+        }
+    }
+
+    private fun replacementTemplate(replacement: Utf8Input?): Array<ReplacementSegment> {
+        if (replacement !== cachedReplacement) {
+            val replacementInput = replacement as ArrayUtf8Input
+            if (isPlainLiteralReplacement(replacementInput)) {
+                val scanner = replacementInput.scanner()
+                cachedTemplate =
+                    arrayOf<ReplacementSegment>(
+                        ReplacementSegment.Literal(scanner.bytes(), scanner.offset(), scanner.length())
+                    )
+                cachedTemplateNeedsCaptures = false
+                cachedReplacement = replacement
+                return cachedTemplate
+            }
+            val text = replacementInput.decode()
+            val groupCount = groupCount()
+            val parsed: Array<Matcher.ReplacementSegment?> =
+                Matcher.Companion.compileReplacementTemplate(text, groupCount)
+            val compiled: Array<ReplacementSegment> = arrayOfNulls<ReplacementSegment>(parsed.length)
+            val namedGroups = pattern.namedGroups()
+            var needsCaptures = false
+            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            cachedTemplate = compiled
+            cachedTemplateNeedsCaptures = needsCaptures
+            cachedReplacement = replacement
+        }
+        return cachedTemplate
+    }
+
+    private interface ReplacementSegment {
+        class Literal internal constructor(bytes: ByteArray?, offset: Int, length: Int) : ReplacementSegment {
+            private val bytes: ByteArray?
+            private val offset: Int
+            private val length: Int
+
+            internal constructor(bytes: ByteArray) : this(bytes, 0, bytes.length)
+
+            init {
+                this.bytes = bytes
+                this.offset = offset
+                this.length = length
+            }
+
+            fun bytes(): ByteArray? {
+                return bytes
+            }
+
+            fun offset(): Int {
+                return offset
+            }
+
+            fun length(): Int {
+                return length
+            }
+        }
+
+        @JvmRecord
+        data class GroupRef(group: Int) : ReplacementSegment {
+            val group: Int
+
+            init {
+                this.group = group
+            }
+        }
+
+        @JvmRecord
+        data class NamedGroupRef(group: Int) : ReplacementSegment {
+            val group: Int
+
+            init {
+                this.group = group
+            }
+        }
+    }
+
+    companion object {
+        private fun isPlainLiteralReplacement(replacement: ArrayUtf8Input): Boolean {
+            val scanner = replacement.scanner()
+            val bytes = scanner.bytes()
+            val end = scanner.offset() + scanner.length()
+            /* !!! Hit visitElement for element type: class org.jetbrains.kotlin.nj2k.tree.JKJavaForLoopStatement !!! */
+            return true
+        }
+    }
 }

@@ -2,13 +2,12 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-/** Declared semantic role for an engine path. */
-enum EnginePathRole {
-  AUTHORITATIVE_PRODUCER,
-  PARTIAL_PRODUCER,
-  FILTER,
-  GUARDED_OPTIMIZATION
+/** Declared semantic role for an engine path.  */
+internal enum class EnginePathRole {
+    AUTHORITATIVE_PRODUCER,
+    PARTIAL_PRODUCER,
+    FILTER,
+    GUARDED_OPTIMIZATION
 }

@@ -2,1770 +2,1857 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junit.jupiter.api.parallel.Isolated;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.assertj.core.api.ThrowingConsumer
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.Isolated
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
+import java.lang.reflect.RecordComponent
+import java.nio.charset.StandardCharsets
+import java.util.List
+import java.util.Map
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.LongAdder
+import java.util.function.Function
+import java.util.function.IntConsumer
+import java.util.function.Predicate
+import java.util.regex.MatchResult
+import java.util.regex.Pattern
+import java.util.stream.IntStream
+import java.util.stream.Stream
 
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 @DisabledForCrosscheck("match diagnostics are a SafeRE-specific public API")
-class DiagnosticsTest {
-  private final RecordingDiagnostics diagnostics = new RecordingDiagnostics();
+internal class DiagnosticsTest {
+    private val diagnostics = RecordingDiagnostics()
 
-  @AfterEach
-  void disableDiagnostics() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-  }
-
-  @Test
-  void anchoredOnePassUsesTerminalRejectionBeforeScanning() {
-    Pattern.setDiagnostics(diagnostics);
-    String input = "a".repeat(4096) + "c";
-    for (String regex : List.of("^(a)*b$", "^([a-z]+)[0-9]$", "^([a-z]+)END\\z")) {
-      Pattern pattern = Pattern.compile(regex);
-      assertThat(pattern.canOnePassPrimary()).as("/%s/", regex).isTrue();
-      assertThat(pattern.matcher(input).matches()).isFalse();
-      assertThat(pattern.matcher(input).find()).isFalse();
-      assertThat(pattern.matcher(input).replaceAll("$1")).isEqualTo(input);
-      Utf8Input utf8 = Utf8Input.validated(input.getBytes(UTF_8));
-      assertThat(pattern.matcher(utf8).matches()).isFalse();
-      assertThat(pattern.matcher(utf8).find()).isFalse();
-      assertThat(operationsFor(pattern))
-          .hasSize(5)
-          .allSatisfy(
-              event -> {
-                assertThat(event.boundaryStrategy())
-                    .isIn(MatchStrategy.LITERAL, MatchStrategy.CHARACTER_CLASS);
-                assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-                assertThat(event.forwardDfaSearchCount()).isZero();
-                assertThat(event.auxiliaryStrategies())
-                    .anyMatch(strategy -> strategy.role() == StrategyRole.REJECT_PREFILTER);
-              });
-    }
-  }
-
-  @Test
-  void patternIdentityIsStableAndDistinctWithoutDiagnostics() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    Pattern first = Pattern.compile("abc");
-    Pattern second = Pattern.compile("abc");
-
-    long firstId = first.patternId();
-    assertThat(firstId).isPositive();
-    assertThat(second.patternId()).isPositive().isNotEqualTo(firstId);
-    assertThat(first.matcher("abc").matches()).isTrue();
-    assertThat(first.patternId()).isEqualTo(firstId);
-  }
-
-  @Test
-  void deserializedPatternHasANewDiagnosticsIdentity() throws Exception {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    Pattern original = Pattern.compile("(a+)b", Pattern.CASE_INSENSITIVE);
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
-      output.writeObject(original);
+    @AfterEach
+    fun disableDiagnostics() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
     }
 
-    Pattern restored;
-    try (ObjectInputStream input =
-        new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
-      restored = (Pattern) input.readObject();
+    @Test
+    fun anchoredOnePassUsesTerminalRejectionBeforeScanning() {
+        Pattern.setDiagnostics(diagnostics)
+        val input = "a".repeat(4096) + "c"
+        for (regex in mutableListOf<String?>("^(a)*b$", "^([a-z]+)[0-9]$", "^([a-z]+)END\\z")) {
+            val pattern = Pattern.compile(regex)
+            Assertions.assertThat(pattern.canOnePassPrimary()).`as`("/%s/", regex).isTrue()
+            Assertions.assertThat(pattern.matcher(input).matches()).isFalse()
+            Assertions.assertThat(pattern.matcher(input).find()).isFalse()
+            Assertions.assertThat(pattern.matcher(input).replaceAll("$1")).isEqualTo(input)
+            val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
+            Assertions.assertThat(pattern.matcher(utf8).matches()).isFalse()
+            Assertions.assertThat(pattern.matcher(utf8).find()).isFalse()
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .hasSize(5)
+                .allSatisfy(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy)
+                            .isIn(MatchStrategy.LITERAL, MatchStrategy.CHARACTER_CLASS)
+                        Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                        Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                        Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                            .anyMatch(Predicate { strategy: StrategyParticipation? -> strategy!!.role == StrategyRole.REJECT_PREFILTER })
+                    })
+        }
     }
 
-    assertThat(restored.patternId()).isPositive().isNotEqualTo(original.patternId());
-    assertThat(restored.pattern()).isEqualTo(original.pattern());
-    assertThat(restored.flags()).isEqualTo(original.flags());
-    Pattern.setDiagnostics(diagnostics);
-    assertThat(restored.matcher("AAB").matches()).isTrue();
-    assertThat(diagnostics.operations)
-        .singleElement()
-        .satisfies(
-            event -> assertThat(event.pattern().patternId()).isEqualTo(restored.patternId()));
-  }
+    @Test
+    fun patternIdentityIsStableAndDistinctWithoutDiagnostics() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        val first = Pattern.compile("abc")
+        val second = Pattern.compile("abc")
 
-  @Test
-  void staticAnalysisReportsFeaturesCapabilitiesAndLimitations() {
-    Pattern pattern = Pattern.compile("^(?:(a)?)*$");
-
-    PatternAnalysis analysis = pattern.analysis();
-
-    assertThat(analysis.features())
-        .contains(
-            PatternFeature.CAPTURES,
-            PatternFeature.ANCHOR,
-            PatternFeature.START_ANCHOR,
-            PatternFeature.END_ANCHOR,
-            PatternFeature.NULLABLE,
-            PatternFeature.NESTED_NULLABLE_QUANTIFIER,
-            PatternFeature.PROGRESS_CHECK,
-            PatternFeature.CAPTURES_IN_QUANTIFIER);
-    assertThat(analysis.capabilities())
-        .contains(PatternCapability.DFA_REJECT_PREFILTER, PatternCapability.NFA);
-    assertThat(analysis.limitations())
-        .contains(
-            PatternLimitation.NULLABLE_LOOP_REQUIRES_EXACT_ENGINE,
-            PatternLimitation.CAPTURE_PRIORITY_REQUIRES_EXACT_ENGINE);
-    assertThat(analysis.captureCount()).isEqualTo(1);
-    assertThatThrownBy(() -> analysis.features().clear())
-        .isInstanceOf(UnsupportedOperationException.class);
-  }
-
-  @Test
-  void listenerInstalledAfterCompilationStillReceivesPatternAnalysis() {
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    Pattern pattern = Pattern.compile("abc");
-    long patternId = pattern.patternId();
-    Pattern.setDiagnostics(diagnostics);
-
-    assertThat(pattern.matcher("abc").matches()).isTrue();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.pattern().analysis()).isSameAs(pattern.analysis());
-              assertThat(event.pattern().patternId()).isEqualTo(patternId);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-              assertThat(event.forwardDfaSearchCount()).isZero();
-              assertThat(event.reverseDfaSearchCount()).isZero();
-            });
-    assertThat(diagnostics.compilations).isEmpty();
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    assertThat(pattern.patternId()).isEqualTo(patternId);
-  }
-
-  @Test
-  void asPredicateReportsOneFindOperation() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("[0-9]+x");
-
-    assertThat(pattern.asPredicate().test("ab 12x cd")).isTrue();
-    assertThat(pattern.asPredicate().test("ab 12 cd")).isFalse();
-
-    assertThat(operationsFor(pattern))
-        .extracting(OperationDiagnostics::operation, OperationDiagnostics::outcome)
-        .containsExactly(
-            tuple(MatchOperation.FIND, MatchOutcome.MATCH),
-            tuple(MatchOperation.FIND, MatchOutcome.NO_MATCH));
-  }
-
-  @Test
-  void literalAlternationSearchesReportADistinctStrategy() {
-    Pattern.setDiagnostics(diagnostics);
-    for (String regex : List.of("apple|banana|cherry", "foo|barfoo")) {
-      Pattern pattern = Pattern.compile(regex);
-      for (String input : List.of("barfoo apple", "xxxxx")) {
-        assertThat(pattern.matcher(input).find()).isEqualTo(input.equals("barfoo apple"));
-        OperationDiagnostics event = operationsFor(pattern).getLast();
-        assertThat(event.boundaryStrategy()).as(regex).isEqualTo(MatchStrategy.LITERAL_ALTERNATION);
-        assertThat(event.forwardDfaSearchCount()).isZero();
-        assertThat(event.reverseDfaSearchCount()).isZero();
-      }
-    }
-  }
-
-  @Test
-  void compilationAndOperationsShareDescriptor() {
-    Pattern.setDiagnostics(diagnostics);
-
-    Pattern pattern = Pattern.compile("^GET ([^ ]+)");
-    assertThat(pattern.matcher("GET /index").lookingAt()).isTrue();
-
-    PatternCompiledEvent compilation =
-        diagnostics.compilations.stream()
-            .filter(event -> event.pattern().patternId() == pattern.patternId())
-            .findFirst()
-            .orElseThrow();
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.pattern()).isSameAs(compilation.pattern());
-              assertThat(event.operation()).isEqualTo(MatchOperation.LOOKING_AT);
-              assertThat(event.outcome()).isEqualTo(MatchOutcome.MATCH);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.ONE_PASS);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.ONE_PASS);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.EAGER);
-            });
-  }
-
-  @Test
-  void capturedLiteralRetainsEnginesNeededWhenLiteralRunnerIsIneligible() {
-    Pattern.setDiagnostics(diagnostics);
-
-    Pattern lookingAtPattern = Pattern.compile("(foo)");
-    assertThat(lookingAtPattern.matcher("foobar").lookingAt()).isTrue();
-    assertThat(operationsFor(lookingAtPattern).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.ONE_PASS);
-
-    Pattern foldedUtf8LookingAt = Pattern.compile("(?i)foo");
-    assertThat(
-            foldedUtf8LookingAt.matcher(Utf8Input.validated("FOObar".getBytes(UTF_8))).lookingAt())
-        .isTrue();
-    assertThat(operationsFor(foldedUtf8LookingAt).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.ONE_PASS);
-
-    Pattern foldedUtf8Matches = Pattern.compile("(?i)foo");
-    assertThat(foldedUtf8Matches.matcher(Utf8Input.validated("FOO".getBytes(UTF_8))).matches())
-        .isTrue();
-    assertThat(operationsFor(foldedUtf8Matches).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.SHIFT_DFA);
-
-    Pattern foldedUtf8Find = Pattern.compile("(?i)foo");
-    assertThat(foldedUtf8Find.matcher(Utf8Input.validated("xxFOO".getBytes(UTF_8))).find())
-        .isTrue();
-    assertThat(operationsFor(foldedUtf8Find).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.DFA);
-  }
-
-  @ParameterizedTest
-  @MethodSource("lazyShiftDfaSearchCases")
-  void lazyShiftDfaSearchesRetainOnePassFallback(
-      String regex, String input, MatchOperation operation, boolean utf8) {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(regex);
-    assertThat(pattern.shiftDfaAnalyzed()).isFalse();
-
-    boolean matched;
-    if (utf8) {
-      Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-      matched = operation == MatchOperation.FIND ? matcher.find() : matcher.lookingAt();
-    } else {
-      Matcher matcher = pattern.matcher(input);
-      matched = operation == MatchOperation.FIND ? matcher.find() : matcher.lookingAt();
+        val firstId = first.patternId()
+        Assertions.assertThat(firstId).isPositive()
+        Assertions.assertThat(second.patternId()).isPositive().isNotEqualTo(firstId)
+        Assertions.assertThat(first.matcher("abc").matches()).isTrue()
+        Assertions.assertThat(first.patternId()).isEqualTo(firstId)
     }
 
-    assertThat(matched).isTrue();
-    assertThat(operationsFor(pattern).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.ONE_PASS);
-    assertThat(pattern.shiftDfaAnalyzed()).isFalse();
-  }
-
-  private static Stream<Arguments> lazyShiftDfaSearchCases() {
-    Stream.Builder<Arguments> cases = Stream.builder();
-    for (boolean utf8 : List.of(false, true)) {
-      for (MatchOperation operation : List.of(MatchOperation.FIND, MatchOperation.LOOKING_AT)) {
-        cases.add(Arguments.of("^a[é]*", "aéé", operation, utf8));
-        cases.add(Arguments.of("^a{9}b?c?", "aaaaaaaaabc", operation, utf8));
-        cases.add(Arguments.of("^a[bc]*", "abcbc", operation, utf8));
-      }
-    }
-    return cases.build();
-  }
-
-  @Test
-  void forcedBitStateAndNfaReportTheExactEngine() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions bitStateOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .shiftDfa(false)
-            .onePass(false)
-            .dfa(false)
-            .build();
-    Pattern bitState = Pattern.compile("a+b", 0, bitStateOnly);
-
-    assertThat(bitState.matcher("aaab").matches()).isTrue();
-    assertThat(operationsFor(bitState).getLast().boundaryStrategy())
-        .isEqualTo(MatchStrategy.BIT_STATE);
-
-    EnginePathOptions nfaOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .shiftDfa(false)
-            .onePass(false)
-            .dfa(false)
-            .bitState(false)
-            .build();
-    Pattern nfa = Pattern.compile("a+b", 0, nfaOnly);
-
-    assertThat(nfa.matcher("aaab").matches()).isTrue();
-    assertThat(operationsFor(nfa).getLast().boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-  }
-
-  private static Stream<Arguments> reverseCandidateVerificationCases() {
-    return Stream.of(false, true)
-        .flatMap(
-            bitState ->
-                Stream.of(
-                    Arguments.of(bitState, "(?:foo|fax)$", "x".repeat(1400) + "foo"),
-                    Arguments.of(bitState, "(?:foo|fax)$", "x".repeat(1400) + "foo\r\n"),
-                    Arguments.of(bitState, "(?:foo|fax)\\z", "x".repeat(1400) + "fax"),
-                    Arguments.of(bitState, "foo[ab]*$", "zzfoo" + "a".repeat(2048))));
-  }
-
-  @ParameterizedTest
-  @MethodSource("reverseCandidateVerificationCases")
-  void utf8ReverseCandidateReportsItsExactEngine(boolean bitState, String regex, String input) {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern =
-        Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(bitState).build());
-
-    assertThat(pattern.find(Utf8Input.validated(input.getBytes(UTF_8)))).isTrue();
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.reverseDfaSearchCount()).isPositive();
-              assertThat(event.boundaryStrategy())
-                  .isEqualTo(bitState ? MatchStrategy.BIT_STATE : MatchStrategy.NFA);
-              assertThat(event.auxiliaryStrategies())
-                  .contains(
-                      new StrategyParticipation(
-                          bitState ? MatchStrategy.BIT_STATE : MatchStrategy.NFA,
-                          StrategyRole.CANDIDATE_VERIFICATION));
-              if (regex.equals("foo[ab]*$")) {
-                assertThat(event.reverseDfaSearchCount()).isEqualTo(2);
-              }
-            });
-  }
-
-  @Test
-  void replacementFastPathEmitsOneOperationWithTotalMatchCount() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("[a-z]+");
-
-    assertThat(pattern.matcher("a 22 bb").replaceAll("x")).isEqualTo("x 22 x");
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.CHARACTER_CLASS);
-              assertThat(event.matchCount()).isEqualTo(2);
-              assertThat(event.auxiliaryStrategies())
-                  .containsExactly(
-                      new StrategyParticipation(
-                          MatchStrategy.CHARACTER_CLASS, StrategyRole.CANDIDATE_VERIFICATION));
-            });
-  }
-
-  @Test
-  void compositeRejectPrefilterReportsTheChildThatRejected() {
-    Pattern.setDiagnostics(diagnostics);
-
-    for (MatchOperation operation : List.of(MatchOperation.FIND, MatchOperation.MATCHES)) {
-      // Reach the composite prefilter rather than the earlier minimum-length rejection.
-      assertCompositeRejection(operation, "needle ", MatchStrategy.CHARACTER_CLASS);
-      assertCompositeRejection(operation, "xxxxxxx", MatchStrategy.LITERAL);
-    }
-  }
-
-  @Test
-  void compositeRejectPrefilterReplacementReportsTheChildThatRejected() {
-    Pattern.setDiagnostics(diagnostics);
-
-    for (MatchOperation operation :
-        List.of(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
-      Pattern pattern = Pattern.compile("foo.*bar.*[0-9]$");
-      Matcher matcher = pattern.matcher("foo---7");
-
-      String result =
-          operation == MatchOperation.REPLACE_FIRST
-              ? matcher.replaceFirst("replacement")
-              : matcher.replaceAll("replacement");
-
-      assertThat(result).isEqualTo("foo---7");
-      assertThat(operationsFor(pattern))
-          .singleElement()
-          .satisfies(
-              event -> {
-                assertThat(event.operation()).isEqualTo(operation);
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-                assertThat(event.auxiliaryStrategies())
-                    .containsExactly(
-                        new StrategyParticipation(
-                            MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER));
-              });
-    }
-  }
-
-  @Test
-  void citationScrubberReplacementRejectsOnCharacterClassPrefilter() {
-    Pattern.setDiagnostics(diagnostics);
-
-    String regex = " ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]";
-    Pattern pattern = Pattern.compile(regex);
-
-    for (String input :
-        List.of("digits 1.2.3.4 and dots but no brackets", "letters and spaces only")) {
-      for (MatchOperation operation :
-          List.of(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
-        diagnostics.operations.clear();
-        Matcher matcher = pattern.matcher(input);
-        String result =
-            operation == MatchOperation.REPLACE_FIRST
-                ? matcher.replaceFirst("replacement")
-                : matcher.replaceAll("replacement");
-
-        assertThat(result).isEqualTo(input);
-        assertThat(operationsFor(pattern))
+    @Test
+    @Throws(Exception::class)
+    fun deserializedPatternHasANewDiagnosticsIdentity() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        val original = Pattern.compile("(a+)b", Pattern.CASE_INSENSITIVE)
+        val bytes = ByteArrayOutputStream()
+        ObjectOutputStream(bytes).use { output ->
+            output.writeObject(original)
+        }
+        val restored: Pattern
+        ObjectInputStream(ByteArrayInputStream(bytes.toByteArray())).use { input ->
+            restored = input.readObject() as Pattern
+        }
+        Assertions.assertThat(restored.patternId()).isPositive().isNotEqualTo(original.patternId())
+        Assertions.assertThat(restored.pattern()).isEqualTo(original.pattern())
+        Assertions.assertThat(restored.flags()).isEqualTo(original.flags())
+        Pattern.setDiagnostics(diagnostics)
+        Assertions.assertThat(restored.matcher("AAB").matches()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(diagnostics.operations)
             .singleElement()
             .satisfies(
-                event -> {
-                  assertThat(event.operation()).isEqualTo(operation);
-                  assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.CHARACTER_CLASS);
-                  assertThat(event.auxiliaryStrategies())
-                      .contains(
-                          new StrategyParticipation(
-                              MatchStrategy.CHARACTER_CLASS, StrategyRole.REJECT_PREFILTER));
-                });
-      }
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat(event!!.pattern.patternId).isEqualTo(restored.patternId())
+                })
     }
 
-    // Brackets present with no matching digits return the right result without false-positive
-    // match.
-    for (String input :
-        List.of(
+    @Test
+    fun staticAnalysisReportsFeaturesCapabilitiesAndLimitations() {
+        val pattern = Pattern.compile("^(?:(a)?)*$")
+
+        val analysis = pattern.analysis()
+
+        Assertions.assertThat<PatternFeature?>(analysis.features)
+            .contains(
+                PatternFeature.CAPTURES,
+                PatternFeature.ANCHOR,
+                PatternFeature.START_ANCHOR,
+                PatternFeature.END_ANCHOR,
+                PatternFeature.NULLABLE,
+                PatternFeature.NESTED_NULLABLE_QUANTIFIER,
+                PatternFeature.PROGRESS_CHECK,
+                PatternFeature.CAPTURES_IN_QUANTIFIER
+            )
+        Assertions.assertThat<PatternCapability?>(analysis.capabilities)
+            .contains(PatternCapability.DFA_REJECT_PREFILTER, PatternCapability.NFA)
+        Assertions.assertThat<PatternLimitation?>(analysis.limitations)
+            .contains(
+                PatternLimitation.NULLABLE_LOOP_REQUIRES_EXACT_ENGINE,
+                PatternLimitation.CAPTURE_PRIORITY_REQUIRES_EXACT_ENGINE
+            )
+        Assertions.assertThat(analysis.captureCount).isEqualTo(1)
+        Assertions.assertThatThrownBy(ThrowingCallable { analysis.features.clear() })
+            .isInstanceOf(UnsupportedOperationException::class.java)
+    }
+
+    @Test
+    fun listenerInstalledAfterCompilationStillReceivesPatternAnalysis() {
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        val pattern = Pattern.compile("abc")
+        val patternId = pattern.patternId()
+        Pattern.setDiagnostics(diagnostics)
+
+        Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<PatternAnalysis?>(event!!.pattern.analysis).isSameAs(pattern.analysis())
+                    Assertions.assertThat(event.pattern.patternId).isEqualTo(patternId)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                    Assertions.assertThat(event.reverseDfaSearchCount).isZero()
+                })
+        Assertions.assertThat<PatternCompiledEvent?>(diagnostics.compilations).isEmpty()
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        Assertions.assertThat(pattern.patternId()).isEqualTo(patternId)
+    }
+
+    @Test
+    fun asPredicateReportsOneFindOperation() {
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("[0-9]+x")
+
+        Assertions.assertThat(pattern.asPredicate().test("ab 12x cd")).isTrue()
+        Assertions.assertThat(pattern.asPredicate().test("ab 12 cd")).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .extracting(OperationDiagnostics::operation, OperationDiagnostics::outcome)
+            .containsExactly(
+                Assertions.tuple(MatchOperation.FIND, MatchOutcome.MATCH),
+                Assertions.tuple(MatchOperation.FIND, MatchOutcome.NO_MATCH)
+            )
+    }
+
+    @Test
+    fun literalAlternationSearchesReportADistinctStrategy() {
+        Pattern.setDiagnostics(diagnostics)
+        for (regex in mutableListOf<String?>("apple|banana|cherry", "foo|barfoo")) {
+            val pattern = Pattern.compile(regex)
+            for (input in mutableListOf<String?>("barfoo apple", "xxxxx")) {
+                Assertions.assertThat(pattern.matcher(input).find()).isEqualTo(input == "barfoo apple")
+                val event: OperationDiagnostics = operationsFor(pattern).getLast()
+                Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).`as`(regex)
+                    .isEqualTo(MatchStrategy.LITERAL_ALTERNATION)
+                Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                Assertions.assertThat(event.reverseDfaSearchCount).isZero()
+            }
+        }
+    }
+
+    @Test
+    fun compilationAndOperationsShareDescriptor() {
+        Pattern.setDiagnostics(diagnostics)
+
+        val pattern = Pattern.compile("^GET ([^ ]+)")
+        Assertions.assertThat(pattern.matcher("GET /index").lookingAt()).isTrue()
+
+        val compilation =
+            diagnostics.compilations.stream()
+                .filter { event: PatternCompiledEvent? -> event!!.pattern.patternId == pattern.patternId() }
+                .findFirst()
+                .orElseThrow()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<PatternDescriptor?>(event!!.pattern).isSameAs(compilation.pattern)
+                    Assertions.assertThat<MatchOperation?>(event.operation).isEqualTo(MatchOperation.LOOKING_AT)
+                    Assertions.assertThat<MatchOutcome?>(event.outcome).isEqualTo(MatchOutcome.MATCH)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.ONE_PASS)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.ONE_PASS)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
+                })
+    }
+
+    @Test
+    fun capturedLiteralRetainsEnginesNeededWhenLiteralRunnerIsIneligible() {
+        Pattern.setDiagnostics(diagnostics)
+
+        val lookingAtPattern = Pattern.compile("(foo)")
+        Assertions.assertThat(lookingAtPattern.matcher("foobar").lookingAt()).isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(lookingAtPattern).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.ONE_PASS)
+
+        val foldedUtf8LookingAt = Pattern.compile("(?i)foo")
+        Assertions.assertThat(
+            foldedUtf8LookingAt.matcher(Utf8Input.validated("FOObar".toByteArray(StandardCharsets.UTF_8))).lookingAt()
+        )
+            .isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8LookingAt).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.ONE_PASS)
+
+        val foldedUtf8Matches = Pattern.compile("(?i)foo")
+        Assertions.assertThat(
+            foldedUtf8Matches.matcher(Utf8Input.validated("FOO".toByteArray(StandardCharsets.UTF_8))).matches()
+        )
+            .isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Matches).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.SHIFT_DFA)
+
+        val foldedUtf8Find = Pattern.compile("(?i)foo")
+        Assertions.assertThat(
+            foldedUtf8Find.matcher(Utf8Input.validated("xxFOO".toByteArray(StandardCharsets.UTF_8))).find()
+        )
+            .isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(foldedUtf8Find).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.DFA)
+    }
+
+    @ParameterizedTest
+    @MethodSource("lazyShiftDfaSearchCases")
+    fun lazyShiftDfaSearchesRetainOnePassFallback(
+        regex: String?, input: String, operation: MatchOperation?, utf8: Boolean
+    ) {
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(regex)
+        Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
+
+        val matched: Boolean
+        if (utf8) {
+            val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+            matched = if (operation == MatchOperation.FIND) matcher.find() else matcher.lookingAt()
+        } else {
+            val matcher = pattern.matcher(input)
+            matched = if (operation == MatchOperation.FIND) matcher.find() else matcher.lookingAt()
+        }
+
+        Assertions.assertThat(matched).isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.ONE_PASS)
+        Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
+    }
+
+    @Test
+    fun forcedBitStateAndNfaReportTheExactEngine() {
+        Pattern.setDiagnostics(diagnostics)
+        val bitStateOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .shiftDfa(false)
+                .onePass(false)
+                .dfa(false)
+                .build()
+        val bitState = Pattern.compile("a+b", 0, bitStateOnly)
+
+        Assertions.assertThat(bitState.matcher("aaab").matches()).isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(bitState).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.BIT_STATE)
+
+        val nfaOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .shiftDfa(false)
+                .onePass(false)
+                .dfa(false)
+                .bitState(false)
+                .build()
+        val nfa = Pattern.compile("a+b", 0, nfaOnly)
+
+        Assertions.assertThat(nfa.matcher("aaab").matches()).isTrue()
+        Assertions.assertThat<MatchStrategy?>(operationsFor(nfa).getLast().boundaryStrategy)
+            .isEqualTo(MatchStrategy.NFA)
+    }
+
+    @ParameterizedTest
+    @MethodSource("reverseCandidateVerificationCases")
+    fun utf8ReverseCandidateReportsItsExactEngine(bitState: Boolean, regex: String, input: String) {
+        Pattern.setDiagnostics(diagnostics)
+        val pattern =
+            Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(bitState).build())
+
+        Assertions.assertThat(pattern.find(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat(event!!.reverseDfaSearchCount).isPositive()
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy)
+                        .isEqualTo(if (bitState) MatchStrategy.BIT_STATE else MatchStrategy.NFA)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .contains(
+                            StrategyParticipation(
+                                if (bitState) MatchStrategy.BIT_STATE else MatchStrategy.NFA,
+                                StrategyRole.CANDIDATE_VERIFICATION
+                            )
+                        )
+                    if (regex == "foo[ab]*$") {
+                        Assertions.assertThat(event.reverseDfaSearchCount).isEqualTo(2)
+                    }
+                })
+    }
+
+    @Test
+    fun replacementFastPathEmitsOneOperationWithTotalMatchCount() {
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("[a-z]+")
+
+        Assertions.assertThat(pattern.matcher("a 22 bb").replaceAll("x")).isEqualTo("x 22 x")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy)
+                        .isEqualTo(MatchStrategy.CHARACTER_CLASS)
+                    Assertions.assertThat(event.matchCount).isEqualTo(2)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .containsExactly(
+                            StrategyParticipation(
+                                MatchStrategy.CHARACTER_CLASS, StrategyRole.CANDIDATE_VERIFICATION
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun compositeRejectPrefilterReportsTheChildThatRejected() {
+        Pattern.setDiagnostics(diagnostics)
+
+        for (operation in List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.MATCHES)) {
+            // Reach the composite prefilter rather than the earlier minimum-length rejection.
+            assertCompositeRejection(operation, "needle ", MatchStrategy.CHARACTER_CLASS)
+            assertCompositeRejection(operation, "xxxxxxx", MatchStrategy.LITERAL)
+        }
+    }
+
+    @Test
+    fun compositeRejectPrefilterReplacementReportsTheChildThatRejected() {
+        Pattern.setDiagnostics(diagnostics)
+
+        for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+            val pattern = Pattern.compile("foo.*bar.*[0-9]$")
+            val matcher = pattern.matcher("foo---7")
+
+            val result =
+                if (operation == MatchOperation.REPLACE_FIRST)
+                    matcher.replaceFirst("replacement")
+                else
+                    matcher.replaceAll("replacement")
+
+            Assertions.assertThat(result).isEqualTo("foo---7")
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(operation)
+                        Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
+                        Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                            .containsExactly(
+                                StrategyParticipation(
+                                    MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                                )
+                            )
+                    })
+        }
+    }
+
+    @Test
+    fun citationScrubberReplacementRejectsOnCharacterClassPrefilter() {
+        Pattern.setDiagnostics(diagnostics)
+
+        val regex = " ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]"
+        val pattern = Pattern.compile(regex)
+
+        for (input in mutableListOf<String?>("digits 1.2.3.4 and dots but no brackets", "letters and spaces only")) {
+            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+                diagnostics.operations.clear()
+                val matcher = pattern.matcher(input)
+                val result =
+                    if (operation == MatchOperation.REPLACE_FIRST)
+                        matcher.replaceFirst("replacement")
+                    else
+                        matcher.replaceAll("replacement")
+
+                Assertions.assertThat(result).isEqualTo(input)
+                Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                    .singleElement()
+                    .satisfies(
+                        ThrowingConsumer { event: OperationDiagnostics? ->
+                            Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(operation)
+                            Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy)
+                                .isEqualTo(MatchStrategy.CHARACTER_CLASS)
+                            Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                                .contains(
+                                    StrategyParticipation(
+                                        MatchStrategy.CHARACTER_CLASS, StrategyRole.REJECT_PREFILTER
+                                    )
+                                )
+                        })
+            }
+        }
+
+        // Brackets present with no matching digits return the right result without false-positive
+        // match.
+        for (input in mutableListOf<String?>(
             "[brackets without digits]",
             "prefix [1.2 incomplete] suffix",
-            "［full width brackets without digits］")) {
-      for (MatchOperation operation :
-          List.of(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
-        diagnostics.operations.clear();
-        Matcher matcher = pattern.matcher(input);
-        String result =
-            operation == MatchOperation.REPLACE_FIRST
-                ? matcher.replaceFirst("replacement")
-                : matcher.replaceAll("replacement");
-
-        assertThat(result).isEqualTo(input);
-        assertThat(operationsFor(pattern))
-            .singleElement()
-            .satisfies(
-                event -> {
-                  assertThat(event.operation()).isEqualTo(operation);
-                  assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-                });
-      }
-    }
-  }
-
-  @Test
-  void startAnchoredReplacementRejectsOnTheAnchoredPrefix() {
-    Pattern.setDiagnostics(diagnostics);
-
-    // Start-anchored scrubbers with a literal anchored prefix of "(" and "[" respectively.
-    for (String regex :
-        List.of(
-            "^\\([Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\)\\s*",
-            "^\\[[Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\]\\s*")) {
-      for (MatchOperation operation :
-          List.of(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
-        Pattern pattern = Pattern.compile(regex);
-        String input = "No citation marker begins this paragraph.";
-        Matcher matcher = pattern.matcher(input);
-
-        String result =
-            operation == MatchOperation.REPLACE_FIRST
-                ? matcher.replaceFirst("replacement")
-                : matcher.replaceAll("replacement");
-
-        assertThat(result).isEqualTo(input);
-        assertThat(operationsFor(pattern))
-            .singleElement()
-            .satisfies(
-                event -> {
-                  assertThat(event.operation()).isEqualTo(operation);
-                  assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-                  assertThat(event.auxiliaryStrategies())
-                      .containsExactly(
-                          new StrategyParticipation(
-                              MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER));
-                });
-      }
-    }
-  }
-
-  @Test
-  void startAnchoredReplacementRejectsOnTheAnchoredCharacterClass() {
-    Pattern.setDiagnostics(diagnostics);
-
-    for (MatchOperation operation :
-        List.of(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
-      Pattern pattern = Pattern.compile("^[0-9]+ items");
-      String input = "no leading digit here";
-      Matcher matcher = pattern.matcher(input);
-
-      String result =
-          operation == MatchOperation.REPLACE_FIRST
-              ? matcher.replaceFirst("replacement")
-              : matcher.replaceAll("replacement");
-
-      assertThat(result).isEqualTo(input);
-      assertThat(operationsFor(pattern))
-          .singleElement()
-          .satisfies(
-              event -> {
-                assertThat(event.operation()).isEqualTo(operation);
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.CHARACTER_CLASS);
-                assertThat(event.auxiliaryStrategies())
-                    .containsExactly(
-                        new StrategyParticipation(
-                            MatchStrategy.CHARACTER_CLASS, StrategyRole.REJECT_PREFILTER));
-              });
-    }
-  }
-
-  @Test
-  void multilineStartAnchorDoesNotTakeTheStartAnchoredRejectPath() {
-    Pattern.setDiagnostics(diagnostics);
-
-    // (?m)^ lowers to a begin-line assertion, not prog().anchorStart(), so the new reject arm must
-    // not fire: a match can legitimately begin at a later line.
-    Pattern pattern = Pattern.compile("(?m)^\\(Source: \\d+\\)\\s*");
-    Matcher matcher = pattern.matcher("first line\n(Source: 7) second line");
-
-    assertThat(matcher.replaceAll("")).isEqualTo("first line\nsecond line");
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event ->
-                assertThat(event.auxiliaryStrategies())
-                    .doesNotContain(
-                        new StrategyParticipation(
-                            MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER)));
-  }
-
-  @Test
-  void ordinaryReplacementLoopSuppressesNestedFindEvents() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions exactOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .charClassReplacementFastPath(false)
-            .keywordAlternationFastPath(false)
-            .shiftDfa(false)
-            .onePass(false)
-            .dfa(false)
-            .build();
-    Pattern pattern = Pattern.compile("(a)", 0, exactOnly);
-
-    assertThat(pattern.matcher("aba").replaceAll("$1x")).isEqualTo("axbax");
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-              assertThat(event.matchCount()).isEqualTo(2);
-            });
-  }
-
-  @Test
-  void dfaReplacementReportsOneEventAndAllMatches() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("a+b");
-
-    assertThat(pattern.matcher("aaab xx ab").replaceAll("z")).isEqualTo("z xx z");
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.matchCount()).isEqualTo(2);
-              // The terminal start-accelerator scan rejects without another DFA search.
-              assertThat(event.forwardDfaSearchCount()).isEqualTo(2);
-              assertThat(event.reverseDfaSearchCount()).isEqualTo(2);
-              assertThat(event.auxiliaryStrategies())
-                  .contains(
-                      new StrategyParticipation(
-                          MatchStrategy.DFA, StrategyRole.CANDIDATE_VERIFICATION));
-            });
-  }
-
-  @Test
-  void captureHistoryPreservesDfaReplacementBoundaryAcrossTerminalRejection() {
-    Pattern pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)");
-    Matcher priming = pattern.matcher("error:[C] code:500");
-    assertThat(priming.find()).isTrue();
-    assertThat(priming.group(1)).isEqualTo("error:[");
-
-    Pattern.setDiagnostics(diagnostics);
-    assertThat(
-            pattern.matcher("error:[C] code:500 xxx error:[x] code:500").replaceAll(result -> "ok"))
-        .isEqualTo("ok xxx error:[x] code:500");
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.matchCount()).isEqualTo(1);
-            });
-  }
-
-  @Test
-  void nullableDfaReplacementCountsTerminalEmptyMatch() {
-    Pattern.setDiagnostics(diagnostics);
-
-    for (String input : List.of("", "b", "bbb")) {
-      Pattern pattern = Pattern.compile("a?");
-      long expectedMatches = input.length() + 1L;
-
-      assertThat(pattern.matcher(input).replaceAll("x"))
-          .isEqualTo(java.util.regex.Pattern.compile("a?").matcher(input).replaceAll("x"));
-
-      assertThat(operationsFor(pattern))
-          .singleElement()
-          .satisfies(
-              event -> {
-                assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-                assertThat(event.matchCount()).isEqualTo(expectedMatches);
-              });
-    }
-  }
-
-  @Test
-  void dfaSandwichReportsForwardAndReverseSearchCounts() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("[ab]+c");
-
-    assertThat(pattern.matcher("xxabc").find()).isTrue();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.forwardDfaSearchCount()).isEqualTo(1);
-              assertThat(event.reverseDfaSearchCount()).isEqualTo(1);
-            });
-  }
-
-  @Test
-  void captureHistoryFromEagerResultsPreservesAcceleratedDfaRejection() {
-    Pattern.setDiagnostics(diagnostics);
-    for (boolean utf8 : new boolean[] {false, true}) {
-      Pattern pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)");
-      String successful = "error:[C] code:500";
-      String rejected = "error:[x] code:500 ".repeat(20);
-      if (utf8) {
-        Utf8Matcher primer = pattern.matcher(Utf8Input.trusted(successful.getBytes(UTF_8)));
-        assertThat(primer.matches()).isTrue();
-        assertThat(primer.start(1)).isZero();
-      } else {
-        Matcher primer = pattern.matcher(successful);
-        assertThat(primer.matches()).isTrue();
-        assertThat(primer.start(1)).isZero();
-      }
-      assertThat(pattern.innerCapturesObserved()).isTrue();
-      if (utf8) {
-        assertThat(pattern.matcher(Utf8Input.trusted(rejected.getBytes(UTF_8))).find()).isFalse();
-      } else {
-        assertThat(pattern.matcher(rejected).find()).isFalse();
-      }
-      assertThat(operationsFor(pattern))
-          .last()
-          .satisfies(
-              event -> {
-                assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-                assertThat(event.forwardDfaSearchCount()).isPositive();
-              });
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource("captureHistoryFindCases")
-  void captureHistoryKeepsUnanchoredFindDfaFirst(boolean utf8, boolean accelerate) {
-    Pattern pattern = captureHistoryPattern(accelerate, false);
-    Pattern.setDiagnostics(diagnostics);
-    String input = "prefix error:[C] code:500 suffix";
-    if (utf8) {
-      Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-      assertThat(matcher.find()).isTrue();
-      assertDfaFindBoundary(pattern);
-      assertThat(input.substring(matcher.start(1), matcher.end(1))).isEqualTo("error:[");
-      assertThat(input.substring(matcher.start(2), matcher.end(2))).isEqualTo("] code:500");
-    } else {
-      Matcher matcher = pattern.matcher(input);
-      assertThat(matcher.find()).isTrue();
-      assertDfaFindBoundary(pattern);
-      assertThat(matcher.group(1)).isEqualTo("error:[");
-      assertThat(matcher.group(2)).isEqualTo("] code:500");
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource("captureHistoryFindCases")
-  void captureHistoryKeepsUnanchoredRejectionOnDfa(boolean utf8, boolean accelerate) {
-    Pattern pattern = captureHistoryPattern(accelerate, false);
-    Pattern.setDiagnostics(diagnostics);
-    // All required literals and an uppercase character occur, but not in a matching arrangement.
-    String input = "prefix error:[x] code:500 suffix C";
-    if (utf8) {
-      assertThat(pattern.matcher(Utf8Input.validated(input.getBytes(UTF_8))).find()).isFalse();
-    } else {
-      assertThat(pattern.matcher(input).find()).isFalse();
-    }
-    assertDfaFindBoundary(pattern);
-  }
-
-  @ParameterizedTest
-  @MethodSource("captureHistoryFindCases")
-  void captureHistoryPreservesAnchoredFindPreference(boolean utf8, boolean accelerate) {
-    Pattern pattern = captureHistoryPattern(accelerate, true);
-    Pattern.setDiagnostics(diagnostics);
-    String input = "error:[D] code:500";
-    if (utf8) {
-      Utf8Matcher matcher = pattern.matcher(Utf8Input.validated(input.getBytes(UTF_8)));
-      assertThat(matcher.find()).isTrue();
-      assertThat(input.substring(matcher.start(1), matcher.end(1))).isEqualTo("error:[");
-    } else {
-      Matcher matcher = pattern.matcher(input);
-      assertThat(matcher.find()).isTrue();
-      assertThat(matcher.group(1)).isEqualTo("error:[");
-    }
-    assertThat(operationsFor(pattern))
-        .last()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-              assertThat(event.forwardDfaSearchCount()).isZero();
-            });
-  }
-
-  private static Stream<Arguments> captureHistoryFindCases() {
-    return Stream.of(false, true)
-        .flatMap(utf8 -> Stream.of(false, true).map(accelerate -> Arguments.of(utf8, accelerate)));
-  }
-
-  private static Pattern captureHistoryPattern(boolean accelerate, boolean anchored) {
-    EnginePathOptions options =
-        EnginePathOptions.builder()
-            .startAcceleration(accelerate)
-            .onePass(false)
-            .shiftDfa(false)
-            .build();
-    Pattern pattern =
-        Pattern.compile((anchored ? "^" : "") + "(error:\\[)[A-Z](\\] code:500)", 0, options);
-    Matcher primer = pattern.matcher("error:[C] code:500");
-    assertThat(primer.find()).isTrue();
-    assertThat(primer.group(1)).isEqualTo("error:[");
-    return pattern;
-  }
-
-  private void assertDfaFindBoundary(Pattern pattern) {
-    assertThat(operationsFor(pattern))
-        .last()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.forwardDfaSearchCount()).isPositive();
-            });
-  }
-
-  @Test
-  void replacementCaptureModeAgreesWithCaptureStrategyAcrossTerminalFindFailure() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern deferredPattern = Pattern.compile("(a+)b");
-
-    assertThat(deferredPattern.matcher("aaab xx ab").replaceAll("x")).isEqualTo("x xx x");
-
-    assertThat(operationsFor(deferredPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-
-    Pattern eagerPattern = Pattern.compile("(a+)b");
-    assertThat(eagerPattern.matcher("aaab xx ab").replaceAll("$1")).isEqualTo("aaa xx a");
-    assertThat(operationsFor(eagerPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.captureStrategy()).isNotEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.EAGER);
-            });
-  }
-
-  @Test
-  void functionalReplacementAlsoSuppressesNestedFindEvents() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("a");
-
-    assertThat(pattern.matcher("aba").replaceAll(result -> result.group() + "x"))
-        .isEqualTo("axbax");
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.operation()).isEqualTo(MatchOperation.REPLACE_ALL);
-              assertThat(event.matchCount()).isEqualTo(2);
-            });
-  }
-
-  @Test
-  void nullableLoopDfaCanAuthoritativelyReject() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions dfaOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .startAcceleration(false)
-            .onePass(false)
-            .bitState(false)
-            .build();
-    Pattern pattern = Pattern.compile("(?:(a)?)*X", 0, dfaOnly);
-
-    assertThat(pattern.matcher("aaaa").find()).isFalse();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.auxiliaryStrategies())
-                  .contains(
-                      new StrategyParticipation(MatchStrategy.DFA, StrategyRole.REJECT_PREFILTER));
-            });
-
-    assertThat(pattern.matcher("aaaaX").find()).isTrue();
-    assertThat(operationsFor(pattern).getLast())
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.strategyDecisions())
-                  .contains(
-                      new StrategyDecision(
-                          MatchStrategy.DFA,
-                          StrategyDisposition.BYPASSED,
-                          StrategyReason.EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED));
-            });
-  }
-
-  @Test
-  void usePatternRunsDisjointLiteralPrefilterForReplacementPattern() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern first = Pattern.compile("(?:banana\\d|apple\\d)");
-    Pattern replacement = Pattern.compile("(?:cherry\\d|pear\\d)");
-    Matcher matcher = first.matcher("apple0 remainder");
-
-    assertThat(matcher.find()).isTrue();
-    matcher.usePattern(replacement);
-    matcher.reset("remainder");
-    assertThat(matcher.find()).isFalse();
-
-    assertThat(operationsFor(replacement))
-        .singleElement()
-        .satisfies(
-            event ->
-                assertThat(event.auxiliaryStrategies())
-                    .contains(
-                        new StrategyParticipation(
-                            MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER)));
-  }
-
-  @Test
-  void prefixCandidateFailureContinuesThroughDfa() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern =
-        Pattern.compile("(?s)<block>\\n(\\s)*# (category|group)_defined:.*?\\n</block>");
-    String input =
-        "<block>\n  # comment\n</block> " + "<block>\n  # category_defined: alpha\n</block>";
-
-    assertThat(pattern.matcher(input).find()).isTrue();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.auxiliaryStrategies())
-                  .startsWith(
-                      new StrategyParticipation(
-                          MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION))
-                  .contains(
-                      new StrategyParticipation(
-                          MatchStrategy.DFA, StrategyRole.CANDIDATE_VERIFICATION));
-            });
-  }
-
-  @Test
-  void dfaBoundsCanLeaveCapturesDeferred() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("(a+)b");
-    Matcher matcher = pattern.matcher("xxaaab");
-
-    assertThat(matcher.find()).isTrue();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-    assertThat(matcher.group(1)).isEqualTo("aaa");
-    assertThat(operationsFor(pattern)).hasSize(1);
-  }
-
-  @Test
-  void failedRegexOperationDoesNotEmitAnEvent() {
-    Pattern.setDiagnostics(diagnostics);
-    Matcher matcher = Pattern.compile("a").matcher("a");
-
-    assertThatThrownBy(() -> matcher.find(2)).isInstanceOf(IndexOutOfBoundsException.class);
-
-    assertThat(operationsFor(matcher.pattern())).isEmpty();
-  }
-
-  @Test
-  void listenerCanAggregateOperationsFromMultipleThreads() {
-    Pattern pattern = Pattern.compile("abc");
-    ConcurrentLinkedQueue<OperationDiagnostics> events = new ConcurrentLinkedQueue<>();
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            events.add(event);
-          }
-        });
-
-    IntStream.range(0, 32)
-        .parallel()
-        .forEach(ignored -> assertThat(pattern.matcher("abc").matches()).isTrue());
-
-    assertThat(events)
-        .filteredOn(event -> event.pattern().patternId() == pattern.descriptor().patternId())
-        .hasSize(32);
-  }
-
-  @Test
-  void listenerFailurePropagatesAfterMatcherStateIsFinalized() {
-    Pattern pattern = Pattern.compile("abc");
-    Matcher matcher = pattern.matcher("abc");
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            throw new IllegalStateException("listener failed");
-          }
-        });
-
-    assertThatThrownBy(matcher::matches)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("listener failed");
-    assertThat(matcher.group()).isEqualTo("abc");
-  }
-
-  @Test
-  void listenerReplacementResetAndOperationSnapshotAreStable() {
-    Pattern pattern = Pattern.compile("abc");
-    RecordingDiagnostics replacement = new RecordingDiagnostics();
-    SafeReMatchDiagnostics replacingListener =
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            diagnostics.operations.add(event);
-            Pattern.setDiagnostics(replacement);
-          }
-        };
-    Pattern.setDiagnostics(replacingListener);
-
-    assertThat(pattern.matcher("abc").matches()).isTrue();
-    assertThat(diagnostics.operations).hasSize(1);
-    assertThat(replacement.operations).isEmpty();
-
-    assertThat(pattern.matcher("abc").matches()).isTrue();
-    assertThat(replacement.operations).hasSize(1);
-
-    Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE);
-    assertThat(pattern.matcher("abc").matches()).isTrue();
-    assertThat(replacement.operations).hasSize(1);
-  }
-
-  @Test
-  void eventsContainOnlyOpaqueIdentityAnalysisAndAggregateInputFacts() {
-    String regexSecret = "diagnosticPatternSecret";
-    String inputSecret = "prefix-diagnosticInputSecret-suffix";
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(regexSecret);
-
-    assertThat(pattern.matcher(inputSecret).find()).isFalse();
-
-    OperationDiagnostics event = operationsFor(pattern).getFirst();
-    assertThat(event.toString()).doesNotContain(regexSecret, inputSecret);
-    assertThat(OperationDiagnostics.class.getRecordComponents())
-        .noneMatch(component -> component.getType() == String.class);
-    assertThat(PatternDescriptor.class.getRecordComponents())
-        .noneMatch(component -> component.getType() == String.class);
-    assertThat(event.inputLength()).isEqualTo(inputSecret.length());
-  }
-
-  @Test
-  void keywordAlternationReportsKeywordStrategy() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("(?i)\\b(error|warning|timeout|failed)\\b");
-
-    assertThat(pattern.matcher("Info: Warning").find()).isTrue();
-
-    assertThat(operationsFor(pattern).getFirst().boundaryStrategy())
-        .isEqualTo(MatchStrategy.KEYWORD);
-  }
-
-  @Test
-  void largeInputBypassesBitStateAndReportsNfaFallback() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions exactOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .shiftDfa(false)
-            .onePass(false)
-            .dfa(false)
-            .build();
-    Pattern pattern = Pattern.compile("a+b", 0, exactOnly);
-
-    assertThat(pattern.matcher("a".repeat(100_000) + "b").matches()).isTrue();
-
-    assertThat(operationsFor(pattern).getFirst())
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.strategyDecisions())
-                  .contains(
-                      new StrategyDecision(
-                          MatchStrategy.BIT_STATE,
-                          StrategyDisposition.BYPASSED,
-                          StrategyReason.INPUT_TOO_LARGE));
-            });
-  }
-
-  @Test
-  void graphemeSemanticsReportUnsupportedOptimizedPathsAndExactFallback() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("\\X");
-
-    assertThat(pattern.matcher("a\u0301").matches()).isTrue();
-
-    assertThat(pattern.analysis().features()).contains(PatternFeature.GRAPHEME);
-    assertThat(pattern.analysis().limitations())
-        .contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE);
-    assertThat(operationsFor(pattern).getFirst().boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-  }
-
-  @Test
-  void dfaBudgetExhaustionReportsFallbackToAnExactEngine() {
-    String regex = "[ab]*a" + "[ab]".repeat(14) + "X";
-    Pattern pattern = Pattern.compile(regex);
-    java.util.regex.Pattern oracle = java.util.regex.Pattern.compile(regex);
-    AtomicBoolean observedBudgetFallback = new AtomicBoolean();
-    AtomicInteger observedForwardSearchCount = new AtomicInteger();
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            if (event
-                .strategyDecisions()
-                .contains(
-                    new StrategyDecision(
-                        MatchStrategy.DFA,
-                        StrategyDisposition.FALLBACK,
-                        StrategyReason.DFA_BUDGET_EXCEEDED))) {
-              observedBudgetFallback.set(true);
-              observedForwardSearchCount.set(event.forwardDfaSearchCount());
+            "［full width brackets without digits］"
+        )) {
+            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+                diagnostics.operations.clear()
+                val matcher = pattern.matcher(input)
+                val result =
+                    if (operation == MatchOperation.REPLACE_FIRST)
+                        matcher.replaceFirst("replacement")
+                    else
+                        matcher.replaceAll("replacement")
+
+                Assertions.assertThat(result).isEqualTo(input)
+                Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                    .singleElement()
+                    .satisfies(
+                        ThrowingConsumer { event: OperationDiagnostics? ->
+                            Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(operation)
+                            Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                        })
             }
-          }
-        });
-
-    for (int bits = 0; bits < 1 << 15 && !observedBudgetFallback.get(); bits++) {
-      StringBuilder input = new StringBuilder(16);
-      for (int index = 0; index < 15; index++) {
-        input.append((bits & (1 << index)) == 0 ? 'a' : 'b');
-      }
-      input.append('X');
-      String text = input.toString();
-      assertThat(pattern.matcher(text).matches()).isEqualTo(oracle.matcher(text).matches());
+        }
     }
 
-    assertThat(observedBudgetFallback).isTrue();
-    assertThat(observedForwardSearchCount).hasPositiveValue();
-  }
+    @Test
+    fun startAnchoredReplacementRejectsOnTheAnchoredPrefix() {
+        Pattern.setDiagnostics(diagnostics)
 
-  @Test
-  void exactEngineRespectsRegionAndAnchoringBoundsAndReportsItsStrategy() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions exactOnly =
-        EnginePathOptions.builder()
-            .literalFastPaths(false)
-            .charClassMatchFastPaths(false)
-            .keywordAlternationFastPath(false)
-            .onePass(false)
-            .dfa(false)
-            .build();
-    Pattern pattern = Pattern.compile("^a", 0, exactOnly);
-    Matcher matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true);
+        // Start-anchored scrubbers with a literal anchored prefix of "(" and "[" respectively.
+        for (regex in mutableListOf<String?>(
+            "^\\([Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\)\\s*",
+            "^\\[[Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\]\\s*"
+        )) {
+            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+                val pattern = Pattern.compile(regex)
+                val input = "No citation marker begins this paragraph."
+                val matcher = pattern.matcher(input)
 
-    assertThat(matcher.matches()).isTrue();
+                val result =
+                    if (operation == MatchOperation.REPLACE_FIRST)
+                        matcher.replaceFirst("replacement")
+                    else
+                        matcher.replaceAll("replacement")
 
-    assertThat(operationsFor(pattern).getFirst().boundaryStrategy())
-        .isEqualTo(MatchStrategy.BIT_STATE);
-  }
+                Assertions.assertThat(result).isEqualTo(input)
+                Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                    .singleElement()
+                    .satisfies(
+                        ThrowingConsumer { event: OperationDiagnostics? ->
+                            Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(operation)
+                            Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy)
+                                .isEqualTo(MatchStrategy.LITERAL)
+                            Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                                .containsExactly(
+                                    StrategyParticipation(
+                                        MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                                    )
+                                )
+                        })
+            }
+        }
+    }
 
-  @Test
-  void exhaustedStartAnchorDoesNotReportPrefilterParticipation() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("^a");
-    Matcher matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true);
+    @Test
+    fun startAnchoredReplacementRejectsOnTheAnchoredCharacterClass() {
+        Pattern.setDiagnostics(diagnostics)
 
-    assertThat(matcher.find()).isTrue();
-    assertThat(matcher.find()).isFalse();
+        for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+            val pattern = Pattern.compile("^[0-9]+ items")
+            val input = "no leading digit here"
+            val matcher = pattern.matcher(input)
 
-    assertThat(operationsFor(pattern).get(1).auxiliaryStrategies()).isEmpty();
-  }
+            val result =
+                if (operation == MatchOperation.REPLACE_FIRST)
+                    matcher.replaceFirst("replacement")
+                else
+                    matcher.replaceAll("replacement")
 
-  @Test
-  void startAnchoredRejectionReportsPrefilterStrategy() {
-    Pattern.setDiagnostics(diagnostics);
-    Map<String, MatchStrategy> cases =
-        Map.of("^target", MatchStrategy.LITERAL, "^[a-z]", MatchStrategy.CHARACTER_CLASS);
+            Assertions.assertThat(result).isEqualTo(input)
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(operation)
+                        Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy)
+                            .isEqualTo(MatchStrategy.CHARACTER_CLASS)
+                        Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                            .containsExactly(
+                                StrategyParticipation(
+                                    MatchStrategy.CHARACTER_CLASS, StrategyRole.REJECT_PREFILTER
+                                )
+                            )
+                    })
+        }
+    }
 
-    cases.forEach(
-        (regex, expectedStrategy) -> {
-          Pattern pattern = Pattern.compile(regex);
+    @Test
+    fun multilineStartAnchorDoesNotTakeTheStartAnchoredRejectPath() {
+        Pattern.setDiagnostics(diagnostics)
 
-          assertThat(pattern.matcher("9target").find()).isFalse();
-          assertThat(operationsFor(pattern))
-              .singleElement()
-              .satisfies(
-                  event -> {
-                    assertThat(event.boundaryStrategy()).isEqualTo(expectedStrategy);
-                    assertThat(event.auxiliaryStrategies())
+        // (?m)^ lowers to a begin-line assertion, not prog().anchorStart(), so the new reject arm must
+        // not fire: a match can legitimately begin at a later line.
+        val pattern = Pattern.compile("(?m)^\\(Source: \\d+\\)\\s*")
+        val matcher = pattern.matcher("first line\n(Source: 7) second line")
+
+        Assertions.assertThat(matcher.replaceAll("")).isEqualTo("first line\nsecond line")
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<StrategyParticipation?>(event!!.auxiliaryStrategies)
+                        .doesNotContain(
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun ordinaryReplacementLoopSuppressesNestedFindEvents() {
+        Pattern.setDiagnostics(diagnostics)
+        val exactOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .charClassReplacementFastPath(false)
+                .keywordAlternationFastPath(false)
+                .shiftDfa(false)
+                .onePass(false)
+                .dfa(false)
+                .build()
+        val pattern = Pattern.compile("(a)", 0, exactOnly)
+
+        Assertions.assertThat(pattern.matcher("aba").replaceAll("$1x")).isEqualTo("axbax")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat(event.matchCount).isEqualTo(2)
+                })
+    }
+
+    @Test
+    fun dfaReplacementReportsOneEventAndAllMatches() {
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("a+b")
+
+        Assertions.assertThat(pattern.matcher("aaab xx ab").replaceAll("z")).isEqualTo("z xx z")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat(event.matchCount).isEqualTo(2)
+                    // The terminal start-accelerator scan rejects without another DFA search.
+                    Assertions.assertThat(event.forwardDfaSearchCount).isEqualTo(2)
+                    Assertions.assertThat(event.reverseDfaSearchCount).isEqualTo(2)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .contains(
+                            StrategyParticipation(
+                                MatchStrategy.DFA, StrategyRole.CANDIDATE_VERIFICATION
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun captureHistoryPreservesDfaReplacementBoundaryAcrossTerminalRejection() {
+        val pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
+        val priming = pattern.matcher("error:[C] code:500")
+        Assertions.assertThat(priming.find()).isTrue()
+        Assertions.assertThat(priming.group(1)).isEqualTo("error:[")
+
+        Pattern.setDiagnostics(diagnostics)
+        Assertions.assertThat(
+            pattern.matcher("error:[C] code:500 xxx error:[x] code:500")
+                .replaceAll(Function { result: MatchResult? -> "ok" })
+        )
+            .isEqualTo("ok xxx error:[x] code:500")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat(event.matchCount).isEqualTo(1)
+                })
+    }
+
+    @Test
+    fun nullableDfaReplacementCountsTerminalEmptyMatch() {
+        Pattern.setDiagnostics(diagnostics)
+
+        for (input in mutableListOf<String?>("", "b", "bbb")) {
+            val pattern = Pattern.compile("a?")
+            val expectedMatches = input!!.length + 1L
+
+            Assertions.assertThat(pattern.matcher(input).replaceAll("x"))
+                .isEqualTo(Pattern.compile("a?").matcher(input).replaceAll("x"))
+
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                        Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                        Assertions.assertThat(event.matchCount).isEqualTo(expectedMatches)
+                    })
+        }
+    }
+
+    @Test
+    fun dfaSandwichReportsForwardAndReverseSearchCounts() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("[ab]+c")
+
+        Assertions.assertThat(pattern.matcher("xxabc").find()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isEqualTo(1)
+                    Assertions.assertThat(event.reverseDfaSearchCount).isEqualTo(1)
+                })
+    }
+
+    @Test
+    fun captureHistoryFromEagerResultsPreservesAcceleratedDfaRejection() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        for (utf8 in booleanArrayOf(false, true)) {
+            val pattern = org.safere.Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
+            val successful = "error:[C] code:500"
+            val rejected = "error:[x] code:500 ".repeat(20)
+            if (utf8) {
+                val primer = pattern.matcher(Utf8Input.trusted(successful.toByteArray(StandardCharsets.UTF_8)))
+                Assertions.assertThat(primer.matches()).isTrue()
+                Assertions.assertThat(primer.start(1)).isZero()
+            } else {
+                val primer = pattern.matcher(successful)
+                Assertions.assertThat(primer.matches()).isTrue()
+                Assertions.assertThat(primer.start(1)).isZero()
+            }
+            Assertions.assertThat(pattern.innerCapturesObserved()).isTrue()
+            if (utf8) {
+                Assertions.assertThat(
+                    pattern.matcher(Utf8Input.trusted(rejected.toByteArray(StandardCharsets.UTF_8))).find()
+                ).isFalse()
+            } else {
+                Assertions.assertThat(pattern.matcher(rejected).find()).isFalse()
+            }
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .last()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+                        Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                        Assertions.assertThat(event.forwardDfaSearchCount).isPositive()
+                    })
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("captureHistoryFindCases")
+    fun captureHistoryKeepsUnanchoredFindDfaFirst(utf8: Boolean, accelerate: Boolean) {
+        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, false)
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val input = "prefix error:[C] code:500 suffix"
+        if (utf8) {
+            val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+            Assertions.assertThat(matcher.find()).isTrue()
+            assertDfaFindBoundary(pattern)
+            Assertions.assertThat(input.substring(matcher.start(1), matcher.end(1))).isEqualTo("error:[")
+            Assertions.assertThat(input.substring(matcher.start(2), matcher.end(2))).isEqualTo("] code:500")
+        } else {
+            val matcher = pattern.matcher(input)
+            Assertions.assertThat(matcher.find()).isTrue()
+            assertDfaFindBoundary(pattern)
+            Assertions.assertThat(matcher.group(1)).isEqualTo("error:[")
+            Assertions.assertThat(matcher.group(2)).isEqualTo("] code:500")
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("captureHistoryFindCases")
+    fun captureHistoryKeepsUnanchoredRejectionOnDfa(utf8: Boolean, accelerate: Boolean) {
+        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, false)
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        // All required literals and an uppercase character occur, but not in a matching arrangement.
+        val input = "prefix error:[x] code:500 suffix C"
+        if (utf8) {
+            Assertions.assertThat(
+                pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))).find()
+            ).isFalse()
+        } else {
+            Assertions.assertThat(pattern.matcher(input).find()).isFalse()
+        }
+        assertDfaFindBoundary(pattern)
+    }
+
+    @ParameterizedTest
+    @MethodSource("captureHistoryFindCases")
+    fun captureHistoryPreservesAnchoredFindPreference(utf8: Boolean, accelerate: Boolean) {
+        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, true)
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val input = "error:[D] code:500"
+        if (utf8) {
+            val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(input.substring(matcher.start(1), matcher.end(1))).isEqualTo("error:[")
+        } else {
+            val matcher = pattern.matcher(input)
+            Assertions.assertThat(matcher.find()).isTrue()
+            Assertions.assertThat(matcher.group(1)).isEqualTo("error:[")
+        }
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .last()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                })
+    }
+
+    private fun assertDfaFindBoundary(pattern: org.safere.Pattern) {
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .last()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isPositive()
+                })
+    }
+
+    @Test
+    fun replacementCaptureModeAgreesWithCaptureStrategyAcrossTerminalFindFailure() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val deferredPattern = org.safere.Pattern.compile("(a+)b")
+
+        Assertions.assertThat(deferredPattern.matcher("aaab xx ab").replaceAll("x")).isEqualTo("x xx x")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(deferredPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+
+        val eagerPattern = org.safere.Pattern.compile("(a+)b")
+        Assertions.assertThat(eagerPattern.matcher("aaab xx ab").replaceAll("$1")).isEqualTo("aaa xx a")
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(eagerPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.captureStrategy).isNotEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
+                })
+    }
+
+    @Test
+    fun functionalReplacementAlsoSuppressesNestedFindEvents() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("a")
+
+        Assertions.assertThat(
+            pattern.matcher("aba").replaceAll(Function { result: MatchResult? -> result!!.group() + "x" })
+        )
+            .isEqualTo("axbax")
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOperation?>(event!!.operation).isEqualTo(MatchOperation.REPLACE_ALL)
+                    Assertions.assertThat(event.matchCount).isEqualTo(2)
+                })
+    }
+
+    @Test
+    fun nullableLoopDfaCanAuthoritativelyReject() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val dfaOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .startAcceleration(false)
+                .onePass(false)
+                .bitState(false)
+                .build()
+        val pattern = org.safere.Pattern.compile("(?:(a)?)*X", 0, dfaOnly)
+
+        Assertions.assertThat(pattern.matcher("aaaa").find()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .contains(
+                            StrategyParticipation(MatchStrategy.DFA, StrategyRole.REJECT_PREFILTER)
+                        )
+                })
+
+        Assertions.assertThat(pattern.matcher("aaaaX").find()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).getLast())
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<StrategyDecision?>(event.strategyDecisions)
+                        .contains(
+                            StrategyDecision(
+                                MatchStrategy.DFA,
+                                StrategyDisposition.BYPASSED,
+                                StrategyReason.EXACT_NULLABLE_LOOP_SEMANTICS_REQUIRED
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun usePatternRunsDisjointLiteralPrefilterForReplacementPattern() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val first = org.safere.Pattern.compile("(?:banana\\d|apple\\d)")
+        val replacement = org.safere.Pattern.compile("(?:cherry\\d|pear\\d)")
+        val matcher = first.matcher("apple0 remainder")
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        matcher.usePattern(replacement)
+        matcher.reset("remainder")
+        Assertions.assertThat(matcher.find()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(replacement))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<StrategyParticipation?>(event!!.auxiliaryStrategies)
+                        .contains(
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun prefixCandidateFailureContinuesThroughDfa() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern =
+            org.safere.Pattern.compile("(?s)<block>\\n(\\s)*# (category|group)_defined:.*?\\n</block>")
+        val input =
+            "<block>\n  # comment\n</block> " + "<block>\n  # category_defined: alpha\n</block>"
+
+        Assertions.assertThat(pattern.matcher(input).find()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .startsWith(
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION
+                            )
+                        )
+                        .contains(
+                            StrategyParticipation(
+                                MatchStrategy.DFA, StrategyRole.CANDIDATE_VERIFICATION
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun dfaBoundsCanLeaveCapturesDeferred() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("(a+)b")
+        val matcher = pattern.matcher("xxaaab")
+
+        Assertions.assertThat(matcher.find()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+        Assertions.assertThat(matcher.group(1)).isEqualTo("aaa")
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern)).hasSize(1)
+    }
+
+    @Test
+    fun failedRegexOperationDoesNotEmitAnEvent() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val matcher = org.safere.Pattern.compile("a").matcher("a")
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.find(2) })
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(matcher.pattern())).isEmpty()
+    }
+
+    @Test
+    fun listenerCanAggregateOperationsFromMultipleThreads() {
+        val pattern = org.safere.Pattern.compile("abc")
+        val events = ConcurrentLinkedQueue<OperationDiagnostics?>()
+        org.safere.Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    events.add(event)
+                }
+            })
+
+        IntStream.range(0, 32)
+            .parallel()
+            .forEach(IntConsumer { ignored: Int -> Assertions.assertThat(pattern.matcher("abc").matches()).isTrue() })
+
+        Assertions.assertThat<OperationDiagnostics?>(events)
+            .filteredOn(Predicate { event: OperationDiagnostics? -> event!!.pattern.patternId == pattern.descriptor().patternId })
+            .hasSize(32)
+    }
+
+    @Test
+    fun listenerFailurePropagatesAfterMatcherStateIsFinalized() {
+        val pattern = org.safere.Pattern.compile("abc")
+        val matcher = pattern.matcher("abc")
+        org.safere.Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    throw IllegalStateException("listener failed")
+                }
+            })
+
+        Assertions.assertThatThrownBy(ThrowingCallable { matcher.matches() })
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessage("listener failed")
+        Assertions.assertThat(matcher.group()).isEqualTo("abc")
+    }
+
+    @Test
+    fun listenerReplacementResetAndOperationSnapshotAreStable() {
+        val pattern = org.safere.Pattern.compile("abc")
+        val replacement = RecordingDiagnostics()
+        val replacingListener: SafeReMatchDiagnostics =
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    diagnostics.operations.add(event!!)
+                    org.safere.Pattern.setDiagnostics(replacement)
+                }
+            }
+        org.safere.Pattern.setDiagnostics(replacingListener)
+
+        Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(diagnostics.operations).hasSize(1)
+        Assertions.assertThat<OperationDiagnostics?>(replacement.operations).isEmpty()
+
+        Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(replacement.operations).hasSize(1)
+
+        org.safere.Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(replacement.operations).hasSize(1)
+    }
+
+    @Test
+    fun eventsContainOnlyOpaqueIdentityAnalysisAndAggregateInputFacts() {
+        val regexSecret = "diagnosticPatternSecret"
+        val inputSecret = "prefix-diagnosticInputSecret-suffix"
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile(regexSecret)
+
+        Assertions.assertThat(pattern.matcher(inputSecret).find()).isFalse()
+
+        val event: OperationDiagnostics = operationsFor(pattern).getFirst()
+        Assertions.assertThat(event.toString()).doesNotContain(regexSecret, inputSecret)
+        Assertions.assertThat<RecordComponent>(OperationDiagnostics::class.java.getRecordComponents())
+            .noneMatch(Predicate { component: RecordComponent? -> component!!.getType() == String::class.java })
+        Assertions.assertThat<RecordComponent>(PatternDescriptor::class.java.getRecordComponents())
+            .noneMatch(Predicate { component: RecordComponent? -> component!!.getType() == String::class.java })
+        Assertions.assertThat(event.inputLength).isEqualTo(inputSecret.length)
+    }
+
+    @Test
+    fun keywordAlternationReportsKeywordStrategy() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("(?i)\\b(error|warning|timeout|failed)\\b")
+
+        Assertions.assertThat(pattern.matcher("Info: Warning").find()).isTrue()
+
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+            .isEqualTo(MatchStrategy.KEYWORD)
+    }
+
+    @Test
+    fun largeInputBypassesBitStateAndReportsNfaFallback() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val exactOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .shiftDfa(false)
+                .onePass(false)
+                .dfa(false)
+                .build()
+        val pattern = org.safere.Pattern.compile("a+b", 0, exactOnly)
+
+        Assertions.assertThat(pattern.matcher("a".repeat(100000) + "b").matches()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern).getFirst())
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<StrategyDecision?>(event.strategyDecisions)
+                        .contains(
+                            StrategyDecision(
+                                MatchStrategy.BIT_STATE,
+                                StrategyDisposition.BYPASSED,
+                                StrategyReason.INPUT_TOO_LARGE
+                            )
+                        )
+                })
+    }
+
+    @Test
+    fun graphemeSemanticsReportUnsupportedOptimizedPathsAndExactFallback() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("\\X")
+
+        Assertions.assertThat(pattern.matcher("a\u0301").matches()).isTrue()
+
+        Assertions.assertThat<PatternFeature?>(pattern.analysis().features).contains(PatternFeature.GRAPHEME)
+        Assertions.assertThat<PatternLimitation?>(pattern.analysis().limitations)
+            .contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+            .isEqualTo(MatchStrategy.NFA)
+    }
+
+    @Test
+    fun dfaBudgetExhaustionReportsFallbackToAnExactEngine() {
+        val regex = "[ab]*a" + "[ab]".repeat(14) + "X"
+        val pattern = org.safere.Pattern.compile(regex)
+        val oracle = Pattern.compile(regex)
+        val observedBudgetFallback = AtomicBoolean()
+        val observedForwardSearchCount = AtomicInteger()
+        org.safere.Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics) {
+                    if (event
+                            .strategyDecisions
+                            .contains(
+                                StrategyDecision(
+                                    MatchStrategy.DFA,
+                                    StrategyDisposition.FALLBACK,
+                                    StrategyReason.DFA_BUDGET_EXCEEDED
+                                )
+                            )
+                    ) {
+                        observedBudgetFallback.set(true)
+                        observedForwardSearchCount.set(event.forwardDfaSearchCount)
+                    }
+                }
+            })
+
+        var bits = 0
+        while (bits < 1 shl 15 && !observedBudgetFallback.get()) {
+            val input = StringBuilder(16)
+            for (index in 0..14) {
+                input.append(if ((bits and (1 shl index)) == 0) 'a' else 'b')
+            }
+            input.append('X')
+            val text = input.toString()
+            Assertions.assertThat(pattern.matcher(text).matches()).isEqualTo(oracle.matcher(text).matches())
+            bits++
+        }
+
+        Assertions.assertThat(observedBudgetFallback).isTrue()
+        Assertions.assertThat(observedForwardSearchCount).hasPositiveValue()
+    }
+
+    @Test
+    fun exactEngineRespectsRegionAndAnchoringBoundsAndReportsItsStrategy() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val exactOnly =
+            EnginePathOptions.builder()
+                .literalFastPaths(false)
+                .charClassMatchFastPaths(false)
+                .keywordAlternationFastPath(false)
+                .onePass(false)
+                .dfa(false)
+                .build()
+        val pattern = org.safere.Pattern.compile("^a", 0, exactOnly)
+        val matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true)
+
+        Assertions.assertThat(matcher.matches()).isTrue()
+
+        Assertions.assertThat<MatchStrategy?>(operationsFor(pattern).getFirst().boundaryStrategy)
+            .isEqualTo(MatchStrategy.BIT_STATE)
+    }
+
+    @Test
+    fun exhaustedStartAnchorDoesNotReportPrefilterParticipation() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("^a")
+        val matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true)
+
+        Assertions.assertThat(matcher.find()).isTrue()
+        Assertions.assertThat(matcher.find()).isFalse()
+
+        Assertions.assertThat<StrategyParticipation?>(operationsFor(pattern).get(1).auxiliaryStrategies).isEmpty()
+    }
+
+    @Test
+    fun startAnchoredRejectionReportsPrefilterStrategy() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val cases =
+            Map.of<String?, MatchStrategy?>("^target", MatchStrategy.LITERAL, "^[a-z]", MatchStrategy.CHARACTER_CLASS)
+
+        cases.forEach { (regex: String?, expectedStrategy: MatchStrategy?) ->
+            val pattern = org.safere.Pattern.compile(regex)
+            Assertions.assertThat(pattern.matcher("9target").find()).isFalse()
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(expectedStrategy)
+                        Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                            .containsExactly(
+                                StrategyParticipation(
+                                    expectedStrategy, StrategyRole.REJECT_PREFILTER
+                                )
+                            )
+                    })
+        }
+    }
+
+    @Test
+    fun listenerCanAggregateStrategiesWithLongAdders() {
+        val pattern = org.safere.Pattern.compile("abc")
+        val counts: MutableMap<MatchStrategy?, LongAdder?> = ConcurrentHashMap<MatchStrategy?, LongAdder?>()
+        org.safere.Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics) {
+                    counts
+                        .computeIfAbsent(event.boundaryStrategy) { ignored: MatchStrategy? -> LongAdder() }!!
+                        .increment()
+                }
+            })
+
+        IntStream.range(0, 64)
+            .parallel()
+            .forEach(IntConsumer { ignored: Int -> Assertions.assertThat(pattern.matcher("abc").matches()).isTrue() })
+
+        Assertions.assertThat(counts.get(MatchStrategy.LITERAL)!!.sum()).isEqualTo(64)
+    }
+
+    @Test
+    fun variableGapChainsFallBackToGeneralEngine() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
+        val input = "2026-08-27 12:00:00 [worker-1] error:[CRITICAL] code:500 msg:crash\n"
+        val matcher = pattern.matcher(input)
+        Assertions.assertThat(matcher.find()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isPositive()
+                })
+    }
+
+    @Test
+    fun multiAnchorNegativeShortCircuitBypassesDfa() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
+        val input = "2026-08-27 12:00:00 [worker-1] error:[NORMAL] code:200 msg:ok\n"
+        val matcher = pattern.matcher(input)
+        Assertions.assertThat(matcher.find()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat(event!!.forwardDfaSearchCount).isZero()
+                })
+    }
+
+    @Test
+    fun primaryBitStateAndNfaCaptureSearchesReportEagerCaptureAttribution() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+
+        val nullableLoopBitState =
+            org.safere.Pattern.compile(
+                "(?:(a)?)*b", 0, EnginePathOptions.builder().dfa(false).onePass(false).build()
+            )
+        val matchesMatcher = nullableLoopBitState.matcher("aab")
+        Assertions.assertThat(matchesMatcher.matches()).isTrue()
+        Assertions.assertThat(matchesMatcher.capturesResolved()).isTrue()
+
+        val lookingAtMatcher = nullableLoopBitState.matcher("aabx")
+        Assertions.assertThat(lookingAtMatcher.lookingAt()).isTrue()
+        Assertions.assertThat(lookingAtMatcher.capturesResolved()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(nullableLoopBitState))
+            .hasSize(2)
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
+                })
+        val nfaPattern = org.safere.Pattern.compile("(\\X)b")
+        val nfaMatches = nfaPattern.matcher("ab")
+        Assertions.assertThat(nfaMatches.matches()).isTrue()
+        Assertions.assertThat(nfaMatches.capturesResolved()).isTrue()
+
+        val nfaFind = nfaPattern.matcher("xxab")
+        Assertions.assertThat(nfaFind.find()).isTrue()
+        Assertions.assertThat(nfaFind.capturesResolved()).isTrue()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(nfaPattern))
+            .hasSize(2)
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
+                })
+    }
+
+    @Test
+    fun regionFindReportsIndependentTextBoundsAndDeferredCaptureAttribution() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+
+        val independentPattern = org.safere.Pattern.compile("(a+?)b")
+        val independentMatcher = independentPattern.matcher("aab")
+        Assertions.assertThat(independentMatcher.find()).isTrue()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(independentPattern)).hasSize(1)
+        val independentEvent: OperationDiagnostics = operationsFor(independentPattern).getFirst()
+
+        val regionPattern = org.safere.Pattern.compile("(a+?)b")
+        val regionMatcher = regionPattern.matcher("xaabx").region(1, 4)
+        Assertions.assertThat(regionMatcher.find()).isTrue()
+        Assertions.assertThat(regionMatcher.capturesResolved()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(regionPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy)
+                        .isEqualTo(independentEvent.boundaryStrategy)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy)
+                        .isEqualTo(independentEvent.captureStrategy)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(independentEvent.captureMode)
+                })
+    }
+
+    @Test
+    fun deferredExactBoundarySearchesKeepDeferredCaptureAttribution() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+
+        val noDfa = EnginePathOptions.builder().dfa(false).build()
+        val lazyFallbackPattern = org.safere.Pattern.compile("(a+?)b", 0, noDfa)
+        val lazyFallbackMatcher = lazyFallbackPattern.matcher("xxaab")
+        Assertions.assertThat(lazyFallbackMatcher.find()).isTrue()
+        Assertions.assertThat(lazyFallbackMatcher.capturesResolved()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(lazyFallbackPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.BIT_STATE)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+        Assertions.assertThat(lazyFallbackMatcher.group(1)).isEqualTo("aa")
+
+        val endAnchoredPattern = org.safere.Pattern.compile("foo(a+?)b$")
+        val endAnchoredMatcher = endAnchoredPattern.matcher("zzfooaab")
+        Assertions.assertThat(endAnchoredMatcher.find()).isTrue()
+        Assertions.assertThat(endAnchoredMatcher.capturesResolved()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(endAnchoredPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+        Assertions.assertThat(endAnchoredMatcher.group(1)).isEqualTo("aa")
+    }
+
+    @Test
+    fun captureHistoryKeepsAcceleratedCandidateHitsAndMissesOnDfa() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("foo(a+)b")
+
+        val warmup = pattern.matcher("fooaab")
+        Assertions.assertThat(warmup.find()).isTrue()
+        Assertions.assertThat(warmup.group(1)).isEqualTo("aa")
+        diagnostics.operations.clear()
+
+        val acceleratedHit = pattern.matcher("xxfooaab")
+        Assertions.assertThat(acceleratedHit.find()).isTrue()
+        Assertions.assertThat(acceleratedHit.capturesResolved()).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+        Assertions.assertThat(acceleratedHit.group(1)).isEqualTo("aa")
+        diagnostics.operations.clear()
+
+        val missedCandidate = pattern.matcher("fooxxx xxfooaab")
+        Assertions.assertThat(missedCandidate.find()).isTrue()
+        Assertions.assertThat(missedCandidate.capturesResolved()).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
+                })
+        Assertions.assertThat(missedCandidate.group(1)).isEqualTo("aa")
+    }
+
+    @Test
+    fun matchesTrailingNewlineNfaFallbackOverridesCaptureAttribution() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val noDfa =
+            EnginePathOptions.builder().dfa(false).onePass(false).shiftDfa(false).build()
+
+        val fullMatchViaNfa = org.safere.Pattern.compile("^(a+)(\\n??)$", 0, noDfa)
+        val matched = fullMatchViaNfa.matcher("aa\n")
+        Assertions.assertThat(matched.matches()).isTrue()
+        Assertions.assertThat(matched.group(1)).isEqualTo("aa")
+        Assertions.assertThat(matched.group(2)).isEqualTo("\n")
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(fullMatchViaNfa))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.MATCH)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
+                })
+
+        val rejectedViaNfa = org.safere.Pattern.compile("^(a+?)$", 0, noDfa)
+        val rejected = rejectedViaNfa.matcher("aa\n")
+        Assertions.assertThat(rejected.matches()).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(rejectedViaNfa))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.NFA)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+                })
+    }
+
+    @Test
+    fun failedOnePassAndKeywordOperationsReportNoCaptureStrategy() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+
+        val onePassPattern = org.safere.Pattern.compile("^([a-z]+):(\\d+)$")
+        // A valid final digit passes terminal rejection so OnePass observes the interior failure.
+        val rejectedInput = "abc:nope1"
+        Assertions.assertThat(onePassPattern.matcher(rejectedInput).matches()).isFalse()
+        Assertions.assertThat(onePassPattern.matcher(rejectedInput).find()).isFalse()
+        Assertions.assertThat(onePassPattern.matcher(rejectedInput).replaceFirst("$1")).isEqualTo(rejectedInput)
+        Assertions.assertThat(onePassPattern.matcher(rejectedInput).replaceAll("$1")).isEqualTo(rejectedInput)
+
+        val onePassPrefixPattern = org.safere.Pattern.compile("^([a-z]+):(\\d+)")
+        Assertions.assertThat(onePassPrefixPattern.matcher("abc:nope").lookingAt()).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(onePassPattern))
+            .hasSize(4)
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.ONE_PASS)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+                })
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(onePassPrefixPattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+                    Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.ONE_PASS)
+                    Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                    Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+                })
+
+        val anchoredKeywordPattern = org.safere.Pattern.compile("(?is).*\\b(you|your)\\b.*")
+        Assertions.assertThat(anchoredKeywordPattern.matcher("nothing matching here").find()).isFalse()
+        val unanchoredKeywordPattern = org.safere.Pattern.compile("(?i)\\b(you|your)\\b")
+        Assertions.assertThat(unanchoredKeywordPattern.matcher("nothing matching here").find()).isFalse()
+
+        for (pattern in List.of<org.safere.Pattern>(anchoredKeywordPattern, unanchoredKeywordPattern)) {
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchOutcome?>(event!!.outcome).isEqualTo(MatchOutcome.NO_MATCH)
+                        Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.KEYWORD)
+                        Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                        Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+                    })
+        }
+    }
+
+    @Test
+    fun literalStartAcceleratorShortCircuitsBeforeInfixRejectPrefilter() {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile("status=3\\d\\d took=(\\d+)ms")
+        val input = "id=42 status=200 took=12ms\nid=43 status=201 took=8ms\n"
+
+        Assertions.assertThat(pattern.matcher(input).find()).isFalse()
+        Assertions.assertThat(pattern.find(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))).isFalse()
+
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .hasSize(2)
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
                         .containsExactly(
-                            new StrategyParticipation(
-                                expectedStrategy, StrategyRole.REJECT_PREFILTER));
-                  });
-        });
-  }
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION
+                            )
+                        )
+                })
 
-  @Test
-  void listenerCanAggregateStrategiesWithLongAdders() {
-    Pattern pattern = Pattern.compile("abc");
-    Map<MatchStrategy, LongAdder> counts = new ConcurrentHashMap<>();
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            counts
-                .computeIfAbsent(event.boundaryStrategy(), ignored -> new LongAdder())
-                .increment();
-          }
-        });
+        // With the start literal present but the infix literal absent, the reject prefilter still runs
+        // from the first start candidate when enough input remains after it, so the forward DFA never
+        // scans the rest of the input.
+        diagnostics.operations.clear()
+        val startOnly = "id=42 status=300 elapsed=12ms\nid=43 status=301 elapsed=8ms\n".repeat(3)
+        Assertions.assertThat(pattern.matcher(startOnly).find()).isFalse()
+        Assertions.assertThat(pattern.find(Utf8Input.trusted(startOnly.toByteArray(StandardCharsets.UTF_8)))).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .hasSize(2)
+            .allSatisfy(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
+                    Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .containsExactlyInAnyOrder(
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION
+                            ),
+                            StrategyParticipation(
+                                MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                            )
+                        )
+                })
 
-    IntStream.range(0, 64)
-        .parallel()
-        .forEach(ignored -> assertThat(pattern.matcher("abc").matches()).isTrue());
-
-    assertThat(counts.get(MatchStrategy.LITERAL).sum()).isEqualTo(64);
-  }
-
-  @Test
-  void variableGapChainsFallBackToGeneralEngine() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash");
-    String input = "2026-08-27 12:00:00 [worker-1] error:[CRITICAL] code:500 msg:crash\n";
-    Matcher matcher = pattern.matcher(input);
-    assertThat(matcher.find()).isTrue();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.forwardDfaSearchCount()).isPositive();
-            });
-  }
-
-  @Test
-  void multiAnchorNegativeShortCircuitBypassesDfa() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash");
-    String input = "2026-08-27 12:00:00 [worker-1] error:[NORMAL] code:200 msg:ok\n";
-    Matcher matcher = pattern.matcher(input);
-    assertThat(matcher.find()).isFalse();
-
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.forwardDfaSearchCount()).isZero();
-            });
-  }
-
-  @Test
-  void primaryBitStateAndNfaCaptureSearchesReportEagerCaptureAttribution() {
-    Pattern.setDiagnostics(diagnostics);
-
-    Pattern nullableLoopBitState =
-        Pattern.compile(
-            "(?:(a)?)*b", 0, EnginePathOptions.builder().dfa(false).onePass(false).build());
-    Matcher matchesMatcher = nullableLoopBitState.matcher("aab");
-    assertThat(matchesMatcher.matches()).isTrue();
-    assertThat(matchesMatcher.capturesResolved()).isTrue();
-
-    Matcher lookingAtMatcher = nullableLoopBitState.matcher("aabx");
-    assertThat(lookingAtMatcher.lookingAt()).isTrue();
-    assertThat(lookingAtMatcher.capturesResolved()).isTrue();
-
-    assertThat(operationsFor(nullableLoopBitState))
-        .hasSize(2)
-        .allSatisfy(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.EAGER);
-            });
-    Pattern nfaPattern = Pattern.compile("(\\X)b");
-    Matcher nfaMatches = nfaPattern.matcher("ab");
-    assertThat(nfaMatches.matches()).isTrue();
-    assertThat(nfaMatches.capturesResolved()).isTrue();
-
-    Matcher nfaFind = nfaPattern.matcher("xxab");
-    assertThat(nfaFind.find()).isTrue();
-    assertThat(nfaFind.capturesResolved()).isTrue();
-
-    assertThat(operationsFor(nfaPattern))
-        .hasSize(2)
-        .allSatisfy(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.EAGER);
-            });
-  }
-
-  @Test
-  void regionFindReportsIndependentTextBoundsAndDeferredCaptureAttribution() {
-    Pattern.setDiagnostics(diagnostics);
-
-    Pattern independentPattern = Pattern.compile("(a+?)b");
-    Matcher independentMatcher = independentPattern.matcher("aab");
-    assertThat(independentMatcher.find()).isTrue();
-    assertThat(operationsFor(independentPattern)).hasSize(1);
-    OperationDiagnostics independentEvent = operationsFor(independentPattern).getFirst();
-
-    Pattern regionPattern = Pattern.compile("(a+?)b");
-    Matcher regionMatcher = regionPattern.matcher("xaabx").region(1, 4);
-    assertThat(regionMatcher.find()).isTrue();
-    assertThat(regionMatcher.capturesResolved()).isFalse();
-
-    assertThat(operationsFor(regionPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(independentEvent.boundaryStrategy());
-              assertThat(event.captureStrategy()).isEqualTo(independentEvent.captureStrategy());
-              assertThat(event.captureMode()).isEqualTo(independentEvent.captureMode());
-            });
-  }
-
-  @Test
-  void deferredExactBoundarySearchesKeepDeferredCaptureAttribution() {
-    Pattern.setDiagnostics(diagnostics);
-
-    EnginePathOptions noDfa = EnginePathOptions.builder().dfa(false).build();
-    Pattern lazyFallbackPattern = Pattern.compile("(a+?)b", 0, noDfa);
-    Matcher lazyFallbackMatcher = lazyFallbackPattern.matcher("xxaab");
-    assertThat(lazyFallbackMatcher.find()).isTrue();
-    assertThat(lazyFallbackMatcher.capturesResolved()).isFalse();
-
-    assertThat(operationsFor(lazyFallbackPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.BIT_STATE);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-    assertThat(lazyFallbackMatcher.group(1)).isEqualTo("aa");
-
-    Pattern endAnchoredPattern = Pattern.compile("foo(a+?)b$");
-    Matcher endAnchoredMatcher = endAnchoredPattern.matcher("zzfooaab");
-    assertThat(endAnchoredMatcher.find()).isTrue();
-    assertThat(endAnchoredMatcher.capturesResolved()).isFalse();
-
-    assertThat(operationsFor(endAnchoredPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-    assertThat(endAnchoredMatcher.group(1)).isEqualTo("aa");
-  }
-
-  @Test
-  void captureHistoryKeepsAcceleratedCandidateHitsAndMissesOnDfa() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("foo(a+)b");
-
-    Matcher warmup = pattern.matcher("fooaab");
-    assertThat(warmup.find()).isTrue();
-    assertThat(warmup.group(1)).isEqualTo("aa");
-    diagnostics.operations.clear();
-
-    Matcher acceleratedHit = pattern.matcher("xxfooaab");
-    assertThat(acceleratedHit.find()).isTrue();
-    assertThat(acceleratedHit.capturesResolved()).isFalse();
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-    assertThat(acceleratedHit.group(1)).isEqualTo("aa");
-    diagnostics.operations.clear();
-
-    Matcher missedCandidate = pattern.matcher("fooxxx xxfooaab");
-    assertThat(missedCandidate.find()).isTrue();
-    assertThat(missedCandidate.capturesResolved()).isFalse();
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.DFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.DEFERRED);
-            });
-    assertThat(missedCandidate.group(1)).isEqualTo("aa");
-  }
-
-  @Test
-  void matchesTrailingNewlineNfaFallbackOverridesCaptureAttribution() {
-    Pattern.setDiagnostics(diagnostics);
-    EnginePathOptions noDfa =
-        EnginePathOptions.builder().dfa(false).onePass(false).shiftDfa(false).build();
-
-    Pattern fullMatchViaNfa = Pattern.compile("^(a+)(\\n??)$", 0, noDfa);
-    Matcher matched = fullMatchViaNfa.matcher("aa\n");
-    assertThat(matched.matches()).isTrue();
-    assertThat(matched.group(1)).isEqualTo("aa");
-    assertThat(matched.group(2)).isEqualTo("\n");
-    assertThat(operationsFor(fullMatchViaNfa))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.outcome()).isEqualTo(MatchOutcome.MATCH);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.EAGER);
-            });
-
-    Pattern rejectedViaNfa = Pattern.compile("^(a+?)$", 0, noDfa);
-    Matcher rejected = rejectedViaNfa.matcher("aa\n");
-    assertThat(rejected.matches()).isFalse();
-    assertThat(operationsFor(rejectedViaNfa))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.NFA);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-            });
-  }
-
-  @Test
-  void failedOnePassAndKeywordOperationsReportNoCaptureStrategy() {
-    Pattern.setDiagnostics(diagnostics);
-
-    Pattern onePassPattern = Pattern.compile("^([a-z]+):(\\d+)$");
-    // A valid final digit passes terminal rejection so OnePass observes the interior failure.
-    String rejectedInput = "abc:nope1";
-    assertThat(onePassPattern.matcher(rejectedInput).matches()).isFalse();
-    assertThat(onePassPattern.matcher(rejectedInput).find()).isFalse();
-    assertThat(onePassPattern.matcher(rejectedInput).replaceFirst("$1")).isEqualTo(rejectedInput);
-    assertThat(onePassPattern.matcher(rejectedInput).replaceAll("$1")).isEqualTo(rejectedInput);
-
-    Pattern onePassPrefixPattern = Pattern.compile("^([a-z]+):(\\d+)");
-    assertThat(onePassPrefixPattern.matcher("abc:nope").lookingAt()).isFalse();
-
-    assertThat(operationsFor(onePassPattern))
-        .hasSize(4)
-        .allSatisfy(
-            event -> {
-              assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.ONE_PASS);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-            });
-    assertThat(operationsFor(onePassPrefixPattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.ONE_PASS);
-              assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-            });
-
-    Pattern anchoredKeywordPattern = Pattern.compile("(?is).*\\b(you|your)\\b.*");
-    assertThat(anchoredKeywordPattern.matcher("nothing matching here").find()).isFalse();
-    Pattern unanchoredKeywordPattern = Pattern.compile("(?i)\\b(you|your)\\b");
-    assertThat(unanchoredKeywordPattern.matcher("nothing matching here").find()).isFalse();
-
-    for (Pattern pattern : List.of(anchoredKeywordPattern, unanchoredKeywordPattern)) {
-      assertThat(operationsFor(pattern))
-          .singleElement()
-          .satisfies(
-              event -> {
-                assertThat(event.outcome()).isEqualTo(MatchOutcome.NO_MATCH);
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.KEYWORD);
-                assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-                assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-              });
-    }
-  }
-
-  @Test
-  void literalStartAcceleratorShortCircuitsBeforeInfixRejectPrefilter() {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile("status=3\\d\\d took=(\\d+)ms");
-    String input = "id=42 status=200 took=12ms\nid=43 status=201 took=8ms\n";
-
-    assertThat(pattern.matcher(input).find()).isFalse();
-    assertThat(pattern.find(Utf8Input.trusted(input.getBytes(UTF_8)))).isFalse();
-
-    assertThat(operationsFor(pattern))
-        .hasSize(2)
-        .allSatisfy(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-              assertThat(event.forwardDfaSearchCount()).isZero();
-              assertThat(event.auxiliaryStrategies())
-                  .containsExactly(
-                      new StrategyParticipation(
-                          MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION));
-            });
-
-    // With the start literal present but the infix literal absent, the reject prefilter still runs
-    // from the first start candidate when enough input remains after it, so the forward DFA never
-    // scans the rest of the input.
-    diagnostics.operations.clear();
-    String startOnly = "id=42 status=300 elapsed=12ms\nid=43 status=301 elapsed=8ms\n".repeat(3);
-    assertThat(pattern.matcher(startOnly).find()).isFalse();
-    assertThat(pattern.find(Utf8Input.trusted(startOnly.getBytes(UTF_8)))).isFalse();
-    assertThat(operationsFor(pattern))
-        .hasSize(2)
-        .allSatisfy(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-              assertThat(event.forwardDfaSearchCount()).isZero();
-              assertThat(event.auxiliaryStrategies())
-                  .containsExactlyInAnyOrder(
-                      new StrategyParticipation(
-                          MatchStrategy.LITERAL, StrategyRole.START_ACCELERATION),
-                      new StrategyParticipation(
-                          MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER));
-            });
-
-    for (String regex :
-        new String[] {
-          "(?i:status=3\\d\\d) took=(\\d+)ms", "\u03b1\u03b2\\d+<<!nav>>\\d+", "er\\d+<<!nav>>\\d+",
-        }) {
-      diagnostics.operations.clear();
-      Pattern rejectFirst = Pattern.compile(regex);
-      String miss = "id=42 status=200 elapsed=12ms\nid=43 status=201 elapsed=8ms\n";
-      assertThat(rejectFirst.matcher(miss).find()).isFalse();
-      assertThat(rejectFirst.find(Utf8Input.trusted(miss.getBytes(UTF_8)))).isFalse();
-      assertThat(operationsFor(rejectFirst))
-          .as("%s should run exact rare-anchor REJECT_PREFILTER first", regex)
-          .hasSize(2)
-          .allSatisfy(
-              event -> {
-                assertThat(event.boundaryStrategy()).isEqualTo(MatchStrategy.LITERAL);
-                assertThat(event.forwardDfaSearchCount()).isZero();
-                assertThat(event.auxiliaryStrategies())
-                    .containsExactly(
-                        new StrategyParticipation(
-                            MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER));
-              });
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource("captureAttributionAlignmentCases")
-  void captureModeAndCaptureStrategyAgreeWithMatcherStateAcrossOperations(
-      String regex, String matchingInput, String nonMatchingInput) {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(regex);
-    boolean hasCaptures = pattern.analysis().captureCount() > 0;
-
-    for (String input : List.of(matchingInput, nonMatchingInput)) {
-      diagnostics.operations.clear();
-      Matcher mMatches = pattern.matcher(input);
-      boolean matched = mMatches.matches();
-      assertSingleOperationCaptureAgreement(
-          operationsFor(pattern), matched, hasCaptures, mMatches.capturesResolved());
-
-      diagnostics.operations.clear();
-      Matcher mLookingAt = pattern.matcher(input);
-      boolean lookedAt = mLookingAt.lookingAt();
-      assertSingleOperationCaptureAgreement(
-          operationsFor(pattern), lookedAt, hasCaptures, mLookingAt.capturesResolved());
-
-      diagnostics.operations.clear();
-      Matcher mFind = pattern.matcher(input);
-      boolean found = mFind.find();
-      assertSingleOperationCaptureAgreement(
-          operationsFor(pattern), found, hasCaptures, mFind.capturesResolved());
-      if (found && hasCaptures) {
-        mFind.group(1);
-        diagnostics.operations.clear();
-        Matcher mPostDemandFind = pattern.matcher(input);
-        boolean foundAgain = mPostDemandFind.find();
-        assertSingleOperationCaptureAgreement(
-            operationsFor(pattern), foundAgain, hasCaptures, mPostDemandFind.capturesResolved());
-      }
-
-      String captureReplacement = hasCaptures ? "$1" : "x";
-      for (String replacement : List.of("x", captureReplacement)) {
-        diagnostics.operations.clear();
-        assertThat(pattern.matcher(input).replaceFirst(replacement)).isNotNull();
-        assertCaptureStrategyMatchesMode(operationsFor(pattern));
-
-        diagnostics.operations.clear();
-        assertThat(pattern.matcher(input).replaceAll(replacement)).isNotNull();
-        assertCaptureStrategyMatchesMode(operationsFor(pattern));
-      }
-    }
-  }
-
-  private static Stream<Arguments> captureAttributionAlignmentCases() {
-    return Stream.of(
-        Arguments.of("^([a-z]+):(\\d+)$", "abc:123", "abc:nope"),
-        Arguments.of("([a-z]+):(\\d+)", "abc:123", "nope"),
-        Arguments.of("(a+?)b", "aab", "zzz"),
-        Arguments.of("(a+|ab)c", "abc", "zzz"),
-        Arguments.of("foo(a+)b", "xxfooaab", "fooxxx"),
-        Arguments.of("(?is).*\\b(you|your)\\b.*", "here is your token", "nothing"),
-        Arguments.of("(\\X)b", "ab", "zz"),
-        Arguments.of("\\d{4}-\\d{2}-\\d{2}", "2026-10-30", "nope"));
-  }
-
-  private static void assertSingleOperationCaptureAgreement(
-      List<OperationDiagnostics> events,
-      boolean matched,
-      boolean hasCaptures,
-      boolean matcherCapturesResolved) {
-    assertCaptureStrategyMatchesMode(events);
-    assertThat(events)
-        .singleElement()
-        .satisfies(
-            event -> {
-              if (!matched || !hasCaptures) {
-                assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-                assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              } else {
-                assertThat(event.captureMode() == CaptureMode.EAGER)
-                    .isEqualTo(matcherCapturesResolved);
-              }
-            });
-  }
-
-  private static void assertCaptureStrategyMatchesMode(List<OperationDiagnostics> events) {
-    assertThat(events)
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.captureStrategy() != MatchStrategy.NONE)
-                  .isEqualTo(event.captureMode() == CaptureMode.EAGER);
-              if (event.outcome() == MatchOutcome.NO_MATCH
-                  || event.pattern().analysis().captureCount() == 0) {
-                assertThat(event.captureMode()).isEqualTo(CaptureMode.NONE);
-                assertThat(event.captureStrategy()).isEqualTo(MatchStrategy.NONE);
-              }
-            });
-  }
-
-  @ParameterizedTest
-  @MethodSource("onePassCapabilityAlignmentCases")
-  void onePassCapabilitiesAgreeWithRuntimeExecution(
-      String regex,
-      EnginePathOptions options,
-      String matchingInput,
-      boolean expectPrimary,
-      boolean expectCaptureExtraction) {
-    Pattern.setDiagnostics(diagnostics);
-    Pattern pattern = Pattern.compile(regex, 0, options);
-    PatternAnalysis analysis = pattern.analysis();
-
-    if (analysis.limitations().contains(PatternLimitation.LAZY_SEMANTICS_LIMIT_ONE_PASS)
-        || analysis.limitations().contains(PatternLimitation.NULLABLE_ALTERNATION_LIMITS_ONE_PASS)
-        || analysis.limitations().contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
-        || analysis.captureCount() > OnePass.MAX_CAPTURE_GROUPS - 1
-        || !options.onePass()) {
-      assertThat(analysis.capabilities())
-          .doesNotContain(
-              PatternCapability.ONE_PASS_PRIMARY, PatternCapability.ONE_PASS_CAPTURE_EXTRACTION);
-    }
-    if (analysis.captureCount() == 0) {
-      assertThat(analysis.capabilities())
-          .doesNotContain(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION);
-    }
-    assertThat(analysis.capabilities().contains(PatternCapability.ONE_PASS_PRIMARY))
-        .isEqualTo(expectPrimary);
-    assertThat(analysis.capabilities().contains(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION))
-        .isEqualTo(expectCaptureExtraction);
-
-    assertThat(pattern.matcher(matchingInput).matches()).isTrue();
-    String lookingAtInput =
-        pattern.prog().anchorEnd() || pattern.prog().dollarAnchorEnd()
-            ? matchingInput
-            : matchingInput + " suffix";
-    assertThat(pattern.matcher(lookingAtInput).lookingAt()).isTrue();
-    Matcher findMatcher = pattern.matcher("prefix " + matchingInput + " suffix");
-    if (!pattern.prog().anchorStart() && !pattern.prog().anchorEnd()) {
-      assertThat(findMatcher.find()).isTrue();
-      if (analysis.captureCount() > 0) {
-        findMatcher.group(1);
-      }
-    } else {
-      Matcher anchoredFind = pattern.matcher(matchingInput);
-      assertThat(anchoredFind.find()).isTrue();
-      if (analysis.captureCount() > 0) {
-        anchoredFind.group(1);
-      }
-    }
-    String replacement = analysis.captureCount() > 0 ? "$1" : "x";
-    assertThat(pattern.matcher(matchingInput).replaceFirst(replacement)).isNotNull();
-    assertThat(pattern.matcher(matchingInput).replaceAll(replacement)).isNotNull();
-
-    List<OperationDiagnostics> events = operationsFor(pattern);
-    boolean ranOnePassPrimary =
-        events.stream().anyMatch(event -> event.boundaryStrategy() == MatchStrategy.ONE_PASS);
-    boolean ranOnePassCapture =
-        events.stream().anyMatch(event -> event.captureStrategy() == MatchStrategy.ONE_PASS);
-    boolean ranOnePassAuxiliary =
-        events.stream()
-            .flatMap(event -> event.auxiliaryStrategies().stream())
-            .anyMatch(participation -> participation.strategy() == MatchStrategy.ONE_PASS);
-
-    assertThat(ranOnePassPrimary).isEqualTo(expectPrimary);
-    assertThat(ranOnePassCapture).isEqualTo(expectCaptureExtraction);
-    if (!expectPrimary && !expectCaptureExtraction) {
-      assertThat(ranOnePassAuxiliary).isFalse();
-    }
-  }
-
-  private static Stream<Arguments> onePassCapabilityAlignmentCases() {
-    EnginePathOptions defaults = EnginePathOptions.allEnabled();
-    EnginePathOptions onePassDisabled = EnginePathOptions.builder().onePass(false).build();
-    return Stream.of(
-        Arguments.of("^([a-z]+):(\\d+)$", defaults, "abc:123", true, true),
-        Arguments.of("([a-z]+):(\\d+)", defaults, "abc:123", true, true),
-        Arguments.of("^[a-z]+:\\d+$", defaults, "abc:123", true, false),
-        Arguments.of("\\d{4}-\\d{2}-\\d{2}", defaults, "2026-10-30", true, false),
-        Arguments.of("(a)*", defaults, "aaa", false, true),
-        Arguments.of("^(a|)b$", defaults, "ab", false, false),
-        Arguments.of("(a|)b", defaults, "ab", false, false),
-        Arguments.of("(a*|b)c", defaults, "ac", false, false),
-        Arguments.of("^([a-z]+?)b$", defaults, "aab", false, false),
-        Arguments.of("([a-z]+?)b", defaults, "aab", false, false),
-        Arguments.of("\\b{g}(a+)", defaults, "aaa", false, false),
-        Arguments.of("(\\X)", defaults, "a", false, false),
-        Arguments.of(
-            "(a)".repeat(OnePass.MAX_CAPTURE_GROUPS),
-            defaults,
-            "a".repeat(OnePass.MAX_CAPTURE_GROUPS),
-            false,
-            false),
-        Arguments.of("(a|ab)c", defaults, "abc", false, false),
-        Arguments.of("^([a-z]+):(\\d+)$", onePassDisabled, "abc:123", false, false),
-        Arguments.of("([a-z]+):(\\d+)", onePassDisabled, "abc:123", false, false));
-  }
-
-  private List<OperationDiagnostics> operationsFor(Pattern pattern) {
-    long patternId = pattern.patternId();
-    return diagnostics.operations.stream()
-        .filter(event -> event.pattern().patternId() == patternId)
-        .toList();
-  }
-
-  private void assertCompositeRejection(
-      MatchOperation operation, String input, MatchStrategy expectedStrategy) {
-    Pattern pattern = Pattern.compile(".*x.*needle.*");
-    Matcher matcher = pattern.matcher(input);
-
-    boolean matched =
-        switch (operation) {
-          case FIND -> matcher.find();
-          case MATCHES -> matcher.matches();
-          default -> throw new AssertionError("unsupported operation: " + operation);
-        };
-
-    assertThat(matched).isFalse();
-    assertThat(operationsFor(pattern))
-        .singleElement()
-        .satisfies(
-            event -> {
-              assertThat(event.boundaryStrategy()).isEqualTo(expectedStrategy);
-              assertThat(event.auxiliaryStrategies())
-                  .containsExactly(
-                      new StrategyParticipation(expectedStrategy, StrategyRole.REJECT_PREFILTER));
-            });
-  }
-
-  private static final class RecordingDiagnostics extends SafeReMatchDiagnostics {
-    final List<PatternCompiledEvent> compilations = new ArrayList<>();
-    final List<OperationDiagnostics> operations = new ArrayList<>();
-
-    @Override
-    public void onPatternCompiled(PatternCompiledEvent event) {
-      compilations.add(event);
+        for (regex in arrayOf<String>(
+            "(?i:status=3\\d\\d) took=(\\d+)ms", "\u03b1\u03b2\\d+<<!nav>>\\d+", "er\\d+<<!nav>>\\d+",
+        )) {
+            diagnostics.operations.clear()
+            val rejectFirst = org.safere.Pattern.compile(regex)
+            val miss = "id=42 status=200 elapsed=12ms\nid=43 status=201 elapsed=8ms\n"
+            Assertions.assertThat(rejectFirst.matcher(miss).find()).isFalse()
+            Assertions.assertThat(rejectFirst.find(Utf8Input.trusted(miss.toByteArray(StandardCharsets.UTF_8))))
+                .isFalse()
+            Assertions.assertThat<OperationDiagnostics?>(operationsFor(rejectFirst))
+                .`as`("%s should run exact rare-anchor REJECT_PREFILTER first", regex)
+                .hasSize(2)
+                .allSatisfy(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
+                        Assertions.assertThat(event.forwardDfaSearchCount).isZero()
+                        Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                            .containsExactly(
+                                StrategyParticipation(
+                                    MatchStrategy.LITERAL, StrategyRole.REJECT_PREFILTER
+                                )
+                            )
+                    })
+        }
     }
 
-    @Override
-    public void onOperationCompleted(OperationDiagnostics event) {
-      operations.add(event);
+    @ParameterizedTest
+    @MethodSource("captureAttributionAlignmentCases")
+    fun captureModeAndCaptureStrategyAgreeWithMatcherStateAcrossOperations(
+        regex: String?, matchingInput: String, nonMatchingInput: String
+    ) {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile(regex)
+        val hasCaptures = pattern.analysis().captureCount > 0
+
+        for (input in List.of<String?>(matchingInput, nonMatchingInput)) {
+            diagnostics.operations.clear()
+            val mMatches = pattern.matcher(input)
+            val matched = mMatches.matches()
+            assertSingleOperationCaptureAgreement(
+                operationsFor(pattern), matched, hasCaptures, mMatches.capturesResolved()
+            )
+
+            diagnostics.operations.clear()
+            val mLookingAt = pattern.matcher(input)
+            val lookedAt = mLookingAt.lookingAt()
+            assertSingleOperationCaptureAgreement(
+                operationsFor(pattern), lookedAt, hasCaptures, mLookingAt.capturesResolved()
+            )
+
+            diagnostics.operations.clear()
+            val mFind = pattern.matcher(input)
+            val found = mFind.find()
+            assertSingleOperationCaptureAgreement(
+                operationsFor(pattern), found, hasCaptures, mFind.capturesResolved()
+            )
+            if (found && hasCaptures) {
+                mFind.group(1)
+                diagnostics.operations.clear()
+                val mPostDemandFind = pattern.matcher(input)
+                val foundAgain = mPostDemandFind.find()
+                assertSingleOperationCaptureAgreement(
+                    operationsFor(pattern), foundAgain, hasCaptures, mPostDemandFind.capturesResolved()
+                )
+            }
+
+            val captureReplacement = if (hasCaptures) "$1" else "x"
+            for (replacement in List.of<String?>("x", captureReplacement)) {
+                diagnostics.operations.clear()
+                Assertions.assertThat(pattern.matcher(input).replaceFirst(replacement)).isNotNull()
+                assertCaptureStrategyMatchesMode(operationsFor(pattern))
+
+                diagnostics.operations.clear()
+                Assertions.assertThat(pattern.matcher(input).replaceAll(replacement)).isNotNull()
+                assertCaptureStrategyMatchesMode(operationsFor(pattern))
+            }
+        }
     }
-  }
+
+    @ParameterizedTest
+    @MethodSource("onePassCapabilityAlignmentCases")
+    fun onePassCapabilitiesAgreeWithRuntimeExecution(
+        regex: String?,
+        options: EnginePathOptions,
+        matchingInput: String?,
+        expectPrimary: Boolean,
+        expectCaptureExtraction: Boolean
+    ) {
+        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern = org.safere.Pattern.compile(regex, 0, options)
+        val analysis = pattern.analysis()
+
+        if (analysis.limitations.contains(PatternLimitation.LAZY_SEMANTICS_LIMIT_ONE_PASS)
+            || analysis.limitations.contains(PatternLimitation.NULLABLE_ALTERNATION_LIMITS_ONE_PASS)
+            || analysis.limitations.contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
+            || analysis.captureCount > OnePass.MAX_CAPTURE_GROUPS - 1 || !options.onePass
+        ) {
+            Assertions.assertThat<PatternCapability?>(analysis.capabilities)
+                .doesNotContain(
+                    PatternCapability.ONE_PASS_PRIMARY, PatternCapability.ONE_PASS_CAPTURE_EXTRACTION
+                )
+        }
+        if (analysis.captureCount == 0) {
+            Assertions.assertThat<PatternCapability?>(analysis.capabilities)
+                .doesNotContain(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION)
+        }
+        Assertions.assertThat(analysis.capabilities.contains(PatternCapability.ONE_PASS_PRIMARY))
+            .isEqualTo(expectPrimary)
+        Assertions.assertThat(analysis.capabilities.contains(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION))
+            .isEqualTo(expectCaptureExtraction)
+
+        Assertions.assertThat(pattern.matcher(matchingInput).matches()).isTrue()
+        val lookingAtInput =
+            if (pattern.prog().anchorEnd() || pattern.prog().dollarAnchorEnd())
+                matchingInput
+            else
+                matchingInput + " suffix"
+        Assertions.assertThat(pattern.matcher(lookingAtInput).lookingAt()).isTrue()
+        val findMatcher = pattern.matcher("prefix " + matchingInput + " suffix")
+        if (!pattern.prog().anchorStart() && !pattern.prog().anchorEnd()) {
+            Assertions.assertThat(findMatcher.find()).isTrue()
+            if (analysis.captureCount > 0) {
+                findMatcher.group(1)
+            }
+        } else {
+            val anchoredFind = pattern.matcher(matchingInput)
+            Assertions.assertThat(anchoredFind.find()).isTrue()
+            if (analysis.captureCount > 0) {
+                anchoredFind.group(1)
+            }
+        }
+        val replacement = if (analysis.captureCount > 0) "$1" else "x"
+        Assertions.assertThat(pattern.matcher(matchingInput).replaceFirst(replacement)).isNotNull()
+        Assertions.assertThat(pattern.matcher(matchingInput).replaceAll(replacement)).isNotNull()
+
+        val events = operationsFor(pattern)
+        val ranOnePassPrimary =
+            events.stream()
+                .anyMatch { event: OperationDiagnostics? -> event!!.boundaryStrategy == MatchStrategy.ONE_PASS }
+        val ranOnePassCapture =
+            events.stream()
+                .anyMatch { event: OperationDiagnostics? -> event!!.captureStrategy == MatchStrategy.ONE_PASS }
+        val ranOnePassAuxiliary =
+            events.stream()
+                .flatMap<StrategyParticipation?> { event: OperationDiagnostics? -> event!!.auxiliaryStrategies.stream() }
+                .anyMatch { participation: StrategyParticipation? -> participation!!.strategy == MatchStrategy.ONE_PASS }
+
+        Assertions.assertThat(ranOnePassPrimary).isEqualTo(expectPrimary)
+        Assertions.assertThat(ranOnePassCapture).isEqualTo(expectCaptureExtraction)
+        if (!expectPrimary && !expectCaptureExtraction) {
+            Assertions.assertThat(ranOnePassAuxiliary).isFalse()
+        }
+    }
+
+    private fun operationsFor(pattern: org.safere.Pattern): MutableList<OperationDiagnostics> {
+        val patternId = pattern.patternId()
+        return diagnostics.operations.stream()
+            .filter { event: OperationDiagnostics? -> event!!.pattern.patternId == patternId }
+            .toList()
+    }
+
+    private fun assertCompositeRejection(
+        operation: MatchOperation, input: String?, expectedStrategy: MatchStrategy?
+    ) {
+        val pattern = org.safere.Pattern.compile(".*x.*needle.*")
+        val matcher = pattern.matcher(input)
+
+        val matched =
+            when (operation) {
+                MatchOperation.FIND -> matcher.find()
+                MatchOperation.MATCHES -> matcher.matches()
+                else -> throw AssertionError("unsupported operation: " + operation)
+            }
+
+        Assertions.assertThat(matched).isFalse()
+        Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
+            .singleElement()
+            .satisfies(
+                ThrowingConsumer { event: OperationDiagnostics? ->
+                    Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).isEqualTo(expectedStrategy)
+                    Assertions.assertThat<StrategyParticipation?>(event.auxiliaryStrategies)
+                        .containsExactly(
+                            StrategyParticipation(expectedStrategy, StrategyRole.REJECT_PREFILTER)
+                        )
+                })
+    }
+
+    private class RecordingDiagnostics : SafeReMatchDiagnostics() {
+        val compilations: MutableList<PatternCompiledEvent> = ArrayList<PatternCompiledEvent>()
+        val operations: MutableList<OperationDiagnostics> = ArrayList<OperationDiagnostics>()
+
+        override fun onPatternCompiled(event: PatternCompiledEvent?) {
+            compilations.add(event!!)
+        }
+
+        override fun onOperationCompleted(event: OperationDiagnostics?) {
+            operations.add(event!!)
+        }
+    }
+
+    companion object {
+        private fun lazyShiftDfaSearchCases(): Stream<Arguments?> {
+            val cases = Stream.builder<Arguments?>()
+            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+                for (operation in List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.LOOKING_AT)) {
+                    cases.add(Arguments.of("^a[é]*", "aéé", operation, utf8))
+                    cases.add(Arguments.of("^a{9}b?c?", "aaaaaaaaabc", operation, utf8))
+                    cases.add(Arguments.of("^a[bc]*", "abcbc", operation, utf8))
+                }
+            }
+            return cases.build()
+        }
+
+        private fun reverseCandidateVerificationCases(): Stream<Arguments?>? {
+            return Stream.of<Boolean?>(false, true)
+                .flatMap<Arguments?> { bitState: Boolean? ->
+                    Stream.of<Arguments?>(
+                        Arguments.of(bitState, "(?:foo|fax)$", "x".repeat(1400) + "foo"),
+                        Arguments.of(bitState, "(?:foo|fax)$", "x".repeat(1400) + "foo\r\n"),
+                        Arguments.of(bitState, "(?:foo|fax)\\z", "x".repeat(1400) + "fax"),
+                        Arguments.of(bitState, "foo[ab]*$", "zzfoo" + "a".repeat(2048))
+                    )
+                }
+        }
+
+        private fun captureHistoryFindCases(): Stream<Arguments?>? {
+            return Stream.of<Boolean?>(false, true)
+                .flatMap<Arguments?> { utf8: Boolean? ->
+                    Stream.of<Boolean?>(false, true)
+                        .map<Arguments?> { accelerate: Boolean? -> Arguments.of(utf8, accelerate) }
+                }
+        }
+
+        private fun captureHistoryPattern(accelerate: Boolean, anchored: Boolean): org.safere.Pattern {
+            val options =
+                EnginePathOptions.builder()
+                    .startAcceleration(accelerate)
+                    .onePass(false)
+                    .shiftDfa(false)
+                    .build()
+            val pattern =
+                org.safere.Pattern.compile((if (anchored) "^" else "") + "(error:\\[)[A-Z](\\] code:500)", 0, options)
+            val primer = pattern.matcher("error:[C] code:500")
+            Assertions.assertThat(primer.find()).isTrue()
+            Assertions.assertThat(primer.group(1)).isEqualTo("error:[")
+            return pattern
+        }
+
+        private fun captureAttributionAlignmentCases(): Stream<Arguments?> {
+            return Stream.of<Arguments?>(
+                Arguments.of("^([a-z]+):(\\d+)$", "abc:123", "abc:nope"),
+                Arguments.of("([a-z]+):(\\d+)", "abc:123", "nope"),
+                Arguments.of("(a+?)b", "aab", "zzz"),
+                Arguments.of("(a+|ab)c", "abc", "zzz"),
+                Arguments.of("foo(a+)b", "xxfooaab", "fooxxx"),
+                Arguments.of("(?is).*\\b(you|your)\\b.*", "here is your token", "nothing"),
+                Arguments.of("(\\X)b", "ab", "zz"),
+                Arguments.of("\\d{4}-\\d{2}-\\d{2}", "2026-10-30", "nope")
+            )
+        }
+
+        private fun assertSingleOperationCaptureAgreement(
+            events: MutableList<OperationDiagnostics>?,
+            matched: Boolean,
+            hasCaptures: Boolean,
+            matcherCapturesResolved: Boolean
+        ) {
+            assertCaptureStrategyMatchesMode(events)
+            Assertions.assertThat<OperationDiagnostics?>(events)
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        if (!matched || !hasCaptures) {
+                            Assertions.assertThat<CaptureMode?>(event!!.captureMode).isEqualTo(CaptureMode.NONE)
+                            Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                        } else {
+                            Assertions.assertThat(event!!.captureMode == CaptureMode.EAGER)
+                                .isEqualTo(matcherCapturesResolved)
+                        }
+                    })
+        }
+
+        private fun assertCaptureStrategyMatchesMode(events: MutableList<OperationDiagnostics>?) {
+            Assertions.assertThat<OperationDiagnostics?>(events)
+                .singleElement()
+                .satisfies(
+                    ThrowingConsumer { event: OperationDiagnostics? ->
+                        Assertions.assertThat(event!!.captureStrategy != MatchStrategy.NONE)
+                            .isEqualTo(event.captureMode == CaptureMode.EAGER)
+                        if (event.outcome == MatchOutcome.NO_MATCH
+                            || event.pattern.analysis.captureCount == 0
+                        ) {
+                            Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
+                            Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
+                        }
+                    })
+        }
+
+        private fun onePassCapabilityAlignmentCases(): Stream<Arguments?> {
+            val defaults = EnginePathOptions.allEnabled()
+            val onePassDisabled = EnginePathOptions.builder().onePass(false).build()
+            return Stream.of<Arguments?>(
+                Arguments.of("^([a-z]+):(\\d+)$", defaults, "abc:123", true, true),
+                Arguments.of("([a-z]+):(\\d+)", defaults, "abc:123", true, true),
+                Arguments.of("^[a-z]+:\\d+$", defaults, "abc:123", true, false),
+                Arguments.of("\\d{4}-\\d{2}-\\d{2}", defaults, "2026-10-30", true, false),
+                Arguments.of("(a)*", defaults, "aaa", false, true),
+                Arguments.of("^(a|)b$", defaults, "ab", false, false),
+                Arguments.of("(a|)b", defaults, "ab", false, false),
+                Arguments.of("(a*|b)c", defaults, "ac", false, false),
+                Arguments.of("^([a-z]+?)b$", defaults, "aab", false, false),
+                Arguments.of("([a-z]+?)b", defaults, "aab", false, false),
+                Arguments.of("\\b{g}(a+)", defaults, "aaa", false, false),
+                Arguments.of("(\\X)", defaults, "a", false, false),
+                Arguments.of(
+                    "(a)".repeat(OnePass.MAX_CAPTURE_GROUPS),
+                    defaults,
+                    "a".repeat(OnePass.MAX_CAPTURE_GROUPS),
+                    false,
+                    false
+                ),
+                Arguments.of("(a|ab)c", defaults, "abc", false, false),
+                Arguments.of("^([a-z]+):(\\d+)$", onePassDisabled, "abc:123", false, false),
+                Arguments.of("([a-z]+):(\\d+)", onePassDisabled, "abc:123", false, false)
+            )
+        }
+    }
 }

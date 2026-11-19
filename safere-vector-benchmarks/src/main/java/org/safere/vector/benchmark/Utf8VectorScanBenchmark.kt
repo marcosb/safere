@@ -2,468 +2,469 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.vector.benchmark
 
-package org.safere.vector.benchmark;
+import jdk.incubator.vector.VectorOperators.GE
 
-import static jdk.incubator.vector.VectorOperators.GE;
-import static jdk.incubator.vector.VectorOperators.LE;
-
-import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
-import jdk.incubator.vector.ByteVector;
-import jdk.incubator.vector.VectorMask;
-import jdk.incubator.vector.VectorSpecies;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.safere.Pattern;
-import org.safere.Utf8Input;
-import org.safere.Utf8Matcher;
-import org.safere.Utf8ScannerBenchmarkAccess;
-
-/** Compares current UTF-8 SWAR scans with direct borrowed-array ByteVector prototypes. */
+/** Compares current UTF-8 SWAR scans with direct borrowed-array ByteVector prototypes.  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Thread)
-public class Utf8VectorScanBenchmark {
-  private static final String PROVIDER_PROPERTY = "org.safere.experimental.vectorScanProvider";
-  private static final VectorSpecies<Byte> SPECIES = ByteVector.SPECIES_PREFERRED;
-  private static final int[] SINGLETON_RANGES = {'x', 'x'};
-  private static final int[] PAIR_RANGES = {'x', 'x', 'y', 'y'};
-  private static final int[] RANGE_RANGES = {'0', '9'};
-  private static final int[] RANGE2_RANGES = {'0', '9', 'A', 'Z'};
-  private static final int[] ALNUM3_RANGES = {'0', '9', 'A', 'Z', 'a', 'z'};
-  private static final int[] MIXED4_RANGES = {'!', '!', '#', '#', '0', '9', 'A', 'Z'};
+class Utf8VectorScanBenchmark {
+    /** Data-declared trial in shape/traversal/density/length/offset form.  */
+    @Param([])
+    var vectorScanTrial: String? = null
 
-  /** Data-declared trial in shape/traversal/density/length/offset form. */
-  @Param({})
-  public String vectorScanTrial;
+    private var storage: ByteArray
+    private var offset = 0
+    private var length = 0
+    private var shape: Shape? = null
+    private var scanAll = false
+    private var swarScanner: Utf8ScannerBenchmarkAccess? = null
+    private var swarProvider: ScanProvider? = null
+    private var vectorProvider: ScanProvider? = null
+    private var lowerBounds: Array<ByteVector?>
+    private var upperBounds: Array<ByteVector?>
+    private var safeRePattern: Pattern? = null
+    private var safeReInput: Utf8Input? = null
+    private var safeReMatcher: Utf8Matcher? = null
 
-  private byte[] storage;
-  private int offset;
-  private int length;
-  private Shape shape;
-  private boolean scanAll;
-  private Utf8ScannerBenchmarkAccess swarScanner;
-  private ScanProvider swarProvider;
-  private ScanProvider vectorProvider;
-  private ByteVector[] lowerBounds;
-  private ByteVector[] upperBounds;
-  private Pattern safeRePattern;
-  private Utf8Input safeReInput;
-  private Utf8Matcher safeReMatcher;
-
-  /** Materializes the declared input and verifies that both implementations agree. */
-  @Setup(Level.Trial)
-  public void setup() {
-    String configuredProvider = System.getProperty(PROVIDER_PROPERTY, "").trim();
-    if (!configuredProvider.isEmpty() && !configuredProvider.equals("swar")) {
-      throw new IllegalStateException(
-          "Low-level benchmarks require the SWAR production provider, not " + configuredProvider);
+    /** Materializes the declared input and verifies that both implementations agree.  */
+    @Setup(Level.Trial)
+    fun setup() {
+        val configuredProvider: String =
+            System.getProperty(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.PROVIDER_PROPERTY, "")
+                .trim()
+        kotlin.check(!(!configuredProvider.isEmpty() && !configuredProvider.equals("swar"))) { "Low-level benchmarks require the SWAR production provider, not " + configuredProvider }
+        val fields: Array<String?> = vectorScanTrial.split("/", -1)
+        kotlin.require(fields.length == 5) { "Malformed Vector scan trial: " + vectorScanTrial }
+        shape =
+            org.safere.vector.benchmark.Utf8VectorScanBenchmark.Shape.valueOf(fields[0].toUpperCase(java.util.Locale.ROOT))
+        scanAll =
+            when (fields[1]) {
+                "first" -> false
+                "all" -> true
+                else -> throw IllegalArgumentException("Unknown traversal: " + fields[1])
+            }
+        length = Integer.parseInt(fields[3])
+        offset = Integer.parseInt(fields[4])
+        val input: ByteArray = VectorScanConfiguration.input(shape.inputProfile, fields[2], length)
+        storage =
+            ByteArray(offset + input.length + org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length())
+        Arrays.fill(storage, 0x7f.toByte())
+        System.arraycopy(input, 0, storage, offset, input.length)
+        swarScanner = Utf8ScannerBenchmarkAccess(storage, offset, length, shape.ranges)
+        swarProvider = org.safere.vector.benchmark.Utf8VectorScanBenchmark.SwarProvider()
+        vectorProvider = org.safere.vector.benchmark.Utf8VectorScanBenchmark.VectorProvider()
+        val rangeCount: Int = shape.ranges.length / 2
+        lowerBounds = arrayOfNulls<ByteVector>(rangeCount)
+        upperBounds = arrayOfNulls<ByteVector>(rangeCount)
+        for (range in 0..<rangeCount) {
+            lowerBounds[range] = ByteVector.broadcast(
+                org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES,
+                shape.ranges[range * 2].toByte()
+            )
+            upperBounds[range] = ByteVector.broadcast(
+                org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES,
+                shape.ranges[range * 2 + 1].toByte()
+            )
+        }
+        safeRePattern = Pattern.compile(shape.pattern)
+        safeReInput = Utf8Input.trusted(storage, offset, length)
+        safeReMatcher = safeRePattern.matcher(safeReInput)
+        val swarResult = runSwar()
+        val swarProviderResult = runSwarProvider()
+        val vectorResult = runVector()
+        val vectorProviderResult = runVectorProvider()
+        val vectorBoundsResult = runVectorBounds()
+        val vectorCursorResult = runVectorCursor()
+        if (swarResult != swarProviderResult || swarResult != vectorResult || swarResult != vectorProviderResult || swarResult != vectorBoundsResult || swarResult != vectorCursorResult) {
+            throw AssertionError(
+                ("Scanner disagreement for "
+                        + vectorScanTrial
+                        + ": SWAR="
+                        + swarResult
+                        + ", SWAR provider="
+                        + swarProviderResult
+                        + ", Vector="
+                        + vectorResult
+                        + ", Vector provider="
+                        + vectorProviderResult
+                        + ", Vector bounds="
+                        + vectorBoundsResult
+                        + ", Vector cursor="
+                        + vectorCursorResult)
+            )
+        }
+        val safeReResult = runSafeRe()
+        val expectedSafeReResult = if (scanAll) swarResult else (if (swarResult >= 0) 1 else 0)
+        if (safeReResult != expectedSafeReResult) {
+            throw AssertionError(
+                ("SafeRE disagreement for "
+                        + vectorScanTrial
+                        + ": expected="
+                        + expectedSafeReResult
+                        + ", actual="
+                        + safeReResult)
+            )
+        }
     }
-    String[] fields = vectorScanTrial.split("/", -1);
-    if (fields.length != 5) {
-      throw new IllegalArgumentException("Malformed Vector scan trial: " + vectorScanTrial);
+
+    /** Runs the current SafeRE SWAR implementation.  */
+    @Benchmark
+    fun swar(): Int {
+        return runSwar()
     }
-    shape = Shape.valueOf(fields[0].toUpperCase(java.util.Locale.ROOT));
-    scanAll =
-        switch (fields[1]) {
-          case "first" -> false;
-          case "all" -> true;
-          default -> throw new IllegalArgumentException("Unknown traversal: " + fields[1]);
+
+    /** Runs current SWAR through a stable benchmark-only provider interface.  */
+    @Benchmark
+    fun swarProvider(): Int {
+        return runSwarProvider()
+    }
+
+    /** Runs the benchmark-only ByteVector implementation.  */
+    @Benchmark
+    fun vector(): Int {
+        return runVector()
+    }
+
+    /** Runs ByteVector through a stable benchmark-only provider interface.  */
+    @Benchmark
+    fun vectorProvider(): Int {
+        return runVectorProvider()
+    }
+
+    /** Runs ByteVector with range bounds broadcast once outside the input loop.  */
+    @Benchmark
+    fun vectorBounds(): Int {
+        return runVectorBounds()
+    }
+
+    /** Runs a ByteVector implementation that retains and drains each complete match mask.  */
+    @Benchmark
+    fun vectorCursor(): Int {
+        return runVectorCursor()
+    }
+
+    /** Runs the corresponding complete SafeRE UTF-8 find operation.  */
+    @Benchmark
+    fun safeRe(): Int {
+        return runSafeRe()
+    }
+
+    private fun runSafeRe(): Int {
+        if (!scanAll) {
+            return if (safeRePattern.find(safeReInput)) 1 else 0
+        }
+        safeReMatcher.reset()
+        var checksum = 0
+        while (safeReMatcher.find()) {
+            checksum += safeReMatcher.start()
+        }
+        return checksum
+    }
+
+    private fun runSwar(): Int {
+        if (!scanAll) {
+            return swarScanner.indexOfCodePointClass(0)
+        }
+        var checksum = 0
+        var start = 0
+        while (start < length) {
+            val found: Int = swarScanner.indexOfCodePointClass(start)
+            if (found < 0) {
+                break
+            }
+            checksum += found
+            start = found + 1
+        }
+        return checksum
+    }
+
+    private fun runSwarProvider(): Int {
+        if (!scanAll) {
+            return swarProvider!!.indexOf(0)
+        }
+        var checksum = 0
+        var start = 0
+        while (start < length) {
+            val found = swarProvider!!.indexOf(start)
+            if (found < 0) {
+                break
+            }
+            checksum += found
+            start = found + 1
+        }
+        return checksum
+    }
+
+    private fun runVector(): Int {
+        if (!scanAll) {
+            return indexOfVector(0)
+        }
+        var checksum = 0
+        var start = 0
+        while (start < length) {
+            val found = indexOfVector(start)
+            if (found < 0) {
+                break
+            }
+            checksum += found
+            start = found + 1
+        }
+        return checksum
+    }
+
+    private fun runVectorProvider(): Int {
+        if (!scanAll) {
+            return vectorProvider!!.indexOf(0)
+        }
+        var checksum = 0
+        var start = 0
+        while (start < length) {
+            val found = vectorProvider!!.indexOf(start)
+            if (found < 0) {
+                break
+            }
+            checksum += found
+            start = found + 1
+        }
+        return checksum
+    }
+
+    private fun runVectorBounds(): Int {
+        if (!scanAll) {
+            return indexOfVectorBounds(0)
+        }
+        var checksum = 0
+        var start = 0
+        while (start < length) {
+            val found = indexOfVectorBounds(start)
+            if (found < 0) {
+                break
+            }
+            checksum += found
+            start = found + 1
+        }
+        return checksum
+    }
+
+    private fun runVectorCursor(): Int {
+        if (!scanAll) {
+            return indexOfVector(0)
+        }
+        var checksum = 0
+        var position = 0
+        val limit: Int = org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.loopBound(length)
+        while (position < limit) {
+            val values: ByteVector? = ByteVector.fromArray(
+                org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES,
+                storage,
+                offset + position
+            )
+            val matches: VectorMask<Byte?> = shape.matches(values)
+            if (!matches.anyTrue()) {
+                position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+                continue
+            }
+            var matchBits: Long = matches.toLong()
+            while (matchBits != 0L) {
+                val lane: Int = Long.numberOfTrailingZeros(matchBits)
+                checksum += position + lane
+                matchBits = matchBits and matchBits - 1
+            }
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+        }
+        while (position < length) {
+            if (shape!!.matches(storage[offset + position])) {
+                checksum += position
+            }
+            position++
+        }
+        return checksum
+    }
+
+    private fun indexOfVector(start: Int): Int {
+        var position: Int = Math.max(0, start)
+        val limit: Int =
+            position + org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.loopBound(length - position)
+        while (position < limit) {
+            val values: ByteVector? = ByteVector.fromArray(
+                org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES,
+                storage,
+                offset + position
+            )
+            val matches: VectorMask<Byte?> = shape.matches(values)
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+        }
+        while (position < length) {
+            if (shape!!.matches(storage[offset + position])) {
+                return position
+            }
+            position++
+        }
+        return -1
+    }
+
+    private fun indexOfVectorBounds(start: Int): Int {
+        var position: Int = Math.max(0, start)
+        val limit: Int =
+            position + org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.loopBound(length - position)
+        while (position < limit) {
+            val values: ByteVector = ByteVector.fromArray(
+                org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES,
+                storage,
+                offset + position
+            )
+            var matches: VectorMask<Byte?> =
+                values.compare(GE, lowerBounds[0]).and(values.compare(LE, upperBounds[0]))
+            for (range in 1..<lowerBounds.length) {
+                matches =
+                    matches.or(
+                        values.compare(GE, lowerBounds[range]).and(values.compare(LE, upperBounds[range]))
+                    )
+            }
+            if (matches.anyTrue()) {
+                return position + matches.firstTrue()
+            }
+            position += org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SPECIES.length()
+        }
+        while (position < length) {
+            if (shape!!.matches(storage[offset + position])) {
+                return position
+            }
+            position++
+        }
+        return -1
+    }
+
+    private interface ScanProvider {
+        fun indexOf(start: Int): Int
+    }
+
+    private inner class SwarProvider : ScanProvider {
+        @Override
+        override fun indexOf(start: Int): Int {
+            return swarScanner.indexOfCodePointClass(start)
+        }
+    }
+
+    private inner class VectorProvider : ScanProvider {
+        @Override
+        override fun indexOf(start: Int): Int {
+            return indexOfVector(start)
+        }
+    }
+
+    private enum class Shape(
+        private val ranges: IntArray,
+        private val pattern: String?,
+        private val inputProfile: String?
+    ) {
+        SINGLETON(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.SINGLETON_RANGES, "x") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                return values.eq('x'.code.toByte())
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return value == 'x'.code.toByte()
+            }
+        },
+        PAIR(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.PAIR_RANGES, "[xy]") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                return values.eq('x'.code.toByte()).or(values.eq('y'.code.toByte()))
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return value == 'x'.code.toByte() || value == 'y'.code.toByte()
+            }
+        },
+        RANGE(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.RANGE_RANGES, "[0-9]") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                return values.compare(GE, '0'.code.toByte()).and(values.compare(LE, '9'.code.toByte()))
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return value >= '0'.code.toByte() && value <= '9'.code.toByte()
+            }
+        },
+        RANGE2(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.RANGE2_RANGES, "[0-9A-Z]", "multi.") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                val digits: VectorMask<Byte?> =
+                    values.compare(GE, '0'.code.toByte()).and(values.compare(LE, '9'.code.toByte()))
+                val upper: VectorMask<Byte?>? =
+                    values.compare(GE, 'A'.code.toByte()).and(values.compare(LE, 'Z'.code.toByte()))
+                return digits.or(upper)
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return (value >= '0'.code.toByte() && value <= '9'.code.toByte()) || (value >= 'A'.code.toByte() && value <= 'Z'.code.toByte())
+            }
+        },
+        ALNUM3(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.ALNUM3_RANGES, "[0-9A-Za-z]", "multi.") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                val digits: VectorMask<Byte?> =
+                    values.compare(GE, '0'.code.toByte()).and(values.compare(LE, '9'.code.toByte()))
+                val upper: VectorMask<Byte?>? =
+                    values.compare(GE, 'A'.code.toByte()).and(values.compare(LE, 'Z'.code.toByte()))
+                val lower: VectorMask<Byte?>? =
+                    values.compare(GE, 'a'.code.toByte()).and(values.compare(LE, 'z'.code.toByte()))
+                return digits.or(upper).or(lower)
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return (value >= '0'.code.toByte() && value <= '9'.code.toByte())
+                        || (value >= 'A'.code.toByte() && value <= 'Z'.code.toByte())
+                        || (value >= 'a'.code.toByte() && value <= 'z'.code.toByte())
+            }
+        },
+        MIXED4(org.safere.vector.benchmark.Utf8VectorScanBenchmark.Companion.MIXED4_RANGES, "[!#0-9A-Z]", "multi.") {
+            @Override
+            override fun matches(values: ByteVector): VectorMask<Byte?> {
+                val singletons: VectorMask<Byte?> = values.eq('!'.code.toByte()).or(values.eq('#'.code.toByte()))
+                val digits: VectorMask<Byte?>? =
+                    values.compare(GE, '0'.code.toByte()).and(values.compare(LE, '9'.code.toByte()))
+                val upper: VectorMask<Byte?>? =
+                    values.compare(GE, 'A'.code.toByte()).and(values.compare(LE, 'Z'.code.toByte()))
+                return singletons.or(digits).or(upper)
+            }
+
+            @Override
+            override fun matches(value: Byte): Boolean {
+                return value == '!'.code.toByte() || value == '#'.code.toByte() || (value >= '0'.code.toByte() && value <= '9'.code.toByte())
+                        || (value >= 'A'.code.toByte() && value <= 'Z'.code.toByte())
+            }
         };
-    length = Integer.parseInt(fields[3]);
-    offset = Integer.parseInt(fields[4]);
-    byte[] input = VectorScanConfiguration.input(shape.inputProfile, fields[2], length);
-    storage = new byte[offset + input.length + SPECIES.length()];
-    Arrays.fill(storage, (byte) 0x7f);
-    System.arraycopy(input, 0, storage, offset, input.length);
-    swarScanner = new Utf8ScannerBenchmarkAccess(storage, offset, length, shape.ranges);
-    swarProvider = new SwarProvider();
-    vectorProvider = new VectorProvider();
-    int rangeCount = shape.ranges.length / 2;
-    lowerBounds = new ByteVector[rangeCount];
-    upperBounds = new ByteVector[rangeCount];
-    for (int range = 0; range < rangeCount; range++) {
-      lowerBounds[range] = ByteVector.broadcast(SPECIES, (byte) shape.ranges[range * 2]);
-      upperBounds[range] = ByteVector.broadcast(SPECIES, (byte) shape.ranges[range * 2 + 1]);
-    }
-    safeRePattern = Pattern.compile(shape.pattern);
-    safeReInput = Utf8Input.trusted(storage, offset, length);
-    safeReMatcher = safeRePattern.matcher(safeReInput);
-    int swarResult = runSwar();
-    int swarProviderResult = runSwarProvider();
-    int vectorResult = runVector();
-    int vectorProviderResult = runVectorProvider();
-    int vectorBoundsResult = runVectorBounds();
-    int vectorCursorResult = runVectorCursor();
-    if (swarResult != swarProviderResult
-        || swarResult != vectorResult
-        || swarResult != vectorProviderResult
-        || swarResult != vectorBoundsResult
-        || swarResult != vectorCursorResult) {
-      throw new AssertionError(
-          "Scanner disagreement for "
-              + vectorScanTrial
-              + ": SWAR="
-              + swarResult
-              + ", SWAR provider="
-              + swarProviderResult
-              + ", Vector="
-              + vectorResult
-              + ", Vector provider="
-              + vectorProviderResult
-              + ", Vector bounds="
-              + vectorBoundsResult
-              + ", Vector cursor="
-              + vectorCursorResult);
-    }
-    int safeReResult = runSafeRe();
-    int expectedSafeReResult = scanAll ? swarResult : (swarResult >= 0 ? 1 : 0);
-    if (safeReResult != expectedSafeReResult) {
-      throw new AssertionError(
-          "SafeRE disagreement for "
-              + vectorScanTrial
-              + ": expected="
-              + expectedSafeReResult
-              + ", actual="
-              + safeReResult);
-    }
-  }
 
-  /** Runs the current SafeRE SWAR implementation. */
-  @Benchmark
-  public int swar() {
-    return runSwar();
-  }
+        constructor(ranges: IntArray, pattern: String?) : this(ranges, pattern, "")
 
-  /** Runs current SWAR through a stable benchmark-only provider interface. */
-  @Benchmark
-  public int swarProvider() {
-    return runSwarProvider();
-  }
+        abstract fun matches(values: ByteVector?): VectorMask<Byte?>
 
-  /** Runs the benchmark-only ByteVector implementation. */
-  @Benchmark
-  public int vector() {
-    return runVector();
-  }
-
-  /** Runs ByteVector through a stable benchmark-only provider interface. */
-  @Benchmark
-  public int vectorProvider() {
-    return runVectorProvider();
-  }
-
-  /** Runs ByteVector with range bounds broadcast once outside the input loop. */
-  @Benchmark
-  public int vectorBounds() {
-    return runVectorBounds();
-  }
-
-  /** Runs a ByteVector implementation that retains and drains each complete match mask. */
-  @Benchmark
-  public int vectorCursor() {
-    return runVectorCursor();
-  }
-
-  /** Runs the corresponding complete SafeRE UTF-8 find operation. */
-  @Benchmark
-  public int safeRe() {
-    return runSafeRe();
-  }
-
-  private int runSafeRe() {
-    if (!scanAll) {
-      return safeRePattern.find(safeReInput) ? 1 : 0;
-    }
-    safeReMatcher.reset();
-    int checksum = 0;
-    while (safeReMatcher.find()) {
-      checksum += safeReMatcher.start();
-    }
-    return checksum;
-  }
-
-  private int runSwar() {
-    if (!scanAll) {
-      return swarScanner.indexOfCodePointClass(0);
-    }
-    int checksum = 0;
-    int start = 0;
-    while (start < length) {
-      int found = swarScanner.indexOfCodePointClass(start);
-      if (found < 0) {
-        break;
-      }
-      checksum += found;
-      start = found + 1;
-    }
-    return checksum;
-  }
-
-  private int runSwarProvider() {
-    if (!scanAll) {
-      return swarProvider.indexOf(0);
-    }
-    int checksum = 0;
-    int start = 0;
-    while (start < length) {
-      int found = swarProvider.indexOf(start);
-      if (found < 0) {
-        break;
-      }
-      checksum += found;
-      start = found + 1;
-    }
-    return checksum;
-  }
-
-  private int runVector() {
-    if (!scanAll) {
-      return indexOfVector(0);
-    }
-    int checksum = 0;
-    int start = 0;
-    while (start < length) {
-      int found = indexOfVector(start);
-      if (found < 0) {
-        break;
-      }
-      checksum += found;
-      start = found + 1;
-    }
-    return checksum;
-  }
-
-  private int runVectorProvider() {
-    if (!scanAll) {
-      return vectorProvider.indexOf(0);
-    }
-    int checksum = 0;
-    int start = 0;
-    while (start < length) {
-      int found = vectorProvider.indexOf(start);
-      if (found < 0) {
-        break;
-      }
-      checksum += found;
-      start = found + 1;
-    }
-    return checksum;
-  }
-
-  private int runVectorBounds() {
-    if (!scanAll) {
-      return indexOfVectorBounds(0);
-    }
-    int checksum = 0;
-    int start = 0;
-    while (start < length) {
-      int found = indexOfVectorBounds(start);
-      if (found < 0) {
-        break;
-      }
-      checksum += found;
-      start = found + 1;
-    }
-    return checksum;
-  }
-
-  private int runVectorCursor() {
-    if (!scanAll) {
-      return indexOfVector(0);
-    }
-    int checksum = 0;
-    int position = 0;
-    int limit = SPECIES.loopBound(length);
-    for (; position < limit; position += SPECIES.length()) {
-      ByteVector values = ByteVector.fromArray(SPECIES, storage, offset + position);
-      VectorMask<Byte> matches = shape.matches(values);
-      if (!matches.anyTrue()) {
-        continue;
-      }
-      long matchBits = matches.toLong();
-      while (matchBits != 0) {
-        int lane = Long.numberOfTrailingZeros(matchBits);
-        checksum += position + lane;
-        matchBits &= matchBits - 1;
-      }
-    }
-    for (; position < length; position++) {
-      if (shape.matches(storage[offset + position])) {
-        checksum += position;
-      }
-    }
-    return checksum;
-  }
-
-  private int indexOfVector(int start) {
-    int position = Math.max(0, start);
-    int limit = position + SPECIES.loopBound(length - position);
-    for (; position < limit; position += SPECIES.length()) {
-      ByteVector values = ByteVector.fromArray(SPECIES, storage, offset + position);
-      VectorMask<Byte> matches = shape.matches(values);
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      if (shape.matches(storage[offset + position])) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  private int indexOfVectorBounds(int start) {
-    int position = Math.max(0, start);
-    int limit = position + SPECIES.loopBound(length - position);
-    for (; position < limit; position += SPECIES.length()) {
-      ByteVector values = ByteVector.fromArray(SPECIES, storage, offset + position);
-      VectorMask<Byte> matches =
-          values.compare(GE, lowerBounds[0]).and(values.compare(LE, upperBounds[0]));
-      for (int range = 1; range < lowerBounds.length; range++) {
-        matches =
-            matches.or(
-                values.compare(GE, lowerBounds[range]).and(values.compare(LE, upperBounds[range])));
-      }
-      if (matches.anyTrue()) {
-        return position + matches.firstTrue();
-      }
-    }
-    for (; position < length; position++) {
-      if (shape.matches(storage[offset + position])) {
-        return position;
-      }
-    }
-    return -1;
-  }
-
-  private interface ScanProvider {
-    int indexOf(int start);
-  }
-
-  private final class SwarProvider implements ScanProvider {
-    @Override
-    public int indexOf(int start) {
-      return swarScanner.indexOfCodePointClass(start);
-    }
-  }
-
-  private final class VectorProvider implements ScanProvider {
-    @Override
-    public int indexOf(int start) {
-      return indexOfVector(start);
-    }
-  }
-
-  private enum Shape {
-    SINGLETON(SINGLETON_RANGES, "x") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        return values.eq((byte) 'x');
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return value == 'x';
-      }
-    },
-    PAIR(PAIR_RANGES, "[xy]") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        return values.eq((byte) 'x').or(values.eq((byte) 'y'));
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return value == 'x' || value == 'y';
-      }
-    },
-    RANGE(RANGE_RANGES, "[0-9]") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        return values.compare(GE, (byte) '0').and(values.compare(LE, (byte) '9'));
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return value >= '0' && value <= '9';
-      }
-    },
-    RANGE2(RANGE2_RANGES, "[0-9A-Z]", "multi.") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        VectorMask<Byte> digits =
-            values.compare(GE, (byte) '0').and(values.compare(LE, (byte) '9'));
-        VectorMask<Byte> upper = values.compare(GE, (byte) 'A').and(values.compare(LE, (byte) 'Z'));
-        return digits.or(upper);
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return (value >= '0' && value <= '9') || (value >= 'A' && value <= 'Z');
-      }
-    },
-    ALNUM3(ALNUM3_RANGES, "[0-9A-Za-z]", "multi.") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        VectorMask<Byte> digits =
-            values.compare(GE, (byte) '0').and(values.compare(LE, (byte) '9'));
-        VectorMask<Byte> upper = values.compare(GE, (byte) 'A').and(values.compare(LE, (byte) 'Z'));
-        VectorMask<Byte> lower = values.compare(GE, (byte) 'a').and(values.compare(LE, (byte) 'z'));
-        return digits.or(upper).or(lower);
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return (value >= '0' && value <= '9')
-            || (value >= 'A' && value <= 'Z')
-            || (value >= 'a' && value <= 'z');
-      }
-    },
-    MIXED4(MIXED4_RANGES, "[!#0-9A-Z]", "multi.") {
-      @Override
-      VectorMask<Byte> matches(ByteVector values) {
-        VectorMask<Byte> singletons = values.eq((byte) '!').or(values.eq((byte) '#'));
-        VectorMask<Byte> digits =
-            values.compare(GE, (byte) '0').and(values.compare(LE, (byte) '9'));
-        VectorMask<Byte> upper = values.compare(GE, (byte) 'A').and(values.compare(LE, (byte) 'Z'));
-        return singletons.or(digits).or(upper);
-      }
-
-      @Override
-      boolean matches(byte value) {
-        return value == '!'
-            || value == '#'
-            || (value >= '0' && value <= '9')
-            || (value >= 'A' && value <= 'Z');
-      }
-    };
-
-    private final int[] ranges;
-    private final String pattern;
-    private final String inputProfile;
-
-    Shape(int[] ranges, String pattern) {
-      this(ranges, pattern, "");
+        abstract fun matches(value: Byte): Boolean
     }
 
-    Shape(int[] ranges, String pattern, String inputProfile) {
-      this.ranges = ranges;
-      this.pattern = pattern;
-      this.inputProfile = inputProfile;
+    companion object {
+        private val PROVIDER_PROPERTY = "org.safere.experimental.vectorScanProvider"
+        private val SPECIES: VectorSpecies<Byte?> = ByteVector.SPECIES_PREFERRED
+        private val SINGLETON_RANGES = intArrayOf('x'.code, 'x'.code)
+        private val PAIR_RANGES = intArrayOf('x'.code, 'x'.code, 'y'.code, 'y'.code)
+        private val RANGE_RANGES = intArrayOf('0'.code, '9'.code)
+        private val RANGE2_RANGES = intArrayOf('0'.code, '9'.code, 'A'.code, 'Z'.code)
+        private val ALNUM3_RANGES = intArrayOf('0'.code, '9'.code, 'A'.code, 'Z'.code, 'a'.code, 'z'.code)
+        private val MIXED4_RANGES =
+            intArrayOf('!'.code, '!'.code, '#'.code, '#'.code, '0'.code, '9'.code, 'A'.code, 'Z'.code)
     }
-
-    abstract VectorMask<Byte> matches(ByteVector values);
-
-    abstract boolean matches(byte value);
-  }
 }

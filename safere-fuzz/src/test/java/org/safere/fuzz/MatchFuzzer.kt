@@ -2,564 +2,608 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.fuzz
 
-package org.safere.fuzz;
+import com.code_intelligence.jazzer.api.FuzzedDataProvider
+import com.code_intelligence.jazzer.junit.FuzzTest
+import org.safere.Pattern
+import org.safere.Utf8Input
+import java.nio.charset.StandardCharsets
+import java.util.List
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import com.code_intelligence.jazzer.junit.FuzzTest;
-import java.util.List;
-import java.util.Locale;
-import org.safere.Matcher;
-import org.safere.Pattern;
-import org.safere.Utf8Input;
-import org.safere.Utf8Matcher;
-
-public final class MatchFuzzer {
-  private static final int CI = Pattern.CASE_INSENSITIVE;
-  private static final int CI_U = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-  private static final int CI_UCC = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CHARACTER_CLASS;
-
-  private static final List<RegressionCase> CASE_FOLDING_REGRESSIONS =
-      List.of(
-          new RegressionCase("\\p{Lt}{4}", CI, List.of("abcd", "AAAA", "\u01C4".repeat(4))),
-          new RegressionCase("\\p{javaUpperCase}", CI, List.of("\u00AA", "\u02B0", "A", "a", "1")),
-          new RegressionCase("[h-j]+", CI_U, List.of("\u0130\u0131", "HIJ", "abc")),
-          new RegressionCase("[^h-j]", CI_U, List.of("\u0130", "\u0131", "x")),
-          new RegressionCase("[\\x{17F}]", CI_U, List.of("\u017F", "S", "s")),
-          new RegressionCase("[K]", CI, List.of("\u212A", "K", "k")),
-          new RegressionCase("\\p{L}", CI_U, List.of("\u0345", "\u0399", "A", "a")),
-          new RegressionCase("\\P{L}", CI_U, List.of("\u0345", "\u0399", "A", "a")),
-          new RegressionCase("[A-Z]", CI_U, List.of("\u017F", "K", "k")),
-          new RegressionCase("[K-K]", CI_U, List.of("K", "k")),
-          new RegressionCase("\\p{Lower}", CI_U, List.of("\u212A", "A", "a")),
-          new RegressionCase("\\p{Lower}", CI_UCC, List.of("\u0345", "\u212A", "A", "a")),
-          new RegressionCase("\\x{49}", CI_U, List.of("\u0130", "\u0131", "I", "i")),
-          new RegressionCase("\\x{69}", CI_U, List.of("\u0130", "\u0131", "I", "i")));
-
-  private static final List<RegressionCase> CASE_FOLDING_MODEL_REGRESSIONS =
-      List.of(
-          new RegressionCase("[A-Z]", CI_U, List.of("\u0130", "\u212A")),
-          new RegressionCase("[I-I]", CI_U, List.of("\u0130")),
-          new RegressionCase("[K-K]", CI_U, List.of("\u212A")),
-          new RegressionCase("[İ-İ]", CI_U, List.of("I", "i", "ı")),
-          new RegressionCase("[ı-ı]", CI_U, List.of("I", "i", "İ")),
-          new RegressionCase("İ", CI_U, List.of("I", "i", "ı")),
-          new RegressionCase("ı", CI_U, List.of("I", "i", "İ")),
-          new RegressionCase("\uFB05", CI_U, List.of("\uFB06")));
-
-  @FuzzTest(maxDuration = "30s")
-  void match(FuzzedDataProvider data) {
-    fuzzerTestOneInput(data);
-  }
-
-  public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    for (RegressionCase regression : CASE_FOLDING_REGRESSIONS) {
-      FuzzSupport.assertFullMatchesJdk(regression.regex(), regression.flags(), regression.inputs());
-    }
-    for (RegressionCase regression : CASE_FOLDING_MODEL_REGRESSIONS) {
-      assertFullMatchesSafeRe(regression.regex(), regression.flags(), regression.inputs());
-    }
-    assertAcceleratedRestartArrayGrowthMatchesJdk(data);
-    CaseFamilyChecks.assertCaseFamilyClosureSafeRe(data);
-    assertUnicodeBoundaryStartCacheMatchesJdk();
-    assertTrailingLineTerminatorEndAnchorFindsMatchJdk();
-    assertUnicodeLineStartAnchorsMatchJdk();
-    assertMixedCarriageReturnLineStartsMatchJdk(data);
-    assertZeroWidthAlternationFindsLeftmostStartJdk();
-    assertZeroWidthPossessiveCaptureRetentionJdk();
-    assertDfaSandwichLeftmostStartCasesMatchJdk();
-    assertMixedAsciiAndExactUnicodeCaseFoldingMatchesJdk(data);
-    assertUnicodeCaseFoldedUtf8LiteralMatchesJdk(data);
-    assertScopedCaseFoldingMatchesJdk(data);
-    assertMultiAnchorGapBoundsMatchJdk(data);
-    assertLeadingClassAssertionsMatchJdk(data);
-    assertFactoredPrefixCaseFlagsMatchJdk(data);
-    assertAlternationAndQuantifierPriorityLookingAtMatchesJdk(data);
-
-    String regex;
-    int flags;
-    String input;
-    if (data.consumeBoolean()) {
-      String atom = distinctLiteralRun(data.consumeInt(16, 192));
-      int repetitions = data.consumeInt(1, 16);
-      regex = "(?:" + atom + "){" + repetitions + "}";
-      flags = 0;
-      input = data.consumeBoolean() ? atom.repeat(repetitions) : data.consumeString(512);
-    } else {
-      regex = data.consumeString(256);
-      flags = FuzzSupport.consumeFlags(data);
-      input = data.consumeString(2048);
-    }
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileOrSkip(regex, flags);
-    if (pattern != null) {
-      FuzzSupport.MatcherPair matcher = pattern.matcher(input);
-      matcher.matches();
-      matcher.reset();
-      matcher.lookingAt();
-      matcher.reset();
-      matcher.find();
-      matcher.reset();
-      matcher.find(FuzzSupport.consumeIndex(data, input));
-    }
-    // Append new consumers so existing corpus inputs retain their original interpretation.
-    assertNullableFindInsideSurrogatePairMatchesJdk(data);
-    assertUnicodeIPrefixFindsMatchJdk(data);
-    assertNestedNullableLoopEntriesMatchJdk(data);
-    assertImpossibleCaptureAlternativesMatchJdk(data);
-  }
-
-  private static void assertImpossibleCaptureAlternativesMatchJdk(FuzzedDataProvider data) {
-    FuzzSupport.CompiledPattern regression =
-        FuzzSupport.compileCompatibleOrSkip("(?:(a)|(b)|(c)|(d)|(e))[^\\s\\S]|x|xx", 0);
-    if (regression != null) {
-      FuzzSupport.MatcherPair matcher = regression.matcher("xxy");
-      while (matcher.find()) {}
+class MatchFuzzer {
+    @FuzzTest(maxDuration = "30s")
+    fun match(data: FuzzedDataProvider) {
+        fuzzerTestOneInput(data)
     }
 
-    // Discarded concatenations leave unreachable capture patch lists in the compiled program.
-    int branches = data.consumeInt(2, 12);
-    StringBuilder alternatives = new StringBuilder();
-    for (int i = 0; i < branches; i++) {
-      if (i > 0) {
-        alternatives.append('|');
-      }
-      String atom = data.pickValue(List.of("a", "b", "é", "😀"));
-      alternatives.append('(').append(data.consumeBoolean() ? "(" + atom + ")" : atom).append(')');
-    }
-    String impossible = data.pickValue(List.of("[^\\s\\S]", "[a&&b]"));
-    String deadBranch = "(?:" + alternatives + ")" + impossible;
-    String atom = data.pickValue(List.of("x", "é", "😀"));
-    String liveBranches = atom + "|" + atom + atom;
-    for (String regex :
-        List.of(deadBranch, deadBranch + "|" + liveBranches, liveBranches + "|" + deadBranch)) {
-      FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (pattern != null) {
-        FuzzSupport.MatcherPair matcher = pattern.matcher(atom.repeat(2) + "!");
-        while (matcher.find()) {}
-        matcher.reset().lookingAt();
-        matcher.reset().matches();
-      }
-    }
-  }
+    @JvmRecord
+    private data class RegressionCase(val regex: String?, val flags: Int, val inputs: MutableList<String>?)
+    companion object {
+        private val CI = Pattern.CASE_INSENSITIVE
+        private val CI_U = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+        private val CI_UCC = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CHARACTER_CLASS
 
-  private static void assertNestedNullableLoopEntriesMatchJdk(FuzzedDataProvider data) {
-    for (String regex : List.of("(?:(?:x|)+?)*", "(?:(?:x?)+?){1,}")) {
-      FuzzSupport.CompiledPattern regression = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (regression != null) {
-        FuzzSupport.MatcherPair matcher = regression.matcher("xxx");
-        while (matcher.find()) {}
-        matcher.reset().replaceAll("-");
-      }
-    }
-    // Vary fresh entry into a nullable loop independently of its own back edge (#1005).
-    String atom = data.pickValue(List.of("x", "xx", "é", "😀"));
-    String body = data.consumeBoolean() ? "(?:" + atom + "|)" : "(?:" + atom + "?)";
-    String inner = data.pickValue(List.of("+?", "*?", "+", "*"));
-    String prefix = data.consumeBoolean() ? "a?" : "";
-    String suffix = data.consumeBoolean() ? "b?" : "";
-    String outer = data.pickValue(List.of("*", "+", "{1,}", "{2}", "*?", "+?"));
-    String continuation = data.pickValue(List.of("", "y", "$"));
-    String regex = "(?:" + prefix + body + inner + suffix + ")" + outer + continuation;
-    if (data.consumeBoolean()) {
-      regex = "(" + regex + ")";
-    }
-    String input = atom.repeat(data.consumeInt(0, 16));
-    if (!suffix.isEmpty() && data.consumeBoolean()) {
-      input += "b" + atom.repeat(data.consumeInt(0, 16));
-    }
-    if (continuation.equals("y")) {
-      input += "y";
-    }
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      FuzzSupport.MatcherPair matcher = pattern.matcher(input);
-      while (matcher.find()) {}
-      matcher.reset().lookingAt();
-      matcher.reset().matches();
-      matcher.reset().replaceAll("-");
-    }
-  }
+        private val CASE_FOLDING_REGRESSIONS: MutableList<RegressionCase> = List.of<RegressionCase?>(
+            RegressionCase("\\p{Lt}{4}", CI, List.of<String?>("abcd", "AAAA", "\u01C4".repeat(4))),
+            RegressionCase("\\p{javaUpperCase}", CI, mutableListOf<String?>("\u00AA", "\u02B0", "A", "a", "1")),
+            RegressionCase("[h-j]+", CI_U, mutableListOf<String?>("\u0130\u0131", "HIJ", "abc")),
+            RegressionCase("[^h-j]", CI_U, mutableListOf<String?>("\u0130", "\u0131", "x")),
+            RegressionCase("[\\x{17F}]", CI_U, mutableListOf<String?>("\u017F", "S", "s")),
+            RegressionCase("[K]", CI, mutableListOf<String?>("\u212A", "K", "k")),
+            RegressionCase("\\p{L}", CI_U, mutableListOf<String?>("\u0345", "\u0399", "A", "a")),
+            RegressionCase("\\P{L}", CI_U, mutableListOf<String?>("\u0345", "\u0399", "A", "a")),
+            RegressionCase("[A-Z]", CI_U, mutableListOf<String?>("\u017F", "K", "k")),
+            RegressionCase("[K-K]", CI_U, mutableListOf<String?>("K", "k")),
+            RegressionCase("\\p{Lower}", CI_U, mutableListOf<String?>("\u212A", "A", "a")),
+            RegressionCase("\\p{Lower}", CI_UCC, mutableListOf<String?>("\u0345", "\u212A", "A", "a")),
+            RegressionCase("\\x{49}", CI_U, mutableListOf<String?>("\u0130", "\u0131", "I", "i")),
+            RegressionCase("\\x{69}", CI_U, mutableListOf<String?>("\u0130", "\u0131", "I", "i"))
+        )
 
-  private static void assertAcceleratedRestartArrayGrowthMatchesJdk(FuzzedDataProvider data) {
-    // Vary both dimensions of the flat DFA arrays and restart after a context change (#882).
-    int prefixLength = data.consumeInt(4, 32);
-    int alphabetSize = data.consumeInt(32, 160);
-    StringBuilder tail = new StringBuilder();
-    for (int i = 0; i < alphabetSize; i++) {
-      tail.appendCodePoint(0x400 + i);
-    }
-    String prefix = "\0".repeat(prefixLength);
-    String regex = "xbw|" + prefix + tail + "$";
-    String separator = data.pickValue(List.of("\n", "\r", "\r\n", "!", "a", "😀"));
-    String suffix = data.pickValue(List.of("", "xbw", "XBW", prefix + tail));
-    String input = "!" + prefix + "!" + separator + "\0" + "!".repeat(40) + suffix;
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, CI_U);
-    if (pattern != null) {
-      for (int pass = 0; pass < 2; pass++) {
-        pattern.matcher(input).find();
-      }
-    }
-  }
+        private val CASE_FOLDING_MODEL_REGRESSIONS: MutableList<RegressionCase> = List.of<RegressionCase?>(
+            RegressionCase("[A-Z]", CI_U, mutableListOf<String?>("\u0130", "\u212A")),
+            RegressionCase("[I-I]", CI_U, mutableListOf<String?>("\u0130")),
+            RegressionCase("[K-K]", CI_U, mutableListOf<String?>("\u212A")),
+            RegressionCase("[İ-İ]", CI_U, mutableListOf<String?>("I", "i", "ı")),
+            RegressionCase("[ı-ı]", CI_U, mutableListOf<String?>("I", "i", "İ")),
+            RegressionCase("İ", CI_U, mutableListOf<String?>("I", "i", "ı")),
+            RegressionCase("ı", CI_U, mutableListOf<String?>("I", "i", "İ")),
+            RegressionCase("\uFB05", CI_U, mutableListOf<String?>("\uFB06"))
+        )
 
-  private static void assertNullableFindInsideSurrogatePairMatchesJdk(FuzzedDataProvider data) {
-    String regex = data.pickValue(List.of(".|", "a|", ".?", "(?:.|)A?"));
-    int codePoint = data.pickValue(List.of(0x1F600, 0x2F802, 0x8D43F));
-    String prefix = data.consumeBoolean() ? "x" : "";
-    String suffix = data.pickValue(List.of("", "A", "AB"));
-    String input = prefix + new String(Character.toChars(codePoint)) + suffix;
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      pattern.matcher(input).find(prefix.length() + 1);
-    }
-  }
+        fun fuzzerTestOneInput(data: FuzzedDataProvider) {
+            for (regression in CASE_FOLDING_REGRESSIONS) {
+                FuzzSupport.assertFullMatchesJdk(regression.regex, regression.flags, regression.inputs)
+            }
+            for (regression in CASE_FOLDING_MODEL_REGRESSIONS) {
+                Companion.assertFullMatchesSafeRe(regression.regex, regression.flags, regression.inputs!!)
+            }
+            assertAcceleratedRestartArrayGrowthMatchesJdk(data)
+            CaseFamilyChecks.assertCaseFamilyClosureSafeRe(data)
+            assertUnicodeBoundaryStartCacheMatchesJdk()
+            assertTrailingLineTerminatorEndAnchorFindsMatchJdk()
+            assertUnicodeLineStartAnchorsMatchJdk()
+            assertMixedCarriageReturnLineStartsMatchJdk(data)
+            assertZeroWidthAlternationFindsLeftmostStartJdk()
+            assertZeroWidthPossessiveCaptureRetentionJdk()
+            assertDfaSandwichLeftmostStartCasesMatchJdk()
+            assertMixedAsciiAndExactUnicodeCaseFoldingMatchesJdk(data)
+            assertUnicodeCaseFoldedUtf8LiteralMatchesJdk(data)
+            assertScopedCaseFoldingMatchesJdk(data)
+            assertMultiAnchorGapBoundsMatchJdk(data)
+            assertLeadingClassAssertionsMatchJdk(data)
+            assertFactoredPrefixCaseFlagsMatchJdk(data)
+            assertAlternationAndQuantifierPriorityLookingAtMatchesJdk(data)
 
-  private static void assertUnicodeIPrefixFindsMatchJdk(FuzzedDataProvider data) {
-    // Append this axis so existing corpus inputs keep their original consumer order. I/i sources
-    // match every member below on the JDK and under SafeRE's approved Unicode closure (#866).
-    String prefix = data.pickValue(List.of("A", "é", "Ж", ""));
-    String source = data.pickValue(List.of("I", "i"));
-    String target = data.pickValue(List.of("ı", "İ", "I", "i"));
-    String suffix = data.pickValue(List.of("", "B", "終"));
-    String literal = prefix + source + suffix;
-    String regex = data.consumeBoolean() ? "(" + literal + ")" : literal;
-    String input = "!" + prefix + target + suffix + "!";
-    int flags = data.consumeBoolean() ? CI_UCC : CI_U;
-    if (!java.util.regex.Pattern.compile(regex, flags).matcher(input).find()) {
-      throw new AssertionError("Unexpected JDK Unicode I prefix result for /" + regex + "/");
-    }
-    Pattern pattern = Pattern.compile(regex, flags);
-    Matcher stringMatcher = pattern.matcher(input);
-    byte[] bytes = input.getBytes(UTF_8);
-    Utf8Matcher utf8Matcher = pattern.matcher(Utf8Input.validated(bytes));
-    if (!stringMatcher.find()
-        || stringMatcher.start() != 1
-        || stringMatcher.end() != input.length() - 1
-        || !utf8Matcher.find()
-        || utf8Matcher.start() != 1
-        || utf8Matcher.end() != bytes.length - 1) {
-      throw new AssertionError("Unicode I prefix find divergence for /" + regex + "/ on " + input);
-    }
-  }
-
-  private static String distinctLiteralRun(int count) {
-    StringBuilder pattern = new StringBuilder(count);
-    for (int i = 0; i < count; i++) {
-      pattern.appendCodePoint(0x1000 + i * 2);
-    }
-    return pattern.toString();
-  }
-
-  private static void assertUnicodeBoundaryStartCacheMatchesJdk() {
-    String regex = "\\b.";
-    int flags = Pattern.UNICODE_CHARACTER_CLASS;
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, flags);
-    if (pattern == null) {
-      return;
-    }
-
-    String boundary = "!\u00E9" + "x".repeat(300);
-    String nonBoundary = "!!" + "x".repeat(300);
-    FuzzSupport.MatcherPair matcher = pattern.matcher(boundary);
-    matcher.region(1, boundary.length()).lookingAt();
-    matcher.reset(nonBoundary).region(1, nonBoundary.length()).lookingAt();
-  }
-
-  private static void assertLeadingClassAssertionsMatchJdk(FuzzedDataProvider data) {
-    String leadingClass = data.pickValue(List.of("[a-z]", "[ ]", "[0-9]", "[^A-Z]"));
-    String assertion = data.consumeBoolean() ? "\\b" : "\\B";
-    String suffix = data.consumeBoolean() ? "AAA" : "AAA[0-9]RAREST_TOKEN";
-    String regex = leadingClass + assertion + suffix;
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      pattern.matcher(data.pickValue(List.of("xAAA", " AAA", "11AAA", "xAAA1RAREST_TOKEN"))).find();
-    }
-  }
-
-  private static void assertFactoredPrefixCaseFlagsMatchJdk(FuzzedDataProvider data) {
-    String exactSuffix = data.pickValue(List.of("X", "Y", "Z"));
-    String foldedSuffix = data.pickValue(List.of("M", "N", "P"));
-    String foldedBranch = "(?i:abc)" + foldedSuffix;
-    String exactBranch = "abc" + exactSuffix;
-    String regex =
-        data.consumeBoolean()
-            ? "(?:" + foldedBranch + "|" + exactBranch + ")"
-            : "(?:" + exactBranch + "|" + foldedBranch + ")";
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      pattern.matcher(data.consumeBoolean() ? "ABC" + foldedSuffix : "abc" + exactSuffix).find();
-    }
-  }
-
-  private static void assertTrailingLineTerminatorEndAnchorFindsMatchJdk() {
-    List<String> regexes = List.of("^(?:\\n|\\n*)$", "^(?:a?|\\n)$", "(?:(?:(?:a?)|\\n))$");
-    List<String> inputs = List.of("\n", "\n\n", "a\n", "aa\n", "\u2028\u2028");
-    for (String regex : regexes) {
-      FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (pattern == null) {
-        continue;
-      }
-      for (String input : inputs) {
-        pattern.matcher(input).find();
-      }
-    }
-  }
-
-  private static void assertUnicodeLineStartAnchorsMatchJdk() {
-    List<String> terminators = List.of("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029");
-    List<String> regexes = List.of("(?m)^\\s+at\\s+(\\w+)$", "(?m).+^");
-    for (String regex : regexes) {
-      FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (pattern == null) {
-        continue;
-      }
-      for (String terminator : terminators) {
-        FuzzSupport.MatcherPair matcher =
-            pattern.matcher("header" + terminator + "\tat alpha" + terminator + "\tat beta");
-        while (matcher.find()) {}
-      }
-    }
-  }
-
-  private static void assertMixedCarriageReturnLineStartsMatchJdk(FuzzedDataProvider data) {
-    List<RegressionCase> regressions =
-        List.of(
-            new RegressionCase("(?m)^.X", 0, List.of("a".repeat(500) + "\r\nqq\rqX")),
-            new RegressionCase("(?m)^\\nX", 0, List.of("a".repeat(500) + "\rqY\r\nX")));
-    for (RegressionCase regression : regressions) {
-      FuzzSupport.CompiledPattern pattern =
-          FuzzSupport.compileCompatibleOrSkip(regression.regex(), regression.flags());
-      if (pattern != null) {
-        for (String input : regression.inputs()) {
-          pattern.matcher(input).find();
+            val regex: String?
+            val flags: Int
+            val input: String
+            if (data.consumeBoolean()) {
+                val atom: String = distinctLiteralRun(data.consumeInt(16, 192))
+                val repetitions = data.consumeInt(1, 16)
+                regex = "(?:" + atom + "){" + repetitions + "}"
+                flags = 0
+                input = if (data.consumeBoolean()) atom.repeat(repetitions) else data.consumeString(512)
+            } else {
+                regex = data.consumeString(256)
+                flags = FuzzSupport.consumeFlags(data)
+                input = data.consumeString(2048)
+            }
+            val pattern = FuzzSupport.compileOrSkip(regex, flags)
+            if (pattern != null) {
+                val matcher = pattern.matcher(input)
+                matcher.matches()
+                matcher.reset()
+                matcher.lookingAt()
+                matcher.reset()
+                matcher.find()
+                matcher.reset()
+                matcher.find(FuzzSupport.consumeIndex(data, input))
+            }
+            // Append new consumers so existing corpus inputs retain their original interpretation.
+            assertNullableFindInsideSurrogatePairMatchesJdk(data)
+            assertUnicodeIPrefixFindsMatchJdk(data)
+            assertNestedNullableLoopEntriesMatchJdk(data)
+            assertImpossibleCaptureAlternativesMatchJdk(data)
         }
-      }
+
+        private fun assertImpossibleCaptureAlternativesMatchJdk(data: FuzzedDataProvider) {
+            val regression =
+                FuzzSupport.compileCompatibleOrSkip("(?:(a)|(b)|(c)|(d)|(e))[^\\s\\S]|x|xx", 0)
+            if (regression != null) {
+                val matcher = regression.matcher("xxy")
+                while (matcher.find()) {
+                }
+            }
+
+            // Discarded concatenations leave unreachable capture patch lists in the compiled program.
+            val branches = data.consumeInt(2, 12)
+            val alternatives = StringBuilder()
+            for (i in 0..<branches) {
+                if (i > 0) {
+                    alternatives.append('|')
+                }
+                val atom = data.pickValue<String?>(mutableListOf<String?>("a", "b", "é", "😀"))
+                alternatives.append('(').append(if (data.consumeBoolean()) "(" + atom + ")" else atom).append(')')
+            }
+            val impossible = data.pickValue<String?>(mutableListOf<String?>("[^\\s\\S]", "[a&&b]"))
+            val deadBranch = "(?:" + alternatives + ")" + impossible
+            val atom = data.pickValue<String>(mutableListOf<String?>("x", "é", "😀"))
+            val liveBranches = atom + "|" + atom + atom
+            for (regex in List.of<String?>(
+                deadBranch,
+                deadBranch + "|" + liveBranches,
+                liveBranches + "|" + deadBranch
+            )) {
+                val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (pattern != null) {
+                    val matcher = pattern.matcher(atom.repeat(2) + "!")
+                    while (matcher.find()) {
+                    }
+                    matcher.reset().lookingAt()
+                    matcher.reset().matches()
+                }
+            }
+        }
+
+        private fun assertNestedNullableLoopEntriesMatchJdk(data: FuzzedDataProvider) {
+            for (regex in mutableListOf<String?>("(?:(?:x|)+?)*", "(?:(?:x?)+?){1,}")) {
+                val regression = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (regression != null) {
+                    val matcher = regression.matcher("xxx")
+                    while (matcher.find()) {
+                    }
+                    matcher.reset().replaceAll("-")
+                }
+            }
+            // Vary fresh entry into a nullable loop independently of its own back edge (#1005).
+            val atom = data.pickValue<String>(mutableListOf<String?>("x", "xx", "é", "😀"))
+            val body = if (data.consumeBoolean()) "(?:" + atom + "|)" else "(?:" + atom + "?)"
+            val inner = data.pickValue<String?>(mutableListOf<String?>("+?", "*?", "+", "*"))
+            val prefix = if (data.consumeBoolean()) "a?" else ""
+            val suffix = if (data.consumeBoolean()) "b?" else ""
+            val outer = data.pickValue<String?>(mutableListOf<String?>("*", "+", "{1,}", "{2}", "*?", "+?"))
+            val continuation = data.pickValue<String>(mutableListOf<String?>("", "y", "$"))
+            var regex = "(?:" + prefix + body + inner + suffix + ")" + outer + continuation
+            if (data.consumeBoolean()) {
+                regex = "(" + regex + ")"
+            }
+            var input = atom.repeat(data.consumeInt(0, 16))
+            if (!suffix.isEmpty() && data.consumeBoolean()) {
+                input += "b" + atom.repeat(data.consumeInt(0, 16))
+            }
+            if (continuation == "y") {
+                input += "y"
+            }
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                val matcher = pattern.matcher(input)
+                while (matcher.find()) {
+                }
+                matcher.reset().lookingAt()
+                matcher.reset().matches()
+                matcher.reset().replaceAll("-")
+            }
+        }
+
+        private fun assertAcceleratedRestartArrayGrowthMatchesJdk(data: FuzzedDataProvider) {
+            // Vary both dimensions of the flat DFA arrays and restart after a context change (#882).
+            val prefixLength = data.consumeInt(4, 32)
+            val alphabetSize = data.consumeInt(32, 160)
+            val tail = StringBuilder()
+            for (i in 0..<alphabetSize) {
+                tail.appendCodePoint(0x400 + i)
+            }
+            val prefix = "\u0000".repeat(prefixLength)
+            val regex = "xbw|" + prefix + tail + "$"
+            val separator = data.pickValue<String?>(mutableListOf<String?>("\n", "\r", "\r\n", "!", "a", "😀"))
+            val suffix = data.pickValue<String?>(List.of<String?>("", "xbw", "XBW", prefix + tail))
+            val input = "!" + prefix + "!" + separator + "\u0000" + "!".repeat(40) + suffix
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, CI_U)
+            if (pattern != null) {
+                for (pass in 0..1) {
+                    pattern.matcher(input).find()
+                }
+            }
+        }
+
+        private fun assertNullableFindInsideSurrogatePairMatchesJdk(data: FuzzedDataProvider) {
+            val regex = data.pickValue<String?>(mutableListOf<String?>(".|", "a|", ".?", "(?:.|)A?"))
+            val codePoint = data.pickValue<Int?>(mutableListOf<Int?>(0x1F600, 0x2F802, 0x8D43F))
+            val prefix = if (data.consumeBoolean()) "x" else ""
+            val suffix = data.pickValue<String?>(mutableListOf<String?>("", "A", "AB"))
+            val input = prefix + String(Character.toChars(codePoint)) + suffix
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                pattern.matcher(input).find(prefix.length + 1)
+            }
+        }
+
+        private fun assertUnicodeIPrefixFindsMatchJdk(data: FuzzedDataProvider) {
+            // Append this axis so existing corpus inputs keep their original consumer order. I/i sources
+            // match every member below on the JDK and under SafeRE's approved Unicode closure (#866).
+            val prefix = data.pickValue<String>(mutableListOf<String?>("A", "é", "Ж", ""))
+            val source = data.pickValue<String>(mutableListOf<String?>("I", "i"))
+            val target = data.pickValue<String?>(mutableListOf<String?>("ı", "İ", "I", "i"))
+            val suffix = data.pickValue<String?>(mutableListOf<String?>("", "B", "終"))
+            val literal = prefix + source + suffix
+            val regex = if (data.consumeBoolean()) "(" + literal + ")" else literal
+            val input = "!" + prefix + target + suffix + "!"
+            val flags: Int = if (data.consumeBoolean()) CI_UCC else CI_U
+            if (!java.util.regex.Pattern.compile(regex, flags).matcher(input).find()) {
+                throw AssertionError("Unexpected JDK Unicode I prefix result for /" + regex + "/")
+            }
+            val pattern = Pattern.compile(regex, flags)
+            val stringMatcher = pattern.matcher(input)
+            val bytes = input.toByteArray(StandardCharsets.UTF_8)
+            val utf8Matcher = pattern.matcher(Utf8Input.validated(bytes))
+            if (!stringMatcher.find() || stringMatcher.start() != 1 || stringMatcher.end() != input.length - 1 || !utf8Matcher.find() || utf8Matcher.start() != 1 || utf8Matcher.end() != bytes.size - 1) {
+                throw AssertionError("Unicode I prefix find divergence for /" + regex + "/ on " + input)
+            }
+        }
+
+        private fun distinctLiteralRun(count: Int): String {
+            val pattern = StringBuilder(count)
+            for (i in 0..<count) {
+                pattern.appendCodePoint(0x1000 + i * 2)
+            }
+            return pattern.toString()
+        }
+
+        private fun assertUnicodeBoundaryStartCacheMatchesJdk() {
+            val regex = "\\b."
+            val flags = Pattern.UNICODE_CHARACTER_CLASS
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, flags)
+            if (pattern == null) {
+                return
+            }
+
+            val boundary = "!\u00E9" + "x".repeat(300)
+            val nonBoundary = "!!" + "x".repeat(300)
+            val matcher = pattern.matcher(boundary)
+            matcher.region(1, boundary.length).lookingAt()
+            matcher.reset(nonBoundary).region(1, nonBoundary.length).lookingAt()
+        }
+
+        private fun assertLeadingClassAssertionsMatchJdk(data: FuzzedDataProvider) {
+            val leadingClass = data.pickValue<String?>(mutableListOf<String?>("[a-z]", "[ ]", "[0-9]", "[^A-Z]"))
+            val assertion = if (data.consumeBoolean()) "\\b" else "\\B"
+            val suffix = if (data.consumeBoolean()) "AAA" else "AAA[0-9]RAREST_TOKEN"
+            val regex = leadingClass + assertion + suffix
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                pattern.matcher(
+                    data.pickValue<String?>(
+                        mutableListOf<String?>(
+                            "xAAA",
+                            " AAA",
+                            "11AAA",
+                            "xAAA1RAREST_TOKEN"
+                        )
+                    )
+                ).find()
+            }
+        }
+
+        private fun assertFactoredPrefixCaseFlagsMatchJdk(data: FuzzedDataProvider) {
+            val exactSuffix = data.pickValue<String>(mutableListOf<String?>("X", "Y", "Z"))
+            val foldedSuffix = data.pickValue<String>(mutableListOf<String?>("M", "N", "P"))
+            val foldedBranch = "(?i:abc)" + foldedSuffix
+            val exactBranch = "abc" + exactSuffix
+            val regex =
+                if (data.consumeBoolean())
+                    "(?:" + foldedBranch + "|" + exactBranch + ")"
+                else
+                    "(?:" + exactBranch + "|" + foldedBranch + ")"
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                pattern.matcher(if (data.consumeBoolean()) "ABC" + foldedSuffix else "abc" + exactSuffix).find()
+            }
+        }
+
+        private fun assertTrailingLineTerminatorEndAnchorFindsMatchJdk() {
+            val regexes = mutableListOf<String?>("^(?:\\n|\\n*)$", "^(?:a?|\\n)$", "(?:(?:(?:a?)|\\n))$")
+            val inputs: MutableList<String> = mutableListOf<String?>("\n", "\n\n", "a\n", "aa\n", "\u2028\u2028")
+            for (regex in regexes) {
+                val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (pattern == null) {
+                    continue
+                }
+                for (input in inputs) {
+                    pattern.matcher(input).find()
+                }
+            }
+        }
+
+        private fun assertUnicodeLineStartAnchorsMatchJdk() {
+            val terminators = mutableListOf<String?>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")
+            val regexes = mutableListOf<String?>("(?m)^\\s+at\\s+(\\w+)$", "(?m).+^")
+            for (regex in regexes) {
+                val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (pattern == null) {
+                    continue
+                }
+                for (terminator in terminators) {
+                    val matcher =
+                        pattern.matcher("header" + terminator + "\tat alpha" + terminator + "\tat beta")
+                    while (matcher.find()) {
+                    }
+                }
+            }
+        }
+
+        private fun assertMixedCarriageReturnLineStartsMatchJdk(data: FuzzedDataProvider) {
+            val regressions: MutableList<RegressionCase> =
+                List.of<RegressionCase?>(
+                    RegressionCase("(?m)^.X", 0, List.of<String?>("a".repeat(500) + "\r\nqq\rqX")),
+                    RegressionCase("(?m)^\\nX", 0, List.of<String?>("a".repeat(500) + "\rqY\r\nX"))
+                )
+            for (regression in regressions) {
+                val pattern =
+                    FuzzSupport.compileCompatibleOrSkip(regression.regex, regression.flags)
+                if (pattern != null) {
+                    for (input in regression.inputs!!) {
+                        pattern.matcher(input).find()
+                    }
+                }
+            }
+
+            val firstTerminator = if (data.consumeBoolean()) "\r\n" else "\r"
+            val secondTerminator = if (firstTerminator.length == 2) "\r" else "\r\n"
+            val regex = if (data.consumeBoolean()) "(?m)^.X" else "(?m)^\\nX"
+            val input =
+                ("a".repeat(data.consumeInt(257, 1024))
+                        + firstTerminator
+                        + data.consumeString(8)
+                        + secondTerminator
+                        + data.consumeString(8))
+            val generated = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (generated != null) {
+                generated.matcher(input).find()
+            }
+        }
+
+        private fun assertZeroWidthAlternationFindsLeftmostStartJdk() {
+            val regexes = mutableListOf<String?>("(?:\\B{1}|a).", "(?:a|\\B?).", "(?:a|(\\B)?).", "(?:(?:)\\B|a).")
+            for (regex in regexes) {
+                val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (pattern != null) {
+                    pattern.matcher("ab").find()
+                }
+            }
+        }
+
+        private fun assertZeroWidthPossessiveCaptureRetentionJdk() {
+            val pattern =
+                FuzzSupport.compileCompatibleOrSkip("(?m:^(\\B)*+$)", Pattern.MULTILINE)
+            if (pattern == null) {
+                return
+            }
+            pattern.matcher("\n").find()
+            pattern.matcher("\na").find()
+        }
+
+        private fun assertDfaSandwichLeftmostStartCasesMatchJdk() {
+            val regexes = mutableListOf<String?>(
+                "\\B([^a])*[^a][^a]",
+                "\\B(?:[^a])*[^a][^a]",
+                "\\B[^a]*[^a][^a]",
+                "\\B(?:b|bb)*bb",
+                "(?:(?:\\ba?)|\\B|[^a])a?",
+                "(?:(?:\\ba?)|\\B|b)a?"
+            )
+            for (regex in regexes) {
+                val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+                if (pattern != null) {
+                    pattern.matcher("bbbb").find()
+                    pattern.matcher("ba").find()
+                }
+            }
+        }
+
+        private fun assertMixedAsciiAndExactUnicodeCaseFoldingMatchesJdk(
+            data: FuzzedDataProvider
+        ) {
+            val exactCharacters = mutableListOf<String?>("\u00DF", "\uFB05")
+            val unicodeFoldedCharacters = mutableListOf<String?>("\u1E9E", "\uFB06")
+            val variant = data.consumeInt(0, exactCharacters.size - 1)
+            val ascii = ('a'.code + data.consumeInt(0, 25)).toChar().toString()
+            val separator = data.pickValue<String>(mutableListOf<String?>("", "-", "_", "0"))
+            val regex = "(?i:" + ascii + separator + exactCharacters.get(variant) + ")"
+            val input =
+                ascii.get(0).uppercaseChar().toString() + separator + unicodeFoldedCharacters.get(variant)
+
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                pattern.matcher(input).find()
+            }
+        }
+
+        private fun assertUnicodeCaseFoldedUtf8LiteralMatchesJdk(data: FuzzedDataProvider) {
+            val family = data.pickValue<String>(mutableListOf<String?>("Iiİı", "KkK", "Ssſ", "Σσς", "Шш"))
+            val members = family.codePoints().toArray()
+            val source = members[data.consumeInt(0, members.size - 1)]
+            val target = members[data.consumeInt(0, members.size - 1)]
+            val prefix = data.pickValue<String>(mutableListOf<String?>("é", "Ж", "α", "A"))
+            val suffix = data.pickValue<String?>(mutableListOf<String?>("", "x", "終"))
+            val regex = prefix + String(Character.toChars(source)) + suffix
+            val input = "!" + prefix + String(Character.toChars(target)) + suffix + "!"
+
+            val expected = java.util.regex.Pattern.compile(regex, CI_U).matcher(input).find()
+            val actual =
+                Pattern.compile(regex, CI_U).matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+                    .find()
+            if (actual != expected) {
+                throw AssertionError(
+                    "Unicode-folded UTF-8 find divergence for /" + regex + "/ on " + input
+                )
+            }
+        }
+
+        private fun assertScopedCaseFoldingMatchesJdk(data: FuzzedDataProvider) {
+            val exact: String = distinctAsciiLiteral(data.consumeInt(3, 12))
+            val folded: String = distinctAsciiLiteral(data.consumeInt(3, 12))
+            val regex =
+                if (data.consumeBoolean())
+                    "(?-i:" + exact + ")[0-9]" + folded
+                else
+                    folded + "[0-9](?-i:" + exact + ")"
+            val input =
+                if (regex.startsWith("(?-i"))
+                    exact.lowercase() + "1" + folded.lowercase()
+                else
+                    folded.lowercase() + "1" + exact.lowercase()
+
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, CI)
+            if (pattern != null) {
+                pattern.matcher(input).find()
+            }
+        }
+
+        private fun distinctAsciiLiteral(count: Int): String {
+            val literal = StringBuilder(count)
+            for (i in 0..<count) {
+                literal.append(('A'.code + i % 26).toChar())
+            }
+            return literal.toString()
+        }
+
+        private fun assertMultiAnchorGapBoundsMatchJdk(data: FuzzedDataProvider) {
+            val repeatedDigits = data.consumeInt(3, 12)
+            val driver: String = distinctAsciiLiteral(data.consumeInt(8, 16))
+            val regex: String?
+            val input: String?
+            when (data.consumeInt(0, 11)) {
+                0 -> {
+                    regex = "111[0-9]+" + driver
+                    input = "1".repeat(repeatedDigits) + "2" + driver
+                }
+
+                1 -> {
+                    val maximum = data.consumeInt(1, 4)
+                    regex = "(?s)TARGET.{1," + maximum + "}"
+                    input = "TARGET" + "😀".repeat(maximum + 1)
+                }
+
+                2 -> {
+                    val maximum = data.consumeInt(1, 4)
+                    val interior = data.consumeBoolean()
+                    regex = if (interior) "TARGET[^;]?" + driver else "TARGET[^;]{0," + maximum + "}"
+                    input = "xxTARGET" + "😀".repeat(if (interior) 1 else maximum) + (if (interior) driver else "zz")
+                }
+
+                3 -> {
+                    regex = "TARGET[^;]*" + driver
+                    input = "TARGET" + driver + ";" + driver
+                }
+
+                4 -> {
+                    val upstream = if (data.consumeBoolean()) "TARGET;" else "é;"
+                    regex = upstream + "[^;]" + driver
+                    input = "xx" + upstream + "x" + driver + "yy"
+                }
+
+                5 -> {
+                    regex = "TARGET[^;]*" + driver + "[^;]X"
+                    input = "X" + "TARGET".repeat(data.consumeInt(16, 128)) + driver + "y"
+                }
+
+                6 -> {
+                    regex = "TARGET[^;]*MID[^;]*" + driver
+                    input = "TARGETMID" + driver + "MID;" + driver
+                }
+
+                7 -> {
+                    regex = "TARGET[^;]*?MID[^:]*" + driver
+                    input = "TARGETMID:MID" + driver
+                }
+
+                8 -> {
+                    regex = "TARGET[^;]*\\uDE00" + driver
+                    input = "TARGET" + (if (data.consumeBoolean()) "😀" else "?") + driver
+                }
+
+                9 -> {
+                    // A gap in leading position. Every other shape here opens with a literal the
+                    // accelerator can lead with, so the match start is proposed rather than recovered.
+                    val minimum = data.consumeInt(0, 4)
+                    val maximum = data.consumeInt(minimum + 1, 6)
+                    val lazy = if (data.consumeBoolean()) "?" else ""
+                    regex = "(?s).{" + minimum + "," + maximum + "}" + lazy + "TARGET[^;]*" + driver
+                    input =
+                        (data.pickValue<String?>(mutableListOf<String?>("x", "é", "😀")).repeat(data.consumeInt(0, 7))
+                                + "TARGET"
+                                + driver)
+                }
+
+                10 -> {
+                    // Inline scoped UNIX_LINES changes which characters a gap may span: CR, NEL and
+                    // LINE SEPARATOR are line terminators by default but not under (?d).
+                    val maximum = data.consumeInt(1, 4)
+                    regex =
+                        data.pickValue<String?>(
+                            mutableListOf<String?>(
+                                "",
+                                "(?d)",
+                                "(?d)(?s)"
+                            )
+                        ) + "TARGET.{1," + maximum + "}" + driver
+                    input =
+                        ("TARGET"
+                                + data.pickValue<String?>(
+                            mutableListOf<String?>(
+                                "\r",
+                                "\n",
+                                "\r\n",
+                                "\u0085",
+                                "\u2028",
+                                "x"
+                            )
+                        )
+                                + driver)
+                }
+
+                else -> {
+                    regex = "TARGET[^;]*?" + driver
+                    input = "TARGETx;".repeat(data.consumeInt(1, 32)) + driver
+                }
+            }
+
+            val pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0)
+            if (pattern != null) {
+                val matcher = pattern.matcher(input)
+                while (matcher.find()) {
+                }
+            }
+        }
+
+        private fun assertAlternationAndQuantifierPriorityLookingAtMatchesJdk(
+            data: FuzzedDataProvider
+        ) {
+            val regression = PriorityCases.choose(data)
+            val pattern =
+                FuzzSupport.compileCompatibleOrSkip(regression.regex, 0)
+            if (pattern != null) {
+                pattern.matcher(data.pickValue<String?>(regression.inputs)).lookingAt()
+            }
+        }
+
+        private fun assertFullMatchesSafeRe(regex: String?, flags: Int, inputs: MutableList<String>) {
+            val pattern = Pattern.compile(regex, flags)
+            for (input in inputs) {
+                if (!pattern.matcher(input).matches()) {
+                    throw AssertionError(
+                        ("SafeRE model regression"
+                                + "\nRegex: "
+                                + regex
+                                + "\nFlags: "
+                                + flags
+                                + "\nInput: "
+                                + input)
+                    )
+                }
+            }
+        }
     }
-
-    String firstTerminator = data.consumeBoolean() ? "\r\n" : "\r";
-    String secondTerminator = firstTerminator.length() == 2 ? "\r" : "\r\n";
-    String regex = data.consumeBoolean() ? "(?m)^.X" : "(?m)^\\nX";
-    String input =
-        "a".repeat(data.consumeInt(257, 1024))
-            + firstTerminator
-            + data.consumeString(8)
-            + secondTerminator
-            + data.consumeString(8);
-    FuzzSupport.CompiledPattern generated = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (generated != null) {
-      generated.matcher(input).find();
-    }
-  }
-
-  private static void assertZeroWidthAlternationFindsLeftmostStartJdk() {
-    List<String> regexes =
-        List.of("(?:\\B{1}|a).", "(?:a|\\B?).", "(?:a|(\\B)?).", "(?:(?:)\\B|a).");
-    for (String regex : regexes) {
-      FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (pattern != null) {
-        pattern.matcher("ab").find();
-      }
-    }
-  }
-
-  private static void assertZeroWidthPossessiveCaptureRetentionJdk() {
-    FuzzSupport.CompiledPattern pattern =
-        FuzzSupport.compileCompatibleOrSkip("(?m:^(\\B)*+$)", Pattern.MULTILINE);
-    if (pattern == null) {
-      return;
-    }
-    pattern.matcher("\n").find();
-    pattern.matcher("\na").find();
-  }
-
-  private static void assertDfaSandwichLeftmostStartCasesMatchJdk() {
-    List<String> regexes =
-        List.of(
-            "\\B([^a])*[^a][^a]",
-            "\\B(?:[^a])*[^a][^a]",
-            "\\B[^a]*[^a][^a]",
-            "\\B(?:b|bb)*bb",
-            "(?:(?:\\ba?)|\\B|[^a])a?",
-            "(?:(?:\\ba?)|\\B|b)a?");
-    for (String regex : regexes) {
-      FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-      if (pattern != null) {
-        pattern.matcher("bbbb").find();
-        pattern.matcher("ba").find();
-      }
-    }
-  }
-
-  private static void assertMixedAsciiAndExactUnicodeCaseFoldingMatchesJdk(
-      FuzzedDataProvider data) {
-    List<String> exactCharacters = List.of("\u00DF", "\uFB05");
-    List<String> unicodeFoldedCharacters = List.of("\u1E9E", "\uFB06");
-    int variant = data.consumeInt(0, exactCharacters.size() - 1);
-    String ascii = String.valueOf((char) ('a' + data.consumeInt(0, 25)));
-    String separator = data.pickValue(List.of("", "-", "_", "0"));
-    String regex = "(?i:" + ascii + separator + exactCharacters.get(variant) + ")";
-    String input =
-        Character.toUpperCase(ascii.charAt(0)) + separator + unicodeFoldedCharacters.get(variant);
-
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      pattern.matcher(input).find();
-    }
-  }
-
-  private static void assertUnicodeCaseFoldedUtf8LiteralMatchesJdk(FuzzedDataProvider data) {
-    String family = data.pickValue(List.of("Iiİı", "KkK", "Ssſ", "Σσς", "Шш"));
-    int[] members = family.codePoints().toArray();
-    int source = members[data.consumeInt(0, members.length - 1)];
-    int target = members[data.consumeInt(0, members.length - 1)];
-    String prefix = data.pickValue(List.of("é", "Ж", "α", "A"));
-    String suffix = data.pickValue(List.of("", "x", "終"));
-    String regex = prefix + new String(Character.toChars(source)) + suffix;
-    String input = "!" + prefix + new String(Character.toChars(target)) + suffix + "!";
-
-    boolean expected = java.util.regex.Pattern.compile(regex, CI_U).matcher(input).find();
-    boolean actual =
-        Pattern.compile(regex, CI_U).matcher(Utf8Input.validated(input.getBytes(UTF_8))).find();
-    if (actual != expected) {
-      throw new AssertionError(
-          "Unicode-folded UTF-8 find divergence for /" + regex + "/ on " + input);
-    }
-  }
-
-  private static void assertScopedCaseFoldingMatchesJdk(FuzzedDataProvider data) {
-    String exact = distinctAsciiLiteral(data.consumeInt(3, 12));
-    String folded = distinctAsciiLiteral(data.consumeInt(3, 12));
-    String regex =
-        data.consumeBoolean()
-            ? "(?-i:" + exact + ")[0-9]" + folded
-            : folded + "[0-9](?-i:" + exact + ")";
-    String input =
-        regex.startsWith("(?-i")
-            ? exact.toLowerCase(Locale.ROOT) + "1" + folded.toLowerCase(Locale.ROOT)
-            : folded.toLowerCase(Locale.ROOT) + "1" + exact.toLowerCase(Locale.ROOT);
-
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, CI);
-    if (pattern != null) {
-      pattern.matcher(input).find();
-    }
-  }
-
-  private static String distinctAsciiLiteral(int count) {
-    StringBuilder literal = new StringBuilder(count);
-    for (int i = 0; i < count; i++) {
-      literal.append((char) ('A' + i % 26));
-    }
-    return literal.toString();
-  }
-
-  private static void assertMultiAnchorGapBoundsMatchJdk(FuzzedDataProvider data) {
-    int repeatedDigits = data.consumeInt(3, 12);
-    String driver = distinctAsciiLiteral(data.consumeInt(8, 16));
-    String regex;
-    String input;
-    switch (data.consumeInt(0, 11)) {
-      case 0 -> {
-        regex = "111[0-9]+" + driver;
-        input = "1".repeat(repeatedDigits) + "2" + driver;
-      }
-      case 1 -> {
-        int maximum = data.consumeInt(1, 4);
-        regex = "(?s)TARGET.{1," + maximum + "}";
-        input = "TARGET" + "😀".repeat(maximum + 1);
-      }
-      case 2 -> {
-        int maximum = data.consumeInt(1, 4);
-        boolean interior = data.consumeBoolean();
-        regex = interior ? "TARGET[^;]?" + driver : "TARGET[^;]{0," + maximum + "}";
-        input = "xxTARGET" + "😀".repeat(interior ? 1 : maximum) + (interior ? driver : "zz");
-      }
-      case 3 -> {
-        regex = "TARGET[^;]*" + driver;
-        input = "TARGET" + driver + ";" + driver;
-      }
-      case 4 -> {
-        String upstream = data.consumeBoolean() ? "TARGET;" : "é;";
-        regex = upstream + "[^;]" + driver;
-        input = "xx" + upstream + "x" + driver + "yy";
-      }
-      case 5 -> {
-        regex = "TARGET[^;]*" + driver + "[^;]X";
-        input = "X" + "TARGET".repeat(data.consumeInt(16, 128)) + driver + "y";
-      }
-      case 6 -> {
-        regex = "TARGET[^;]*MID[^;]*" + driver;
-        input = "TARGETMID" + driver + "MID;" + driver;
-      }
-      case 7 -> {
-        regex = "TARGET[^;]*?MID[^:]*" + driver;
-        input = "TARGETMID:MID" + driver;
-      }
-      case 8 -> {
-        regex = "TARGET[^;]*\\uDE00" + driver;
-        input = "TARGET" + (data.consumeBoolean() ? "😀" : "?") + driver;
-      }
-      case 9 -> {
-        // A gap in leading position. Every other shape here opens with a literal the
-        // accelerator can lead with, so the match start is proposed rather than recovered.
-        int minimum = data.consumeInt(0, 4);
-        int maximum = data.consumeInt(minimum + 1, 6);
-        String lazy = data.consumeBoolean() ? "?" : "";
-        regex = "(?s).{" + minimum + "," + maximum + "}" + lazy + "TARGET[^;]*" + driver;
-        input =
-            data.pickValue(List.of("x", "é", "😀")).repeat(data.consumeInt(0, 7))
-                + "TARGET"
-                + driver;
-      }
-      case 10 -> {
-        // Inline scoped UNIX_LINES changes which characters a gap may span: CR, NEL and
-        // LINE SEPARATOR are line terminators by default but not under (?d).
-        int maximum = data.consumeInt(1, 4);
-        regex =
-            data.pickValue(List.of("", "(?d)", "(?d)(?s)")) + "TARGET.{1," + maximum + "}" + driver;
-        input =
-            "TARGET"
-                + data.pickValue(List.of("\r", "\n", "\r\n", "\u0085", "\u2028", "x"))
-                + driver;
-      }
-      default -> {
-        regex = "TARGET[^;]*?" + driver;
-        input = "TARGETx;".repeat(data.consumeInt(1, 32)) + driver;
-      }
-    }
-
-    FuzzSupport.CompiledPattern pattern = FuzzSupport.compileCompatibleOrSkip(regex, 0);
-    if (pattern != null) {
-      FuzzSupport.MatcherPair matcher = pattern.matcher(input);
-      while (matcher.find()) {}
-    }
-  }
-
-  private static void assertAlternationAndQuantifierPriorityLookingAtMatchesJdk(
-      FuzzedDataProvider data) {
-    PriorityCases.Case regression = PriorityCases.choose(data);
-    FuzzSupport.CompiledPattern pattern =
-        FuzzSupport.compileCompatibleOrSkip(regression.regex(), 0);
-    if (pattern != null) {
-      pattern.matcher(data.pickValue(regression.inputs())).lookingAt();
-    }
-  }
-
-  private static void assertFullMatchesSafeRe(String regex, int flags, List<String> inputs) {
-    Pattern pattern = Pattern.compile(regex, flags);
-    for (String input : inputs) {
-      if (!pattern.matcher(input).matches()) {
-        throw new AssertionError(
-            "SafeRE model regression"
-                + "\nRegex: "
-                + regex
-                + "\nFlags: "
-                + flags
-                + "\nInput: "
-                + input);
-      }
-    }
-  }
-
-  private record RegressionCase(String regex, int flags, List<String> inputs) {}
 }

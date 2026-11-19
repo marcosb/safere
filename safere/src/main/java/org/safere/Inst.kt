@@ -2,370 +2,388 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
-
-import java.util.Locale;
+import java.lang.String
+import java.util.*
+import kotlin.Boolean
+import kotlin.IllegalStateException
+import kotlin.Int
+import kotlin.IntArray
+import kotlin.Long
+import kotlin.check
+import kotlin.text.StringBuilder
 
 /**
- * A single instruction in a compiled regular expression program. Each instruction has an {@link
- * InstOp opcode} and opcode-specific data.
- *
- * <p>Unlike the C++ RE2 implementation, this class does not use bit-packing. Fields are stored
+ * A single instruction in a compiled regular expression program. Each instruction has an [ ] and opcode-specific data.
+ * 
+ * 
+ * Unlike the C++ RE2 implementation, this class does not use bit-packing. Fields are stored
  * directly for clarity.
- *
- * <p>The instruction set:
- *
- * <ul>
- *   <li>{@link InstOp#ALT}: Branch to {@code out} or {@code out1}
- *   <li>{@link InstOp#ALT_MATCH}: Optimized Alt where one branch is a match
- *   <li>{@link InstOp#CHAR_RANGE}: Match a code point in {@code [lo, hi]}, optionally
- *       case-insensitive
- *   <li>{@link InstOp#CAPTURE}: Record position as submatch boundary for capture {@code arg}
- *   <li>{@link InstOp#EMPTY_WIDTH}: Assert zero-width condition (see {@link EmptyOp})
- *   <li>{@link InstOp#MATCH}: Accept with match ID {@code arg}
- *   <li>{@link InstOp#NOP}: No-op, continue to {@code out}
- *   <li>{@link InstOp#FAIL}: Unconditional failure
- *   <li>{@link InstOp#CHAR_CLASS}: Match a code point against a multi-range character class
- *   <li>{@link InstOp#GRAPHEME_CLUSTER}: Match one Unicode extended grapheme cluster
- * </ul>
+ * 
+ * 
+ * The instruction set:
+ * 
+ * 
+ *  * [InstOp.ALT]: Branch to `out` or `out1`
+ *  * [InstOp.ALT_MATCH]: Optimized Alt where one branch is a match
+ *  * [InstOp.CHAR_RANGE]: Match a code point in `[lo, hi]`, optionally
+ * case-insensitive
+ *  * [InstOp.CAPTURE]: Record position as submatch boundary for capture `arg`
+ *  * [InstOp.EMPTY_WIDTH]: Assert zero-width condition (see [EmptyOp])
+ *  * [InstOp.MATCH]: Accept with match ID `arg`
+ *  * [InstOp.NOP]: No-op, continue to `out`
+ *  * [InstOp.FAIL]: Unconditional failure
+ *  * [InstOp.CHAR_CLASS]: Match a code point against a multi-range character class
+ *  * [InstOp.GRAPHEME_CLUSTER]: Match one Unicode extended grapheme cluster
+ * 
  */
-final class Inst {
+internal class Inst {
+    /** The opcode for this instruction.  */
+    var op: InstOp?
 
-  /** The opcode for this instruction. */
-  public InstOp op;
+    /**
+     * Cached `op.ordinal()` for use in hot-loop switches, avoiding the overhead of `Enum.ordinal()` and the synthetic switch-map array lookup on every iteration.
+     */
+    var opCode: Int
 
-  /**
-   * Cached {@code op.ordinal()} for use in hot-loop switches, avoiding the overhead of {@code
-   * Enum.ordinal()} and the synthetic switch-map array lookup on every iteration.
-   */
-  public int opCode;
+    /** Primary successor instruction index. Used by all opcodes except MATCH and FAIL.  */
+    var out: Int = 0
 
-  /** Primary successor instruction index. Used by all opcodes except MATCH and FAIL. */
-  public int out;
+    /**
+     * Secondary successor instruction index. Only used by [InstOp.ALT] and [ ][InstOp.ALT_MATCH].
+     */
+    var out1: Int = 0
 
-  /**
-   * Secondary successor instruction index. Only used by {@link InstOp#ALT} and {@link
-   * InstOp#ALT_MATCH}.
-   */
-  public int out1;
+    /**
+     * Multipurpose argument:
+     * 
+     * 
+     *  * For [InstOp.CAPTURE]: the capture register index (cap * 2 for start, cap * 2 + 1
+     * for end)
+     *  * For [InstOp.MATCH]: the match ID
+     *  * For [InstOp.EMPTY_WIDTH]: the [EmptyOp] flags
+     * 
+     */
+    var arg: Int = 0
 
-  /**
-   * Multipurpose argument:
-   *
-   * <ul>
-   *   <li>For {@link InstOp#CAPTURE}: the capture register index (cap * 2 for start, cap * 2 + 1
-   *       for end)
-   *   <li>For {@link InstOp#MATCH}: the match ID
-   *   <li>For {@link InstOp#EMPTY_WIDTH}: the {@link EmptyOp} flags
-   * </ul>
-   */
-  public int arg;
+    /** Low end of character range (inclusive). Only used by [InstOp.CHAR_RANGE].  */
+    var lo: Int = 0
 
-  /** Low end of character range (inclusive). Only used by {@link InstOp#CHAR_RANGE}. */
-  public int lo;
+    /** High end of character range (inclusive). Only used by [InstOp.CHAR_RANGE].  */
+    var hi: Int = 0
 
-  /** High end of character range (inclusive). Only used by {@link InstOp#CHAR_RANGE}. */
-  public int hi;
+    /**
+     * Whether this character range match is case-insensitive. Only used by [InstOp.CHAR_RANGE].
+     */
+    var foldCase: Boolean = false
 
-  /**
-   * Whether this character range match is case-insensitive. Only used by {@link InstOp#CHAR_RANGE}.
-   */
-  public boolean foldCase;
+    /** Whether this is the last instruction in a flattened list.  */
+    var last: Boolean = false
 
-  /** Whether this is the last instruction in a flattened list. */
-  public boolean last;
+    /**
+     * Flat array of [lo0, hi0, lo1, hi1, ...] range pairs for [InstOp.CHAR_CLASS]. Each pair
+     * defines an inclusive Unicode code point range.
+     */
+    var ranges: IntArray
 
-  /**
-   * Flat array of [lo0, hi0, lo1, hi1, ...] range pairs for {@link InstOp#CHAR_CLASS}. Each pair
-   * defines an inclusive Unicode code point range.
-   */
-  public int[] ranges;
+    /**
+     * ASCII bitmap for [InstOp.CHAR_CLASS]: bit `i` is set if code point `i`
+     * matches at least one range. Covers code points 0–63.
+     */
+    var bitmap0: Long = 0
 
-  /**
-   * ASCII bitmap for {@link InstOp#CHAR_CLASS}: bit {@code i} is set if code point {@code i}
-   * matches at least one range. Covers code points 0–63.
-   */
-  public long bitmap0;
+    /**
+     * ASCII bitmap for [InstOp.CHAR_CLASS]: bit `(i - 64)` is set if code point `i`
+     * matches at least one range. Covers code points 64–127.
+     */
+    var bitmap1: Long = 0
 
-  /**
-   * ASCII bitmap for {@link InstOp#CHAR_CLASS}: bit {@code (i - 64)} is set if code point {@code i}
-   * matches at least one range. Covers code points 64–127.
-   */
-  public long bitmap1;
+    /** Creates an uninitialized instruction (defaults to FAIL).  */
+    constructor() {
+        this.op = InstOp.FAIL
+        this.opCode = InstOp.Companion.OP_FAIL
+    }
 
-  /** Creates an uninitialized instruction (defaults to FAIL). */
-  public Inst() {
-    this.op = InstOp.FAIL;
-    this.opCode = InstOp.OP_FAIL;
-  }
+    /** Creates a copy of another instruction.  */
+    constructor(other: Inst) {
+        this.op = other.op
+        this.opCode = other.opCode
+        this.out = other.out
+        this.out1 = other.out1
+        this.arg = other.arg
+        this.lo = other.lo
+        this.hi = other.hi
+        this.foldCase = other.foldCase
+        this.last = other.last
+        this.ranges = other.ranges
+        this.bitmap0 = other.bitmap0
+        this.bitmap1 = other.bitmap1
+    }
 
-  /** Creates a copy of another instruction. */
-  public Inst(Inst other) {
-    this.op = other.op;
-    this.opCode = other.opCode;
-    this.out = other.out;
-    this.out1 = other.out1;
-    this.arg = other.arg;
-    this.lo = other.lo;
-    this.hi = other.hi;
-    this.foldCase = other.foldCase;
-    this.last = other.last;
-    this.ranges = other.ranges;
-    this.bitmap0 = other.bitmap0;
-    this.bitmap1 = other.bitmap1;
-  }
+    /** Initializes as an ALT instruction branching to `out` or `out1`.  */
+    fun initAlt(out: Int, out1: Int) {
+        this.op = InstOp.ALT
+        this.opCode = InstOp.Companion.OP_ALT
+        this.out = out
+        this.out1 = out1
+    }
 
-  /** Initializes as an ALT instruction branching to {@code out} or {@code out1}. */
-  public void initAlt(int out, int out1) {
-    this.op = InstOp.ALT;
-    this.opCode = InstOp.OP_ALT;
-    this.out = out;
-    this.out1 = out1;
-  }
+    /** Initializes as a CHAR_RANGE instruction matching code points in `[lo, hi]`.  */
+    fun initCharRange(lo: Int, hi: Int, foldCase: Boolean, out: Int) {
+        this.op = InstOp.CHAR_RANGE
+        this.opCode = InstOp.Companion.OP_CHAR_RANGE
+        this.lo = lo
+        this.hi = hi
+        this.foldCase = foldCase
+        this.out = out
+    }
 
-  /** Initializes as a CHAR_RANGE instruction matching code points in {@code [lo, hi]}. */
-  public void initCharRange(int lo, int hi, boolean foldCase, int out) {
-    this.op = InstOp.CHAR_RANGE;
-    this.opCode = InstOp.OP_CHAR_RANGE;
-    this.lo = lo;
-    this.hi = hi;
-    this.foldCase = foldCase;
-    this.out = out;
-  }
+    /** Initializes as a CAPTURE instruction for capture register `cap`.  */
+    fun initCapture(cap: Int, out: Int) {
+        this.op = InstOp.CAPTURE
+        this.opCode = InstOp.Companion.OP_CAPTURE
+        this.arg = cap
+        this.out = out
+    }
 
-  /** Initializes as a CAPTURE instruction for capture register {@code cap}. */
-  public void initCapture(int cap, int out) {
-    this.op = InstOp.CAPTURE;
-    this.opCode = InstOp.OP_CAPTURE;
-    this.arg = cap;
-    this.out = out;
-  }
+    /** Initializes as an EMPTY_WIDTH instruction with the given [EmptyOp] flags.  */
+    fun initEmptyWidth(emptyFlags: Int, out: Int) {
+        this.op = InstOp.EMPTY_WIDTH
+        this.opCode = InstOp.Companion.OP_EMPTY_WIDTH
+        this.arg = emptyFlags
+        this.out = out
+    }
 
-  /** Initializes as an EMPTY_WIDTH instruction with the given {@link EmptyOp} flags. */
-  public void initEmptyWidth(int emptyFlags, int out) {
-    this.op = InstOp.EMPTY_WIDTH;
-    this.opCode = InstOp.OP_EMPTY_WIDTH;
-    this.arg = emptyFlags;
-    this.out = out;
-  }
+    /** Initializes as a MATCH instruction with the given match ID.  */
+    fun initMatch(matchId: Int) {
+        this.op = InstOp.MATCH
+        this.opCode = InstOp.Companion.OP_MATCH
+        this.arg = matchId
+    }
 
-  /** Initializes as a MATCH instruction with the given match ID. */
-  public void initMatch(int matchId) {
-    this.op = InstOp.MATCH;
-    this.opCode = InstOp.OP_MATCH;
-    this.arg = matchId;
-  }
+    /** Initializes as a NOP instruction continuing to `out`.  */
+    fun initNop(out: Int) {
+        this.op = InstOp.NOP
+        this.opCode = InstOp.Companion.OP_NOP
+        this.out = out
+    }
 
-  /** Initializes as a NOP instruction continuing to {@code out}. */
-  public void initNop(int out) {
-    this.op = InstOp.NOP;
-    this.opCode = InstOp.OP_NOP;
-    this.out = out;
-  }
+    /** Initializes as a FAIL instruction.  */
+    fun initFail() {
+        this.op = InstOp.FAIL
+        this.opCode = InstOp.Companion.OP_FAIL
+    }
 
-  /** Initializes as a FAIL instruction. */
-  public void initFail() {
-    this.op = InstOp.FAIL;
-    this.opCode = InstOp.OP_FAIL;
-  }
+    /**
+     * Initializes as a PROGRESS_CHECK instruction with the given loop register index.
+     * 
+     * 
+     * This instruction has two successors and a greediness flag:
+     * 
+     * 
+     *  * `out`: body entry (the loop body)
+     *  * `out1`: loop exit (patched to whatever follows the repetition)
+     * 
+     * 
+     * 
+     * Behavior:
+     * 
+     * 
+     *  * **First visit** (saved == -1): saves position and enters the body (plus semantics)
+     *  * **Progress** (pos != saved): saves position, follows both successors like ALT (greedy
+     * → prefer body; non-greedy → prefer exit)
+     *  * **Zero-width** (pos == saved): follows only exit (terminates the loop)
+     * 
+     * 
+     * @param loopReg the loop register index (0-based)
+     * @param bodyOut successor for body entry
+     * @param exitOut successor for loop exit
+     * @param nonGreedy true if the enclosing repetition is non-greedy
+     */
+    fun initProgressCheck(loopReg: Int, bodyOut: Int, exitOut: Int, nonGreedy: Boolean) {
+        this.op = InstOp.PROGRESS_CHECK
+        this.opCode = InstOp.Companion.OP_PROGRESS_CHECK
+        this.arg = loopReg
+        this.out = bodyOut
+        this.out1 = exitOut
+        this.foldCase = nonGreedy
+    }
 
-  /**
-   * Initializes as a PROGRESS_CHECK instruction with the given loop register index.
-   *
-   * <p>This instruction has two successors and a greediness flag:
-   *
-   * <ul>
-   *   <li>{@code out}: body entry (the loop body)
-   *   <li>{@code out1}: loop exit (patched to whatever follows the repetition)
-   * </ul>
-   *
-   * <p>Behavior:
-   *
-   * <ul>
-   *   <li><b>First visit</b> (saved == -1): saves position and enters the body (plus semantics)
-   *   <li><b>Progress</b> (pos != saved): saves position, follows both successors like ALT (greedy
-   *       → prefer body; non-greedy → prefer exit)
-   *   <li><b>Zero-width</b> (pos == saved): follows only exit (terminates the loop)
-   * </ul>
-   *
-   * @param loopReg the loop register index (0-based)
-   * @param bodyOut successor for body entry
-   * @param exitOut successor for loop exit
-   * @param nonGreedy true if the enclosing repetition is non-greedy
-   */
-  public void initProgressCheck(int loopReg, int bodyOut, int exitOut, boolean nonGreedy) {
-    this.op = InstOp.PROGRESS_CHECK;
-    this.opCode = InstOp.OP_PROGRESS_CHECK;
-    this.arg = loopReg;
-    this.out = bodyOut;
-    this.out1 = exitOut;
-    this.foldCase = nonGreedy;
-  }
+    /** Initializes a fresh loop entry resetting `loopReg` before continuing to `out`.  */
+    fun initLoopEnter(loopReg: Int, out: Int) {
+        this.op = InstOp.LOOP_ENTER
+        this.opCode = InstOp.Companion.OP_LOOP_ENTER
+        this.arg = loopReg
+        this.out = out
+    }
 
-  /** Initializes a fresh loop entry resetting {@code loopReg} before continuing to {@code out}. */
-  public void initLoopEnter(int loopReg, int out) {
-    this.op = InstOp.LOOP_ENTER;
-    this.opCode = InstOp.OP_LOOP_ENTER;
-    this.arg = loopReg;
-    this.out = out;
-  }
+    /**
+     * Initializes as a CHAR_CLASS instruction matching code points against multiple ranges.
+     * 
+     * @param out successor instruction index
+     * @param ranges flat array of [lo0, hi0, lo1, hi1, ...] range pairs (inclusive)
+     */
+    fun initCharClass(out: Int, ranges: IntArray) {
+        this.op = InstOp.CHAR_CLASS
+        this.opCode = InstOp.Companion.OP_CHAR_CLASS
+        this.out = out
+        this.ranges = ranges
+        // Precompute ASCII bitmap for O(1) lookup of code points 0-127.
+        var b0: Long = 0
+        var b1: Long = 0
+        var i = 0
+        while (i < ranges.length) {
+            val lo = ranges[i]
+            val hi = ranges[i + 1]
+            val start = Math.max(lo, 0)
+            val end = Math.min(hi, 127)
+            for (cp in start..end) {
+                if (cp < 64) {
+                    b0 = b0 or (1L shl cp)
+                } else {
+                    b1 = b1 or (1L shl (cp - 64))
+                }
+            }
+            i += 2
+        }
+        this.bitmap0 = b0
+        this.bitmap1 = b1
+    }
 
-  /**
-   * Initializes as a CHAR_CLASS instruction matching code points against multiple ranges.
-   *
-   * @param out successor instruction index
-   * @param ranges flat array of [lo0, hi0, lo1, hi1, ...] range pairs (inclusive)
-   */
-  public void initCharClass(int out, int[] ranges) {
-    this.op = InstOp.CHAR_CLASS;
-    this.opCode = InstOp.OP_CHAR_CLASS;
-    this.out = out;
-    this.ranges = ranges;
-    // Precompute ASCII bitmap for O(1) lookup of code points 0-127.
-    long b0 = 0;
-    long b1 = 0;
-    for (int i = 0; i < ranges.length; i += 2) {
-      int lo = ranges[i];
-      int hi = ranges[i + 1];
-      int start = Math.max(lo, 0);
-      int end = Math.min(hi, 127);
-      for (int cp = start; cp <= end; cp++) {
+    /** Initializes as a GRAPHEME_CLUSTER instruction.  */
+    fun initGraphemeCluster(out: Int) {
+        this.op = InstOp.GRAPHEME_CLUSTER
+        this.opCode = InstOp.Companion.OP_GRAPHEME_CLUSTER
+        this.out = out
+    }
+
+    /**
+     * Returns true if the given code point matches this CHAR_CLASS instruction. Uses the precomputed
+     * ASCII bitmap for code points 0–127, falls back to binary search for non-ASCII.
+     */
+    fun matchesCharClass(cp: Int): Boolean {
         if (cp < 64) {
-          b0 |= 1L << cp;
-        } else {
-          b1 |= 1L << (cp - 64);
+            return (bitmap0 and (1L shl cp)) != 0L
         }
-      }
-    }
-    this.bitmap0 = b0;
-    this.bitmap1 = b1;
-  }
-
-  /** Initializes as a GRAPHEME_CLUSTER instruction. */
-  public void initGraphemeCluster(int out) {
-    this.op = InstOp.GRAPHEME_CLUSTER;
-    this.opCode = InstOp.OP_GRAPHEME_CLUSTER;
-    this.out = out;
-  }
-
-  /**
-   * Returns true if the given code point matches this CHAR_CLASS instruction. Uses the precomputed
-   * ASCII bitmap for code points 0–127, falls back to binary search for non-ASCII.
-   */
-  public boolean matchesCharClass(int cp) {
-    if (cp < 64) {
-      return (bitmap0 & (1L << cp)) != 0;
-    }
-    if (cp < 128) {
-      return (bitmap1 & (1L << (cp - 64))) != 0;
-    }
-    // Binary search for non-ASCII code points.
-    int lo = 0;
-    int hi = (ranges.length >>> 1) - 1;
-    while (lo <= hi) {
-      int mid = (lo + hi) >>> 1;
-      int rLo = ranges[mid * 2];
-      int rHi = ranges[mid * 2 + 1];
-      if (cp < rLo) {
-        hi = mid - 1;
-      } else if (cp > rHi) {
-        lo = mid + 1;
-      } else {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns true if the given code point matches this CHAR_RANGE instruction.
-   *
-   * @throws IllegalStateException if this instruction is not a CHAR_RANGE
-   */
-  public boolean matchesChar(int c) {
-    if (op != InstOp.CHAR_RANGE) {
-      throw new IllegalStateException("matchesChar called on " + op);
-    }
-    if (c >= lo && c <= hi) {
-      return true;
-    }
-    if (foldCase) {
-      // Try case-folded version.
-      int folded = simpleFold(c);
-      while (folded != c) {
-        if (folded >= lo && folded <= hi) {
-          return true;
+        if (cp < 128) {
+            return (bitmap1 and (1L shl (cp - 64))) != 0L
         }
-        folded = simpleFold(folded);
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns the next code point in the case-fold orbit of {@code r}. For example, 'A' → 'a' → 'A'.
-   * For characters with no case folding, returns {@code r}.
-   */
-  static int simpleFold(int r) {
-    // Use Unicode case folding tables.
-    for (int[] fold : UnicodeTables.CASE_FOLD) {
-      if (r < fold[0]) {
-        return r; // Past the relevant range.
-      }
-      if (r > fold[1]) {
-        continue; // Before this range.
-      }
-      int delta = fold[2];
-      if (delta == UnicodeTables.EVEN_ODD) {
-        // Even code points add 1, odd subtract 1.
-        return (r % 2 == 0) ? r + 1 : r - 1;
-      } else if (delta == UnicodeTables.ODD_EVEN) {
-        // Odd code points add 1 (wrapping), even subtract 1.
-        return (r % 2 == 1) ? r + 1 : r - 1;
-      } else if (delta == UnicodeTables.EVEN_ODD_SKIP || delta == UnicodeTables.ODD_EVEN_SKIP) {
-        // These are more complex folding cases; for now treat as simple delta.
-        return r;
-      } else {
-        return r + delta;
-      }
-    }
-    return r;
-  }
-
-  @Override
-  public String toString() {
-    return switch (op) {
-      case ALT -> String.format(Locale.ROOT, "alt -> %d | %d", out, out1);
-      case ALT_MATCH -> String.format(Locale.ROOT, "altmatch -> %d | %d", out, out1);
-      case CHAR_RANGE ->
-          String.format(Locale.ROOT, "char [0x%X-0x%X]%s -> %d", lo, hi, foldCase ? "/i" : "", out);
-      case CAPTURE -> String.format(Locale.ROOT, "capture %d -> %d", arg, out);
-      case EMPTY_WIDTH -> String.format(Locale.ROOT, "empty 0x%X -> %d", arg, out);
-      case MATCH -> String.format(Locale.ROOT, "match %d", arg);
-      case NOP -> String.format(Locale.ROOT, "nop -> %d", out);
-      case LOOP_ENTER -> String.format(Locale.ROOT, "loop_enter reg=%d -> %d", arg, out);
-      case FAIL -> "fail";
-      case GRAPHEME_CLUSTER -> String.format(Locale.ROOT, "grapheme_cluster -> %d", out);
-      case PROGRESS_CHECK ->
-          String.format(
-              Locale.ROOT,
-              "progress_check reg=%d body=%d exit=%d %s",
-              arg,
-              out,
-              out1,
-              foldCase ? "non-greedy" : "greedy");
-      case CHAR_CLASS -> {
-        StringBuilder sb = new StringBuilder("charclass [");
-        for (int i = 0; i < ranges.length; i += 2) {
-          if (i > 0) {
-            sb.append(',');
-          }
-          sb.append(String.format(Locale.ROOT, "0x%X-0x%X", ranges[i], ranges[i + 1]));
+        // Binary search for non-ASCII code points.
+        var lo = 0
+        var hi: Int = (ranges.length ushr 1) - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            val rLo = ranges[mid * 2]
+            val rHi = ranges[mid * 2 + 1]
+            if (cp < rLo) {
+                hi = mid - 1
+            } else if (cp > rHi) {
+                lo = mid + 1
+            } else {
+                return true
+            }
         }
-        sb.append(String.format(Locale.ROOT, "] -> %d", out));
-        yield sb.toString();
-      }
-    };
-  }
+        return false
+    }
+
+    /**
+     * Returns true if the given code point matches this CHAR_RANGE instruction.
+     * 
+     * @throws IllegalStateException if this instruction is not a CHAR_RANGE
+     */
+    fun matchesChar(c: Int): Boolean {
+        check(op == InstOp.CHAR_RANGE) { "matchesChar called on " + op }
+        if (c >= lo && c <= hi) {
+            return true
+        }
+        if (foldCase) {
+            // Try case-folded version.
+            var folded: Int = simpleFold(c)
+            while (folded != c) {
+                if (folded >= lo && folded <= hi) {
+                    return true
+                }
+                folded = simpleFold(folded)
+            }
+        }
+        return false
+    }
+
+    override fun toString(): String {
+        return when (op) {
+            InstOp.ALT -> String.format(Locale.ROOT, "alt -> %d | %d", out, out1)
+            InstOp.ALT_MATCH -> String.format(Locale.ROOT, "altmatch -> %d | %d", out, out1)
+            InstOp.CHAR_RANGE -> String.format(
+                Locale.ROOT,
+                "char [0x%X-0x%X]%s -> %d",
+                lo,
+                hi,
+                if (foldCase) "/i" else "",
+                out
+            )
+
+            InstOp.CAPTURE -> String.format(Locale.ROOT, "capture %d -> %d", arg, out)
+            InstOp.EMPTY_WIDTH -> String.format(Locale.ROOT, "empty 0x%X -> %d", arg, out)
+            InstOp.MATCH -> String.format(Locale.ROOT, "match %d", arg)
+            InstOp.NOP -> String.format(Locale.ROOT, "nop -> %d", out)
+            InstOp.LOOP_ENTER -> String.format(Locale.ROOT, "loop_enter reg=%d -> %d", arg, out)
+            InstOp.FAIL -> "fail"
+            InstOp.GRAPHEME_CLUSTER -> String.format(Locale.ROOT, "grapheme_cluster -> %d", out)
+            InstOp.PROGRESS_CHECK -> String.format(
+                Locale.ROOT,
+                "progress_check reg=%d body=%d exit=%d %s",
+                arg,
+                out,
+                out1,
+                if (foldCase) "non-greedy" else "greedy"
+            )
+
+            InstOp.CHAR_CLASS -> {
+                val sb = StringBuilder("charclass [")
+                var i = 0
+                while (i < ranges.length) {
+                    if (i > 0) {
+                        sb.append(',')
+                    }
+                    sb.append(String.format(Locale.ROOT, "0x%X-0x%X", ranges[i], ranges[i + 1]))
+                    i += 2
+                }
+                sb.append(String.format(Locale.ROOT, "] -> %d", out))
+                sb.toString()
+            }
+        }
+    }
+
+    companion object {
+        /**
+         * Returns the next code point in the case-fold orbit of `r`. For example, 'A' → 'a' → 'A'.
+         * For characters with no case folding, returns `r`.
+         */
+        fun simpleFold(r: Int): Int {
+            // Use Unicode case folding tables.
+            for (fold in UnicodeTables.CASE_FOLD) {
+                if (r < fold[0]) {
+                    return r // Past the relevant range.
+                }
+                if (r > fold[1]) {
+                    continue  // Before this range.
+                }
+                val delta = fold[2]
+                if (delta == UnicodeTables.EVEN_ODD) {
+                    // Even code points add 1, odd subtract 1.
+                    return if (r % 2 == 0) r + 1 else r - 1
+                } else if (delta == UnicodeTables.ODD_EVEN) {
+                    // Odd code points add 1 (wrapping), even subtract 1.
+                    return if (r % 2 == 1) r + 1 else r - 1
+                } else if (delta == UnicodeTables.EVEN_ODD_SKIP || delta == UnicodeTables.ODD_EVEN_SKIP) {
+                    // These are more complex folding cases; for now treat as simple delta.
+                    return r
+                } else {
+                    return r + delta
+                }
+            }
+            return r
+        }
+    }
 }

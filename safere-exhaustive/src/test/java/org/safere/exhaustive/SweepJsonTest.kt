@@ -2,68 +2,66 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere.exhaustive
 
-package org.safere.exhaustive;
+import org.assertj.core.api.Assertions
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
+import org.junit.jupiter.api.Test
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+/** Tests for [SweepJson].  */
+internal class SweepJsonTest {
+    @Test
+    fun writesAndReadsJsonFieldsWithEscapedCharacters() {
+        val value = "quote\" slash\\ newline\n tab\t surrogate\uD83D"
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("field", value)
+        `object`.addProperty("other", "x")
 
-import org.junit.jupiter.api.Test;
+        val line = SweepJson.toJson(`object`)
 
-/** Tests for {@link SweepJson}. */
-class SweepJsonTest {
-  @Test
-  void writesAndReadsJsonFieldsWithEscapedCharacters() {
-    String value = "quote\" slash\\ newline\n tab\t surrogate\uD83D";
-    var object = SweepJson.object();
-    object.addProperty("field", value);
-    object.addProperty("other", "x");
+        Assertions.assertThat(SweepJson.field(line, "field")).isEqualTo(value)
+        Assertions.assertThat(SweepJson.field(line, "missing")).isNull()
+    }
 
-    String line = SweepJson.toJson(object);
+    @Test
+    fun toJsonEscapesUnpairedSurrogates() {
+        val `object` = SweepJson.`object`()
+        `object`.addProperty("high", "\uD83D")
+        `object`.addProperty("low", "\uDE00")
+        `object`.addProperty("pair", "\uD83D\uDE00")
 
-    assertThat(SweepJson.field(line, "field")).isEqualTo(value);
-    assertThat(SweepJson.field(line, "missing")).isNull();
-  }
+        val line = SweepJson.toJson(`object`)
 
-  @Test
-  void toJsonEscapesUnpairedSurrogates() {
-    var object = SweepJson.object();
-    object.addProperty("high", "\uD83D");
-    object.addProperty("low", "\uDE00");
-    object.addProperty("pair", "\uD83D\uDE00");
+        Assertions.assertThat(line).contains("\"high\":\"\\ud83d\"", "\"low\":\"\\ude00\"")
+        Assertions.assertThat(line).contains("😀")
+    }
 
-    String line = SweepJson.toJson(object);
+    @Test
+    fun fieldReturnsNullForLegacyRawReplayLine() {
+        Assertions.assertThat(SweepJson.field("\\Qabc\\E", "regex")).isNull()
+    }
 
-    assertThat(line).contains("\"high\":\"\\ud83d\"", "\"low\":\"\\ude00\"");
-    assertThat(line).contains("😀");
-  }
+    @Test
+    fun readsStructuredJsonFields() {
+        val `object` = SweepJson.`object`()
+        val nested = SweepJson.`object`()
+        nested.addProperty("text", "abc")
+        nested.addProperty("enabled", true)
+        nested.addProperty("count", 7)
+        `object`.add("nested", nested)
 
-  @Test
-  void fieldReturnsNullForLegacyRawReplayLine() {
-    assertThat(SweepJson.field("\\Qabc\\E", "regex")).isNull();
-  }
+        val parsed = SweepJson.parseObject(SweepJson.toJson(`object`))
+        val parsedNested = SweepJson.`object`(parsed, "nested")
 
-  @Test
-  void readsStructuredJsonFields() {
-    var object = SweepJson.object();
-    var nested = SweepJson.object();
-    nested.addProperty("text", "abc");
-    nested.addProperty("enabled", true);
-    nested.addProperty("count", 7);
-    object.add("nested", nested);
+        Assertions.assertThat(SweepJson.string(parsedNested, "text")).isEqualTo("abc")
+        Assertions.assertThat(SweepJson.bool(parsedNested, "enabled")).isTrue()
+        Assertions.assertThat(SweepJson.integer(parsedNested, "count")).isEqualTo(7)
+    }
 
-    var parsed = SweepJson.parseObject(SweepJson.toJson(object));
-    var parsedNested = SweepJson.object(parsed, "nested");
-
-    assertThat(SweepJson.string(parsedNested, "text")).isEqualTo("abc");
-    assertThat(SweepJson.bool(parsedNested, "enabled")).isTrue();
-    assertThat(SweepJson.integer(parsedNested, "count")).isEqualTo(7);
-  }
-
-  @Test
-  void parseObjectRejectsLegacyRawReplayLine() {
-    assertThatThrownBy(() -> SweepJson.parseObject("\\Qabc\\E"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("expected JSON object");
-  }
+    @Test
+    fun parseObjectRejectsLegacyRawReplayLine() {
+        Assertions.assertThatThrownBy(ThrowingCallable { SweepJson.parseObject("\\Qabc\\E") })
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("expected JSON object")
+    }
 }

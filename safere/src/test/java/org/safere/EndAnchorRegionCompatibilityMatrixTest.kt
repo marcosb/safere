@@ -2,307 +2,324 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import java.util.List
+import java.util.regex.MatchResult
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import java.util.stream.Stream
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.MatchResult;
-import java.util.stream.Stream;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-
-/** Focused differential matrix for end anchors under matcher regions and bounds. */
+/** Focused differential matrix for end anchors under matcher regions and bounds.  */
 @DisabledForCrosscheck("differential matrix already compares SafeRE with java.util.regex")
-class EndAnchorRegionCompatibilityMatrixTest {
-  private static final int FIND_LIMIT = 16;
+internal class EndAnchorRegionCompatibilityMatrixTest {
+    @ParameterizedTest(name = "[{index}] {0} /{1}/")
+    @MethodSource("endAnchorRegionCases")
+    @DisplayName("end-anchor region behavior matches java.util.regex")
+    fun endAnchorRegionBehaviorMatchesJdk(scenario: Scenario, regexCase: RegexCase) {
+        val safeTrace: Trace = safeTrace(regexCase, scenario)
+        val jdkTrace: Trace = jdkTrace(regexCase, scenario)
 
-  @ParameterizedTest(name = "[{index}] {0} /{1}/")
-  @MethodSource("endAnchorRegionCases")
-  @DisplayName("end-anchor region behavior matches java.util.regex")
-  void endAnchorRegionBehaviorMatchesJdk(Scenario scenario, RegexCase regexCase) {
-    Trace safeTrace = safeTrace(regexCase, scenario);
-    Trace jdkTrace = jdkTrace(regexCase, scenario);
-
-    assertThat(safeTrace)
-        .as(
-            "%s%nInput length=%s region=[%s,%s] transparent=%s anchoring=%s flags=%s",
-            scenario.name(),
-            scenario.input().length(),
-            scenario.start(),
-            scenario.end(),
-            scenario.transparentBounds(),
-            scenario.anchoringBounds(),
-            regexCase.flags())
-        .isEqualTo(jdkTrace);
-  }
-
-  private static Stream<Arguments> endAnchorRegionCases() {
-    return scenarios().stream()
-        .flatMap(
-            scenario -> regexCases().stream().map(regexCase -> Arguments.of(scenario, regexCase)));
-  }
-
-  private static List<Scenario> scenarios() {
-    List<Scenario> scenarios = new ArrayList<>();
-    for (InputRegion inputRegion : inputRegions()) {
-      for (BoundsCase boundsCase : boundsCases()) {
-        scenarios.add(
-            new Scenario(
-                inputRegion.name() + " " + boundsCase.name(),
-                inputRegion.input(),
-                inputRegion.start(),
-                inputRegion.end(),
-                boundsCase.transparentBounds(),
-                boundsCase.anchoringBounds()));
-      }
+        Assertions.assertThat<Trace?>(safeTrace)
+            .`as`(
+                "%s%nInput length=%s region=[%s,%s] transparent=%s anchoring=%s flags=%s",
+                scenario.name,
+                scenario.input!!.length,
+                scenario.start,
+                scenario.end,
+                scenario.transparentBounds,
+                scenario.anchoringBounds,
+                regexCase.flags
+            )
+            .isEqualTo(jdkTrace)
     }
-    return scenarios;
-  }
 
-  private static List<InputRegion> inputRegions() {
-    return List.of(
-        new InputRegion("before final lf", "ab\n", 0, 2),
-        new InputRegion("including final lf", "ab\n", 0, 3),
-        new InputRegion("before final cr", "ab\r", 0, 2),
-        new InputRegion("including final cr", "ab\r", 0, 3),
-        new InputRegion("before final nel", "ab\u0085", 0, 2),
-        new InputRegion("before final ls", "ab\u2028", 0, 2),
-        new InputRegion("before final ps", "ab\u2029", 0, 2),
-        new InputRegion("before final crlf", "ab\r\n", 0, 2),
-        new InputRegion("split final crlf", "ab\r\n", 0, 3),
-        new InputRegion("including final crlf", "ab\r\n", 0, 4),
-        new InputRegion("interior lf before suffix", "ab\nx", 0, 3),
-        new InputRegion("region end before full-text final lf", "a\u0000\n\n", 0, 3));
-  }
+    @JvmRecord
+    private data class InputRegion(val name: String?, val input: String?, val start: Int, val end: Int)
 
-  private static List<BoundsCase> boundsCases() {
-    return List.of(
-        new BoundsCase("opaque anchoring", false, true),
-        new BoundsCase("opaque non-anchoring", false, false),
-        new BoundsCase("transparent anchoring", true, true),
-        new BoundsCase("transparent non-anchoring", true, false));
-  }
+    @JvmRecord
+    private data class BoundsCase(val name: String?, val transparentBounds: Boolean, val anchoringBounds: Boolean)
 
-  private static List<RegexCase> regexCases() {
-    return List.of(
-        regex("scoped standard dollar", "[\\s\\S][\\s\\S](?-d:$)", Pattern.UNIX_LINES),
-        regex("scoped unix dollar", "[\\s\\S][\\s\\S](?d:$)", 0),
-        regex("scoped standard Z", "[\\s\\S][\\s\\S](?-d:\\Z)", Pattern.UNIX_LINES),
-        regex("scoped unix Z", "[\\s\\S][\\s\\S](?d:\\Z)", 0),
-        regex("mixed end modes", "[\\s\\S][\\s\\S](?-d:$)(?d:$)", 0),
-        regex("dollar only", "$", 0),
-        regex("Z only", "\\Z", 0),
-        regex("z only", "\\z", 0),
-        regex("two chars dollar", "[\\s\\S][\\s\\S]$", 0),
-        regex("anchored two chars dollar", "^[\\s\\S][\\s\\S]$", 0),
-        regex("captured two chars dollar", "([\\s\\S])([\\s\\S])$", 0),
-        regex("two chars Z", "[\\s\\S][\\s\\S]\\Z", 0),
-        regex("anchored two chars Z", "^[\\s\\S][\\s\\S]\\Z", 0),
-        regex("two chars z", "[\\s\\S][\\s\\S]\\z", 0),
-        regex("anchored two chars z", "^[\\s\\S][\\s\\S]\\z", 0),
-        regex("greedy chars dollar", "[\\s\\S]+$", 0),
-        regex("dotall two chars dollar", "..$", Pattern.DOTALL),
-        regex("unix lines dollar", "[\\s\\S][\\s\\S]$", Pattern.UNIX_LINES),
-        regex("unix lines Z", "[\\s\\S][\\s\\S]\\Z", Pattern.UNIX_LINES),
-        regex("multiline dollar", "[\\s\\S][\\s\\S]$", Pattern.MULTILINE),
-        regex("multiline anchored dollar", "^[\\s\\S][\\s\\S]$", Pattern.MULTILINE));
-  }
-
-  private static RegexCase regex(String name, String regex, int flags) {
-    return new RegexCase(name, regex, flags);
-  }
-
-  private static Trace safeTrace(RegexCase regexCase, Scenario scenario) {
-    Pattern pattern = Pattern.compile(regexCase.regex(), regexCase.flags());
-    Matcher matcher = configure(pattern.matcher(scenario.input()), scenario);
-    int groupCount = matcher.groupCount();
-
-    String matches =
-        matchTrace(configure(pattern.matcher(scenario.input()), scenario), Operation.MATCHES);
-    String lookingAt =
-        matchTrace(configure(pattern.matcher(scenario.input()), scenario), Operation.LOOKING_AT);
-    List<String> finds = findTrace(configure(pattern.matcher(scenario.input()), scenario));
-    List<String> results = resultsTrace(configure(pattern.matcher(scenario.input()), scenario));
-    List<String> resultsAfterFind =
-        resultsAfterFindTrace(configure(pattern.matcher(scenario.input()), scenario));
-
-    return new Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind);
-  }
-
-  private static Trace jdkTrace(RegexCase regexCase, Scenario scenario) {
-    java.util.regex.Pattern pattern =
-        java.util.regex.Pattern.compile(regexCase.regex(), regexCase.flags());
-    java.util.regex.Matcher matcher = configure(pattern.matcher(scenario.input()), scenario);
-    int groupCount = matcher.groupCount();
-
-    String matches =
-        matchTrace(configure(pattern.matcher(scenario.input()), scenario), Operation.MATCHES);
-    String lookingAt =
-        matchTrace(configure(pattern.matcher(scenario.input()), scenario), Operation.LOOKING_AT);
-    List<String> finds = findTrace(configure(pattern.matcher(scenario.input()), scenario));
-    List<String> results = resultsTrace(configure(pattern.matcher(scenario.input()), scenario));
-    List<String> resultsAfterFind =
-        resultsAfterFindTrace(configure(pattern.matcher(scenario.input()), scenario));
-
-    return new Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind);
-  }
-
-  private static Matcher configure(Matcher matcher, Scenario scenario) {
-    return matcher
-        .region(scenario.start(), scenario.end())
-        .useTransparentBounds(scenario.transparentBounds())
-        .useAnchoringBounds(scenario.anchoringBounds());
-  }
-
-  private static java.util.regex.Matcher configure(
-      java.util.regex.Matcher matcher, Scenario scenario) {
-    return matcher
-        .region(scenario.start(), scenario.end())
-        .useTransparentBounds(scenario.transparentBounds())
-        .useAnchoringBounds(scenario.anchoringBounds());
-  }
-
-  private static String matchTrace(Matcher matcher, Operation operation) {
-    boolean matched =
-        switch (operation) {
-          case MATCHES -> matcher.matches();
-          case LOOKING_AT -> matcher.lookingAt();
-        };
-    return matched ? capturedMatchTrace(matcher) : "NO_MATCH";
-  }
-
-  private static String matchTrace(java.util.regex.Matcher matcher, Operation operation) {
-    boolean matched =
-        switch (operation) {
-          case MATCHES -> matcher.matches();
-          case LOOKING_AT -> matcher.lookingAt();
-        };
-    return matched ? capturedMatchTrace(matcher) : "NO_MATCH";
-  }
-
-  private static List<String> findTrace(Matcher matcher) {
-    List<String> trace = new ArrayList<>();
-    while (matcher.find()) {
-      trace.add(capturedMatchTrace(matcher));
-      if (trace.size() > FIND_LIMIT) {
-        throw new AssertionError("find() trace exceeded " + FIND_LIMIT + " matches");
-      }
+    @JvmRecord
+    private data class Scenario(
+        val name: String,
+        val input: String?,
+        val start: Int,
+        val end: Int,
+        val transparentBounds: Boolean,
+        val anchoringBounds: Boolean
+    ) {
+        override fun toString(): String {
+            return name
+        }
     }
-    return trace;
-  }
 
-  private static List<String> findTrace(java.util.regex.Matcher matcher) {
-    List<String> trace = new ArrayList<>();
-    while (matcher.find()) {
-      trace.add(capturedMatchTrace(matcher));
-      if (trace.size() > FIND_LIMIT) {
-        throw new AssertionError("find() trace exceeded " + FIND_LIMIT + " matches");
-      }
+    @JvmRecord
+    private data class RegexCase(val name: String, val regex: String?, val flags: Int) {
+        override fun toString(): String {
+            return name
+        }
     }
-    return trace;
-  }
 
-  private static List<String> resultsTrace(Matcher matcher) {
-    return matcher.results().map(EndAnchorRegionCompatibilityMatrixTest::matchResultTrace).toList();
-  }
+    @JvmRecord
+    private data class Trace(
+        val groupCount: Int,
+        val matches: String?,
+        val lookingAt: String?,
+        val finds: MutableList<String?>?,
+        val results: MutableList<String?>?,
+        val resultsAfterFind: MutableList<String?>?
+    )
 
-  private static List<String> resultsTrace(java.util.regex.Matcher matcher) {
-    return matcher.results().map(EndAnchorRegionCompatibilityMatrixTest::matchResultTrace).toList();
-  }
-
-  private static List<String> resultsAfterFindTrace(Matcher matcher) {
-    if (!matcher.find()) {
-      return List.of();
+    private enum class Operation {
+        MATCHES,
+        LOOKING_AT
     }
-    return resultsTrace(matcher);
-  }
 
-  private static List<String> resultsAfterFindTrace(java.util.regex.Matcher matcher) {
-    if (!matcher.find()) {
-      return List.of();
+    companion object {
+        private const val FIND_LIMIT = 16
+
+        private fun endAnchorRegionCases(): Stream<Arguments?>? {
+            return scenarios().stream()
+                .flatMap<Arguments?> { scenario: Scenario? ->
+                    regexCases().stream().map<Arguments?> { regexCase: RegexCase? -> Arguments.of(scenario, regexCase) }
+                }
+        }
+
+        private fun scenarios(): MutableList<Scenario?> {
+            val scenarios: MutableList<Scenario?> = ArrayList<Scenario?>()
+            for (inputRegion in inputRegions()) {
+                for (boundsCase in boundsCases()) {
+                    scenarios.add(
+                        Scenario(
+                            inputRegion.name + " " + boundsCase.name,
+                            inputRegion.input,
+                            inputRegion.start,
+                            inputRegion.end,
+                            boundsCase.transparentBounds,
+                            boundsCase.anchoringBounds
+                        )
+                    )
+                }
+            }
+            return scenarios
+        }
+
+        private fun inputRegions(): MutableList<InputRegion> {
+            return List.of<InputRegion?>(
+                InputRegion("before final lf", "ab\n", 0, 2),
+                InputRegion("including final lf", "ab\n", 0, 3),
+                InputRegion("before final cr", "ab\r", 0, 2),
+                InputRegion("including final cr", "ab\r", 0, 3),
+                InputRegion("before final nel", "ab\u0085", 0, 2),
+                InputRegion("before final ls", "ab\u2028", 0, 2),
+                InputRegion("before final ps", "ab\u2029", 0, 2),
+                InputRegion("before final crlf", "ab\r\n", 0, 2),
+                InputRegion("split final crlf", "ab\r\n", 0, 3),
+                InputRegion("including final crlf", "ab\r\n", 0, 4),
+                InputRegion("interior lf before suffix", "ab\nx", 0, 3),
+                InputRegion("region end before full-text final lf", "a\u0000\n\n", 0, 3)
+            )
+        }
+
+        private fun boundsCases(): MutableList<BoundsCase> {
+            return List.of<BoundsCase?>(
+                BoundsCase("opaque anchoring", false, true),
+                BoundsCase("opaque non-anchoring", false, false),
+                BoundsCase("transparent anchoring", true, true),
+                BoundsCase("transparent non-anchoring", true, false)
+            )
+        }
+
+        private fun regexCases(): MutableList<RegexCase?> {
+            return List.of<RegexCase?>(
+                regex("scoped standard dollar", "[\\s\\S][\\s\\S](?-d:$)", Pattern.UNIX_LINES),
+                regex("scoped unix dollar", "[\\s\\S][\\s\\S](?d:$)", 0),
+                regex("scoped standard Z", "[\\s\\S][\\s\\S](?-d:\\Z)", Pattern.UNIX_LINES),
+                regex("scoped unix Z", "[\\s\\S][\\s\\S](?d:\\Z)", 0),
+                regex("mixed end modes", "[\\s\\S][\\s\\S](?-d:$)(?d:$)", 0),
+                regex("dollar only", "$", 0),
+                regex("Z only", "\\Z", 0),
+                regex("z only", "\\z", 0),
+                regex("two chars dollar", "[\\s\\S][\\s\\S]$", 0),
+                regex("anchored two chars dollar", "^[\\s\\S][\\s\\S]$", 0),
+                regex("captured two chars dollar", "([\\s\\S])([\\s\\S])$", 0),
+                regex("two chars Z", "[\\s\\S][\\s\\S]\\Z", 0),
+                regex("anchored two chars Z", "^[\\s\\S][\\s\\S]\\Z", 0),
+                regex("two chars z", "[\\s\\S][\\s\\S]\\z", 0),
+                regex("anchored two chars z", "^[\\s\\S][\\s\\S]\\z", 0),
+                regex("greedy chars dollar", "[\\s\\S]+$", 0),
+                regex("dotall two chars dollar", "..$", Pattern.DOTALL),
+                regex("unix lines dollar", "[\\s\\S][\\s\\S]$", Pattern.UNIX_LINES),
+                regex("unix lines Z", "[\\s\\S][\\s\\S]\\Z", Pattern.UNIX_LINES),
+                regex("multiline dollar", "[\\s\\S][\\s\\S]$", Pattern.MULTILINE),
+                regex("multiline anchored dollar", "^[\\s\\S][\\s\\S]$", Pattern.MULTILINE)
+            )
+        }
+
+        private fun regex(name: String, regex: String?, flags: Int): RegexCase {
+            return RegexCase(name, regex, flags)
+        }
+
+        private fun safeTrace(regexCase: RegexCase, scenario: Scenario): Trace {
+            val pattern = Pattern.compile(regexCase.regex, regexCase.flags)
+            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val groupCount = matcher.groupCount()
+
+            val matches: String =
+                matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
+            val lookingAt: String =
+                matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
+            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String?> =
+                resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
+
+            return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
+        }
+
+        private fun jdkTrace(regexCase: RegexCase, scenario: Scenario): Trace {
+            val pattern =
+                Pattern.compile(regexCase.regex, regexCase.flags)
+            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val groupCount = matcher.groupCount()
+
+            val matches: String =
+                matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
+            val lookingAt: String =
+                matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
+            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String?> =
+                resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
+
+            return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
+        }
+
+        private fun configure(matcher: org.safere.Matcher, scenario: Scenario): org.safere.Matcher {
+            return matcher
+                .region(scenario.start, scenario.end)
+                .useTransparentBounds(scenario.transparentBounds)
+                .useAnchoringBounds(scenario.anchoringBounds)
+        }
+
+        private fun configure(
+            matcher: Matcher, scenario: Scenario
+        ): Matcher {
+            return matcher
+                .region(scenario.start, scenario.end)
+                .useTransparentBounds(scenario.transparentBounds)
+                .useAnchoringBounds(scenario.anchoringBounds)
+        }
+
+        private fun matchTrace(matcher: org.safere.Matcher, operation: Operation): String {
+            val matched =
+                when (operation) {
+                    Operation.MATCHES -> matcher.matches()
+                    Operation.LOOKING_AT -> matcher.lookingAt()
+                }
+            return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
+        }
+
+        private fun matchTrace(matcher: Matcher, operation: Operation): String {
+            val matched =
+                when (operation) {
+                    Operation.MATCHES -> matcher.matches()
+                    Operation.LOOKING_AT -> matcher.lookingAt()
+                }
+            return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
+        }
+
+        private fun findTrace(matcher: org.safere.Matcher): MutableList<String?> {
+            val trace: MutableList<String?> = ArrayList<String?>()
+            while (matcher.find()) {
+                trace.add(capturedMatchTrace(matcher))
+                if (trace.size > FIND_LIMIT) {
+                    throw AssertionError("find() trace exceeded " + FIND_LIMIT + " matches")
+                }
+            }
+            return trace
+        }
+
+        private fun findTrace(matcher: Matcher): MutableList<String?> {
+            val trace: MutableList<String?> = ArrayList<String?>()
+            while (matcher.find()) {
+                trace.add(capturedMatchTrace(matcher))
+                if (trace.size > FIND_LIMIT) {
+                    throw AssertionError("find() trace exceeded " + FIND_LIMIT + " matches")
+                }
+            }
+            return trace
+        }
+
+        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String?> {
+            return matcher.results().map<String?> { result: MatchResult? -> Companion.matchResultTrace(result!!) }
+                .toList()
+        }
+
+        private fun resultsTrace(matcher: Matcher): MutableList<String?> {
+            return matcher.results().map<String?> { result: MatchResult? -> Companion.matchResultTrace(result!!) }
+                .toList()
+        }
+
+        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String?> {
+            if (!matcher.find()) {
+                return mutableListOf<String?>()
+            }
+            return resultsTrace(matcher)
+        }
+
+        private fun resultsAfterFindTrace(matcher: Matcher): MutableList<String?> {
+            if (!matcher.find()) {
+                return mutableListOf<String?>()
+            }
+            return resultsTrace(matcher)
+        }
+
+        private fun capturedMatchTrace(matcher: org.safere.Matcher): String {
+            val builder = StringBuilder()
+            builder.append(matcher.start()).append('-').append(matcher.end())
+            for (group in 0..matcher.groupCount()) {
+                appendGroup(builder, group, matcher.start(group), matcher.end(group), matcher.group(group))
+            }
+            return builder.toString()
+        }
+
+        private fun capturedMatchTrace(matcher: Matcher): String {
+            val builder = StringBuilder()
+            builder.append(matcher.start()).append('-').append(matcher.end())
+            for (group in 0..matcher.groupCount()) {
+                appendGroup(builder, group, matcher.start(group), matcher.end(group), matcher.group(group))
+            }
+            return builder.toString()
+        }
+
+        private fun matchResultTrace(result: MatchResult): String {
+            val builder = StringBuilder()
+            builder.append(result.start()).append('-').append(result.end())
+            for (group in 0..result.groupCount()) {
+                appendGroup(builder, group, result.start(group), result.end(group), result.group(group))
+            }
+            return builder.toString()
+        }
+
+        private fun appendGroup(
+            builder: StringBuilder, group: Int, start: Int, end: Int, value: String?
+        ) {
+            builder
+                .append(";g")
+                .append(group)
+                .append('=')
+                .append(start)
+                .append('-')
+                .append(end)
+                .append(':')
+                .append(if (value == null) "<null>" else value)
+        }
     }
-    return resultsTrace(matcher);
-  }
-
-  private static String capturedMatchTrace(Matcher matcher) {
-    StringBuilder builder = new StringBuilder();
-    builder.append(matcher.start()).append('-').append(matcher.end());
-    for (int group = 0; group <= matcher.groupCount(); group++) {
-      appendGroup(builder, group, matcher.start(group), matcher.end(group), matcher.group(group));
-    }
-    return builder.toString();
-  }
-
-  private static String capturedMatchTrace(java.util.regex.Matcher matcher) {
-    StringBuilder builder = new StringBuilder();
-    builder.append(matcher.start()).append('-').append(matcher.end());
-    for (int group = 0; group <= matcher.groupCount(); group++) {
-      appendGroup(builder, group, matcher.start(group), matcher.end(group), matcher.group(group));
-    }
-    return builder.toString();
-  }
-
-  private static String matchResultTrace(MatchResult result) {
-    StringBuilder builder = new StringBuilder();
-    builder.append(result.start()).append('-').append(result.end());
-    for (int group = 0; group <= result.groupCount(); group++) {
-      appendGroup(builder, group, result.start(group), result.end(group), result.group(group));
-    }
-    return builder.toString();
-  }
-
-  private static void appendGroup(
-      StringBuilder builder, int group, int start, int end, String value) {
-    builder
-        .append(";g")
-        .append(group)
-        .append('=')
-        .append(start)
-        .append('-')
-        .append(end)
-        .append(':')
-        .append(value == null ? "<null>" : value);
-  }
-
-  private record InputRegion(String name, String input, int start, int end) {}
-
-  private record BoundsCase(String name, boolean transparentBounds, boolean anchoringBounds) {}
-
-  private record Scenario(
-      String name,
-      String input,
-      int start,
-      int end,
-      boolean transparentBounds,
-      boolean anchoringBounds) {
-    @Override
-    public String toString() {
-      return name;
-    }
-  }
-
-  private record RegexCase(String name, String regex, int flags) {
-    @Override
-    public String toString() {
-      return name;
-    }
-  }
-
-  private record Trace(
-      int groupCount,
-      String matches,
-      String lookingAt,
-      List<String> finds,
-      List<String> results,
-      List<String> resultsAfterFind) {}
-
-  private enum Operation {
-    MATCHES,
-    LOOKING_AT
-  }
 }

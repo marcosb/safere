@@ -2,58 +2,63 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import java.util.*
 
-import static java.util.Objects.requireNonNull;
+/** Immutable execution bounds shared by regex engines.  */
+@JvmRecord
+internal data class EngineContext(
+    val text: InputScanner?,
+    val searchStart: Int,
+    val searchLimit: Int,
+    val endPos: Int,
+    val consumeRegionStart: Int,
+    val boundaryRegionStart: Int,
+    val boundaryEndPos: Int,
+    val anchorEndPos: Int,
+    val emptyAnchorStartPos: Int,
+    val emptyAnchorEndPos: Int,
+    val graphemeContext: GraphemeSupport.Context?
+) {
+    init {
+        Objects.requireNonNull<InputScanner?>(text, "text")
+        Objects.requireNonNull<GraphemeSupport.Context?>(graphemeContext, "graphemeContext")
+    }
 
-/** Immutable execution bounds shared by regex engines. */
-record EngineContext(
-    InputScanner text,
-    int searchStart,
-    int searchLimit,
-    int endPos,
-    int consumeRegionStart,
-    int boundaryRegionStart,
-    int boundaryEndPos,
-    int anchorEndPos,
-    int emptyAnchorStartPos,
-    int emptyAnchorEndPos,
-    GraphemeSupport.Context graphemeContext) {
-
-  EngineContext {
-    requireNonNull(text, "text");
-    requireNonNull(graphemeContext, "graphemeContext");
-  }
-
-  static EngineContext create(
-      Prog prog,
-      InputScanner text,
-      int searchStart,
-      int searchLimit,
-      int endPos,
-      int consumeRegionStart,
-      int boundaryRegionStart,
-      int boundaryEndPos,
-      int anchorEndPos,
-      int emptyAnchorStartPos,
-      int emptyAnchorEndPos,
-      GraphemeSupport.Context graphemeContext) {
-    GraphemeSupport.Context context =
-        graphemeContext != null
-            ? graphemeContext
-            : GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics());
-    return new EngineContext(
-        text,
-        searchStart,
-        searchLimit,
-        endPos,
-        consumeRegionStart,
-        boundaryRegionStart,
-        boundaryEndPos,
-        anchorEndPos,
-        emptyAnchorStartPos,
-        emptyAnchorEndPos,
-        context);
-  }
+    companion object {
+        fun create(
+            prog: Prog,
+            text: InputScanner?,
+            searchStart: Int,
+            searchLimit: Int,
+            endPos: Int,
+            consumeRegionStart: Int,
+            boundaryRegionStart: Int,
+            boundaryEndPos: Int,
+            anchorEndPos: Int,
+            emptyAnchorStartPos: Int,
+            emptyAnchorEndPos: Int,
+            graphemeContext: GraphemeSupport.Context?
+        ): EngineContext {
+            val context: GraphemeSupport.Context? =
+                if (graphemeContext != null)
+                    graphemeContext
+                else
+                    GraphemeSupport.Context.Companion.create(text, prog.hasGraphemeSemantics())
+            return EngineContext(
+                text,
+                searchStart,
+                searchLimit,
+                endPos,
+                consumeRegionStart,
+                boundaryRegionStart,
+                boundaryEndPos,
+                anchorEndPos,
+                emptyAnchorStartPos,
+                emptyAnchorEndPos,
+                context
+            )
+        }
+    }
 }

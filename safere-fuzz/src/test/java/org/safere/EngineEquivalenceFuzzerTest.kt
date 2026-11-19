@@ -2,146 +2,141 @@
 // Original RE2 code is Copyright (c) 2009 The RE2 Authors.
 // Modifications and Java port Copyright (c) 2026 Eddie Aftandilian.
 // Licensed under the BSD 3-Clause License (see LICENSE file).
+package org.safere
 
-package org.safere;
+import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Test
+import java.util.*
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.EnumSet;
-import java.util.Set;
-import org.junit.jupiter.api.Test;
-
-final class EngineEquivalenceFuzzerTest {
-  @Test
-  void diagnosticsProveExecutionOfDistinctEngines() {
-    Set<MatchStrategy> seen = EnumSet.noneOf(MatchStrategy.class);
-    var previous = Pattern.diagnostics();
-    Pattern.setDiagnostics(
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            seen.add(event.boundaryStrategy());
-            seen.add(event.captureStrategy());
-          }
-        });
-    try {
-      for (String regex : new String[] {"a+b", "^a+b$", "(a)?b", ".|"}) {
-        EngineEquivalenceFuzzer.check(regex, "aaab", 0);
-        EngineEquivalenceFuzzer.check(regex, "é😀aaab", 0);
-      }
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-    assertThat(seen)
-        .contains(
-            MatchStrategy.DFA, MatchStrategy.ONE_PASS, MatchStrategy.BIT_STATE, MatchStrategy.NFA);
-  }
-
-  @Test
-  void modelChecksPreserveAndExerciseTheCallersDiagnostics() {
-    var previous = Pattern.diagnostics();
-    int[] operations = {0};
-    var listener =
-        new SafeReMatchDiagnostics() {
-          @Override
-          public void onOperationCompleted(OperationDiagnostics event) {
-            operations[0]++;
-          }
-        };
-    Pattern.setDiagnostics(listener);
-    try {
-      EngineEquivalenceFuzzer.check("a+b", "aaab", 0);
-      assertThat(Pattern.diagnostics()).isSameAs(listener);
-      assertThat(operations[0]).isPositive();
-    } finally {
-      Pattern.setDiagnostics(previous);
-    }
-  }
-
-  @Test
-  void wideLeadingExistenceChecksRejectedAndLaterCandidates() {
-    for (String leading : new String[] {".*", ".*?", "[^;]*", ".+", "^.*", "\\b.*"}) {
-      for (String tail : new String[] {": -", ": disk", ": -\nerror: disk", ": -;error: disk"}) {
-        EngineEquivalenceFuzzer.check(
-            leading + "error: \\w+", "abcdefghijklmnopqrstuvwxyz".repeat(16) + "error" + tail, 0);
-      }
-    }
-  }
-
-  @Test
-  void emptyFindContinuationUsesEachRepresentationsOwnProgression() {
-    EngineEquivalenceFuzzer.check("a|", "😀aaa", 0);
-    EngineEquivalenceFuzzer.check("", "😀", 0);
-  }
-
-  @Test
-  void surrogateInteriorFindAndUnicodePathsAgree() {
-    for (String input : new String[] {"\udb7d\udf02A", "\ud800A", "é😀中a", "\udc00a"}) {
-      for (int start = 0; start <= input.length(); start++)
-        EngineEquivalenceFuzzer.check(".|", input, start);
-    }
-  }
-
-  @Test
-  void leadingRepetitionsPreserveInteriorCursors() {
-    for (String scalar : new String[] {"\\uDC4D", "[\\uDC00-\\uDFFF]", "\\p{Cs}", "."}) {
-      for (String quantifier : new String[] {"*", "*?", "+", "+?"}) {
-        String regex = "(" + scalar + quantifier + ")([ab])(\\b{g})";
-        for (String input : new String[] {"\uD83D\uDC4Da\uD83D\uDC4Db", "\uDC4Da\uDC4Db"}) {
-          for (int start = 0; start <= input.length(); start++) {
-            EngineEquivalenceFuzzer.check(regex, input, start);
-            for (int end = start; end <= input.length(); end++) {
-              for (boolean transparent : new boolean[] {false, true}) {
-                for (boolean anchoring : new boolean[] {false, true}) {
-                  EngineEquivalenceFuzzer.checkRegion(
-                      regex, input, start, end, transparent, anchoring);
+internal class EngineEquivalenceFuzzerTest {
+    @Test
+    fun diagnosticsProveExecutionOfDistinctEngines() {
+        val seen: MutableSet<MatchStrategy?> = EnumSet.noneOf<MatchStrategy?>(MatchStrategy::class.java)
+        val previous = Pattern.diagnostics()
+        Pattern.setDiagnostics(
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics) {
+                    seen.add(event.boundaryStrategy)
+                    seen.add(event.captureStrategy)
                 }
-              }
+            })
+        try {
+            for (regex in arrayOf<String>("a+b", "^a+b$", "(a)?b", ".|")) {
+                EngineEquivalenceFuzzer.Companion.check(regex, "aaab", 0)
+                EngineEquivalenceFuzzer.Companion.check(regex, "é😀aaab", 0)
             }
-          }
+        } finally {
+            Pattern.setDiagnostics(previous)
         }
-      }
+        Assertions.assertThat<MatchStrategy?>(seen)
+            .contains(
+                MatchStrategy.DFA, MatchStrategy.ONE_PASS, MatchStrategy.BIT_STATE, MatchStrategy.NFA
+            )
     }
-  }
 
-  @Test
-  void surrogateLiteralPlansAgreeAcrossEnginesAndRepresentations() {
-    for (String regex :
-        new String[] {
-          "\\x{D800}",
-          "\\x{DC00}",
-          "\"\\x{D800}",
-          "\\x{D800}\\x{DC00}",
-          "\\x{D800}(?:\\x{DC00})",
-          "a\\x{D800}b",
-          "(?iu)k\\x{D800}",
-          ".*\\x{DC00}$",
-          "(?:a\\x{D800}|banana)"
-        }) {
-      for (String input :
-          new String[] {"\"?", "a?b", "\uD800\uDC00", "a\uD800b", "K\uD800", "\uDC00", "banana"}) {
-        EngineEquivalenceFuzzer.check(regex, input, 0);
-      }
-    }
-  }
-
-  @Test
-  void scalarPrefixesAndGraphemeBoundariesAgreeAcrossSearchPaths() {
-    for (String regex :
-        new String[] {"\\p{Cs}\\b{g}", "(\\uDC4D)(\\b{g})", "\\p{So}\\b{g}", "\\b{g}([^a])"}) {
-      for (String input : new String[] {"\uD83D\uDC4D", "a\uD83D\uDC4D\uDC4Da"}) {
-        for (int start = 0; start <= input.length(); start++) {
-          EngineEquivalenceFuzzer.check(regex, input, start);
-          for (int end = start; end <= input.length(); end++) {
-            for (boolean transparent : new boolean[] {false, true}) {
-              for (boolean anchoring : new boolean[] {false, true}) {
-                EngineEquivalenceFuzzer.checkRegion(
-                    regex, input, start, end, transparent, anchoring);
-              }
+    @Test
+    fun modelChecksPreserveAndExerciseTheCallersDiagnostics() {
+        val previous = Pattern.diagnostics()
+        val operations = intArrayOf(0)
+        val listener: SafeReMatchDiagnostics? =
+            object : SafeReMatchDiagnostics() {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    operations[0]++
+                }
             }
-          }
+        Pattern.setDiagnostics(listener)
+        try {
+            EngineEquivalenceFuzzer.Companion.check("a+b", "aaab", 0)
+            Assertions.assertThat<SafeReMatchDiagnostics?>(Pattern.diagnostics()).isSameAs(listener)
+            Assertions.assertThat(operations[0]).isPositive()
+        } finally {
+            Pattern.setDiagnostics(previous)
         }
-      }
     }
-  }
+
+    @Test
+    fun wideLeadingExistenceChecksRejectedAndLaterCandidates() {
+        for (leading in arrayOf<String>(".*", ".*?", "[^;]*", ".+", "^.*", "\\b.*")) {
+            for (tail in arrayOf<String>(": -", ": disk", ": -\nerror: disk", ": -;error: disk")) {
+                EngineEquivalenceFuzzer.Companion.check(
+                    leading + "error: \\w+", "abcdefghijklmnopqrstuvwxyz".repeat(16) + "error" + tail, 0
+                )
+            }
+        }
+    }
+
+    @Test
+    fun emptyFindContinuationUsesEachRepresentationsOwnProgression() {
+        EngineEquivalenceFuzzer.Companion.check("a|", "😀aaa", 0)
+        EngineEquivalenceFuzzer.Companion.check("", "😀", 0)
+    }
+
+    @Test
+    fun surrogateInteriorFindAndUnicodePathsAgree() {
+        for (input in arrayOf<String>("\udb7d\udf02A", "\ud800A", "é😀中a", "\udc00a")) {
+            for (start in 0..input.length) EngineEquivalenceFuzzer.Companion.check(".|", input, start)
+        }
+    }
+
+    @Test
+    fun leadingRepetitionsPreserveInteriorCursors() {
+        for (scalar in arrayOf<String>("\\uDC4D", "[\\uDC00-\\uDFFF]", "\\p{Cs}", ".")) {
+            for (quantifier in arrayOf<String>("*", "*?", "+", "+?")) {
+                val regex = "(" + scalar + quantifier + ")([ab])(\\b{g})"
+                for (input in arrayOf<String>("\uD83D\uDC4Da\uD83D\uDC4Db", "\uDC4Da\uDC4Db")) {
+                    for (start in 0..input.length) {
+                        EngineEquivalenceFuzzer.Companion.check(regex, input, start)
+                        for (end in start..input.length) {
+                            for (transparent in booleanArrayOf(false, true)) {
+                                for (anchoring in booleanArrayOf(false, true)) {
+                                    EngineEquivalenceFuzzer.Companion.checkRegion(
+                                        regex, input, start, end, transparent, anchoring
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun surrogateLiteralPlansAgreeAcrossEnginesAndRepresentations() {
+        for (regex in arrayOf<String>(
+            "\\x{D800}",
+            "\\x{DC00}",
+            "\"\\x{D800}",
+            "\\x{D800}\\x{DC00}",
+            "\\x{D800}(?:\\x{DC00})",
+            "a\\x{D800}b",
+            "(?iu)k\\x{D800}",
+            ".*\\x{DC00}$",
+            "(?:a\\x{D800}|banana)"
+        )) {
+            for (input in arrayOf<String>("\"?", "a?b", "\uD800\uDC00", "a\uD800b", "K\uD800", "\uDC00", "banana")) {
+                EngineEquivalenceFuzzer.Companion.check(regex, input, 0)
+            }
+        }
+    }
+
+    @Test
+    fun scalarPrefixesAndGraphemeBoundariesAgreeAcrossSearchPaths() {
+        for (regex in arrayOf<String>("\\p{Cs}\\b{g}", "(\\uDC4D)(\\b{g})", "\\p{So}\\b{g}", "\\b{g}([^a])")) {
+            for (input in arrayOf<String>("\uD83D\uDC4D", "a\uD83D\uDC4D\uDC4Da")) {
+                for (start in 0..input.length) {
+                    EngineEquivalenceFuzzer.Companion.check(regex, input, start)
+                    for (end in start..input.length) {
+                        for (transparent in booleanArrayOf(false, true)) {
+                            for (anchoring in booleanArrayOf(false, true)) {
+                                EngineEquivalenceFuzzer.Companion.checkRegion(
+                                    regex, input, start, end, transparent, anchoring
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
