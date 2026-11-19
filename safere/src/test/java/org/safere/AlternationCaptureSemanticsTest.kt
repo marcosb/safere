@@ -20,7 +20,7 @@ internal class AlternationCaptureSemanticsTest {
     @DisplayName("compiled alternations preserve JDK-visible capture group count")
     fun compiledAlternationsPreserveCaptureGroupCount(regex: String, flags: Int, input: String) {
         val jdkPattern = java.util.regex.Pattern.compile(regex, flags)
-        val saferePattern = org.safere.Pattern.compile(regex, flags)
+        val saferePattern = Pattern.compile(regex, flags)
 
         Assertions.assertThat(saferePattern.matcher(input).groupCount())
             .`as`("groupCount before match for /%s/ on %s", regex, input)
@@ -82,7 +82,7 @@ internal class AlternationCaptureSemanticsTest {
             regex: String, flags: Int, input: String, operation: Operation
         ) {
             val jdk = java.util.regex.Pattern.compile(regex, flags).matcher(input)
-            val safere = org.safere.Pattern.compile(regex, flags).matcher(input)
+            val safere = Pattern.compile(regex, flags).matcher(input)
 
             val jdkMatched =
                 when (operation) {
@@ -107,7 +107,7 @@ internal class AlternationCaptureSemanticsTest {
         }
 
         private fun assertGroupsMatch(
-            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: org.safere.Matcher
+            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: Matcher
         ) {
             Assertions.assertThat(safere.groupCount()).isEqualTo(jdk.groupCount())
             if (!matched) {

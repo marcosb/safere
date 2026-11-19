@@ -52,7 +52,7 @@ internal class DfaArrayGrowthTest {
                 }
                 val prefix = "\u0000".repeat(count)
                 val regex = "xbw|" + prefix + tail + "$"
-                val pattern = org.safere.Pattern.compile(
+                val pattern = Pattern.compile(
                     regex,
                     org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.UNICODE_CASE
                 )

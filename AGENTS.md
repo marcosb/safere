@@ -13,6 +13,8 @@ and direct UTF-8 matching. Preserve the attribution for its RE2 and RE2/J ancest
 - `safere-crosscheck/`: JDK differential facade and generated public API tests.
 - `safere-fuzz/`: Jazzer differential fuzz targets and regression corpus.
 - `safere-benchmarks/`: JMH suite, workload declarations, and collection tools.
+- `safere-kmp/`: optional Gradle KMP sidecar (kotlin/native host target) for
+  iteratively replacing JVM-only APIs; not part of the Maven reactor.
 - Java 21 is the source baseline; builds use OpenJDK 26 and CI tests JDK 21–26.
   Maven manages the build, JUnit, AssertJ, and JaCoCo versions.
 

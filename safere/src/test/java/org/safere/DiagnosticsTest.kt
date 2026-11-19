@@ -94,9 +94,9 @@ internal class DiagnosticsTest {
         ObjectOutputStream(bytes).use { output ->
             output.writeObject(original)
         }
-        val restored: org.safere.Pattern
+        val restored: Pattern
         ObjectInputStream(ByteArrayInputStream(bytes.toByteArray())).use { input ->
-            restored = input.readObject() as org.safere.Pattern
+            restored = input.readObject() as Pattern
         }
         Assertions.assertThat(restored.patternId()).isPositive().isNotEqualTo(original.patternId())
         Assertions.assertThat(restored.pattern()).isEqualTo(original.pattern())
@@ -668,8 +668,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun dfaSandwichReportsForwardAndReverseSearchCounts() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("[ab]+c")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("[ab]+c")
 
         Assertions.assertThat(pattern.matcher("xxabc").find()).isTrue()
 
@@ -685,9 +685,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun captureHistoryFromEagerResultsPreservesAcceleratedDfaRejection() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         for (utf8 in booleanArrayOf(false, true)) {
-            val pattern = org.safere.Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
+            val pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
             val successful = "error:[C] code:500"
             val rejected = "error:[x] code:500 ".repeat(20)
             if (utf8) {
@@ -721,8 +721,8 @@ internal class DiagnosticsTest {
     @ParameterizedTest
     @MethodSource("captureHistoryFindCases")
     fun captureHistoryKeepsUnanchoredFindDfaFirst(utf8: Boolean, accelerate: Boolean) {
-        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, false)
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern: Pattern = captureHistoryPattern(accelerate, false)
+        Pattern.setDiagnostics(diagnostics)
         val input = "prefix error:[C] code:500 suffix"
         if (utf8) {
             val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
@@ -742,8 +742,8 @@ internal class DiagnosticsTest {
     @ParameterizedTest
     @MethodSource("captureHistoryFindCases")
     fun captureHistoryKeepsUnanchoredRejectionOnDfa(utf8: Boolean, accelerate: Boolean) {
-        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, false)
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern: Pattern = captureHistoryPattern(accelerate, false)
+        Pattern.setDiagnostics(diagnostics)
         // All required literals and an uppercase character occur, but not in a matching arrangement.
         val input = "prefix error:[x] code:500 suffix C"
         if (utf8) {
@@ -759,8 +759,8 @@ internal class DiagnosticsTest {
     @ParameterizedTest
     @MethodSource("captureHistoryFindCases")
     fun captureHistoryPreservesAnchoredFindPreference(utf8: Boolean, accelerate: Boolean) {
-        val pattern: org.safere.Pattern = captureHistoryPattern(accelerate, true)
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        val pattern: Pattern = captureHistoryPattern(accelerate, true)
+        Pattern.setDiagnostics(diagnostics)
         val input = "error:[D] code:500"
         if (utf8) {
             val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
@@ -780,7 +780,7 @@ internal class DiagnosticsTest {
                 })
     }
 
-    private fun assertDfaFindBoundary(pattern: org.safere.Pattern) {
+    private fun assertDfaFindBoundary(pattern: Pattern) {
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
             .last()
             .satisfies(
@@ -792,8 +792,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun replacementCaptureModeAgreesWithCaptureStrategyAcrossTerminalFindFailure() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val deferredPattern = org.safere.Pattern.compile("(a+)b")
+        Pattern.setDiagnostics(diagnostics)
+        val deferredPattern = Pattern.compile("(a+)b")
 
         Assertions.assertThat(deferredPattern.matcher("aaab xx ab").replaceAll("x")).isEqualTo("x xx x")
 
@@ -805,7 +805,7 @@ internal class DiagnosticsTest {
                     Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.DEFERRED)
                 })
 
-        val eagerPattern = org.safere.Pattern.compile("(a+)b")
+        val eagerPattern = Pattern.compile("(a+)b")
         Assertions.assertThat(eagerPattern.matcher("aaab xx ab").replaceAll("$1")).isEqualTo("aaa xx a")
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(eagerPattern))
             .singleElement()
@@ -818,8 +818,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun functionalReplacementAlsoSuppressesNestedFindEvents() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("a")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("a")
 
         Assertions.assertThat(
             pattern.matcher("aba").replaceAll(Function { result: MatchResult? -> result!!.group() + "x" })
@@ -837,7 +837,7 @@ internal class DiagnosticsTest {
 
     @Test
     fun nullableLoopDfaCanAuthoritativelyReject() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val dfaOnly =
             EnginePathOptions.builder()
                 .literalFastPaths(false)
@@ -847,7 +847,7 @@ internal class DiagnosticsTest {
                 .onePass(false)
                 .bitState(false)
                 .build()
-        val pattern = org.safere.Pattern.compile("(?:(a)?)*X", 0, dfaOnly)
+        val pattern = Pattern.compile("(?:(a)?)*X", 0, dfaOnly)
 
         Assertions.assertThat(pattern.matcher("aaaa").find()).isFalse()
 
@@ -880,9 +880,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun usePatternRunsDisjointLiteralPrefilterForReplacementPattern() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val first = org.safere.Pattern.compile("(?:banana\\d|apple\\d)")
-        val replacement = org.safere.Pattern.compile("(?:cherry\\d|pear\\d)")
+        Pattern.setDiagnostics(diagnostics)
+        val first = Pattern.compile("(?:banana\\d|apple\\d)")
+        val replacement = Pattern.compile("(?:cherry\\d|pear\\d)")
         val matcher = first.matcher("apple0 remainder")
 
         Assertions.assertThat(matcher.find()).isTrue()
@@ -905,9 +905,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun prefixCandidateFailureContinuesThroughDfa() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val pattern =
-            org.safere.Pattern.compile("(?s)<block>\\n(\\s)*# (category|group)_defined:.*?\\n</block>")
+            Pattern.compile("(?s)<block>\\n(\\s)*# (category|group)_defined:.*?\\n</block>")
         val input =
             "<block>\n  # comment\n</block> " + "<block>\n  # category_defined: alpha\n</block>"
 
@@ -934,8 +934,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun dfaBoundsCanLeaveCapturesDeferred() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("(a+)b")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("(a+)b")
         val matcher = pattern.matcher("xxaaab")
 
         Assertions.assertThat(matcher.find()).isTrue()
@@ -954,8 +954,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun failedRegexOperationDoesNotEmitAnEvent() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val matcher = org.safere.Pattern.compile("a").matcher("a")
+        Pattern.setDiagnostics(diagnostics)
+        val matcher = Pattern.compile("a").matcher("a")
 
         Assertions.assertThatThrownBy(ThrowingCallable { matcher.find(2) })
             .isInstanceOf(IndexOutOfBoundsException::class.java)
@@ -965,9 +965,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun listenerCanAggregateOperationsFromMultipleThreads() {
-        val pattern = org.safere.Pattern.compile("abc")
+        val pattern = Pattern.compile("abc")
         val events = ConcurrentLinkedQueue<OperationDiagnostics?>()
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
                 override fun onOperationCompleted(event: OperationDiagnostics?) {
                     events.add(event)
@@ -985,9 +985,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun listenerFailurePropagatesAfterMatcherStateIsFinalized() {
-        val pattern = org.safere.Pattern.compile("abc")
+        val pattern = Pattern.compile("abc")
         val matcher = pattern.matcher("abc")
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
                 override fun onOperationCompleted(event: OperationDiagnostics?) {
                     throw IllegalStateException("listener failed")
@@ -1002,16 +1002,16 @@ internal class DiagnosticsTest {
 
     @Test
     fun listenerReplacementResetAndOperationSnapshotAreStable() {
-        val pattern = org.safere.Pattern.compile("abc")
+        val pattern = Pattern.compile("abc")
         val replacement = RecordingDiagnostics()
         val replacingListener: SafeReMatchDiagnostics =
             object : SafeReMatchDiagnostics() {
                 override fun onOperationCompleted(event: OperationDiagnostics?) {
                     diagnostics.operations.add(event!!)
-                    org.safere.Pattern.setDiagnostics(replacement)
+                    Pattern.setDiagnostics(replacement)
                 }
             }
-        org.safere.Pattern.setDiagnostics(replacingListener)
+        Pattern.setDiagnostics(replacingListener)
 
         Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
         Assertions.assertThat<OperationDiagnostics?>(diagnostics.operations).hasSize(1)
@@ -1020,7 +1020,7 @@ internal class DiagnosticsTest {
         Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
         Assertions.assertThat<OperationDiagnostics?>(replacement.operations).hasSize(1)
 
-        org.safere.Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
+        Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
         Assertions.assertThat(pattern.matcher("abc").matches()).isTrue()
         Assertions.assertThat<OperationDiagnostics?>(replacement.operations).hasSize(1)
     }
@@ -1029,8 +1029,8 @@ internal class DiagnosticsTest {
     fun eventsContainOnlyOpaqueIdentityAnalysisAndAggregateInputFacts() {
         val regexSecret = "diagnosticPatternSecret"
         val inputSecret = "prefix-diagnosticInputSecret-suffix"
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(regexSecret)
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(regexSecret)
 
         Assertions.assertThat(pattern.matcher(inputSecret).find()).isFalse()
 
@@ -1045,8 +1045,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun keywordAlternationReportsKeywordStrategy() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("(?i)\\b(error|warning|timeout|failed)\\b")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("(?i)\\b(error|warning|timeout|failed)\\b")
 
         Assertions.assertThat(pattern.matcher("Info: Warning").find()).isTrue()
 
@@ -1056,7 +1056,7 @@ internal class DiagnosticsTest {
 
     @Test
     fun largeInputBypassesBitStateAndReportsNfaFallback() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val exactOnly =
             EnginePathOptions.builder()
                 .literalFastPaths(false)
@@ -1066,7 +1066,7 @@ internal class DiagnosticsTest {
                 .onePass(false)
                 .dfa(false)
                 .build()
-        val pattern = org.safere.Pattern.compile("a+b", 0, exactOnly)
+        val pattern = Pattern.compile("a+b", 0, exactOnly)
 
         Assertions.assertThat(pattern.matcher("a".repeat(100000) + "b").matches()).isTrue()
 
@@ -1087,8 +1087,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun graphemeSemanticsReportUnsupportedOptimizedPathsAndExactFallback() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("\\X")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("\\X")
 
         Assertions.assertThat(pattern.matcher("a\u0301").matches()).isTrue()
 
@@ -1102,11 +1102,11 @@ internal class DiagnosticsTest {
     @Test
     fun dfaBudgetExhaustionReportsFallbackToAnExactEngine() {
         val regex = "[ab]*a" + "[ab]".repeat(14) + "X"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val oracle = java.util.regex.Pattern.compile(regex)
         val observedBudgetFallback = AtomicBoolean()
         val observedForwardSearchCount = AtomicInteger()
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
                 override fun onOperationCompleted(event: OperationDiagnostics?) {
                     if (event!!
@@ -1143,7 +1143,7 @@ internal class DiagnosticsTest {
 
     @Test
     fun exactEngineRespectsRegionAndAnchoringBoundsAndReportsItsStrategy() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val exactOnly =
             EnginePathOptions.builder()
                 .literalFastPaths(false)
@@ -1152,7 +1152,7 @@ internal class DiagnosticsTest {
                 .onePass(false)
                 .dfa(false)
                 .build()
-        val pattern = org.safere.Pattern.compile("^a", 0, exactOnly)
+        val pattern = Pattern.compile("^a", 0, exactOnly)
         val matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true)
 
         Assertions.assertThat(matcher.matches()).isTrue()
@@ -1163,8 +1163,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun exhaustedStartAnchorDoesNotReportPrefilterParticipation() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("^a")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("^a")
         val matcher = pattern.matcher("za").region(1, 2).useAnchoringBounds(true)
 
         Assertions.assertThat(matcher.find()).isTrue()
@@ -1175,12 +1175,12 @@ internal class DiagnosticsTest {
 
     @Test
     fun startAnchoredRejectionReportsPrefilterStrategy() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val cases =
             Map.of<String?, MatchStrategy?>("^target", MatchStrategy.LITERAL, "^[a-z]", MatchStrategy.CHARACTER_CLASS)
 
         cases.forEach { (regex: String?, expectedStrategy: MatchStrategy?) ->
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.matcher("9target").find()).isFalse()
             Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
                 .singleElement()
@@ -1199,9 +1199,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun listenerCanAggregateStrategiesWithLongAdders() {
-        val pattern = org.safere.Pattern.compile("abc")
+        val pattern = Pattern.compile("abc")
         val counts: MutableMap<MatchStrategy?, LongAdder?> = ConcurrentHashMap<MatchStrategy?, LongAdder?>()
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
                 override fun onOperationCompleted(event: OperationDiagnostics?) {
                     counts
@@ -1219,8 +1219,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun variableGapChainsFallBackToGeneralEngine() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
         val input = "2026-08-27 12:00:00 [worker-1] error:[CRITICAL] code:500 msg:crash\n"
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
@@ -1236,8 +1236,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun multiAnchorNegativeShortCircuitBypassesDfa() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(".*error:\\[[A-Z]+\\]\\s+code:500\\s+msg:crash")
         val input = "2026-08-27 12:00:00 [worker-1] error:[NORMAL] code:200 msg:ok\n"
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isFalse()
@@ -1252,10 +1252,10 @@ internal class DiagnosticsTest {
 
     @Test
     fun primaryBitStateAndNfaCaptureSearchesReportEagerCaptureAttribution() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
 
         val nullableLoopBitState =
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 "(?:(a)?)*b", 0, EnginePathOptions.builder().dfa(false).onePass(false).build()
             )
         val matchesMatcher = nullableLoopBitState.matcher("aab")
@@ -1274,7 +1274,7 @@ internal class DiagnosticsTest {
                     Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.BIT_STATE)
                     Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
                 })
-        val nfaPattern = org.safere.Pattern.compile("(\\X)b")
+        val nfaPattern = Pattern.compile("(\\X)b")
         val nfaMatches = nfaPattern.matcher("ab")
         Assertions.assertThat(nfaMatches.matches()).isTrue()
         Assertions.assertThat(nfaMatches.capturesResolved()).isTrue()
@@ -1295,15 +1295,15 @@ internal class DiagnosticsTest {
 
     @Test
     fun regionFindReportsIndependentTextBoundsAndDeferredCaptureAttribution() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
 
-        val independentPattern = org.safere.Pattern.compile("(a+?)b")
+        val independentPattern = Pattern.compile("(a+?)b")
         val independentMatcher = independentPattern.matcher("aab")
         Assertions.assertThat(independentMatcher.find()).isTrue()
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(independentPattern)).hasSize(1)
         val independentEvent: OperationDiagnostics = operationsFor(independentPattern).first()
 
-        val regionPattern = org.safere.Pattern.compile("(a+?)b")
+        val regionPattern = Pattern.compile("(a+?)b")
         val regionMatcher = regionPattern.matcher("xaabx").region(1, 4)
         Assertions.assertThat(regionMatcher.find()).isTrue()
         Assertions.assertThat(regionMatcher.capturesResolved()).isFalse()
@@ -1322,10 +1322,10 @@ internal class DiagnosticsTest {
 
     @Test
     fun deferredExactBoundarySearchesKeepDeferredCaptureAttribution() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
 
         val noDfa = EnginePathOptions.builder().dfa(false).build()
-        val lazyFallbackPattern = org.safere.Pattern.compile("(a+?)b", 0, noDfa)
+        val lazyFallbackPattern = Pattern.compile("(a+?)b", 0, noDfa)
         val lazyFallbackMatcher = lazyFallbackPattern.matcher("xxaab")
         Assertions.assertThat(lazyFallbackMatcher.find()).isTrue()
         Assertions.assertThat(lazyFallbackMatcher.capturesResolved()).isFalse()
@@ -1340,7 +1340,7 @@ internal class DiagnosticsTest {
                 })
         Assertions.assertThat(lazyFallbackMatcher.group(1)).isEqualTo("aa")
 
-        val endAnchoredPattern = org.safere.Pattern.compile("foo(a+?)b$")
+        val endAnchoredPattern = Pattern.compile("foo(a+?)b$")
         val endAnchoredMatcher = endAnchoredPattern.matcher("zzfooaab")
         Assertions.assertThat(endAnchoredMatcher.find()).isTrue()
         Assertions.assertThat(endAnchoredMatcher.capturesResolved()).isFalse()
@@ -1357,8 +1357,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun captureHistoryKeepsAcceleratedCandidateHitsAndMissesOnDfa() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("foo(a+)b")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("foo(a+)b")
 
         val warmup = pattern.matcher("fooaab")
         Assertions.assertThat(warmup.find()).isTrue()
@@ -1395,11 +1395,11 @@ internal class DiagnosticsTest {
 
     @Test
     fun matchesTrailingNewlineNfaFallbackOverridesCaptureAttribution() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
         val noDfa =
             EnginePathOptions.builder().dfa(false).onePass(false).shiftDfa(false).build()
 
-        val fullMatchViaNfa = org.safere.Pattern.compile("^(a+)(\\n??)$", 0, noDfa)
+        val fullMatchViaNfa = Pattern.compile("^(a+)(\\n??)$", 0, noDfa)
         val matched = fullMatchViaNfa.matcher("aa\n")
         Assertions.assertThat(matched.matches()).isTrue()
         Assertions.assertThat(matched.group(1)).isEqualTo("aa")
@@ -1414,7 +1414,7 @@ internal class DiagnosticsTest {
                     Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.EAGER)
                 })
 
-        val rejectedViaNfa = org.safere.Pattern.compile("^(a+?)$", 0, noDfa)
+        val rejectedViaNfa = Pattern.compile("^(a+?)$", 0, noDfa)
         val rejected = rejectedViaNfa.matcher("aa\n")
         Assertions.assertThat(rejected.matches()).isFalse()
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(rejectedViaNfa))
@@ -1430,9 +1430,9 @@ internal class DiagnosticsTest {
 
     @Test
     fun failedOnePassAndKeywordOperationsReportNoCaptureStrategy() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
+        Pattern.setDiagnostics(diagnostics)
 
-        val onePassPattern = org.safere.Pattern.compile("^([a-z]+):(\\d+)$")
+        val onePassPattern = Pattern.compile("^([a-z]+):(\\d+)$")
         // A valid final digit passes terminal rejection so OnePass observes the interior failure.
         val rejectedInput = "abc:nope1"
         Assertions.assertThat(onePassPattern.matcher(rejectedInput).matches()).isFalse()
@@ -1440,7 +1440,7 @@ internal class DiagnosticsTest {
         Assertions.assertThat(onePassPattern.matcher(rejectedInput).replaceFirst("$1")).isEqualTo(rejectedInput)
         Assertions.assertThat(onePassPattern.matcher(rejectedInput).replaceAll("$1")).isEqualTo(rejectedInput)
 
-        val onePassPrefixPattern = org.safere.Pattern.compile("^([a-z]+):(\\d+)")
+        val onePassPrefixPattern = Pattern.compile("^([a-z]+):(\\d+)")
         Assertions.assertThat(onePassPrefixPattern.matcher("abc:nope").lookingAt()).isFalse()
 
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(onePassPattern))
@@ -1462,12 +1462,12 @@ internal class DiagnosticsTest {
                     Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
                 })
 
-        val anchoredKeywordPattern = org.safere.Pattern.compile("(?is).*\\b(you|your)\\b.*")
+        val anchoredKeywordPattern = Pattern.compile("(?is).*\\b(you|your)\\b.*")
         Assertions.assertThat(anchoredKeywordPattern.matcher("nothing matching here").find()).isFalse()
-        val unanchoredKeywordPattern = org.safere.Pattern.compile("(?i)\\b(you|your)\\b")
+        val unanchoredKeywordPattern = Pattern.compile("(?i)\\b(you|your)\\b")
         Assertions.assertThat(unanchoredKeywordPattern.matcher("nothing matching here").find()).isFalse()
 
-        for (pattern in java.util.List.of<org.safere.Pattern>(anchoredKeywordPattern, unanchoredKeywordPattern)) {
+        for (pattern in java.util.List.of<Pattern>(anchoredKeywordPattern, unanchoredKeywordPattern)) {
             Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
                 .singleElement()
                 .satisfies(
@@ -1482,8 +1482,8 @@ internal class DiagnosticsTest {
 
     @Test
     fun literalStartAcceleratorShortCircuitsBeforeInfixRejectPrefilter() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile("status=3\\d\\d took=(\\d+)ms")
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile("status=3\\d\\d took=(\\d+)ms")
         val input = "id=42 status=200 took=12ms\nid=43 status=201 took=8ms\n"
 
         Assertions.assertThat(pattern.matcher(input).find()).isFalse()
@@ -1531,7 +1531,7 @@ internal class DiagnosticsTest {
             "(?i:status=3\\d\\d) took=(\\d+)ms", "\u03b1\u03b2\\d+<<!nav>>\\d+", "er\\d+<<!nav>>\\d+",
         )) {
             diagnostics.operations.clear()
-            val rejectFirst = org.safere.Pattern.compile(regex)
+            val rejectFirst = Pattern.compile(regex)
             val miss = "id=42 status=200 elapsed=12ms\nid=43 status=201 elapsed=8ms\n"
             Assertions.assertThat(rejectFirst.matcher(miss).find()).isFalse()
             Assertions.assertThat(rejectFirst.find(Utf8Input.trusted(miss.toByteArray(StandardCharsets.UTF_8))))
@@ -1558,8 +1558,8 @@ internal class DiagnosticsTest {
     fun captureModeAndCaptureStrategyAgreeWithMatcherStateAcrossOperations(
         regex: String?, matchingInput: String, nonMatchingInput: String
     ) {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(regex)
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(regex)
         val hasCaptures = pattern.analysis().captureCount > 0
 
         for (input in java.util.List.of<String?>(matchingInput, nonMatchingInput)) {
@@ -1615,8 +1615,8 @@ internal class DiagnosticsTest {
         expectPrimary: Boolean,
         expectCaptureExtraction: Boolean
     ) {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(regex, 0, options)
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(regex, 0, options)
         val analysis = pattern.analysis()
 
         if (analysis.limitations!!.contains(PatternLimitation.LAZY_SEMANTICS_LIMIT_ONE_PASS)
@@ -1681,7 +1681,7 @@ internal class DiagnosticsTest {
         }
     }
 
-    private fun operationsFor(pattern: org.safere.Pattern): MutableList<OperationDiagnostics> {
+    private fun operationsFor(pattern: Pattern): MutableList<OperationDiagnostics> {
         val patternId = pattern.patternId()
         return diagnostics.operations.stream()
             .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }
@@ -1691,7 +1691,7 @@ internal class DiagnosticsTest {
     private fun assertCompositeRejection(
         operation: MatchOperation, input: String?, expectedStrategy: MatchStrategy?
     ) {
-        val pattern = org.safere.Pattern.compile(".*x.*needle.*")
+        val pattern = Pattern.compile(".*x.*needle.*")
         val matcher = pattern.matcher(input)
 
         val matched =
@@ -1763,7 +1763,7 @@ internal class DiagnosticsTest {
                 }
         }
 
-        private fun captureHistoryPattern(accelerate: Boolean, anchored: Boolean): org.safere.Pattern {
+        private fun captureHistoryPattern(accelerate: Boolean, anchored: Boolean): Pattern {
             val options =
                 EnginePathOptions.builder()
                     .startAcceleration(accelerate)
@@ -1771,7 +1771,7 @@ internal class DiagnosticsTest {
                     .shiftDfa(false)
                     .build()
             val pattern =
-                org.safere.Pattern.compile((if (anchored) "^" else "") + "(error:\\[)[A-Z](\\] code:500)", 0, options)
+                Pattern.compile((if (anchored) "^" else "") + "(error:\\[)[A-Z](\\] code:500)", 0, options)
             val primer = pattern.matcher("error:[C] code:500")
             Assertions.assertThat(primer.find()).isTrue()
             Assertions.assertThat(primer.group(1)).isEqualTo("error:[")

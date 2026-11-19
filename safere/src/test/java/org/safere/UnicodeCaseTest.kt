@@ -200,7 +200,7 @@ internal class UnicodeCaseTest {
         val flags = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
         Assertions.assertThat(java.util.regex.Pattern.compile(regex, flags).matcher(input).find()).isTrue()
 
-        val pattern = org.safere.Pattern.compile(regex, flags)
+        val pattern = Pattern.compile(regex, flags)
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -240,7 +240,7 @@ internal class UnicodeCaseTest {
         regex: String?, input: String?, expected: Boolean
     ) {
         Assertions.assertThat(
-            org.safere.Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
+            Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
         )
             .isEqualTo(expected)
     }
@@ -271,7 +271,7 @@ internal class UnicodeCaseTest {
         regex: String?, input: String?, expected: Boolean
     ) {
         val flags = org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.UNICODE_CASE
-        Assertions.assertThat(org.safere.Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
+        Assertions.assertThat(Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
     }
 
     @ParameterizedTest
@@ -286,7 +286,7 @@ internal class UnicodeCaseTest {
         regex: String?, input: String?, expected: Boolean
     ) {
         val flags = org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.UNICODE_CASE
-        Assertions.assertThat(org.safere.Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
+        Assertions.assertThat(Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
     }
 
     @ParameterizedTest
@@ -297,7 +297,7 @@ internal class UnicodeCaseTest {
         regex: String?, input: String?, expected: Boolean
     ) {
         val flags = org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.UNICODE_CHARACTER_CLASS
-        Assertions.assertThat(org.safere.Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
+        Assertions.assertThat(Pattern.compile(regex, flags).matcher(input).matches()).isEqualTo(expected)
     }
 
     @ParameterizedTest
@@ -306,7 +306,7 @@ internal class UnicodeCaseTest {
         regex: String?, input: String?, expected: Boolean
     ) {
         Assertions.assertThat(
-            org.safere.Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
+            Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
         )
             .isEqualTo(expected)
     }
@@ -317,7 +317,7 @@ internal class UnicodeCaseTest {
     )
     fun caseInsensitiveLiteralsWithoutUnicodeCaseDoNotUseUnicodeFolds(regex: String?, input: String?) {
         Assertions.assertThat(
-            org.safere.Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
+            Pattern.compile(regex, org.safere.Pattern.CASE_INSENSITIVE).matcher(input).matches()
         ).isFalse()
     }
 
@@ -325,7 +325,7 @@ internal class UnicodeCaseTest {
         private fun assertReplacementFindsSingleCodeUnitUnicodeFoldedPrefix(
             patternCharacter: String?, foldedCharacter: String
         ) {
-            val pattern = org.safere.Pattern.compile("(?iu)" + patternCharacter + ".")
+            val pattern = Pattern.compile("(?iu)" + patternCharacter + ".")
             val input = "--" + foldedCharacter + "x--" + foldedCharacter + "y--"
 
             Assertions.assertThat(pattern.matcher(input).replaceFirst("z"))

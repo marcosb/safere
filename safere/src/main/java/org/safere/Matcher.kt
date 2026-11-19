@@ -470,8 +470,8 @@ class Matcher : MatchResult {
 
     private fun applyGroupZeroMatchResult(start: Int, end: Int): Boolean {
         findExhaustedAfterTerminalEmptyMatch = false
-        groups!![0] = start
-        groups!![1] = end
+        groups[0] = start
+        groups[1] = end
         if (groups.size > 2) {
             Arrays.fill(groups, 2, groups.size, -1)
         }
@@ -490,8 +490,8 @@ class Matcher : MatchResult {
     ): Boolean {
         findExhaustedAfterTerminalEmptyMatch = false
         Arrays.fill(groups, -1)
-        groups!![0] = start
-        groups!![1] = end
+        groups[0] = start
+        groups[1] = end
         deferredMatchStart = start
         deferredMatchEnd = end
         deferredEndMatch = endMatch
@@ -548,7 +548,7 @@ class Matcher : MatchResult {
             if (!groupZeroResolved) {
                 resolveCaptures()
             }
-            previousMatchEnd = groups!![1]
+            previousMatchEnd = groups[1]
         }
     }
 
@@ -946,8 +946,8 @@ class Matcher : MatchResult {
                 is ReplacementSegment.GroupRef -> {
                     val g = seg.groupNum
                     checkGroup(g)
-                    val start = groups!![2 * g]
-                    val end = groups!![2 * g + 1]
+                    val start = groups[2 * g]
+                    val end = groups[2 * g + 1]
                     if (start >= 0 && end >= 0) {
                         sb.append(text, start, end)
                     }
@@ -1018,9 +1018,9 @@ class Matcher : MatchResult {
                 text = savedText
                 textScanner = savedTextScanner
                 if (hasMatch) {
-                    for (i in groups!!.indices) {
-                        if (groups!![i] >= 0) {
-                            groups!![i] += regionStart
+                    for (i in groups.indices) {
+                        if (groups[i] >= 0) {
+                            groups[i] += regionStart
                         }
                     }
                 }
@@ -1263,9 +1263,9 @@ class Matcher : MatchResult {
                 text = savedText
                 textScanner = savedTextScanner
                 if (hasMatch) {
-                    for (i in groups!!.indices) {
-                        if (groups!![i] >= 0) {
-                            groups!![i] += regionStart
+                    for (i in groups.indices) {
+                        if (groups[i] >= 0) {
+                            groups[i] += regionStart
                         }
                     }
                 }
@@ -1379,8 +1379,8 @@ class Matcher : MatchResult {
         if (!groupZeroResolved) {
             resolveCaptures()
         }
-        searchFrom = groups!![1]
-        if (groups!![0] == groups!![1]) {
+        searchFrom = groups[1]
+        if (groups[0] == groups[1]) {
             if (searchFrom >= regionEnd) {
                 applyFailedMatchResult()
                 findExhaustedAfterTerminalEmptyMatch = true
@@ -1584,9 +1584,9 @@ class Matcher : MatchResult {
                 textScanner = savedTextScanner
                 searchFrom = savedSearchFrom
                 if (hasMatch) {
-                    for (i in groups!!.indices) {
-                        if (groups!![i] >= 0) {
-                            groups!![i] += regionStart
+                    for (i in groups.indices) {
+                        if (groups[i] >= 0) {
+                            groups[i] += regionStart
                         }
                     }
                 }
@@ -1610,9 +1610,10 @@ class Matcher : MatchResult {
     /** Installs one independent input view for every opaque region operation.  */
     private fun useRegionInput(savedScanner: InputScanner?) {
         if (cachedRegionScanner == null || cachedRegionStart != regionStart || cachedRegionEnd != regionEnd) {
+            val currentText = text
             cachedRegionScanner =
-                if (text != null)
-                    StringRegionInputScanner(text!!, regionStart, regionEnd)
+                if (currentText != null)
+                    StringRegionInputScanner(currentText, regionStart, regionEnd)
                 else
                     (savedScanner as Utf8InputScanner).slice(regionStart, regionEnd)
             cachedRegionStart = regionStart
@@ -2842,7 +2843,7 @@ class Matcher : MatchResult {
             }
             resolveCaptures()
         }
-        return groups!![2 * group]
+        return groups[2 * group]
     }
 
     /**
@@ -2874,7 +2875,7 @@ class Matcher : MatchResult {
             }
             resolveCaptures()
         }
-        return groups!![2 * group + 1]
+        return groups[2 * group + 1]
     }
 
     /**
@@ -3042,14 +3043,14 @@ class Matcher : MatchResult {
             if (needsCaptures && !groupZeroResolved) {
                 resolveCaptures()
             }
-            val matchStart = if (groupZeroResolved) groups!![0] else deferredMatchStart
-            val matchEnd = if (groupZeroResolved) groups!![1] else deferredMatchEnd
+            val matchStart = if (groupZeroResolved) groups[0] else deferredMatchStart
+            val matchEnd = if (groupZeroResolved) groups[1] else deferredMatchEnd
             sb.append(text, appendPos, matchStart)
             if (needsCaptures) {
                 applyReplacementTemplate(sb, compiledTemplate)
             } else {
-                groups!![0] = matchStart
-                groups!![1] = matchEnd
+                groups[0] = matchStart
+                groups[1] = matchEnd
                 applyReplacementTemplate(sb, compiledTemplate)
             }
             appendPos = matchEnd
@@ -3205,8 +3206,8 @@ class Matcher : MatchResult {
                 firstMatchEnd = matchEnd
             }
 
-            groups!![0] = matchStart
-            groups!![1] = matchEnd
+            groups[0] = matchStart
+            groups[1] = matchEnd
             if (needsCaptures) {
                 Arrays.fill(groups, 2, groups.size, -1)
                 var resultGroups: IntArray?
@@ -3597,8 +3598,8 @@ class Matcher : MatchResult {
             if (!simpleReplacement) {
                 applyGroupZeroMatchResult(matchStart, matchEnd)
                 val compiledTemplate = template!!.get()
-                groups!![0] = matchStart
-                groups!![1] = matchEnd
+                groups[0] = matchStart
+                groups[1] = matchEnd
                 applyReplacementTemplate(sb, compiledTemplate)
             } else {
                 sb.append(replacement)
@@ -3701,8 +3702,8 @@ class Matcher : MatchResult {
             if (simpleReplacement) {
                 sb.append(replacement)
             } else {
-                groups!![0] = matchStart
-                groups!![1] = matchStart + literal.length
+                groups[0] = matchStart
+                groups[1] = matchStart + literal.length
                 applyReplacementTemplate(sb, compiledTemplate!!)
             }
 
@@ -4119,8 +4120,8 @@ class Matcher : MatchResult {
 
     override fun toString(): String {
         var lastMatch = ""
-        if (hasMatch && groups!![0] >= 0 && groups!![1] >= groups!![0]) {
-            lastMatch = text!!.substring(groups!![0], groups!![1])
+        if (hasMatch && groups[0] >= 0 && groups[1] >= groups[0]) {
+            lastMatch = text!!.substring(groups[0], groups[1])
         }
         return ("org.safere.Matcher[pattern="
                 + parentPattern.pattern()
@@ -4150,8 +4151,8 @@ class Matcher : MatchResult {
             if (!groupZeroResolved) {
                 resolveCaptures()
             }
-            val prevStart = groups!![0]
-            val prevEnd = groups!![1]
+            val prevStart = groups[0]
+            val prevEnd = groups[1]
             searchFrom = prevEnd
             if (prevStart == prevEnd && searchFrom < regionEnd) {
                 searchFrom++
@@ -4159,8 +4160,8 @@ class Matcher : MatchResult {
             this.parentPattern = newPattern
             this.groups = IntArray(2 * newPattern.prog().numCaptures())
             Arrays.fill(this.groups, -1)
-            this.groups!![0] = prevStart
-            this.groups!![1] = prevEnd
+            this.groups[0] = prevStart
+            this.groups[1] = prevEnd
             clearDeferredCaptureState()
         } else {
             this.parentPattern = newPattern
@@ -4269,9 +4270,9 @@ class Matcher : MatchResult {
     private fun resolveRegionCaptures() {
         val offset = deferredRegionOffset
         resolveCapturesOnInput(deferredRegionScanner!!)
-        for (i in groups!!.indices) {
-            if (groups!![i] >= 0) {
-                groups!![i] += offset
+        for (i in groups.indices) {
+            if (groups[i] >= 0) {
+                groups[i] += offset
             }
         }
         deferredRegionScanner = null

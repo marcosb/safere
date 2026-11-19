@@ -77,7 +77,7 @@ internal class InnerLiteralActivationTest {
             "clé:[^;]*fin",
             "😀[^;]*終"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val reference = java.util.regex.Pattern.compile(regex)
             for (body in java.util.List.of<String?>(
                 "record:ok_val=200;".repeat(32) + "record:x;".repeat(128) + "record:target_val=200;",

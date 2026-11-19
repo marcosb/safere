@@ -111,7 +111,7 @@ internal class LeadingExpansionEntryPointTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun exhaustedCandidateVerificationFallsBackToAuthoritativeMatching(diagnostics: Boolean) {
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
         // Binary suffix windows require more DFA states than the cache can retain. The trailing
         // window still matches, so cache exhaustion must fall back rather than mean rejection.
@@ -123,7 +123,7 @@ internal class LeadingExpansionEntryPointTest {
         input.append('a').append("b".repeat(14)).append('Z')
         val text = input.toString()
         val regex = "\\s*# noqa[ab]*a[ab]{14}Z"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat<Dfa.SearchResult?>(
             pattern
                 .forwardFirstMatchDfa()
@@ -140,7 +140,7 @@ internal class LeadingExpansionEntryPointTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun replacementSearchDoesNotStartInsideAnIntactSurrogatePair(diagnostics: Boolean) {
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
         for (regex in mutableListOf<String>(
             "\\uDC00[bc]",
@@ -152,7 +152,7 @@ internal class LeadingExpansionEntryPointTest {
             "\\s+\\uDC00[bc]",
             "\\s*\\uDC00[bc]\\b{g}"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val jdk = java.util.regex.Pattern.compile(regex)
             for (input in mutableListOf<String>(
                 "\uDC00b;\uD800\uDC00b",
@@ -171,7 +171,7 @@ internal class LeadingExpansionEntryPointTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun repeatedLiteralPrefixReplacementPreservesMatches(diagnostics: Boolean) {
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
         for (regex in mutableListOf<String>(
             "tag[bc]",
@@ -182,7 +182,7 @@ internal class LeadingExpansionEntryPointTest {
             "^tag[bc]",
             "(?m)^tag[bc]"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val jdk = java.util.regex.Pattern.compile(regex)
             for (input in java.util.List.of<String?>(
                 "",
@@ -209,12 +209,12 @@ internal class LeadingExpansionEntryPointTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun initialSurrogateInteriorCursorRemainsEligibleForLeadingExpansion(diagnostics: Boolean) {
-        org.safere.Pattern.setDiagnostics(
+        Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
         val input = "\uD800\uDC00b; \uDC00c;\uD800\uDC00b"
         for (regex in mutableListOf<String>("\\s*\\uDC00[bc]", "\\s{0,3}\\uDC00[bc]", "\\s*[\\uDC00-\\uDFFF][bc]")) {
             val expected = java.util.regex.Pattern.compile(regex).matcher(input)
-            val actual = org.safere.Pattern.compile(regex).matcher(input)
+            val actual = Pattern.compile(regex).matcher(input)
             Assertions.assertThat(actual.find(1)).isEqualTo(expected.find(1)).isTrue()
             Assertions.assertThat(actual.start()).isEqualTo(expected.start())
             Assertions.assertThat(actual.end()).isEqualTo(expected.end())

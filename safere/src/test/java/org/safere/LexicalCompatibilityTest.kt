@@ -374,12 +374,12 @@ internal class LexicalCompatibilityTest {
             try {
                 expected = java.util.regex.Pattern.compile(regex, flags)
             } catch (e: PatternSyntaxException) {
-                Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, flags) })
+                Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex, flags) })
                     .`as`("rejection of %s with flags %s", regex, flags)
                     .isInstanceOf(PatternSyntaxException::class.java)
                 return
             }
-            val actual = org.safere.Pattern.compile(regex, flags)
+            val actual = Pattern.compile(regex, flags)
             for (input in inputs) {
                 val jdk = expected.matcher(input)
                 val safe = actual.matcher(input)

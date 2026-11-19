@@ -115,7 +115,7 @@ internal class EndAnchoredSearchTest {
                 EnginePathOptions.builder().startAcceleration(false).build(),
                 EnginePathOptions.builder().reverseDfa(false).build()
             )) {
-                val pattern = org.safere.Pattern.compile(regex, 0, options)
+                val pattern = Pattern.compile(regex, 0, options)
                 for (prefix in java.util.List.of<String?>("", "x".repeat(1024), "é😀".repeat(400))) {
                     for (tail in mutableListOf<String>(
                         "",
@@ -168,7 +168,7 @@ internal class EndAnchoredSearchTest {
                 EnginePathOptions.builder().reverseDfa(false).build(),
                 EnginePathOptions.builder().literalFastPaths(false).build()
             )) {
-                val pattern = org.safere.Pattern.compile(regex, 0, options)
+                val pattern = Pattern.compile(regex, 0, options)
                 for (gap in mutableListOf<Int>(0, 1, 7, 63, 64, 65, 127, 511, 1023)) {
                     for (prefix in java.util.List.of<String?>("x".repeat(1024), "é😀".repeat(400))) {
                         for (body in java.util.List.of<String?>(
@@ -200,7 +200,7 @@ internal class EndAnchoredSearchTest {
 
     companion object {
         private fun assertFindSequence(
-            pattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, input: String, utf8: Utf8Input?
+            pattern: Pattern, jdkPattern: java.util.regex.Pattern, input: String, utf8: Utf8Input?
         ) {
             val matcher = pattern.matcher(input)
             val utf8Matcher = pattern.matcher(utf8)

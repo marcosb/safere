@@ -104,8 +104,9 @@ internal interface RejectPrefilter {
         @MaxBytecodeSize(
             value = 37, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
                     + " before searching for patterns with a required literal. Keep it a dispatcher"
-                    + " and put new work in the String or scanner overloads. Kotlin compilation is 37"
-                    + " bytes for the same dispatcher shape.")
+                    + " and put new work in the String or scanner overloads. Kotlin emits 37 bytes for"
+                    + " the same dispatcher shape (BytecodeBudgetTest); it may miss always-inline —"
+                    + " re-measure reject/literal callers before shrinking or growing further.")
         )
         override fun canReject(
             text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?

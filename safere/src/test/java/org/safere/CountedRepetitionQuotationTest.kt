@@ -66,7 +66,7 @@ internal class CountedRepetitionQuotationTest {
     fun emptyQuotesDoNotMakeMalformedCountsOrNonemptyQuotesValid(regex: String) {
         Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
-        Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
     }
 
@@ -76,7 +76,7 @@ internal class CountedRepetitionQuotationTest {
         Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
             .isInstanceOf(PatternSyntaxException::class.java)
         Assertions.assertThatThrownBy(ThrowingCallable {
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 regex,
                 org.safere.Pattern.COMMENTS
             )
@@ -89,7 +89,7 @@ internal class CountedRepetitionQuotationTest {
     fun emptyQuotesDoNotBypassConsumingPossessiveRejection() {
         for (regex in mutableListOf<String>("a{1\\Q\\E,3}+", "a{1,3\\Q\\E}\\Q\\E+")) {
             java.util.regex.Pattern.compile(regex)
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
                 .hasMessageContaining("possessive")
         }
@@ -100,7 +100,7 @@ internal class CountedRepetitionQuotationTest {
     fun emptyQuotesDoNotBypassRepeatBudgets() {
         for (regex in mutableListOf<String>("a{1\\Q\\E001}", "a{0,1\\Q\\E001}", "(?:a{1\\Q\\E,100}){1\\Q\\E,100}")) {
             java.util.regex.Pattern.compile(regex)
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
                 .hasMessageContaining("invalid repeat count")
         }
@@ -156,7 +156,7 @@ internal class CountedRepetitionQuotationTest {
 
         private fun assertSameMatches(regex: String, flags: Int) {
             val expectedPattern = java.util.regex.Pattern.compile(regex, flags)
-            val actualPattern = org.safere.Pattern.compile(regex, flags)
+            val actualPattern = Pattern.compile(regex, flags)
             for (input in INPUTS) {
                 val expected = expectedPattern.matcher(input)
                 val actual = actualPattern.matcher(input)
@@ -178,7 +178,7 @@ internal class CountedRepetitionQuotationTest {
             }
         }
 
-        private fun assertEmptyCaptureMatches(pattern: org.safere.Pattern, participates: Boolean) {
+        private fun assertEmptyCaptureMatches(pattern: Pattern, participates: Boolean) {
             for (input in INPUTS) {
                 val matcher = pattern.matcher(input)
                 Assertions.assertThat(matcher.groupCount()).isEqualTo(1)

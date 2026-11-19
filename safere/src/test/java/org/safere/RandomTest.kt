@@ -151,10 +151,10 @@ internal class RandomTest {
                 val pattern: String = generateRandomRegexp(regexpRng, atoms, ops, maxOps)
 
                 // Try to compile with both engines.
-                val saferePattern: org.safere.Pattern?
+                val saferePattern: Pattern?
                 val jdkPattern: java.util.regex.Pattern?
                 try {
-                    saferePattern = org.safere.Pattern.compile(pattern)
+                    saferePattern = Pattern.compile(pattern)
                 } catch (e: PatternSyntaxException) {
                     skipped++
                     continue
@@ -275,7 +275,7 @@ internal class RandomTest {
          * match: a byte-domain implementation can agree on the first match and still drift on iteration,
          * on how it advances past an empty match, or on group bounds.
          */
-        private fun compareUtf8Domain(pattern: org.safere.Pattern, text: String): String? {
+        private fun compareUtf8Domain(pattern: Pattern, text: String): String? {
             val byteOffsets: IntArray = byteOffsets(text)
             val encoded = text.toByteArray(StandardCharsets.UTF_8)
 

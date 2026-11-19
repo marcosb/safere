@@ -22,7 +22,7 @@ internal class SurrogateLiteralTest {
         Assertions.assertThat(jdkPattern.matcher(input).matches()).isFalse()
         Assertions.assertThat(jdkPattern.matcher(input).lookingAt()).isFalse()
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat(pattern.matcher(input).find()).isFalse()
         Assertions.assertThat(pattern.matcher(input).matches()).isFalse()
         Assertions.assertThat(pattern.matcher(input).lookingAt()).isFalse()
@@ -40,7 +40,7 @@ internal class SurrogateLiteralTest {
         regex: String, input: String, expectedStart: Int, expectedEnd: Int
     ) {
         val expected = java.util.regex.Pattern.compile(regex).matcher(input)
-        val actual = org.safere.Pattern.compile(regex).matcher(input)
+        val actual = Pattern.compile(regex).matcher(input)
 
         Assertions.assertThat(actual.find()).isEqualTo(expected.find()).isTrue()
         Assertions.assertThat(actual.start()).isEqualTo(expected.start()).isEqualTo(expectedStart)
@@ -52,7 +52,7 @@ internal class SurrogateLiteralTest {
     @MethodSource("entryPointCases")
     fun surrogateLiteralsAgreeWithJdkAcrossEntryPoints(regex: String, input: String) {
         val expected = java.util.regex.Pattern.compile(regex)
-        val actual = org.safere.Pattern.compile(regex)
+        val actual = Pattern.compile(regex)
 
         Assertions.assertThat(actual.matcher(input).replaceAll("_"))
             .isEqualTo(expected.matcher(input).replaceAll("_"))

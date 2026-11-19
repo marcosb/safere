@@ -208,7 +208,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun caseSensitiveLiteralSupersedesShiftDfaOnlyWhenEnabled() {
-        val literal = org.safere.Pattern.compile("hello")
+        val literal = Pattern.compile("hello")
         Assertions.assertThat(literal.shiftDfaAnalyzed()).isFalse()
         Assertions.assertThat<ShiftDfa?>(literal.shiftDfa()).isNull()
         Assertions.assertThat<PreparedMatchRunner?>(literal.preparedMatchRunner(false))
@@ -217,7 +217,7 @@ internal class ShiftDfaTest {
             .isInstanceOf(LiteralPreparedRunner::class.java)
 
         val forcedShift =
-            org.safere.Pattern.compile("hello", 0, EnginePathOptions.builder().literalFastPaths(false).build())
+            Pattern.compile("hello", 0, EnginePathOptions.builder().literalFastPaths(false).build())
         Assertions.assertThat(forcedShift.shiftDfaAnalyzed()).isFalse()
         Assertions.assertThat<PreparedMatchRunner?>(forcedShift.preparedMatchRunner(false))
             .isInstanceOf(LazyShiftDfaPreparedRunner::class.java)
@@ -227,7 +227,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun foldedLiteralRetainsUtf8Fallback() {
-        val folded = org.safere.Pattern.compile("hello", org.safere.Pattern.CASE_INSENSITIVE)
+        val folded = Pattern.compile("hello", org.safere.Pattern.CASE_INSENSITIVE)
         Assertions.assertThat(folded.shiftDfaAnalyzed()).isFalse()
         Assertions.assertThat(folded.matcher(Utf8Input.trusted("HELLO".toByteArray(StandardCharsets.UTF_8))).matches())
             .isTrue()
@@ -238,7 +238,7 @@ internal class ShiftDfaTest {
     @Test
     fun disabledShiftDfaIsNotConstructed() {
         val disabled =
-            org.safere.Pattern.compile("(?:true|false) ?", 0, EnginePathOptions.builder().shiftDfa(false).build())
+            Pattern.compile("(?:true|false) ?", 0, EnginePathOptions.builder().shiftDfa(false).build())
         Assertions.assertThat<ShiftDfa?>(disabled.shiftDfa()).isNull()
     }
 
@@ -252,7 +252,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("full pattern matcher integration")
     fun patternMatcherIntegration() {
-        val pattern = org.safere.Pattern.compile("true|false")
+        val pattern = Pattern.compile("true|false")
         val matcher = pattern.matcher("true")
         Assertions.assertThat(matcher.matches()).isTrue()
 
@@ -265,7 +265,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun shiftDfaIsCompiledLazilyOnlyOnMatches() {
-        val pattern = org.safere.Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,4}")
+        val pattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,4}")
         Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
 
         val matcher = pattern.matcher("contact user@example.com for details")
@@ -282,7 +282,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun shiftDfaCachesDisabledWhenStateBudgetExceededOnMatches() {
-        val pattern = org.safere.Pattern.compile("a{9}b?c?")
+        val pattern = Pattern.compile("a{9}b?c?")
         Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
         Assertions.assertThat<PreparedMatchRunner?>(pattern.preparedMatchRunner(false))
             .isInstanceOf(LazyShiftDfaPreparedRunner::class.java)
@@ -298,7 +298,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun minMatchLengthAtLeastMaxStatesSkipsShiftDfaRunnerWithoutDeterminization() {
-        val pattern = org.safere.Pattern.compile("a{10}b*")
+        val pattern = Pattern.compile("a{10}b*")
         Assertions.assertThat(pattern.shiftDfaAnalyzed()).isFalse()
         Assertions.assertThat<PreparedMatchRunner?>(pattern.preparedMatchRunner(false))
             .isNotInstanceOf(ShiftDfaPreparedRunner::class.java)

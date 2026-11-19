@@ -317,7 +317,7 @@ internal class Utf8MatcherStateMachineTest {
 
     @Test
     fun patternEntryPointsRejectNullInput() {
-        val pattern = org.safere.Pattern.compile("a")
+        val pattern = Pattern.compile("a")
 
         Assertions.assertThatThrownBy(ThrowingCallable { pattern.matcher(null as Utf8Input?) })
             .isInstanceOf(NullPointerException::class.java)
@@ -330,7 +330,7 @@ internal class Utf8MatcherStateMachineTest {
         val logical = "xé😀y".toByteArray(StandardCharsets.UTF_8)
         val storage = ByteArray(logical.size + 6)
         System.arraycopy(logical, 0, storage, 3, logical.size)
-        val pattern = org.safere.Pattern.compile("é|😀")
+        val pattern = Pattern.compile("é|😀")
 
         Assertions.assertThat<MutableList<Int?>?>(findTrace(pattern.matcher(Utf8Input.validated(logical))))
             .isEqualTo(findTrace(pattern.matcher(Utf8Input.validated(storage, 3, logical.size))))
@@ -343,7 +343,7 @@ internal class Utf8MatcherStateMachineTest {
         System.arraycopy(logical, 0, storage, 7, logical.size)
         val input = Utf8Input.validated(storage, 7, logical.size)
 
-        val matcher = org.safere.Pattern.compile("é").matcher(input)
+        val matcher = Pattern.compile("é").matcher(input)
 
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -353,24 +353,24 @@ internal class Utf8MatcherStateMachineTest {
 
     @Test
     fun patternBooleanSearchUsesUtf8Input() {
-        val pattern = org.safere.Pattern.compile("😀$")
+        val pattern = Pattern.compile("😀$")
 
         Assertions.assertThat(pattern.find(Utf8Input.validated("x😀".toByteArray(StandardCharsets.UTF_8)))).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated("😀x".toByteArray(StandardCharsets.UTF_8)))).isFalse()
         Assertions.assertThat(
-            org.safere.Pattern.compile("(?<letter>é)|😀")
+            Pattern.compile("(?<letter>é)|😀")
                 .find(Utf8Input.validated("xé".toByteArray(StandardCharsets.UTF_8)))
         )
             .isTrue()
         Assertions.assertThat(
-            org.safere.Pattern.compile("\\Xz").find(Utf8Input.validated("👩‍💻x".toByteArray(StandardCharsets.UTF_8)))
+            Pattern.compile("\\Xz").find(Utf8Input.validated("👩‍💻x".toByteArray(StandardCharsets.UTF_8)))
         )
             .isFalse()
     }
 
     @Test
     fun patternBooleanSearchUsesFixedOffsetLiteralCandidates() {
-        val phone = org.safere.Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
+        val phone = Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
 
         Assertions.assertThat(phone.find(Utf8Input.validated("path /api/42".toByteArray(StandardCharsets.UTF_8))))
             .isFalse()
@@ -386,7 +386,7 @@ internal class Utf8MatcherStateMachineTest {
         val input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
 
         for (regex in mutableListOf<String>("[x]q?", "[xy]q?", "[xz]q?", "[0-9]q?", "[ace@]q?")) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val stringMatcher = pattern.matcher(text)
             val utf8Matcher = pattern.matcher(input)
             val expected: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
@@ -417,7 +417,7 @@ internal class Utf8MatcherStateMachineTest {
 
     @Test
     fun requiredNonAsciiClassRejectsAsciiInputAcrossUtf8EntryPoints() {
-        val pattern = org.safere.Pattern.compile("[一-龥]{3,}")
+        val pattern = Pattern.compile("[一-龥]{3,}")
         val absent = Utf8Input.trusted("ordinary ASCII text".toByteArray(StandardCharsets.UTF_8))
         val present = Utf8Input.validated("prefix中文测试suffix".toByteArray(StandardCharsets.UTF_8))
 
@@ -431,14 +431,14 @@ internal class Utf8MatcherStateMachineTest {
     fun graphemePatternDoesNotSplitMultibyteCodePointInUnanchoredFind() {
         val input = "\u1e99| 5  \u8ed6"
         val utf8Matcher =
-            org.safere.Pattern.compile(".\\X| /0? ?5-")
+            Pattern.compile(".\\X| /0? ?5-")
                 .matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         val actualMatches: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
         while (utf8Matcher.find()) {
             actualMatches.add(java.util.List.of<Int?>(utf8Matcher.start(), utf8Matcher.end()))
         }
 
-        val stringMatcher = org.safere.Pattern.compile(".\\X| /0? ?5-").matcher(input)
+        val stringMatcher = Pattern.compile(".\\X| /0? ?5-").matcher(input)
         val expectedMatches: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
         while (stringMatcher.find()) {
             expectedMatches.add(
@@ -478,7 +478,7 @@ internal class Utf8MatcherStateMachineTest {
                     + "HTTP_other HTTP_next "
                     + "hTtP_almost "
                     + "HTTP_QUERY_final")
-        val p = org.safere.Pattern.compile(pattern)
+        val p = Pattern.compile(pattern)
         val matcher = p.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
 
         Assertions.assertThat(matcher.find()).isTrue()
@@ -494,7 +494,7 @@ internal class Utf8MatcherStateMachineTest {
         val pattern = "(?i)the_zone"
         val noise = "the_alpha the_beta the_gamma the_delta "
         val input = noise.repeat(5) + "THE_ZONE"
-        val p = org.safere.Pattern.compile(pattern)
+        val p = Pattern.compile(pattern)
         val matcher = p.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
 
         Assertions.assertThat(matcher.find()).isTrue()
@@ -506,13 +506,13 @@ internal class Utf8MatcherStateMachineTest {
     companion object {
         private fun assertGraphemePatternsWorkAcrossUtf8Scalars(input: String) {
             val bytes = input.toByteArray(StandardCharsets.UTF_8)
-            val clusters = org.safere.Pattern.compile("\\X").matcher(Utf8Input.validated(bytes))
+            val clusters = Pattern.compile("\\X").matcher(Utf8Input.validated(bytes))
             val actualClusters: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
             while (clusters.find()) {
                 actualClusters.add(java.util.List.of<Int?>(clusters.start(), clusters.end()))
             }
 
-            val stringClusters = org.safere.Pattern.compile("\\X").matcher(input)
+            val stringClusters = Pattern.compile("\\X").matcher(input)
             val expectedClusters: MutableList<MutableList<Int?>?> = ArrayList<MutableList<Int?>?>()
             while (stringClusters.find()) {
                 expectedClusters.add(
@@ -524,12 +524,12 @@ internal class Utf8MatcherStateMachineTest {
             Assertions.assertThat<MutableList<Int?>?>(actualClusters).`as`("grapheme clusters for %s", input)
                 .isEqualTo(expectedClusters)
 
-            val boundaries = org.safere.Pattern.compile("\\b{g}").matcher(Utf8Input.validated(bytes))
+            val boundaries = Pattern.compile("\\b{g}").matcher(Utf8Input.validated(bytes))
             val actualBoundaries: MutableList<Int?> = ArrayList<Int?>()
             while (boundaries.find()) {
                 actualBoundaries.add(boundaries.start())
             }
-            val stringBoundaries = org.safere.Pattern.compile("\\b{g}").matcher(input)
+            val stringBoundaries = Pattern.compile("\\b{g}").matcher(input)
             val expectedBoundaries: MutableList<Int?> = ArrayList<Int?>()
             while (stringBoundaries.find()) {
                 expectedBoundaries.add(utf8Offset(input, stringBoundaries.start()))
@@ -540,12 +540,12 @@ internal class Utf8MatcherStateMachineTest {
         }
 
         private fun matcher(pattern: String?, input: String): Utf8Matcher {
-            return org.safere.Pattern.compile(pattern)
+            return Pattern.compile(pattern)
                 .matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         }
 
         private fun assertKeywordAlternationMatch(regex: String, input: String, regionStart: Int) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val jdkMatcher =
                 java.util.regex.Pattern.compile(regex).matcher(input).region(regionStart, input.length)
             val byteRegionStart: Int = utf8Offset(input, regionStart)

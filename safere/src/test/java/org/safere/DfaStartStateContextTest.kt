@@ -88,7 +88,7 @@ internal class DfaStartStateContextTest {
             ""
         )
 
-        private fun trace(matcher: org.safere.Matcher, from: Int): MutableList<String> {
+        private fun trace(matcher: Matcher, from: Int): MutableList<String> {
             val out: MutableList<String> = ArrayList<String>()
             var found = matcher.find(from)
             while (found) {

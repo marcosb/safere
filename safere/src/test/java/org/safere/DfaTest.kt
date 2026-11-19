@@ -741,7 +741,7 @@ internal class DfaTest {
             var nonNullResults = 0
             for (regex in regexes) {
                 val prog = Compiler.compile(Parser.parse(regex, FLAGS)!!)!!
-                val reverseProg = org.safere.Pattern.compile(regex).flatReverseDfaProg()
+                val reverseProg = Pattern.compile(regex).flatReverseDfaProg()
                 for (budget in intArrayOf(1, 2, 3, 4, 8, 64)) {
                     // Reuse each DFA across searches so a flag left over from an earlier search is caught.
                     val first = Dfa(prog, budget, Dfa.buildSetup(prog), false)
@@ -829,7 +829,7 @@ internal class DfaTest {
                 )
             )
         )) {
-            val reverse = org.safere.Pattern.compile("(?s:.*)abc$").reverseDfa()!!
+            val reverse = Pattern.compile("(?s:.*)abc$").reverseDfa()!!
             for (pass in 0..1) {
                 val probe =
                     reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)!!
@@ -866,7 +866,7 @@ internal class DfaTest {
                     )
                 )) {
                     for (regex in java.util.List.of<String?>("\\b" + tail + "$", "\\B" + tail + "$", tail + "$")) {
-                        val reverse = org.safere.Pattern.compile(regex).reverseDfa()!!
+                        val reverse = Pattern.compile(regex).reverseDfa()!!
                         val full =
                             reverse.doSearchReverse(scanner, scanner.length, 0, true, true)
                         for (limit in 0..16) {
@@ -900,7 +900,7 @@ internal class DfaTest {
                 for (regex in mutableListOf<String>("a", "\\ba|a", "\\Ba|a", "\\ba", "\\Ba", "^a|b", "(?m)^a")) {
                     val expected =
                         java.util.regex.Pattern.compile(regex).matcher(text).find(prefix!!.length)
-                    val reverse = org.safere.Pattern.compile(regex).reverseDfa()!!
+                    val reverse = Pattern.compile(regex).reverseDfa()!!
                     for (pass in 0..1) {
                         val result =
                             reverse.doSearchReverse(
@@ -932,7 +932,7 @@ internal class DfaTest {
                 )
             )) {
                 for (regex in mutableListOf<String>(".", ".|", ".+")) {
-                    val reverse = org.safere.Pattern.compile(regex).reverseDfa()!!
+                    val reverse = Pattern.compile(regex).reverseDfa()!!
                     for (start in 1..<scanner.length) {
                         for (pass in 0..1) {
                             val result =
@@ -972,7 +972,7 @@ internal class DfaTest {
                         c.text.substring(0, c.startLimit).toByteArray(StandardCharsets.UTF_8).size
                     else
                         c.startLimit
-                val reverse = org.safere.Pattern.compile(c.regex).reverseDfa()!!
+                val reverse = Pattern.compile(c.regex).reverseDfa()!!
                 for (pass in 0..1) {
                     val result =
                         reverse.doSearchReverse(scanner, scanner.length, startLimit, true, true)!!
@@ -993,7 +993,7 @@ internal class DfaTest {
             Case("(?m)(\\n?)(\\n|^b)?", "\n\nb", mutableListOf<String>("0:2", "2:3", "3:3")),
             Case("(\\w?)(b|\\b😀)?", "1b😀", mutableListOf<String>("0:2", "2:6", "6:6"))
         )) {
-            val pattern = org.safere.Pattern.compile(c.regex)
+            val pattern = Pattern.compile(c.regex)
             for (pass in 0..1) {
                 val matcher = pattern.matcher(Utf8Input.validated(c.text!!.toByteArray(StandardCharsets.UTF_8)))
                 val spans: MutableList<String> = ArrayList<String>()
@@ -1011,7 +1011,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaPruningCorrectness() {
-        val p = org.safere.Pattern.compile("\\B([^a])*[^a][^a]")
+        val p = Pattern.compile("\\B([^a])*[^a][^a]")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1024,7 +1024,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaDeferredMatchCorrectness() {
-        val p = org.safere.Pattern.compile("\\ba|a")
+        val p = Pattern.compile("\\ba|a")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1043,7 +1043,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaMixedDeferredAndConsumingMatchPreservesDeferredStart() {
-        val p = org.safere.Pattern.compile("(?:(?:\\ba?)|\\B|[^a])a?")
+        val p = Pattern.compile("(?:(?:\\ba?)|\\B|[^a])a?")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1056,7 +1056,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaAsciiFastPathPreservesAnchoredStartFilter() {
-        val p = org.safere.Pattern.compile("^a")
+        val p = Pattern.compile("^a")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1071,7 +1071,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaAsciiFastPathPreservesDeferredMatchAmbiguity() {
-        val p = org.safere.Pattern.compile("(?:\\B{1}|a).")
+        val p = Pattern.compile("(?:\\B{1}|a).")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1088,7 +1088,7 @@ internal class DfaTest {
 
     @Test
     fun reverseDfaAsciiFastPathPreservesAcceptedAfterMatchAmbiguity() {
-        val p = org.safere.Pattern.compile("^(?:\\B|a)b")
+        val p = Pattern.compile("^(?:\\B|a)b")
         val revDfa = p.reverseDfa()!!
         Assertions.assertThat<Dfa?>(revDfa).isNotNull()
 
@@ -1163,7 +1163,7 @@ internal class DfaTest {
 
         @Test
         fun startAccelerationUsesOnlyTheActiveInputSubstrate() {
-            val pattern = org.safere.Pattern.compile("(?m)^foo")
+            val pattern = Pattern.compile("(?m)^foo")
             val dfa = pattern.forwardFirstMatchDfa()
 
             Assertions.assertThat(dfa.hasStartAcceleration(StringInputScanner("foo"))).isTrue()
@@ -1190,7 +1190,7 @@ internal class DfaTest {
             private fun assertNonAsciiEscapeMatches(escape: String) {
                 val pattern = "A[\\x00-\\x21\\x23-\\x7F]*" + escape
                 val text = "A" + "x".repeat(1000) + escape
-                val compiledPattern = org.safere.Pattern.compile(pattern)
+                val compiledPattern = Pattern.compile(pattern)
                 Assertions.assertThat(compiledPattern.matcher(text).find()).isTrue()
                 Assertions.assertThat(compiledPattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))))
                     .isTrue()
@@ -1217,8 +1217,8 @@ internal class DfaTest {
         val input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_"
         val enabled = EnginePathOptions.builder().startAcceleration(true).build()
         val disabled = EnginePathOptions.builder().startAcceleration(false).build()
-        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
-        val control = org.safere.Pattern.compile(regex, 0, disabled)
+        val accelerated = Pattern.compile(regex, 0, enabled)
+        val control = Pattern.compile(regex, 0, disabled)
         val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
 
         Assertions.assertThat(control.find(utf8)).isFalse()
@@ -1233,8 +1233,8 @@ internal class DfaTest {
         val input = "x".repeat(100) + "0cb\r1bacd19c1__19x y_"
         val enabled = EnginePathOptions.builder().startAcceleration(true).build()
         val disabled = EnginePathOptions.builder().startAcceleration(false).build()
-        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
-        val control = org.safere.Pattern.compile(regex, 0, disabled)
+        val accelerated = Pattern.compile(regex, 0, enabled)
+        val control = Pattern.compile(regex, 0, disabled)
 
         Assertions.assertThat(control.matcher(input).find()).isFalse()
         Assertions.assertThat(accelerated.matcher(input).find())
@@ -1248,8 +1248,8 @@ internal class DfaTest {
         val input = "x".repeat(100) + "0cb_bacd19c1__19x y_"
         val enabled = EnginePathOptions.builder().startAcceleration(true).build()
         val disabled = EnginePathOptions.builder().startAcceleration(false).build()
-        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
-        val control = org.safere.Pattern.compile(regex, 0, disabled)
+        val accelerated = Pattern.compile(regex, 0, enabled)
+        val control = Pattern.compile(regex, 0, disabled)
 
         Assertions.assertThat(control.matcher(input).find()).isFalse()
         Assertions.assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find())
@@ -1261,8 +1261,8 @@ internal class DfaTest {
         val input = "x".repeat(100) + "0cb1bacd19c1__19x y_"
         val enabled = EnginePathOptions.builder().startAcceleration(true).build()
         val disabled = EnginePathOptions.builder().startAcceleration(false).build()
-        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
-        val control = org.safere.Pattern.compile(regex, 0, disabled)
+        val accelerated = Pattern.compile(regex, 0, enabled)
+        val control = Pattern.compile(regex, 0, disabled)
 
         Assertions.assertThat(control.matcher(input).find()).isFalse()
         Assertions.assertThat(accelerated.matcher(input).find()).isEqualTo(control.matcher(input).find())
@@ -1273,7 +1273,7 @@ internal class DfaTest {
         val regex = "(b|(?m:^a))cd[0-9]"
         val input = "x".repeat(100) + "0cb\nacd19c1__19x y_"
         val enabled = EnginePathOptions.builder().startAcceleration(true).build()
-        val accelerated = org.safere.Pattern.compile(regex, 0, enabled)
+        val accelerated = Pattern.compile(regex, 0, enabled)
 
         Assertions.assertThat(accelerated.matcher(input).find()).isTrue()
         Assertions.assertThat(accelerated.find(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))).isTrue()
@@ -1281,7 +1281,7 @@ internal class DfaTest {
 
     @Test
     fun automataDerivedStartStateAcceleratesOptionalWhitespaceBracket() {
-        val pattern = org.safere.Pattern.compile("[ \\t]*\\[\\[.*?\\]\\]")
+        val pattern = Pattern.compile("[ \\t]*\\[\\[.*?\\]\\]")
         val text = "x".repeat(1000) + "[[test]]" + "y".repeat(1000)
         Assertions.assertThat(pattern.matcher(text).find()).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
@@ -1297,7 +1297,7 @@ internal class DfaTest {
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(AsciiTripleEscape::class.java)
 
-        val pattern = org.safere.Pattern.compile("apple|banana|cherry")
+        val pattern = Pattern.compile("apple|banana|cherry")
         val text = "x".repeat(500) + "banana" + "y".repeat(500)
         Assertions.assertThat(pattern.matcher(text).find()).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
@@ -1309,7 +1309,7 @@ internal class DfaTest {
 
     @Test
     fun automataDerivedStartStateAcceleratesMultiTokenAlternation() {
-        val pattern = org.safere.Pattern.compile("(?:image-tokens|video-tokens|pdf-tokens)")
+        val pattern = Pattern.compile("(?:image-tokens|video-tokens|pdf-tokens)")
         val text = "x".repeat(500) + "video-tokens" + "y".repeat(500)
         Assertions.assertThat(pattern.matcher(text).find()).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
@@ -1321,7 +1321,7 @@ internal class DfaTest {
 
     @Test
     fun automataDerivedStartStateAcceleratesDisjointRangeAlternation() {
-        val pattern = org.safere.Pattern.compile("[0-9]{3}|[a-z]{3}")
+        val pattern = Pattern.compile("[0-9]{3}|[a-z]{3}")
         val text = "---".repeat(100) + "123" + "---".repeat(100)
         Assertions.assertThat(pattern.matcher(text).find()).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))).isTrue()
@@ -1335,14 +1335,14 @@ internal class DfaTest {
     fun wordBoundaryLongText() {
         val regex = "(?:\\w(?:\\b))"
         val input = "#".repeat(260) + "a"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat(pattern.matcher(input).find()).isTrue()
         Assertions.assertThat(pattern.find(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))).isTrue()
     }
 
     @Test
     fun matchDenseNumericFindAllDoesNotUseStartAcceleration() {
-        val pattern = org.safere.Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
+        val pattern = Pattern.compile("\\d{3}/\\d{3}/\\d{4}")
         val text = ByteArray(32768)
         val random = Random(42)
         for (i in text.indices) {
@@ -1367,7 +1367,7 @@ internal class DfaTest {
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(SingleAsciiEscape::class.java)
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val matching = "a\n".repeat(2048) + "\""
         Assertions.assertThat(pattern.matcher(matching).matches()).isTrue()
         Assertions.assertThat(
@@ -1392,7 +1392,7 @@ internal class DfaTest {
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isNotNull()
         Assertions.assertThat<StateAccelerator?>(s.accelerator).isInstanceOf(AsciiPairEscape::class.java)
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val matching = "a".repeat(4096) + "\""
         Assertions.assertThat(pattern.matcher(matching).matches()).isTrue()
         Assertions.assertThat(
@@ -1409,7 +1409,7 @@ internal class DfaTest {
     @Test
     fun automataDerivedInteriorStateAcceleratesSelfLoop() {
         val regex = "prefix:\\s*[^;]+;\\s*suffix"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val matching = "prefix: " + "a".repeat(4096) + "; suffix"
         Assertions.assertThat(pattern.matcher(matching).find()).isTrue()
@@ -1433,7 +1433,7 @@ internal class DfaTest {
     @Test
     fun adaptiveQuarantineOnAdversarialPeriodicNoise() {
         val regex = "q[0-9]{4}z"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // 2,000 repetitions of "q1234a" (12,000 bytes). Distance between 'q' is 6 bytes.
         // Downstream fails on 'a' instead of 'z'.
@@ -1460,7 +1460,7 @@ internal class DfaTest {
     @Test
     fun burstyHeaderRecoversAccelerationInCleanBody() {
         val regex = "q[0-9]{4}z"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // 100 repetitions of noise (600 bytes header) followed by 50 KB of clean text, ending in a
         // match
@@ -1483,7 +1483,7 @@ internal class DfaTest {
     @Test
     fun denseConsecutiveValidMatchesNotThrottled() {
         val regex = "q[0-9]{4}z"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // 50 valid consecutive matches back-to-back
         val denseMatches = "q1234z".repeat(50)
@@ -1504,7 +1504,7 @@ internal class DfaTest {
 
     @Test
     fun dfaReacceleratesStartStateAfterFalseCandidate() {
-        val pattern = org.safere.Pattern.compile("fo[0-9]+")
+        val pattern = Pattern.compile("fo[0-9]+")
         val text = "foox" + "a".repeat(100000)
         val utf8Input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
         Assertions.assertThat(pattern.find(utf8Input)).isFalse()
@@ -1515,7 +1515,7 @@ internal class DfaTest {
 
     @Test
     fun dfaReacceleratesToNextMatchAfterFalseCandidate() {
-        val pattern = org.safere.Pattern.compile("fo[0-9]+")
+        val pattern = Pattern.compile("fo[0-9]+")
         val text = "foox" + "a".repeat(100000) + "fo123"
         val utf8Input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
         Assertions.assertThat(pattern.find(utf8Input)).isTrue()
@@ -1532,7 +1532,7 @@ internal class DfaTest {
         val text = "#".repeat(260) + "\n\nbb"
         val utf8 = text.toByteArray(StandardCharsets.UTF_8)
 
-        val pat = org.safere.Pattern.compile(regexp, org.safere.Pattern.MULTILINE)
+        val pat = Pattern.compile(regexp, org.safere.Pattern.MULTILINE)
         val utfM = pat.matcher(Utf8Input.validated(utf8))
         Assertions.assertThat(utfM.find()).isTrue()
         Assertions.assertThat(utfM.start()).isEqualTo(261)

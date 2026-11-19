@@ -103,8 +103,8 @@ internal class StartAcceleratorDifferentialTest {
                 "x".repeat(200) + "\nwordmatch rest"
             )
 
-        val accelerated = org.safere.Pattern.compile(regex, 0, ACCELERATED)
-        val control = org.safere.Pattern.compile(regex, 0, UNACCELERATED)
+        val accelerated = Pattern.compile(regex, 0, ACCELERATED)
+        val control = Pattern.compile(regex, 0, UNACCELERATED)
 
         for (input in matchingInputs) {
             val expected = control.matcher(input).find()
@@ -125,8 +125,8 @@ internal class StartAcceleratorDifferentialTest {
     fun exactIssue711Reproducer() {
         val regex = "(b|(?m:^a))c[0-9]"
         val input = "0cb\r1bac19c1__19x y_"
-        val accelerated = org.safere.Pattern.compile(regex, 0, ACCELERATED)
-        val control = org.safere.Pattern.compile(regex, 0, UNACCELERATED)
+        val accelerated = Pattern.compile(regex, 0, ACCELERATED)
+        val control = Pattern.compile(regex, 0, UNACCELERATED)
         val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
 
         Assertions.assertThat(control.find(utf8)).isFalse()

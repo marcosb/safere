@@ -16,7 +16,7 @@ internal class DfaNullableSurrogateFindTest {
     @MethodSource("cases")
     fun findFromSurrogateInteriorMatchesJdk(regex: String, input: String, start: Int) {
         val expected = java.util.regex.Pattern.compile(regex).matcher(input)
-        val actual = org.safere.Pattern.compile(regex).matcher(input)
+        val actual = Pattern.compile(regex).matcher(input)
         Assertions.assertThat(actual.find(start)).isEqualTo(expected.find(start))
         Assertions.assertThat(actual.start()).isEqualTo(expected.start())
         Assertions.assertThat(actual.end()).isEqualTo(expected.end())

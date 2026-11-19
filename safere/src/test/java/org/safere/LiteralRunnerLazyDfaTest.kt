@@ -49,7 +49,7 @@ internal class LiteralRunnerLazyDfaTest {
     fun firstOperationLookingAt() {
         for (regex in PATTERNS) {
             for (text in TEXTS) {
-                val actual = org.safere.Pattern.compile(regex).matcher(text)
+                val actual = Pattern.compile(regex).matcher(text)
                 val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 Assertions.assertThat(actual.lookingAt())
                     .`as`("%s lookingAt %s", regex, text)
@@ -67,14 +67,14 @@ internal class LiteralRunnerLazyDfaTest {
             for (text in TEXTS) {
                 val bytes = text.toByteArray(StandardCharsets.UTF_8)
                 val jdk = java.util.regex.Pattern.compile(regex)
-                Assertions.assertThat(org.safere.Pattern.compile(regex).find(Utf8Input.trusted(bytes)))
+                Assertions.assertThat(Pattern.compile(regex).find(Utf8Input.trusted(bytes)))
                     .`as`("%s find %s", regex, text)
                     .isEqualTo(jdk.matcher(text).find())
-                Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(Utf8Input.trusted(bytes)).matches())
+                Assertions.assertThat(Pattern.compile(regex).matcher(Utf8Input.trusted(bytes)).matches())
                     .`as`("%s matches %s", regex, text)
                     .isEqualTo(jdk.matcher(text).matches())
 
-                val actual = org.safere.Pattern.compile(regex).matcher(Utf8Input.trusted(bytes))
+                val actual = Pattern.compile(regex).matcher(Utf8Input.trusted(bytes))
                 val expected = jdk.matcher(text)
                 while (expected.find()) {
                     Assertions.assertThat(actual.find()).`as`("%s find %s", regex, text).isTrue()
@@ -95,7 +95,7 @@ internal class LiteralRunnerLazyDfaTest {
         val executor = Executors.newFixedThreadPool(threads)
         try {
             for (round in 0..49) {
-                val pattern = org.safere.Pattern.compile("apple|banana|cherry")
+                val pattern = Pattern.compile("apple|banana|cherry")
                 val start = CountDownLatch(1)
                 val results: MutableList<Future<Boolean?>> = ArrayList<Future<Boolean?>>()
                 for (i in 0..<threads) {
@@ -123,7 +123,7 @@ internal class LiteralRunnerLazyDfaTest {
     @MethodSource("sharedArtifacts")
     @Throws(Exception::class)
     fun concurrentFirstUseSharesPreparedArtifact(regex: String?, artifact: String?) {
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat<PreparedMatchRunner?>(pattern.preparedMatchRunner(false))
             .isInstanceOfAny(
                 LiteralPreparedRunner::class.java, LiteralAlternationPreparedRunner::class.java

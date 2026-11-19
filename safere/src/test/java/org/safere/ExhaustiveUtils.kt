@@ -114,9 +114,9 @@ internal object ExhaustiveUtils {
         }
 
         // Try to compile with SafeRE — if it rejects (unsupported feature), skip
-        val saferePat: org.safere.Pattern?
+        val saferePat: Pattern?
         try {
-            saferePat = org.safere.Pattern.compile(regexp, flags)
+            saferePat = Pattern.compile(regexp, flags)
         } catch (e: PatternSyntaxException) {
             return 0
         }
@@ -309,7 +309,7 @@ internal object ExhaustiveUtils {
     }
 
     /** Extract group positions from a SafeRE matcher.  */
-    private fun extractGroups(m: org.safere.Matcher, maxGroups: Int): String {
+    private fun extractGroups(m: Matcher, maxGroups: Int): String {
         val count = min(m.groupCount(), maxGroups)
         val sb = StringBuilder()
         for (i in 0..count) {

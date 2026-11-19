@@ -486,7 +486,7 @@ internal class PredefinedCharClassTest {
         @Test
         @DisplayName("\\v matches same characters as JDK")
         fun vMatchesSameAsJdk() {
-            val safeP = org.safere.Pattern.compile("\\v")
+            val safeP = Pattern.compile("\\v")
             val jdkP = java.util.regex.Pattern.compile("\\v")
             // Test BMP code points up to 0x3000 (covers all \v members plus surroundings)
             for (cp in 0..0x3000) {
@@ -502,7 +502,7 @@ internal class PredefinedCharClassTest {
         @Test
         @DisplayName("\\H matches same characters as JDK")
         fun bigHMatchesSameAsJdk() {
-            val safeP = org.safere.Pattern.compile("\\H")
+            val safeP = Pattern.compile("\\H")
             val jdkP = java.util.regex.Pattern.compile("\\H")
             for (cp in 0..0x3100) {
                 val s = String(Character.toChars(cp))
@@ -517,7 +517,7 @@ internal class PredefinedCharClassTest {
         @Test
         @DisplayName("\\V matches same characters as JDK")
         fun bigVMatchesSameAsJdk() {
-            val safeP = org.safere.Pattern.compile("\\V")
+            val safeP = Pattern.compile("\\V")
             val jdkP = java.util.regex.Pattern.compile("\\V")
             for (cp in 0..0x3000) {
                 val s = String(Character.toChars(cp))

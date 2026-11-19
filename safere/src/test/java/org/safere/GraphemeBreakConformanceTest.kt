@@ -62,7 +62,7 @@ internal class GraphemeBreakConformanceTest {
                     val text = stringInput.toString()
 
                     val stringClusters: MutableList<String> = ArrayList<String>()
-                    val matcher: org.safere.Matcher = SAFERE_GRAPHEME.matcher(text)
+                    val matcher: Matcher = SAFERE_GRAPHEME.matcher(text)
                     while (matcher.find()) {
                         stringClusters.add(matcher.group()!!)
                     }
@@ -143,7 +143,7 @@ internal class GraphemeBreakConformanceTest {
         for (cp in intArrayOf(0x11720, 0x11721)) {
             val sign = Character.toString(cp)
             val text = "a" + sign
-            val matcher: org.safere.Matcher = SAFERE_GRAPHEME.matcher(text)
+            val matcher: Matcher = SAFERE_GRAPHEME.matcher(text)
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.group()).isEqualTo("a")
             Assertions.assertThat(matcher.find()).isTrue()
@@ -154,8 +154,8 @@ internal class GraphemeBreakConformanceTest {
     }
 
     companion object {
-        private val SAFERE_GRAPHEME: org.safere.Pattern = Pattern.compile("\\X")
-        private val SAFERE_BOUNDARY: org.safere.Pattern = Pattern.compile("\\b{g}")
+        private val SAFERE_GRAPHEME: Pattern = Pattern.compile("\\X")
+        private val SAFERE_BOUNDARY: Pattern = Pattern.compile("\\b{g}")
         private val JDK_GRAPHEME: java.util.regex.Pattern = java.util.regex.Pattern.compile("\\X")
 
         private fun runtimeJdkUnicodeMatchesGeneratedTables(): Boolean {
@@ -174,7 +174,7 @@ internal class GraphemeBreakConformanceTest {
             return true
         }
 
-        private fun collectEnds(matcher: org.safere.Matcher, out: IntArray): Int {
+        private fun collectEnds(matcher: Matcher, out: IntArray): Int {
             var n = 0
             while (matcher.find()) {
                 out[n++] = matcher.end()

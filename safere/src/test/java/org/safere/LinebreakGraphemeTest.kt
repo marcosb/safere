@@ -749,7 +749,7 @@ internal class LinebreakGraphemeTest {
             private fun assertFindGroupsSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
                     java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.find()).`as`("SafeRE find() should match")
                     .isEqualTo(jdkMatcher.find())
@@ -764,7 +764,7 @@ internal class LinebreakGraphemeTest {
             private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
                     java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.matches())
                     .`as`("matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -796,7 +796,7 @@ internal class LinebreakGraphemeTest {
             private fun assertSafeReFindBounds(
                 regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String>?
             ) {
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatches: MutableList<String> = ArrayList<String>()
                 while (safeMatcher.find()) {
                     safeMatches.add(safeMatcher.start().toString() + "-" + safeMatcher.end())
@@ -815,7 +815,7 @@ internal class LinebreakGraphemeTest {
                         .region(start, end)
                         .useTransparentBounds(true)
                 val safeMatcher =
-                    org.safere.Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
+                    Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
 
                 Assertions.assertThat(safeMatcher.matches())
                     .`as`("transparent matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -848,14 +848,14 @@ internal class LinebreakGraphemeTest {
             }
 
             private fun allocatedForImmediateTwoClusterFind(
-                allocationTracker: AllocationTracker, threadId: Long, pattern: org.safere.Pattern, text: String?
+                allocationTracker: AllocationTracker, threadId: Long, pattern: Pattern, text: String?
             ): Long {
                 val before = allocationTracker.allocatedBytes(threadId)
                 assertImmediateTwoClusterMatch(pattern, text)
                 return allocationTracker.allocatedBytes(threadId) - before
             }
 
-            private fun assertImmediateTwoClusterMatch(pattern: org.safere.Pattern, text: String?) {
+            private fun assertImmediateTwoClusterMatch(pattern: Pattern, text: String?) {
                 val matcher = pattern.matcher(text)
                 Assertions.assertThat(matcher.find()).isTrue()
                 Assertions.assertThat(matcher.start()).isZero()

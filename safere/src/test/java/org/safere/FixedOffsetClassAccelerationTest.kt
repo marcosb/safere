@@ -165,7 +165,7 @@ internal class FixedOffsetClassAccelerationTest {
         val input = "é😀 noise ".repeat(200) + " 12 12345 6789"
         for (regex in mutableListOf<String>(" ([0-9]{4,})", " ([0-9]{1,3}?)")) {
             val expected = java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("<$1>")
-            Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("<$1>"))
+            Assertions.assertThat(Pattern.compile(regex).matcher(input).replaceAll("<$1>"))
                 .isEqualTo(expected)
         }
     }
@@ -174,7 +174,7 @@ internal class FixedOffsetClassAccelerationTest {
     fun explicitFindStartsAndResetPreserveSearchState() {
         val input = "😀 1234x 56789"
         for (start in 0..input.length) {
-            val safe = org.safere.Pattern.compile(" ([0-9]{4,})").matcher(input)
+            val safe = Pattern.compile(" ([0-9]{4,})").matcher(input)
             val jdk = java.util.regex.Pattern.compile(" ([0-9]{4,})").matcher(input)
             val matched = jdk.find(start)
             Assertions.assertThat(safe.find(start)).isEqualTo(matched)
@@ -196,7 +196,7 @@ internal class FixedOffsetClassAccelerationTest {
     @Test
     fun interiorClassAnalysisIsStackSafeForDeepCaptures() {
         val regex = " " + "(".repeat(2000) + "[0-9]{4,}" + ")".repeat(2000)
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat<StartPlan?>(pattern.startPlan())
             .isInstanceOf(StartPlan.FixedOffsetClass::class.java)
         Assertions.assertThat(pattern.matcher("noise 1234x").find()).isTrue()
@@ -207,9 +207,9 @@ internal class FixedOffsetClassAccelerationTest {
             EnginePathOptions.builder().startAcceleration(false).build()
 
         private fun assertFindSequence(regex: String, input: String, region: Boolean) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val safe = pattern.matcher(input)
-            val unaccelerated = org.safere.Pattern.compile(regex, 0, WITHOUT_ACCELERATION).matcher(input)
+            val unaccelerated = Pattern.compile(regex, 0, WITHOUT_ACCELERATION).matcher(input)
             val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             val padded = ("pad" + input + "tail").toByteArray(StandardCharsets.UTF_8)
             val bytes = Utf8Input.trusted(padded, 3, input.toByteArray(StandardCharsets.UTF_8).size)

@@ -73,7 +73,7 @@ internal class MultilineCrLfDfaCachingTest {
         val jdkResult = java.util.regex.Pattern.compile(regex).matcher(input).find()
         Assertions.assertThat(jdkResult).`as`("JDK result for %s", description).isEqualTo(expected)
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         Assertions.assertThat(pattern.matcher(input).find())
             .`as`("String result for %s", description)
             .isEqualTo(jdkResult)
@@ -85,7 +85,7 @@ internal class MultilineCrLfDfaCachingTest {
     companion object {
         private val LONG_PREFIX = "a".repeat(500)
 
-        private fun assertFindSequence(actual: org.safere.Matcher, regex: String, input: String) {
+        private fun assertFindSequence(actual: Matcher, regex: String, input: String) {
             val expected = java.util.regex.Pattern.compile(regex).matcher(input)
             while (expected.find()) {
                 Assertions.assertThat(actual.find()).isTrue()

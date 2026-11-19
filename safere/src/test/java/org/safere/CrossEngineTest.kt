@@ -12,7 +12,7 @@ import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 
 /**
- * Cross-engine test that runs the same regex patterns and input strings through both SafeRE (`org.safere.Pattern`/`Matcher`) and `java.util.regex.Pattern`/`Matcher`,
+ * Cross-engine test that runs the same regex patterns and input strings through both SafeRE (`Pattern`/`Matcher`) and `java.util.regex.Pattern`/`Matcher`,
  * comparing results.
  * 
  * 
@@ -64,7 +64,7 @@ internal class CrossEngineTest {
     @DisplayName("Cross-engine comparison")
     fun crossEngineComparison(tc: TestCase) {
         // --- Phase 0: Compile with both engines ---
-        val safeRePattern: org.safere.Pattern
+        val safeRePattern: Pattern
         val jdkPattern: java.util.regex.Pattern
 
         // Compile with java.util.regex first (it supports everything).
@@ -78,7 +78,7 @@ internal class CrossEngineTest {
         // Compile with SafeRE.
         if (tc.divergence == Divergence.SAFERE_REJECTS) {
             try {
-                org.safere.Pattern.compile(tc.pattern)
+                Pattern.compile(tc.pattern)
                 Assertions.fail<Any?>(
                     "Expected SafeRE to reject pattern /" + tc.pattern + "/ with PatternSyntaxException"
                 )
@@ -89,7 +89,7 @@ internal class CrossEngineTest {
         }
 
         try {
-            safeRePattern = org.safere.Pattern.compile(tc.pattern)
+            safeRePattern = Pattern.compile(tc.pattern)
         } catch (e: PatternSyntaxException) {
             Assertions.fail<Any?>("SafeRE unexpectedly rejected pattern /" + tc.pattern + "/: " + e.message)
             return  // unreachable, but keeps the compiler happy
@@ -361,7 +361,7 @@ internal class CrossEngineTest {
         // Comparison helpers
         // ---------------------------------------------------------------------------
         private fun compareMatches(
-            safeRePattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
+            safeRePattern: Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
         ) {
             val safeReResult = safeRePattern.matcher(tc.input).matches()
             val jdkResult = jdkPattern.matcher(tc.input).matches()
@@ -378,7 +378,7 @@ internal class CrossEngineTest {
         }
 
         private fun compareFind(
-            safeRePattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
+            safeRePattern: Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
         ) {
             val safeReMatches: MutableList<MatchResult> = collectFinds(safeRePattern.matcher(tc.input))
             val jdkMatches: MutableList<MatchResult> = collectFindsJdk(jdkPattern.matcher(tc.input))
@@ -416,7 +416,7 @@ internal class CrossEngineTest {
         }
 
         private fun compareReplaceAll(
-            safeRePattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
+            safeRePattern: Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
         ) {
             val replacement = "X"
             val safeReResult = safeRePattern.matcher(tc.input).replaceAll(replacement)
@@ -430,7 +430,7 @@ internal class CrossEngineTest {
         }
 
         private fun compareSplit(
-            safeRePattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
+            safeRePattern: Pattern, jdkPattern: java.util.regex.Pattern, tc: TestCase, expectEqual: Boolean
         ) {
             val safeReParts = safeRePattern.split(tc.input!!)
             val jdkParts = jdkPattern.split(tc.input)
@@ -446,7 +446,7 @@ internal class CrossEngineTest {
         // Match-collection helpers
         // ---------------------------------------------------------------------------
         /** Collects all `find()` results from a SafeRE [Matcher].  */
-        private fun collectFinds(matcher: org.safere.Matcher): MutableList<MatchResult> {
+        private fun collectFinds(matcher: Matcher): MutableList<MatchResult> {
             val results: MutableList<MatchResult> = ArrayList<MatchResult>()
             while (matcher.find()) {
                 val gc = matcher.groupCount()

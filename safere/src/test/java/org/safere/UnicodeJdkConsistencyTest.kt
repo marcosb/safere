@@ -255,7 +255,7 @@ internal class UnicodeJdkConsistencyTest {
             runtimeJdkUnicodeMatchesGeneratedTables(),
             "Runtime JDK Unicode repertoire differs from the generator JDK"
         )
-        val m = org.safere.Pattern.compile("(?i)\\p{IsLowercase}").matcher("")
+        val m = Pattern.compile("(?i)\\p{IsLowercase}").matcher("")
         val differences: MutableList<String> = ArrayList<String>()
         for (cp in 0..Character.MAX_CODE_POINT) {
             val expected =

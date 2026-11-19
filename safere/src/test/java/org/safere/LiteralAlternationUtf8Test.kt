@@ -184,8 +184,8 @@ internal class LiteralAlternationUtf8Test {
             'b'.code.toByte()
         )
         for (regex in mutableListOf<String>("apple|banana|cherry", "ab|cherry|abc", "abc|cherry|ab")) {
-            val pattern = org.safere.Pattern.compile(regex)
-            val fallback = org.safere.Pattern.compile(regex, 0, NO_LITERAL_FAST_PATHS)
+            val pattern = Pattern.compile(regex)
+            val fallback = Pattern.compile(regex, 0, NO_LITERAL_FAST_PATHS)
             for (literal in mutableListOf<String>("", "apple", "abc", "cherry")) {
                 val out = ByteArrayOutputStream()
                 for (i in 0..63) {
@@ -205,7 +205,7 @@ internal class LiteralAlternationUtf8Test {
     @Test
     fun fullAndPrefixMatchesAgreeWithJdk() {
         for (regex in PATTERNS) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             for (text in mutableListOf<String>("", "apple", "APPLE", "Apple", "banana", "abc", "ab", "abcé")) {
                 val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 val actual = pattern.matcher(Utf8Input.validated(text!!.toByteArray(StandardCharsets.UTF_8)))
@@ -244,11 +244,11 @@ internal class LiteralAlternationUtf8Test {
             return finds
         }
 
-        private fun utf8Finds(pattern: org.safere.Pattern, text: String): MutableList<String> {
+        private fun utf8Finds(pattern: Pattern, text: String): MutableList<String> {
             return bytesFinds(pattern, text.toByteArray(StandardCharsets.UTF_8))
         }
 
-        private fun bytesFinds(pattern: org.safere.Pattern, bytes: ByteArray?): MutableList<String> {
+        private fun bytesFinds(pattern: Pattern, bytes: ByteArray?): MutableList<String> {
             val finds: MutableList<String> = ArrayList<String>()
             val matcher = pattern.matcher(Utf8Input.trusted(bytes))
             while (matcher.find()) {
@@ -257,7 +257,7 @@ internal class LiteralAlternationUtf8Test {
             return finds
         }
 
-        private fun stringFinds(pattern: org.safere.Pattern, text: String): MutableList<String> {
+        private fun stringFinds(pattern: Pattern, text: String): MutableList<String> {
             val finds: MutableList<String> = ArrayList<String>()
             val matcher = pattern.matcher(text)
             while (matcher.find()) {

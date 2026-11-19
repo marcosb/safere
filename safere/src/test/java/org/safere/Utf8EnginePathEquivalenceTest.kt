@@ -250,7 +250,7 @@ internal class Utf8EnginePathEquivalenceTest {
     private data class GroupTrace(val value: String?, val start: Int, val end: Int)
     companion object {
         private fun replacement(
-            pattern: org.safere.Pattern, input: Utf8Input?, replacement: String, all: Boolean
+            pattern: Pattern, input: Utf8Input?, replacement: String, all: Boolean
         ): String? {
             val output = ByteArrayOutputStream()
             val matcher = pattern.matcher(input)
@@ -406,11 +406,11 @@ internal class Utf8EnginePathEquivalenceTest {
                 .build()
         }
 
-        private fun trace(pattern: org.safere.Pattern, input: String): MutableList<MatchTrace?> {
+        private fun trace(pattern: Pattern, input: String): MutableList<MatchTrace?> {
             return trace(pattern, Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         }
 
-        private fun trace(pattern: org.safere.Pattern, input: Utf8Input?): MutableList<MatchTrace?> {
+        private fun trace(pattern: Pattern, input: Utf8Input?): MutableList<MatchTrace?> {
             val array = input as ArrayUtf8Input
             val matcher = pattern.matcher(input)
             val matches: MutableList<MatchTrace?> = ArrayList<MatchTrace?>()
@@ -435,7 +435,7 @@ internal class Utf8EnginePathEquivalenceTest {
             return matches
         }
 
-        private fun stringOracleTrace(pattern: org.safere.Pattern, input: String): MutableList<MatchTrace?> {
+        private fun stringOracleTrace(pattern: Pattern, input: String): MutableList<MatchTrace?> {
             val matcher = pattern.matcher(input)
             val matches: MutableList<MatchTrace?> = ArrayList<MatchTrace?>()
             while (matcher.find()) {

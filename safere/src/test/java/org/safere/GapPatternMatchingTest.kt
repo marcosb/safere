@@ -55,7 +55,7 @@ internal class GapPatternMatchingTest {
 
     @Test
     fun patternMultiAnchorIntegrationStructure() {
-        val pattern = org.safere.Pattern.compile("header:.*body:.*footer")
+        val pattern = Pattern.compile("header:.*body:.*footer")
         val actual = pattern.multiAnchor()
 
         Assertions.assertThat<StartPlan?>(actual.startPlan())
@@ -68,19 +68,19 @@ internal class GapPatternMatchingTest {
 
     @Test
     fun boundaryGapsRuntimeBehavior() {
-        val anchoredPattern = org.safere.Pattern.compile("^START.*END$")
+        val anchoredPattern = Pattern.compile("^START.*END$")
         Assertions.assertThat(anchoredPattern.matcher("START between END").find()).isTrue()
         Assertions.assertThat(anchoredPattern.matcher("prefix START between END").find()).isFalse()
         Assertions.assertThat(anchoredPattern.matcher("START between END suffix").find()).isFalse()
 
-        val wordPattern = org.safere.Pattern.compile("\\bWORD.*TAIL")
+        val wordPattern = Pattern.compile("\\bWORD.*TAIL")
         Assertions.assertThat(wordPattern.matcher("a WORD with TAIL").find()).isTrue()
         Assertions.assertThat(wordPattern.matcher("NO_WORD with TAIL").find()).isFalse()
     }
 
     @Test
     fun emptyGapsAndAdjacentAnchors() {
-        val pattern = org.safere.Pattern.compile("ABC.*DEF")
+        val pattern = Pattern.compile("ABC.*DEF")
         val text = "ABCDEF"
         val matcher = pattern.matcher(text)
         Assertions.assertThat(matcher.find()).isTrue()
@@ -90,7 +90,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun deferredCaptureExtractionParity() {
         val regex = "A(?<grp1>\\d+)B(?<grp2>[a-z]+)C"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text = "noise A12345BqwertyC trailing"
@@ -108,7 +108,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun multiInfixBasicMatch() {
         val regex = ".*foo.*bar.*baz.*"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "prefix foo intermediate bar trailing baz suffix"
         val matcher = pattern.matcher(text)
@@ -120,7 +120,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun multiInfixPartialMatchNegativeRejection() {
         val regex = ".*foo.*bar.*baz.*"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // "foo" and "bar" present, but "baz" is absent -> instant rejection in Phase 1
         val text = "prefix foo intermediate bar trailing qux suffix"
@@ -131,7 +131,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun multiInfixUtf8Input() {
         val regex = ".*foo.*bar.*baz.*"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val bytes = "prefix foo intermediate bar trailing baz suffix".toByteArray(StandardCharsets.UTF_8)
         val input = Utf8Input.validated(bytes)
@@ -145,7 +145,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun structuredMultiClauseLog() {
         val regex = "error:\\[(\\w+)\\]\\s+code:(\\d+)\\s+msg:([^\n]+)"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "2026-08-27 12:00:00 error:[CRITICAL] code:500 msg:Internal Server Error\n"
         val matcher = pattern.matcher(text)
@@ -159,7 +159,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun singleLineGapNewlineBoundary() {
         val regex = "START[^\n]*MIDDLE[^\n]*END"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // Fails when a newline is present between START and MIDDLE
         val multilineFail = "START some text\nMIDDLE some text END"
@@ -176,7 +176,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun dotallMultiLineSuccess() {
         val regex = "(?s)START.*MIDDLE.*END"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "START line 1\nMIDDLE line 2\nEND"
         val matcher = pattern.matcher(text)
@@ -188,7 +188,7 @@ internal class GapPatternMatchingTest {
     fun adversarialDenseNoiseStillFindsTheMatch() {
         // Pattern looking for A followed by B with bounded noise
         val regex = "A[0-9]{3}B"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         // Dense stream of 5,000 'A's without digits, ending with valid match
         val sb = StringBuilder()
@@ -207,7 +207,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun alternationAnchors() {
         val regex = ".*(GET|POST|PUT)\\s+/api/v1/(users|orders).*"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "Incoming request: POST /api/v1/orders HTTP/1.1"
         val matcher = pattern.matcher(text)
@@ -219,7 +219,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun jdkEquivalenceAcrossOffsets() {
         val regex = "id:([a-z]+)\\s+count:(\\d+)"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text = "noise id:first count:100 intermediate id:second count:200 trailing"
@@ -240,7 +240,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun multiAnchorLogCaptureExtraction() {
         val regex = "error:\\[([A-Z]+)\\]\\s+code:(\\d+)\\s+msg:([a-z]+)"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text = "noise error:[CRITICAL] code:500 msg:crash trailing"
@@ -276,7 +276,7 @@ internal class GapPatternMatchingTest {
     fun quantifiedInternalGapCountsUnicodeCodePoints() {
         assertFirstMatchEqualsJdk("AAA.BB", "AAA😀BB")
 
-        val pattern = org.safere.Pattern.compile("AAA.BB")
+        val pattern = Pattern.compile("AAA.BB")
         val matcher = pattern.matcher(Utf8Input.validated("AAA😀BB".toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(matcher.find()).isTrue()
     }
@@ -294,7 +294,7 @@ internal class GapPatternMatchingTest {
 
     @Test
     fun fixedAnchorChainMatches() {
-        val pattern = org.safere.Pattern.compile("AAA[0-9]BB")
+        val pattern = Pattern.compile("AAA[0-9]BB")
         val matcher = pattern.matcher("noise AAA1BB trailing")
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.group()).isEqualTo("AAA1BB")
@@ -322,7 +322,7 @@ internal class GapPatternMatchingTest {
 
     @Test
     fun foldedSupplementaryLiteralMatchesUtf8() {
-        val pattern = org.safere.Pattern.compile("😀A[0-9]BB", org.safere.Pattern.CASE_INSENSITIVE)
+        val pattern = Pattern.compile("😀A[0-9]BB", org.safere.Pattern.CASE_INSENSITIVE)
 
         val matcher = pattern.matcher(Utf8Input.validated("😀A1BB".toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(matcher.find()).isTrue()
@@ -339,7 +339,7 @@ internal class GapPatternMatchingTest {
     fun rarestAnchorBidirectionalExecution() {
         // "security_alert_code" is rarest anchor at index 2
         val regex = "user:([a-z]+)\\s+action:([a-z]+)\\s+security_alert_code:(\\d+)"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text =
@@ -360,7 +360,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun rarestAnchorBoundedUpstreamVerification() {
         val regex = "PREFIX[0-9]MIDDLE[0-9]RAREST_TOKEN_XYZ[0-9]SUFFIX"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "noise PREFIX1MIDDLE2RAREST_TOKEN_XYZ3SUFFIX trailing"
         val matcher = pattern.matcher(text)
@@ -376,7 +376,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun rarestAnchorUnboundedUpstreamVerification() {
         val regex = "START.*RAREST_ANCHOR_12345.*END"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text = "START noise intermediate RAREST_ANCHOR_12345 more noise END"
@@ -393,7 +393,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun rarestAnchorMultipleOccurrencesLeftmost() {
         val regex = "HEAD[0-9]{2}RAREST[0-9]{2}TAIL"
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
 
         val text = "HEAD11RAREST22TAIL noise HEAD33RAREST44TAIL"
@@ -416,7 +416,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun rarestAnchorUtf8Equivalence() {
         val regex = "tag:([a-z]+)\\s+RAREST_KEY_TOKEN=(\\d+)"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val bytes = "noise tag:alpha RAREST_KEY_TOKEN=42 trailing".toByteArray(StandardCharsets.UTF_8)
         val input = Utf8Input.validated(bytes)
@@ -440,7 +440,7 @@ internal class GapPatternMatchingTest {
     fun utf8ReverseWindowAllowsMultibyteUpstreamLiteral() {
         val regex = "é".repeat(10) + "[0-9]" + "z".repeat(30)
         val text = regex.replace("[0-9]", "7")
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         Assertions.assertThat(pattern.matcher(text).find()).isTrue()
         val matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
@@ -455,7 +455,7 @@ internal class GapPatternMatchingTest {
         val text = "Xaaaaaaaaaazzzzz"
         assertFirstMatchEqualsJdk(regex, text)
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -468,7 +468,7 @@ internal class GapPatternMatchingTest {
         assertFirstMatchEqualsJdk("(?s).TARGET", "abcTARGET")
         assertFirstMatchEqualsJdk("(?s)TARGET.{1,2}", "TARGETabc")
 
-        val pattern = org.safere.Pattern.compile("(?s)TARGET.")
+        val pattern = Pattern.compile("(?s)TARGET.")
         val matcher = pattern.matcher(Utf8Input.validated("TARGET😀x".toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isZero()
@@ -488,7 +488,7 @@ internal class GapPatternMatchingTest {
         val text = "AAA" + "éê".repeat(5) + "BBB"
         assertFirstMatchEqualsJdk(regex, text)
 
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val matcher = pattern.matcher(Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isZero()
@@ -520,7 +520,7 @@ internal class GapPatternMatchingTest {
 
     @Test
     fun singleAnchorWithLeadingWildcardInUtf8() {
-        val pattern = org.safere.Pattern.compile(".*TARGET_KEY")
+        val pattern = Pattern.compile(".*TARGET_KEY")
         val bytes = "prefix data TARGET_KEY trailing".toByteArray(StandardCharsets.UTF_8)
         val input = Utf8Input.validated(bytes)
         val matcher = pattern.matcher(input)
@@ -540,7 +540,7 @@ internal class GapPatternMatchingTest {
         )) {
             val regex: String = testCase!![0]!!
             val text: String = testCase[1]!!
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
 
             assertFirstMatchEqualsJdk(regex, text)
 
@@ -567,7 +567,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun alternationPrefixFactoring() {
         val regex = "(?:application/json|application/xml|application/pdf)"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "Content-Type: application/json; charset=utf-8"
         val matcher = pattern.matcher(text)
@@ -587,7 +587,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun alternationSuffixFactoring() {
         val regex = "(?:https?://|ftp://|sftp://)api/v1/[a-z]+"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "Endpoint: https://api/v1/users and ftp://api/v1/files"
         val matcher = pattern.matcher(text)
@@ -605,7 +605,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun fixedWidthRepetitionDateGap() {
         val regex = "\\d{4}-\\d{2}-\\d{2}"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "Event logged at 2026-08-29 in system"
         val matcher = pattern.matcher(text)
@@ -621,7 +621,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun fixedWidthRepetitionUuidGap() {
         val regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "Request ID: 12345678-abcd-ef01-2345-6789abcdef01 processed"
         val matcher = pattern.matcher(text)
@@ -636,7 +636,7 @@ internal class GapPatternMatchingTest {
     @Test
     fun dynamicCoalescedWeakAnchorChain() {
         val regex = "PREFIX_START_[a-z0-9]{2}_MID_[a-z0-9]{2}_RAREST_FINAL_TOKEN"
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
 
         val text = "noise PREFIX_START_ab_MID_cd_RAREST_FINAL_TOKEN trailing"
         val matcher = pattern.matcher(text)
@@ -651,7 +651,7 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun structuredHeaderGuardByteRejection(useUtf8: Boolean) {
-        val pattern = org.safere.Pattern.compile("header:[^\\r\\n;]*val")
+        val pattern = Pattern.compile("header:[^\\r\\n;]*val")
 
         val valid = "prefix header:custom-content-12345val suffix"
         Assertions.assertThat<String?>(findMatches(pattern, valid, useUtf8))
@@ -677,7 +677,7 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun quotedStringDelimiterGuardByteRejection(useUtf8: Boolean) {
-        val pattern = org.safere.Pattern.compile("\"[^\"]*\"")
+        val pattern = Pattern.compile("\"[^\"]*\"")
 
         val simple = "leading \"hello world\" trailing"
         Assertions.assertThat<String?>(findMatches(pattern, simple, useUtf8)).containsExactly("\"hello world\"")
@@ -690,7 +690,7 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun singleLineDelimiterReverseRejection(useUtf8: Boolean) {
-        val pattern = org.safere.Pattern.compile("START[^\\n]*END")
+        val pattern = Pattern.compile("START[^\\n]*END")
 
         val sameLine = "noise START some content END trailing"
         Assertions.assertThat<String?>(findMatches(pattern, sameLine, useUtf8))
@@ -704,7 +704,7 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun guardedGreedyGapChoosesSuffixBeforeFirstGuard(useUtf8: Boolean) {
-        val pattern = org.safere.Pattern.compile("AAA[^;]*BBB")
+        val pattern = Pattern.compile("AAA[^;]*BBB")
 
         Assertions.assertThat<String?>(findMatches(pattern, "AAABBB;BBB", useUtf8)).containsExactly("AAABBB")
         Assertions.assertThat<String?>(findMatches(pattern, "AAAxxBBB;BBB", useUtf8)).containsExactly("AAAxxBBB")
@@ -714,8 +714,8 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun reverseGuardPruningRetainsUpstreamAnchorContainingGuard(useUtf8: Boolean) {
-        val ascii = org.safere.Pattern.compile("AAA;[^;]RAREBBBB")
-        val nonAscii = org.safere.Pattern.compile("é;[^;]RAREBBBBBBBB")
+        val ascii = Pattern.compile("AAA;[^;]RAREBBBB")
+        val nonAscii = Pattern.compile("é;[^;]RAREBBBBBBBB")
 
         Assertions.assertThat<String?>(findMatches(ascii, "xxAAA;xRAREBBBByy", useUtf8))
             .containsExactly("AAA;xRAREBBBB")
@@ -726,8 +726,8 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun guardedGapWithFallibleContinuationMatches(useUtf8: Boolean) {
-        val greedy = org.safere.Pattern.compile("AAA[^;]*BBB[^;]*CCC")
-        val reluctant = org.safere.Pattern.compile("AAA[^;]*?BBB[^:]*CCC")
+        val greedy = Pattern.compile("AAA[^;]*BBB[^;]*CCC")
+        val reluctant = Pattern.compile("AAA[^;]*?BBB[^:]*CCC")
 
         Assertions.assertThat<String?>(findMatches(greedy, "AAABBBCCCBBB;CCC", useUtf8)).containsExactly("AAABBBCCC")
         Assertions.assertThat<String?>(findMatches(reluctant, "AAABBB:BBBCCC", useUtf8))
@@ -737,9 +737,9 @@ internal class GapPatternMatchingTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun guardedBoundedTrailingGapEndsOnCodePointBoundary(useUtf8: Boolean) {
-        val optional = org.safere.Pattern.compile("AAA[^;]?")
-        val bounded = org.safere.Pattern.compile("AAA[^;]{0,2}")
-        val interior = org.safere.Pattern.compile("AAA[^;]?BBB")
+        val optional = Pattern.compile("AAA[^;]?")
+        val bounded = Pattern.compile("AAA[^;]{0,2}")
+        val interior = Pattern.compile("AAA[^;]?BBB")
 
         Assertions.assertThat<String?>(findMatches(optional, "xxAAA\ud83d\ude00zz", useUtf8))
             .containsExactly("AAA\ud83d\ude00")
@@ -756,30 +756,30 @@ internal class GapPatternMatchingTest {
 
         for (regex in arrayOf<String>("AAA[^;]*\\uDE00BBB", "AAA[^;]?\\uDE00BBB")) {
             Assertions.assertThat(java.util.regex.Pattern.compile(regex).matcher(text).find()).isFalse()
-            Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(text).find()).`as`(regex).isFalse()
+            Assertions.assertThat(Pattern.compile(regex).matcher(text).find()).`as`(regex).isFalse()
         }
 
         val laterValidSuffix = "AAA\ud83d\ude00BBB\ude00BBB"
         val regex = "AAA[^;]*\\uDE00BBB"
         val jdk = java.util.regex.Pattern.compile(regex).matcher(laterValidSuffix)
-        val safeRe = org.safere.Pattern.compile(regex).matcher(laterValidSuffix)
+        val safeRe = Pattern.compile(regex).matcher(laterValidSuffix)
         Assertions.assertThat(jdk.find()).isTrue()
         Assertions.assertThat(safeRe.find()).isTrue()
         Assertions.assertThat(safeRe.group()).isEqualTo(jdk.group())
 
-        Assertions.assertThat(org.safere.Pattern.compile("AAA\\uD83D[^;]*").matcher("AAA\ud83d\ude00").find()).isFalse()
-        Assertions.assertThat(org.safere.Pattern.compile("AAA[^;]*BBB\\uD83D").matcher("AAABBB\ud83d\ude00").find())
+        Assertions.assertThat(Pattern.compile("AAA\\uD83D[^;]*").matcher("AAA\ud83d\ude00").find()).isFalse()
+        Assertions.assertThat(Pattern.compile("AAA[^;]*BBB\\uD83D").matcher("AAABBB\ud83d\ude00").find())
             .isFalse()
 
         val utf8 =
-            org.safere.Pattern.compile(regex)
+            Pattern.compile(regex)
                 .matcher(Utf8Input.validated("AAA?BBB".toByteArray(StandardCharsets.UTF_8)))
         Assertions.assertThat(utf8.find()).isFalse()
     }
 
     @Test
     fun unixLinesDotMatchesCarriageReturnAndStopsAtNewline() {
-        val pattern = org.safere.Pattern.compile("AAA.*BBB", org.safere.Pattern.UNIX_LINES)
+        val pattern = Pattern.compile("AAA.*BBB", org.safere.Pattern.UNIX_LINES)
 
         // Contains \r -> matches because \r is allowed under UNIX_LINES
         val withCr = "AAAcontent\rwith_crBBB"
@@ -804,7 +804,7 @@ internal class GapPatternMatchingTest {
         }
 
         private fun assertFirstMatchEqualsJdk(regex: String, flags: Int, text: String) {
-            val safere = org.safere.Pattern.compile(regex, flags).matcher(text)
+            val safere = Pattern.compile(regex, flags).matcher(text)
             val jdk = java.util.regex.Pattern.compile(regex, flags).matcher(text)
 
             val expected = jdk.find()
@@ -816,7 +816,7 @@ internal class GapPatternMatchingTest {
             }
         }
 
-        private fun findMatches(pattern: org.safere.Pattern, text: String, useUtf8: Boolean): MutableList<String> {
+        private fun findMatches(pattern: Pattern, text: String, useUtf8: Boolean): MutableList<String> {
             val matches: MutableList<String> = ArrayList<String>()
             if (useUtf8) {
                 val bytes = text.toByteArray(StandardCharsets.UTF_8)

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 
 private fun assertMatchesSameAsJdk(regex: String, flags: Int, input: String) {
     val jdkMatches = java.util.regex.Pattern.compile(regex, flags).matcher(input).matches()
-    val safeMatches = org.safere.Pattern.compile(regex, flags).matcher(input).matches()
+    val safeMatches = Pattern.compile(regex, flags).matcher(input).matches()
 
     Assertions.assertThat(safeMatches)
         .`as`("matches() for /%s/ (flags=%d) on \"%s\"", regex, flags, input)
@@ -36,7 +36,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("whitespace in pattern is ignored")
         fun whitespaceIgnored() {
-            val p = org.safere.Pattern.compile("a b c", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a b c", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("abc").matches()).isTrue()
             Assertions.assertThat(p.matcher("a b c").matches()).isFalse()
         }
@@ -44,7 +44,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("tabs and newlines are ignored")
         fun tabsAndNewlinesIgnored() {
-            val p = org.safere.Pattern.compile("a\tb\nc", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a\tb\nc", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("abc").matches()).isTrue()
         }
 
@@ -55,7 +55,7 @@ internal class CommentsTest {
             for (cp in ignoredByJdkComments) {
                 val pattern = "a" + String(Character.toChars(cp)) + "b"
                 Assertions.assertThat(
-                    org.safere.Pattern.compile(pattern, org.safere.Pattern.COMMENTS).matcher("ab").matches()
+                    Pattern.compile(pattern, org.safere.Pattern.COMMENTS).matcher("ab").matches()
                 )
                     .`as`("U+%04X should be ignored in COMMENTS mode", cp)
                     .isTrue()
@@ -64,7 +64,7 @@ internal class CommentsTest {
             val literalInJdkComments = intArrayOf(0x1C, 0x1D, 0x1E, 0x1F, 0x85, 0x1680, 0x2028, 0x2029)
             for (cp in literalInJdkComments) {
                 val ch = String(Character.toChars(cp))
-                val p = org.safere.Pattern.compile(
+                val p = Pattern.compile(
                     "a" + ch + "\\^]",
                     org.safere.Pattern.COMMENTS or org.safere.Pattern.MULTILINE
                 )
@@ -80,7 +80,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("# starts a comment to end of line")
         fun hashComment() {
-            val p = org.safere.Pattern.compile("a # match 'a'\nb", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a # match 'a'\nb", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("ab").matches()).isTrue()
             Assertions.assertThat(p.matcher("a # match 'a'\nb").matches()).isFalse()
         }
@@ -88,14 +88,14 @@ internal class CommentsTest {
         @Test
         @DisplayName("# comment at end of pattern (no trailing newline)")
         fun hashCommentAtEnd() {
-            val p = org.safere.Pattern.compile("ab # trailing comment", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("ab # trailing comment", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("ab").matches()).isTrue()
         }
 
         @Test
         @DisplayName("escaped space is literal")
         fun escapedSpaceLiteral() {
-            val p = org.safere.Pattern.compile("a\\ b", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a\\ b", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("a b").matches()).isTrue()
             Assertions.assertThat(p.matcher("ab").matches()).isFalse()
         }
@@ -103,7 +103,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("escaped # is literal")
         fun escapedHashLiteral() {
-            val p = org.safere.Pattern.compile("a\\#b", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a\\#b", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("a#b").matches()).isTrue()
         }
 
@@ -111,7 +111,7 @@ internal class CommentsTest {
         @DisplayName("multiline verbose pattern")
         fun multilineVerbosePattern() {
             val p =
-                org.safere.Pattern.compile(
+                Pattern.compile(
                     """
               ^           # start of string
               (\d{3})    # area code
@@ -133,7 +133,7 @@ internal class CommentsTest {
         fun verboseBlockCommentReplacementPreservesCapturedText() {
             // Regression for issue #105.
             val p =
-                org.safere.Pattern.compile(
+                Pattern.compile(
                     """
               /[*]
               [\s*]*
@@ -167,7 +167,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("whitespace inside character class is ignored")
         fun whitespaceInCharClassIgnored() {
-            val p = org.safere.Pattern.compile("[a b]", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("[a b]", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("a").matches()).isTrue()
             Assertions.assertThat(p.matcher("b").matches()).isTrue()
             Assertions.assertThat(p.matcher(" ").matches()).isFalse()
@@ -176,7 +176,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("escaped space in character class is literal")
         fun escapedSpaceInCharClass() {
-            val p = org.safere.Pattern.compile("[\\ ]", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("[\\ ]", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher(" ").matches()).isTrue()
             Assertions.assertThat(p.matcher("a").matches()).isFalse()
         }
@@ -187,7 +187,7 @@ internal class CommentsTest {
             val ignoredByJdkComments = intArrayOf('\t'.code, '\n'.code, 0x0B, 0x0C, '\r'.code, ' '.code)
             for (cp in ignoredByJdkComments) {
                 val pattern = "[a" + String(Character.toChars(cp)) + "b]"
-                val p = org.safere.Pattern.compile(pattern, org.safere.Pattern.COMMENTS)
+                val p = Pattern.compile(pattern, org.safere.Pattern.COMMENTS)
                 Assertions.assertThat(p.matcher("a").matches()).isTrue()
                 Assertions.assertThat(p.matcher("b").matches()).isTrue()
                 Assertions.assertThat(p.matcher(String(Character.toChars(cp))).matches())
@@ -198,7 +198,7 @@ internal class CommentsTest {
             val literalInJdkComments = intArrayOf(0x1C, 0x1D, 0x1E, 0x1F, 0x85, 0x1680, 0x2028, 0x2029)
             for (cp in literalInJdkComments) {
                 val ch = String(Character.toChars(cp))
-                val p = org.safere.Pattern.compile("[a" + ch + "b]", org.safere.Pattern.COMMENTS)
+                val p = Pattern.compile("[a" + ch + "b]", org.safere.Pattern.COMMENTS)
                 Assertions.assertThat(p.matcher(ch).matches())
                     .`as`("U+%04X should remain literal inside COMMENTS character classes", cp)
                     .isTrue()
@@ -208,7 +208,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("range in character class with whitespace")
         fun rangeWithWhitespace() {
-            val p = org.safere.Pattern.compile("[ a - z ]", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("[ a - z ]", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("m").matches()).isTrue()
             Assertions.assertThat(p.matcher("A").matches()).isFalse()
         }
@@ -216,7 +216,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("negated character class with whitespace")
         fun negatedCharClassWithWhitespace() {
-            val p = org.safere.Pattern.compile("[^ a - z ]", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("[^ a - z ]", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("A").matches()).isTrue()
             Assertions.assertThat(p.matcher("m").matches()).isFalse()
         }
@@ -231,14 +231,14 @@ internal class CommentsTest {
         @Test
         @DisplayName("(?x) enables comments mode")
         fun inlineXEnablesComments() {
-            val p = org.safere.Pattern.compile("(?x) a b c")
+            val p = Pattern.compile("(?x) a b c")
             Assertions.assertThat(p.matcher("abc").matches()).isTrue()
         }
 
         @Test
         @DisplayName("(?-x) disables comments mode")
         fun inlineMinusXDisablesComments() {
-            val p = org.safere.Pattern.compile("(?x)a b(?-x) c")
+            val p = Pattern.compile("(?x)a b(?-x) c")
             Assertions.assertThat(p.matcher("ab c").matches()).isTrue()
             Assertions.assertThat(p.matcher("abc").matches()).isFalse()
         }
@@ -246,7 +246,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("(?x:...) scoped comments mode")
         fun scopedInlineX() {
-            val p = org.safere.Pattern.compile("(?x: a b) c")
+            val p = Pattern.compile("(?x: a b) c")
             Assertions.assertThat(p.matcher("ab c").matches()).isTrue()
             Assertions.assertThat(p.matcher("abc").matches()).isFalse()
         }
@@ -254,7 +254,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("(?x) with # comment")
         fun inlineXWithComment() {
-            val p = org.safere.Pattern.compile("(?x)a # match a\nb # match b")
+            val p = Pattern.compile("(?x)a # match a\nb # match b")
             Assertions.assertThat(p.matcher("ab").matches()).isTrue()
         }
     }
@@ -268,7 +268,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("COMMENTS | DOTALL")
         fun commentsAndDotall() {
-            val p = org.safere.Pattern.compile("a . b", org.safere.Pattern.COMMENTS or org.safere.Pattern.DOTALL)
+            val p = Pattern.compile("a . b", org.safere.Pattern.COMMENTS or org.safere.Pattern.DOTALL)
             Assertions.assertThat(p.matcher("a\nb").matches()).isTrue()
         }
 
@@ -276,14 +276,14 @@ internal class CommentsTest {
         @DisplayName("COMMENTS | CASE_INSENSITIVE")
         fun commentsAndCaseInsensitive() {
             val p =
-                org.safere.Pattern.compile("a b c", org.safere.Pattern.COMMENTS or org.safere.Pattern.CASE_INSENSITIVE)
+                Pattern.compile("a b c", org.safere.Pattern.COMMENTS or org.safere.Pattern.CASE_INSENSITIVE)
             Assertions.assertThat(p.matcher("ABC").matches()).isTrue()
         }
 
         @Test
         @DisplayName("COMMENTS | MULTILINE")
         fun commentsAndMultiline() {
-            val p = org.safere.Pattern.compile("^ a $", org.safere.Pattern.COMMENTS or org.safere.Pattern.MULTILINE)
+            val p = Pattern.compile("^ a $", org.safere.Pattern.COMMENTS or org.safere.Pattern.MULTILINE)
             Assertions.assertThat(p.matcher("a").find()).isTrue()
             Assertions.assertThat(p.matcher("x\na\ny").find()).isTrue()
         }
@@ -298,28 +298,28 @@ internal class CommentsTest {
         @Test
         @DisplayName("empty pattern with COMMENTS")
         fun emptyPattern() {
-            val p = org.safere.Pattern.compile("", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("").matches()).isTrue()
         }
 
         @Test
         @DisplayName("pattern of only whitespace with COMMENTS")
         fun onlyWhitespace() {
-            val p = org.safere.Pattern.compile("   \t\n   ", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("   \t\n   ", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("").matches()).isTrue()
         }
 
         @Test
         @DisplayName("pattern of only comment with COMMENTS")
         fun onlyComment() {
-            val p = org.safere.Pattern.compile("# just a comment", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("# just a comment", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("").matches()).isTrue()
         }
 
         @Test
         @DisplayName("\\Q...\\E quoting preserves whitespace under COMMENTS")
         fun quotingPreservesWhitespace() {
-            val p = org.safere.Pattern.compile("\\Q a b \\E", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("\\Q a b \\E", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher(" a b ").matches()).isTrue()
             Assertions.assertThat(p.matcher("ab").matches()).isFalse()
         }
@@ -340,14 +340,14 @@ internal class CommentsTest {
         @Test
         @DisplayName("quantifiers with whitespace in COMMENTS mode")
         fun quantifiersWithWhitespace() {
-            val p = org.safere.Pattern.compile("a +", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a +", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("aaa").matches()).isTrue()
         }
 
         @Test
         @DisplayName("alternation with whitespace in COMMENTS mode")
         fun alternationWithWhitespace() {
-            val p = org.safere.Pattern.compile("a | b", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("a | b", org.safere.Pattern.COMMENTS)
             Assertions.assertThat(p.matcher("a").matches()).isTrue()
             Assertions.assertThat(p.matcher("b").matches()).isTrue()
         }
@@ -355,7 +355,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("group with whitespace in COMMENTS mode")
         fun groupWithWhitespace() {
-            val p = org.safere.Pattern.compile("( a ) ( b )", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("( a ) ( b )", org.safere.Pattern.COMMENTS)
             val m = p.matcher("ab")
             Assertions.assertThat(m.matches()).isTrue()
             Assertions.assertThat(m.group(1)).isEqualTo("a")
@@ -365,7 +365,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("COMMENTS has no effect with LITERAL flag")
         fun commentsWithLiteral() {
-            val p = org.safere.Pattern.compile("a b", org.safere.Pattern.COMMENTS or org.safere.Pattern.LITERAL)
+            val p = Pattern.compile("a b", org.safere.Pattern.COMMENTS or org.safere.Pattern.LITERAL)
             // LITERAL takes precedence — the pattern is the literal string "a b"
             Assertions.assertThat(p.matcher("a b").matches()).isTrue()
             Assertions.assertThat(p.matcher("ab").matches()).isFalse()
@@ -374,7 +374,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("find mode with COMMENTS")
         fun findModeWithComments() {
-            val p = org.safere.Pattern.compile("\\d + \\. \\d +", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("\\d + \\. \\d +", org.safere.Pattern.COMMENTS)
             val m = p.matcher("price is 3.14 dollars")
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.group()).isEqualTo("3.14")
@@ -383,7 +383,7 @@ internal class CommentsTest {
         @Test
         @DisplayName("replaceAll with COMMENTS")
         fun replaceAllWithComments() {
-            val p = org.safere.Pattern.compile("\\s +", org.safere.Pattern.COMMENTS)
+            val p = Pattern.compile("\\s +", org.safere.Pattern.COMMENTS)
             val result = p.matcher("hello   world").replaceAll(" ")
             Assertions.assertThat(result).isEqualTo("hello world")
         }

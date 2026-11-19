@@ -130,10 +130,10 @@ internal class RE2ExhaustiveTest {
                     // Skip \C patterns (match-any-byte, not applicable to Java)
                     var skip = pattern.contains("\\C")
 
-                    var compiledPat: org.safere.Pattern? = null
+                    var compiledPat: Pattern? = null
                     if (!skip) {
                         try {
-                            compiledPat = org.safere.Pattern.compile(pattern)
+                            compiledPat = Pattern.compile(pattern)
                         } catch (e: PatternSyntaxException) {
                             skip = true
                         }
@@ -454,7 +454,7 @@ internal class RE2ExhaustiveTest {
                 return false
             }
             try {
-                val safeRePattern = org.safere.Pattern.compile(pattern)
+                val safeRePattern = Pattern.compile(pattern)
                 val features = safeRePattern.analysis().features!!
                 if (!features.contains(PatternFeature.BOUNDED_REPEAT) || !features.contains(PatternFeature.CAPTURES_IN_QUANTIFIER)) {
                     return false
@@ -503,7 +503,7 @@ internal class RE2ExhaustiveTest {
             }
 
             try {
-                val safeReMatcher = org.safere.Pattern.compile(pattern).matcher(text)
+                val safeReMatcher = Pattern.compile(pattern).matcher(text)
                 val jdkMatcher = java.util.regex.Pattern.compile(pattern).matcher(text)
                 val safeReFound = safeReMatcher.find()
                 val jdkFound = jdkMatcher.find()

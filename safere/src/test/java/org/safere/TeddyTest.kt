@@ -241,7 +241,7 @@ internal class TeddyTest {
 
     @Test
     fun teddyUtf16NonLatin1StringMatch() {
-        val p = org.safere.Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE")
+        val p = Pattern.compile("GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE")
         // Non-Latin-1 string (UTF-16 coder = 1) containing Japanese text and emojis
         val text = "リクエストログ: POST /api/v1/user 📦 レスポンス受信後に GET /api/v1/user 🚀 完了"
 
@@ -260,7 +260,7 @@ internal class TeddyTest {
     @ParameterizedTest
     @ValueSource(ints = [0, 1, 15, 16, 31, 32, 63, 64, 127, 128])
     fun teddyUtf16WithNonAsciiPadding(padding: Int) {
-        val p = org.safere.Pattern.compile(US_STATES)
+        val p = Pattern.compile(US_STATES)
         val nonAsciiPad = "あ".repeat(padding)
         val text = nonAsciiPad + "CA" + nonAsciiPad + "NY" + nonAsciiPad + "TX"
 
@@ -282,7 +282,7 @@ internal class TeddyTest {
 
     @Test
     fun teddyUtf16AbsentWithNonAsciiText() {
-        val p = org.safere.Pattern.compile(US_STATES)
+        val p = Pattern.compile(US_STATES)
         val text = "こんにちは世界！これは日本語のテキストです。".repeat(50)
 
         val m = p.matcher(text)

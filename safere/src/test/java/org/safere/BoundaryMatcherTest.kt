@@ -434,7 +434,7 @@ internal class BoundaryMatcherTest {
         companion object {
             private fun assertFindSameAsJdk(regex: String, input: String) {
                 val jdkMatcher = java.util.regex.Pattern.compile(regex).matcher(input)
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input)
+                val safeMatcher = Pattern.compile(regex).matcher(input)
 
                 val jdkMatches: MutableList<IntArray?> = ArrayList<IntArray?>()
                 while (jdkMatcher.find()) {
@@ -454,7 +454,7 @@ internal class BoundaryMatcherTest {
             private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
                     java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.matches())
                     .`as`("matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -491,7 +491,7 @@ internal class BoundaryMatcherTest {
             }
 
             private fun assertNoMatchInRegion(regex: String?, input: String?, start: Int, end: Int) {
-                val matcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val matcher = Pattern.compile(regex).matcher(input).region(start, end)
                 Assertions.assertThat(matcher.matches()).`as`("matches() for /%s/ on %s", regex, input).isFalse()
                 Assertions.assertThat(matcher.lookingAt()).`as`("lookingAt() for /%s/ on %s", regex, input).isFalse()
                 Assertions.assertThat(matcher.find()).`as`("find() for /%s/ on %s", regex, input).isFalse()
@@ -500,7 +500,7 @@ internal class BoundaryMatcherTest {
             private fun assertSafeReFindBounds(
                 regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String>?
             ) {
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatches: MutableList<String> = ArrayList<String>()
                 while (safeMatcher.find()) {
                     safeMatches.add(safeMatcher.start().toString() + "-" + safeMatcher.end())
@@ -519,7 +519,7 @@ internal class BoundaryMatcherTest {
                         .region(start, end)
                         .useTransparentBounds(true)
                 val safeMatcher =
-                    org.safere.Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
+                    Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
 
                 Assertions.assertThat(safeMatcher.matches())
                     .`as`("transparent matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -566,7 +566,7 @@ internal class BoundaryMatcherTest {
             ) {
                 val jdkMatcher =
                     java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+                val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
                 val jdkMatches = capturedFindTrace(jdkMatcher)
                 val safeMatches = capturedFindTrace(safeMatcher)
@@ -584,7 +584,7 @@ internal class BoundaryMatcherTest {
                 return trace
             }
 
-            private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String> {
+            private fun capturedFindTrace(matcher: Matcher): MutableList<String> {
                 val trace: MutableList<String> = ArrayList<String>()
                 while (matcher.find()) {
                     trace.add(capturedMatchTrace(matcher))
@@ -602,7 +602,7 @@ internal class BoundaryMatcherTest {
                 return builder.toString()
             }
 
-            private fun capturedMatchTrace(matcher: org.safere.Matcher): String {
+            private fun capturedMatchTrace(matcher: Matcher): String {
                 val builder = StringBuilder()
                 builder.append(matcher.start()).append('-').append(matcher.end()).append(':')
                 builder.append(matcher.group())
@@ -645,7 +645,7 @@ internal class BoundaryMatcherTest {
         fun dollarOrWordBoundary() {
             // Regression for issue #42: find() must choose the leftmost boundary, not the first
             // alternative that can match later.
-            val m = org.safere.Pattern.compile("(?:$|\\b)").matcher(" a")
+            val m = Pattern.compile("(?:$|\\b)").matcher(" a")
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.start()).isEqualTo(1)
             Assertions.assertThat(m.end()).isEqualTo(1)
@@ -654,7 +654,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("(?:\\b|$) finds the word boundary before the first word character")
         fun wordBoundaryOrDollar() {
-            val m = org.safere.Pattern.compile("(?:\\b|$)").matcher(" a")
+            val m = Pattern.compile("(?:\\b|$)").matcher(" a")
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.start()).isEqualTo(1)
             Assertions.assertThat(m.end()).isEqualTo(1)
@@ -663,7 +663,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("$|\\b on longer text finds the boundary at the start of the word")
         fun dollarOrWordBoundaryLongText() {
-            val m = org.safere.Pattern.compile("(?:$|\\b)").matcher("hello world")
+            val m = Pattern.compile("(?:$|\\b)").matcher("hello world")
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.start()).isEqualTo(0)
             Assertions.assertThat(m.end()).isEqualTo(0)
@@ -672,7 +672,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("find() with $|\\b returns each boundary position once")
         fun dollarOrWordBoundaryFindAll() {
-            val m = org.safere.Pattern.compile("(?:$|\\b)").matcher(" a")
+            val m = Pattern.compile("(?:$|\\b)").matcher(" a")
             val matches: MutableList<IntArray?> = ArrayList<IntArray?>()
             while (m.find()) {
                 matches.add(intArrayOf(m.start(), m.end()))
@@ -693,7 +693,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\A matches only at start of text")
         fun beginText() {
-            val p = org.safere.Pattern.compile("\\Aabc")
+            val p = Pattern.compile("\\Aabc")
             Assertions.assertThat(p.matcher("abc").find()).isTrue()
             Assertions.assertThat(p.matcher("xabc").find()).isFalse()
         }
@@ -701,7 +701,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\A with MULTILINE does not match at line start")
         fun beginTextMultiline() {
-            val p = org.safere.Pattern.compile("\\Aabc", org.safere.Pattern.MULTILINE)
+            val p = Pattern.compile("\\Aabc", org.safere.Pattern.MULTILINE)
             Assertions.assertThat(p.matcher("abc").find()).isTrue()
             Assertions.assertThat(p.matcher("xyz\nabc").find()).isFalse()
         }
@@ -709,7 +709,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\z matches only at absolute end of text")
         fun endText() {
-            val p = org.safere.Pattern.compile("abc\\z")
+            val p = Pattern.compile("abc\\z")
             Assertions.assertThat(p.matcher("abc").find()).isTrue()
             Assertions.assertThat(p.matcher("abc\n").find()).isFalse()
             Assertions.assertThat(p.matcher("abcx").find()).isFalse()
@@ -718,7 +718,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\b matches at word/non-word transitions")
         fun wordBoundary() {
-            val p = org.safere.Pattern.compile("\\bcat\\b")
+            val p = Pattern.compile("\\bcat\\b")
             Assertions.assertThat(p.matcher("the cat sat").find()).isTrue()
             Assertions.assertThat(p.matcher("concatenate").find()).isFalse()
         }
@@ -726,7 +726,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\B matches inside a word")
         fun nonWordBoundary() {
-            val p = org.safere.Pattern.compile("\\Bcat\\B")
+            val p = Pattern.compile("\\Bcat\\B")
             Assertions.assertThat(p.matcher("concatenate").find()).isTrue()
             Assertions.assertThat(p.matcher("the cat sat").find()).isFalse()
         }
@@ -734,7 +734,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\b at start of string")
         fun wordBoundaryAtStart() {
-            val p = org.safere.Pattern.compile("\\bword")
+            val p = Pattern.compile("\\bword")
             Assertions.assertThat(p.matcher("word").find()).isTrue()
             Assertions.assertThat(p.matcher(" word").find()).isTrue()
         }
@@ -742,7 +742,7 @@ internal class BoundaryMatcherTest {
         @Test
         @DisplayName("\\b at end of string")
         fun wordBoundaryAtEnd() {
-            val p = org.safere.Pattern.compile("word\\b")
+            val p = Pattern.compile("word\\b")
             Assertions.assertThat(p.matcher("word").find()).isTrue()
             Assertions.assertThat(p.matcher("word ").find()).isTrue()
         }
@@ -759,7 +759,7 @@ internal class BoundaryMatcherTest {
 
         companion object {
             private fun findStarts(regex: String?, input: String?): MutableList<Int?> {
-                val matcher = org.safere.Pattern.compile(regex).matcher(input)
+                val matcher = Pattern.compile(regex).matcher(input)
                 val starts: MutableList<Int?> = ArrayList<Int?>()
                 while (matcher.find()) {
                     starts.add(matcher.start())

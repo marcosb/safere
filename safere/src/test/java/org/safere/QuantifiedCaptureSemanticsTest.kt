@@ -24,7 +24,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @DisplayName("find() exposes quantified captures like java.util.regex")
     fun findCapturesMatchJdk(regex: String, input: String) {
         val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
-        val safere = org.safere.Pattern.compile(regex).matcher(input)
+        val safere = Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.find()
         Assertions.assertThat(safere.find()).isEqualTo(jdkMatched)
@@ -36,7 +36,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @DisplayName("matches() exposes quantified captures like java.util.regex")
     fun matchesCapturesMatchJdk(regex: String, input: String) {
         val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
-        val safere = org.safere.Pattern.compile(regex).matcher(input)
+        val safere = Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.matches()
         Assertions.assertThat(safere.matches()).isEqualTo(jdkMatched)
@@ -56,7 +56,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @DisplayName("replacement APIs consume quantified captures like java.util.regex")
     fun replacementApisMatchJdk(regex: String, input: String) {
         val jdkPattern = java.util.regex.Pattern.compile(regex)
-        val saferePattern = org.safere.Pattern.compile(regex)
+        val saferePattern = Pattern.compile(regex)
 
         Assertions.assertThat(saferePattern.matcher(input).replaceAll("[$1]"))
             .`as`("replaceAll(String) for /%s/ on %s", regex, input)
@@ -85,7 +85,7 @@ internal class QuantifiedCaptureSemanticsTest {
         org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
             CAPTURE_OBSERVATION_TIMEOUT,
             Executable {
-                val matcher = org.safere.Pattern.compile(".*x(?:(a){1,}){2}y").matcher(input)
+                val matcher = Pattern.compile(".*x(?:(a){1,}){2}y").matcher(input)
                 Assertions.assertThat(matcher.find()).isTrue()
                 Assertions.assertThat(matcher.group(1)).isEqualTo("a")
                 Assertions.assertThat(matcher.start(1)).isEqualTo(prefix.length + suffix.length)
@@ -98,7 +98,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @DisplayName("capture observation preserves lazy nullable group zero")
     fun captureObservationPreservesLazyNullableGroupZero(regex: String, input: String) {
         val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
-        val safere = org.safere.Pattern.compile(regex).matcher(input)
+        val safere = Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.find()
         Assertions.assertThat(safere.find()).isEqualTo(jdkMatched)
@@ -117,7 +117,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @MethodSource("failedStartLeakageCases")
     @DisplayName("failed starting-position capture leakage remains an intentional divergence")
     fun failedStartCaptureLeakageDoesNotMatchJdk(regex: String?, input: String?) {
-        val safere = org.safere.Pattern.compile(regex).matcher(input)
+        val safere = Pattern.compile(regex).matcher(input)
 
         Assertions.assertThat(safere.find()).isTrue()
         Assertions.assertThat(safere.group(1)).isNull()
@@ -128,7 +128,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @Test
     @DisplayName("failed alternative capture leakage remains an intentional divergence")
     fun failedAlternativeCaptureLeakageDoesNotMatchJdk() {
-        val safere = org.safere.Pattern.compile("(?:(?:())*{0}{1}?{1}|a).").matcher("ab")
+        val safere = Pattern.compile("(?:(?:())*{0}{1}?{1}|a).").matcher("ab")
 
         Assertions.assertThat(safere.matches()).isTrue()
         Assertions.assertThat(safere.group(1)).isNull()
@@ -139,7 +139,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @Test
     @DisplayName("failed possessive zero-width alternative capture leakage remains intentional")
     fun failedPossessiveZeroWidthAlternativeCaptureLeakageDoesNotMatchJdk() {
-        val safere = org.safere.Pattern.compile("(?:((?:))*+{1}+{2}+{1}|a).").matcher("ab")
+        val safere = Pattern.compile("(?:((?:))*+{1}+{2}+{1}|a).").matcher("ab")
 
         Assertions.assertThat(safere.matches()).isTrue()
         Assertions.assertThat(safere.group(1)).isNull()
@@ -304,7 +304,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertGroupsMatch(
-            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: org.safere.Matcher
+            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: Matcher
         ) {
             if (!matched) {
                 return
@@ -325,7 +325,7 @@ internal class QuantifiedCaptureSemanticsTest {
 
         private fun assertOperationTraceMatchesJdk(testCase: GeneratedCase) {
             val jdkPattern = java.util.regex.Pattern.compile(testCase.regex)
-            val saferePattern = org.safere.Pattern.compile(testCase.regex)
+            val saferePattern = Pattern.compile(testCase.regex)
 
             assertSingleOperationMatchesJdk(testCase, jdkPattern, saferePattern, Operation.FIND)
             assertSingleOperationMatchesJdk(testCase, jdkPattern, saferePattern, Operation.MATCHES)
@@ -336,7 +336,7 @@ internal class QuantifiedCaptureSemanticsTest {
         private fun assertSingleOperationMatchesJdk(
             testCase: GeneratedCase,
             jdkPattern: java.util.regex.Pattern,
-            saferePattern: org.safere.Pattern,
+            saferePattern: Pattern,
             operation: Operation
         ) {
             val jdk = jdkPattern.matcher(testCase.input)
@@ -363,7 +363,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertFindSequenceMatchesJdk(
-            testCase: GeneratedCase, jdkPattern: java.util.regex.Pattern, saferePattern: org.safere.Pattern
+            testCase: GeneratedCase, jdkPattern: java.util.regex.Pattern, saferePattern: Pattern
         ) {
             val jdk = jdkPattern.matcher(testCase.input)
             val safere = saferePattern.matcher(testCase.input)
@@ -402,7 +402,7 @@ internal class QuantifiedCaptureSemanticsTest {
 
         private fun assertReplacementTraceMatchesJdk(testCase: GeneratedCase) {
             val jdkPattern = java.util.regex.Pattern.compile(testCase.regex)
-            val saferePattern = org.safere.Pattern.compile(testCase.regex)
+            val saferePattern = Pattern.compile(testCase.regex)
             val numberedReplacement = "[$1]"
 
             Assertions.assertThat(saferePattern.matcher(testCase.input).replaceAll(numberedReplacement))
@@ -432,7 +432,7 @@ internal class QuantifiedCaptureSemanticsTest {
             }
         }
 
-        private fun appendReplacementResult(matcher: org.safere.Matcher): String {
+        private fun appendReplacementResult(matcher: Matcher): String {
             val result = StringBuffer()
             while (matcher.find()) {
                 matcher.appendReplacement(result, "[$1]")

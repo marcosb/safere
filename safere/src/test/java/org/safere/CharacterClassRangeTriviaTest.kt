@@ -115,12 +115,12 @@ internal class CharacterClassRangeTriviaTest {
                 // Only the unspaced form is a JDK oracle; the spaced form intentionally diverges.
                 expected = java.util.regex.Pattern.compile(canonical, flags)
             } catch (e: PatternSyntaxException) {
-                Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(candidate, flags) })
+                Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(candidate, flags) })
                     .`as`("rejection of /%s/", candidate)
                     .isInstanceOf(PatternSyntaxException::class.java)
                 return
             }
-            val actual = org.safere.Pattern.compile(candidate, flags)
+            val actual = Pattern.compile(candidate, flags)
             for (input in INPUTS) {
                 Assertions.assertThat(actual.matcher(input).matches())
                     .`as`("/%s/ equivalent to /%s/ on <%s>", candidate, canonical, input)

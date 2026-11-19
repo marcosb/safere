@@ -34,7 +34,7 @@ internal class MatcherFreeFindTest {
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE
         )
         val expected = java.util.regex.Pattern.compile(regex).matcher(input).find()
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
         Assertions.assertThat(pattern.asPredicate().test(input)).isEqualTo(expected)
         Assertions.assertThat(pattern.find(utf8)).isEqualTo(expected)

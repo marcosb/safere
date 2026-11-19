@@ -337,9 +337,9 @@ internal class EnginePathEquivalenceTest {
         }
 
         val nonAsciiInput = "bxc\rca9\né\nac9é\r0x\r9a0"
-        val accelerated = org.safere.Pattern.compile(regex)
+        val accelerated = Pattern.compile(regex)
         val control =
-            org.safere.Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
+            Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
         val expected = java.util.regex.Pattern.compile(regex).matcher(nonAsciiInput).find()
         Assertions.assertThat(control.matcher(nonAsciiInput).find()).isEqualTo(expected)
         Assertions.assertThat(accelerated.matcher(nonAsciiInput).find()).isEqualTo(expected)
@@ -350,9 +350,9 @@ internal class EnginePathEquivalenceTest {
     fun startAnchoredFixedOffsetPlansPreserveUtf8Anchoring() {
         val lateCandidate = "x".repeat(300) + "1c"
         for (regex in mutableListOf<String>("\\A\\dc", "(?m:\\A\\d(?m:c))", "(\\A)[0-9]c")) {
-            val accelerated = org.safere.Pattern.compile(regex)
+            val accelerated = Pattern.compile(regex)
             val control =
-                org.safere.Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
+                Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
 
             Assertions.assertThat(
                 accelerated.find(Utf8Input.validated(lateCandidate.toByteArray(StandardCharsets.UTF_8)))
@@ -372,7 +372,7 @@ internal class EnginePathEquivalenceTest {
     @DisplayName("disabled start acceleration is not installed in forward DFAs")
     fun disabledStartAccelerationIsNotInstalledInForwardDfas() {
         val pattern =
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 "foo[0-9]+", 0, EnginePathOptions.builder().startAcceleration(false).build()
             )
 
@@ -441,8 +441,8 @@ internal class EnginePathEquivalenceTest {
                 .bitState(false)
                 .lazyCaptureExtraction(false)
                 .build()
-        val defaultPattern = org.safere.Pattern.compile("^[a-z]+$")
-        val forcedPattern = org.safere.Pattern.compile("^[a-z]+$", 0, forced)
+        val defaultPattern = Pattern.compile("^[a-z]+$")
+        val forcedPattern = Pattern.compile("^[a-z]+$", 0, forced)
         val defaultMatcher = defaultPattern.matcher("00abc11").region(2, 5)
         val forcedMatcher = forcedPattern.matcher("00abc11").region(2, 5)
 
@@ -454,8 +454,8 @@ internal class EnginePathEquivalenceTest {
     @DisplayName("transparent and anchoring bounds traces are engine-path equivalent")
     fun boundsTracesAreEnginePathEquivalent() {
         val forced = EnginePathOptions.builder().dfa(false).bitState(false).build()
-        val defaultPattern = org.safere.Pattern.compile("^abc$")
-        val forcedPattern = org.safere.Pattern.compile("^abc$", 0, forced)
+        val defaultPattern = Pattern.compile("^abc$")
+        val forcedPattern = Pattern.compile("^abc$", 0, forced)
         val defaultMatcher =
             defaultPattern.matcher("00abc11").region(2, 5).useAnchoringBounds(false)
         val forcedMatcher = forcedPattern.matcher("00abc11").region(2, 5).useAnchoringBounds(false)
@@ -589,8 +589,8 @@ internal class EnginePathEquivalenceTest {
     private data class GroupTrace(val value: String?, val start: Int, val end: Int)
     companion object {
         private fun assertEquivalent(regex: String?, input: String?, options: EnginePathOptions?) {
-            val defaultPattern = org.safere.Pattern.compile(regex)
-            val forcedPattern = org.safere.Pattern.compile(regex, 0, options)
+            val defaultPattern = Pattern.compile(regex)
+            val forcedPattern = Pattern.compile(regex, 0, options)
 
             Assertions.assertThat<MatchTrace?>(operationTrace(defaultPattern.matcher(input), Operation.MATCHES))
                 .`as`("matches trace for /%s/ on %s", regex, input)
@@ -622,9 +622,9 @@ internal class EnginePathEquivalenceTest {
         }
 
         private fun assertUnguardedDfaFindEquivalent(regex: String?, input: String) {
-            val canonical = org.safere.Pattern.compile(regex)
+            val canonical = Pattern.compile(regex)
             val unguarded =
-                org.safere.Pattern.compile(
+                Pattern.compile(
                     regex, 0, EnginePathOptions.builder().onePass(false).bitState(false).build()
                 )
 
@@ -653,7 +653,7 @@ internal class EnginePathEquivalenceTest {
         }
 
         private fun regionTrace(
-            pattern: org.safere.Pattern, input: String, start: Int, end: Int, transparent: Boolean, anchoring: Boolean
+            pattern: Pattern, input: String, start: Int, end: Int, transparent: Boolean, anchoring: Boolean
         ): MutableList<MatchTrace?> {
             val matcher =
                 pattern.matcher(input).useTransparentBounds(transparent).useAnchoringBounds(anchoring)

@@ -69,16 +69,16 @@ internal class LiteralAlternationTest {
     @Test
     fun searchSequencesAndReplacementsAgreeWithJdkAndFallback() {
         for (regex in PATTERNS) {
-            val optimized = org.safere.Pattern.compile(regex)
+            val optimized = Pattern.compile(regex)
             val fallback =
-                org.safere.Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
+                Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
             for (offset in intArrayOf(0, 1, 255, 256, 1023, 1024, 4095, 4096, 8192)) {
                 val text =
                     ("x".repeat(offset)
                             + "barfoo banana gardens abc red 😀éclair apple"
                             + "x".repeat(5000)
                             + "cherry blue banana")
-                for (pattern in java.util.List.of<org.safere.Pattern>(optimized, fallback)) {
+                for (pattern in java.util.List.of<Pattern>(optimized, fallback)) {
                     compareFinds(pattern.matcher(text), java.util.regex.Pattern.compile(regex).matcher(text))
                     Assertions.assertThat(pattern.matcher(text).replaceAll("<$0>"))
                         .`as`("replacement %s offset %s", regex, offset)
@@ -106,7 +106,7 @@ internal class LiteralAlternationTest {
                     for (anchoring in booleanArrayOf(false, true)) {
                         for (start in intArrayOf(0, 1, padding.length * 1024 + 3)) {
                             val actual =
-                                org.safere.Pattern.compile(regex)
+                                Pattern.compile(regex)
                                     .matcher(text)
                                     .region(start, text.length - 1)
                                     .useTransparentBounds(transparent)
@@ -133,7 +133,7 @@ internal class LiteralAlternationTest {
             "ab|durian|cherry|elderberry|fig|abc",
             "abc|durian|cherry|elderberry|fig|ab"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             Assertions.assertThat<PreparedMatchRunner?>(pattern.preparedMatchRunner(false))
                 .isInstanceOf(LiteralAlternationPreparedRunner::class.java)
             for (boundary in intArrayOf(256, 768, 1024, 1792, 3072, 3840, 7168, 7936, 15360, 31744)) {
@@ -153,7 +153,7 @@ internal class LiteralAlternationTest {
                 for (prefix in java.util.List.of<String?>("x".repeat(offset), "banana" + "x".repeat(offset))) {
                     val text = prefix + literal + "x".repeat(8192) + "cherry"
                     compareFinds(
-                        org.safere.Pattern.compile(regex).matcher(text),
+                        Pattern.compile(regex).matcher(text),
                         java.util.regex.Pattern.compile(regex).matcher(text)
                     )
                 }
@@ -163,7 +163,7 @@ internal class LiteralAlternationTest {
 
     @Test
     fun literalAlternationsAdvertiseLiteralCapability() {
-        val pattern = org.safere.Pattern.compile("apple|banana|cherry")
+        val pattern = Pattern.compile("apple|banana|cherry")
         Assertions.assertThat<PatternCapability?>(pattern.analysis().capabilities)
             .contains(PatternCapability.LITERAL_MATCH)
     }
@@ -172,7 +172,7 @@ internal class LiteralAlternationTest {
     fun fullAndPrefixMatchesPreserveTheExistingRunnerSemantics() {
         for (regex in PATTERNS) {
             for (text in mutableListOf<String>("", "apple", "banana", "cherry", "barfoo", "ab", "abc")) {
-                val actual = org.safere.Pattern.compile(regex).matcher(text)
+                val actual = Pattern.compile(regex).matcher(text)
                 val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 Assertions.assertThat(actual.matches()).isEqualTo(expected.matches())
                 Assertions.assertThat(actual.lookingAt()).isEqualTo(expected.lookingAt())
@@ -199,7 +199,7 @@ internal class LiteralAlternationTest {
             "éclair|😀"
         )
 
-        private fun compareFinds(actual: org.safere.Matcher, expected: java.util.regex.Matcher) {
+        private fun compareFinds(actual: Matcher, expected: java.util.regex.Matcher) {
             while (true) {
                 val found = expected.find()
                 Assertions.assertThat(actual.find()).isEqualTo(found)

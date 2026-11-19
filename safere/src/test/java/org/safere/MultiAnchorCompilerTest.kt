@@ -551,25 +551,25 @@ internal class MultiAnchorCompilerTest {
 
     @Test
     fun homogeneousGapExtractionIsStackSafeForDeepQuantifiers() {
-        Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(deepHomogeneousGap("[ab]", 5000)) })
+        Assertions.assertThatCode(ThrowingCallable { Pattern.compile(deepHomogeneousGap("[ab]", 5000)) })
             .doesNotThrowAnyException()
-        Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(deepHomogeneousGap(".", 5000)) })
+        Assertions.assertThatCode(ThrowingCallable { Pattern.compile(deepHomogeneousGap(".", 5000)) })
             .doesNotThrowAnyException()
     }
 
     @Test
     fun poisonousSingleCharacterPrefixGatedFromLiteralStartPlan() {
         // Single space is poisonous; should not be emitted as StartPlan.Literal
-        val spacePattern = org.safere.Pattern.compile(" [0-9]+")
+        val spacePattern = Pattern.compile(" [0-9]+")
         Assertions.assertThat<StartPlan?>(spacePattern.startPlan())
             .isNotInstanceOf(StartPlan.Literal::class.java)
 
         // Single 'e' is high-frequency / poisonous; should not be emitted as StartPlan.Literal
-        val ePattern = org.safere.Pattern.compile("e[0-9]+")
+        val ePattern = Pattern.compile("e[0-9]+")
         Assertions.assertThat<StartPlan?>(ePattern.startPlan()).isNotInstanceOf(StartPlan.Literal::class.java)
 
         // Single-character class matching space is unselective / poisonous
-        val spaceClassPattern = org.safere.Pattern.compile("[ ]\\d+")
+        val spaceClassPattern = Pattern.compile("[ ]\\d+")
         Assertions.assertThat<StartPlan?>(spaceClassPattern.startPlan())
             .isInstanceOfSatisfying<StartPlan.FixedOffsetClass?>(
                 StartPlan.FixedOffsetClass::class.java,
@@ -580,36 +580,36 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat<StringStartAccelerator?>(spaceClassPattern.stringStartAccelerator()).isNotNull()
 
         // Multi-character prefix containing space is not poisonous (e.g. "  " or "id: ")
-        val multiSpace = org.safere.Pattern.compile("  [0-9]+")
+        val multiSpace = Pattern.compile("  [0-9]+")
         Assertions.assertThat<StartPlan?>(multiSpace.startPlan()).isInstanceOf(StartPlan.Literal::class.java)
         Assertions.assertThat((multiSpace.startPlan() as StartPlan.Literal).prefix)
             .isEqualTo("  ")
 
-        val exactUppercase = org.safere.Pattern.compile("E[0-9]+")
+        val exactUppercase = Pattern.compile("E[0-9]+")
         Assertions.assertThat<StartPlan?>(exactUppercase.startPlan())
             .isInstanceOf(StartPlan.Literal::class.java)
         Assertions.assertThat<StringStartAccelerator?>(exactUppercase.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(exactUppercase.utf8StartAccelerator()).isNotNull()
 
-        val foldedCommonLetter = org.safere.Pattern.compile("(?i:E)[0-9]+")
+        val foldedCommonLetter = Pattern.compile("(?i:E)[0-9]+")
         Assertions.assertThat<StartPlan?>(foldedCommonLetter.startPlan())
             .isInstanceOf(StartPlan.None::class.java)
         Assertions.assertThat<StringStartAccelerator?>(foldedCommonLetter.stringStartAccelerator()).isNull()
         Assertions.assertThat<Utf8StartAccelerator?>(foldedCommonLetter.utf8StartAccelerator()).isNull()
 
-        val foldedRareLetter = org.safere.Pattern.compile("(?i:Q)[0-9]+")
+        val foldedRareLetter = Pattern.compile("(?i:Q)[0-9]+")
         Assertions.assertThat<StartPlan?>(foldedRareLetter.startPlan())
             .isInstanceOf(StartPlan.Literal::class.java)
         Assertions.assertThat<StringStartAccelerator?>(foldedRareLetter.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(foldedRareLetter.utf8StartAccelerator()).isNotNull()
 
-        val latin1Singleton = org.safere.Pattern.compile("é+(?:ab|cd)?")
+        val latin1Singleton = Pattern.compile("é+(?:ab|cd)?")
         Assertions.assertThat<StartPlan?>(latin1Singleton.startPlan())
             .isInstanceOf(StartPlan.CharClass::class.java)
         Assertions.assertThat<StringStartAccelerator?>(latin1Singleton.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(latin1Singleton.utf8StartAccelerator()).isNotNull()
 
-        val unicodeSingleton = org.safere.Pattern.compile("Ā+(?:ab|cd)?")
+        val unicodeSingleton = Pattern.compile("Ā+(?:ab|cd)?")
         Assertions.assertThat<StartPlan?>(unicodeSingleton.startPlan())
             .isInstanceOf(StartPlan.CharClass::class.java)
         Assertions.assertThat<StringStartAccelerator?>(unicodeSingleton.stringStartAccelerator()).isNotNull()
@@ -619,7 +619,7 @@ internal class MultiAnchorCompilerTest {
     @Test
     fun competitiveSelectivityPrefersFixedOffsetOverPoisonousOrWeakPrefix() {
         // Case 1: Poisonous leading space prefix eclipsed by selective fixed-offset literal
-        val p1 = org.safere.Pattern.compile(" [0-9]{2}404_NOT_FOUND")
+        val p1 = Pattern.compile(" [0-9]{2}404_NOT_FOUND")
         Assertions.assertThat<StartPlan?>(p1.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
         val fo1 =
             p1.startPlan() as StartPlan.FixedOffset
@@ -627,14 +627,14 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat(fo1.fol!!.minOffset()).isEqualTo(3)
 
         // Case 2: Short 2-character weak prefix eclipsed by much more selective fixed-offset literal
-        val p2 = org.safere.Pattern.compile("ab[0-9]{2}ERROR_CRITICAL_PAYLOAD")
+        val p2 = Pattern.compile("ab[0-9]{2}ERROR_CRITICAL_PAYLOAD")
         Assertions.assertThat<StartPlan?>(p2.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
         val fo2 =
             p2.startPlan() as StartPlan.FixedOffset
         Assertions.assertThat(fo2.fol!!.literal()).isEqualTo("ERROR_CRITICAL_PAYLOAD")
 
         // Case 3: Long selective prefix retains priority over fixed-offset literal
-        val p3 = org.safere.Pattern.compile("Content-Type:[0-9]{2}json")
+        val p3 = Pattern.compile("Content-Type:[0-9]{2}json")
         Assertions.assertThat<StartPlan?>(p3.startPlan()).isInstanceOf(StartPlan.Literal::class.java)
         Assertions.assertThat((p3.startPlan() as StartPlan.Literal).prefix)
             .isEqualTo("Content-Type:")
@@ -643,7 +643,7 @@ internal class MultiAnchorCompilerTest {
     @Test
     fun fixedOffsetLiteralSubsumedFromRejectPlan() {
         // Single fixed-offset literal drives startPlan; should not be duplicated in rejectPlan
-        val p1 = org.safere.Pattern.compile("[0-9]{2}404_NOT_FOUND")
+        val p1 = Pattern.compile("[0-9]{2}404_NOT_FOUND")
         Assertions.assertThat<StartPlan?>(p1.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
         val fo =
             p1.startPlan() as StartPlan.FixedOffset
@@ -659,7 +659,7 @@ internal class MultiAnchorCompilerTest {
 
         // Multiple required literals: fixed-offset literal is excluded, but downstream required literal
         // is preserved
-        val p2 = org.safere.Pattern.compile("[0-9]{2}404_NOT_FOUND.*EXCEPTION_LOG")
+        val p2 = Pattern.compile("[0-9]{2}404_NOT_FOUND.*EXCEPTION_LOG")
         Assertions.assertThat<StartPlan?>(p2.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
         val reqLits2: Stream<RequiredLiteral?>? =
             rejectPlans(p2.rejectPlan())
@@ -670,7 +670,7 @@ internal class MultiAnchorCompilerTest {
 
         // Multiple literals in fixed-offset prefix: all prefix literals subsumed, none leaked to
         // rejectPlan
-        val p3 = org.safere.Pattern.compile("[0-9]{2}____[a-z]zq[a-z]")
+        val p3 = Pattern.compile("[0-9]{2}____[a-z]zq[a-z]")
         Assertions.assertThat<StartPlan?>(p3.startPlan()).isInstanceOf(StartPlan.FixedOffset::class.java)
         val reqLits3: Stream<RequiredLiteral?>? =
             rejectPlans(p3.rejectPlan())
@@ -678,7 +678,7 @@ internal class MultiAnchorCompilerTest {
                 .map<RequiredLiteral?> { obj: RejectPlan? -> RequiredLiteral::class.java.cast(obj) }
         Assertions.assertThat<RequiredLiteral?>(reqLits3).isEmpty()
 
-        val variableWidthBoundary = org.safere.Pattern.compile("[0-9]{2}____(?:ALPHABET)+")
+        val variableWidthBoundary = Pattern.compile("[0-9]{2}____(?:ALPHABET)+")
         val boundaryLiterals: Stream<RequiredLiteral?>? =
             rejectPlans(variableWidthBoundary.rejectPlan())
                 .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
@@ -687,7 +687,7 @@ internal class MultiAnchorCompilerTest {
             .extracting<String?, RuntimeException?>(RequiredLiteral::literal)
             .contains("ALPHABET")
 
-        val repeatedPrefixToken = org.safere.Pattern.compile("[0-9]{2}zz.*zzRARE")
+        val repeatedPrefixToken = Pattern.compile("[0-9]{2}zz.*zzRARE")
         val repeatedTokenLiterals: Stream<RequiredLiteral?>? =
             rejectPlans(repeatedPrefixToken.rejectPlan())
                 .filter { obj: RejectPlan? -> RequiredLiteral::class.java.isInstance(obj) }
@@ -704,7 +704,7 @@ internal class MultiAnchorCompilerTest {
         // itself even though the accelerator would go on to find the same literal. Dropping it
         // regressed the UTF-8 arm of rebar's 04-ruff-noqa by 1.70x.
         val p =
-            org.safere.Pattern.compile("(\\s*)((?:# [Nn][Oo][Qq][Aa])(?::\\s?(([A-Z]+[0-9]+(?:[,\\s]+)?)+))?)")
+            Pattern.compile("(\\s*)((?:# [Nn][Oo][Qq][Aa])(?::\\s?(([A-Z]+[0-9]+(?:[,\\s]+)?)+))?)")
         Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le = p.startPlan() as StartPlan.LeadingExpansion
         Assertions.assertThat<StartPlan?>(le.innerPlan).isInstanceOf(StartPlan.Literal::class.java)
@@ -713,7 +713,7 @@ internal class MultiAnchorCompilerTest {
 
     @Test
     fun leadingExpansionOverFixedOffsetKeepsItsRequiredCharClass() {
-        val p = org.safere.Pattern.compile("\\s+[0-9]{2}404_NOT_FOUND")
+        val p = Pattern.compile("\\s+[0-9]{2}404_NOT_FOUND")
         Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le = p.startPlan() as StartPlan.LeadingExpansion
         Assertions.assertThat<StartPlan?>(le.innerPlan).isInstanceOf(StartPlan.FixedOffset::class.java)
@@ -723,7 +723,7 @@ internal class MultiAnchorCompilerTest {
 
     @Test
     fun leadingExpansionWithDownstreamRequiredLiteralPreservesRequiredLiteral() {
-        val p = org.safere.Pattern.compile("\\s*foo.*RARE_KEYWORD")
+        val p = Pattern.compile("\\s*foo.*RARE_KEYWORD")
         Assertions.assertThat<StartPlan?>(p.startPlan()).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le = p.startPlan() as StartPlan.LeadingExpansion
         Assertions.assertThat((le.innerPlan as StartPlan.Literal).prefix).isEqualTo("foo")
@@ -736,7 +736,7 @@ internal class MultiAnchorCompilerTest {
     @Test
     fun multiLiteralFallbackClassCompetesWithRequiredCharClass() {
         // `.*\d+.*` has a mandatory `\d` (10 runes) and no start plan of its own.
-        val ast = Parser.parse(".*\\d+.*", org.safere.Pattern.toParseFlags(0))
+        val ast = Parser.parse(".*\\d+.*", Pattern.toParseFlags(0))
         val literals = arrayOf<String?>("apple", "banana")
 
         // A MultiLiteral with no fallback class behaves like any plan without a driving character
@@ -761,14 +761,14 @@ internal class MultiAnchorCompilerTest {
     @Test
     fun requiredCharClassSelectionUsesAsciiMembersAndFallsBackToRuneCount() {
         // Mixed [\[\uFF3B] and [\]\uFF3D] are scored by their ASCII members, beating `.` and `\d`.
-        val citation = org.safere.Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]")
+        val citation = Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]")
         Assertions.assertThat<RejectPlan?>(citation.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
         val citationReject =
             citation.rejectPlan() as RequiredCharClass
         Assertions.assertThat(citationReject.scanInfo!!.ranges).containsExactly(']'.code, ']'.code, 0xFF3D, 0xFF3D)
 
         // Purely non-ASCII classes fall back to rune count rather than claiming to be rarer than ASCII.
-        val nonAsciiPairVsSingleAscii = org.safere.Pattern.compile("[\uFF3B\uFF3D]+(?:a|aa)+")
+        val nonAsciiPairVsSingleAscii = Pattern.compile("[\uFF3B\uFF3D]+(?:a|aa)+")
         Assertions.assertThat<RejectPlan?>(nonAsciiPairVsSingleAscii.rejectPlan())
             .isInstanceOf(RequiredCharClass::class.java)
         val singleAsciiReject =
@@ -776,7 +776,7 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat(singleAsciiReject.scanInfo!!.ranges).containsExactly('a'.code, 'a'.code)
 
         // A 1-rune non-ASCII class still beats a 10-rune ASCII digit class by rune count.
-        val singleNonAsciiVsDigits = org.safere.Pattern.compile(".*[\uFF3B]+\\d+")
+        val singleNonAsciiVsDigits = Pattern.compile(".*[\uFF3B]+\\d+")
         Assertions.assertThat<RejectPlan?>(singleNonAsciiVsDigits.rejectPlan())
             .isInstanceOf(RequiredCharClass::class.java)
         val singleNonAsciiReject =
@@ -785,7 +785,7 @@ internal class MultiAnchorCompilerTest {
 
         // A mixed class with a large non-ASCII range is not scored by its ASCII member, so it does not
         // claim to be rarer than a digit on text in the language it covers.
-        val digitsThenCjk = org.safere.Pattern.compile("\\d+[\\-\u4E00-\u9FFF]+")
+        val digitsThenCjk = Pattern.compile("\\d+[\\-\u4E00-\u9FFF]+")
         Assertions.assertThat<RejectPlan?>(digitsThenCjk.rejectPlan()).isInstanceOf(RequiredCharClass::class.java)
         val digitsReject =
             digitsThenCjk.rejectPlan() as RequiredCharClass
@@ -797,13 +797,13 @@ internal class MultiAnchorCompilerTest {
         // No start accelerator scans for a class this common, so a leading expansion would only drop
         // the reject that makes input without the class cheap.
         for (regex in mutableListOf<String>("-?\\d+", "[+-]?\\d+", "#?[0-9A-Fa-f]{6}")) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             Assertions.assertThat<StartPlan?>(pattern.startPlan()).`as`(regex)
                 .isNotInstanceOf(StartPlan.LeadingExpansion::class.java)
             Assertions.assertThat<RejectPlan?>(pattern.rejectPlan()).`as`(regex).isNotEqualTo(RejectPlan.None.INSTANCE)
         }
         // A selective inner class still gets the expansion.
-        Assertions.assertThat<StartPlan?>(org.safere.Pattern.compile(" ?[\\[\uFF3B]\\d+").startPlan())
+        Assertions.assertThat<StartPlan?>(Pattern.compile(" ?[\\[\uFF3B]\\d+").startPlan())
             .isInstanceOf(StartPlan.LeadingExpansion::class.java)
     }
 
@@ -821,7 +821,7 @@ internal class MultiAnchorCompilerTest {
             ".*?error",
             "[^;]*error"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             Assertions.assertThat<StartPlan?>(pattern.startPlan()).`as`(regex)
                 .isInstanceOf(StartPlan.LeadingExpansion::class.java)
             val le = pattern.startPlan() as StartPlan.LeadingExpansion
@@ -830,7 +830,7 @@ internal class MultiAnchorCompilerTest {
         // DOTALL `.` never stops before the search start, and a class excluding more than a handful
         // of code points is still too large to walk.
         for (regex in mutableListOf<String>("(?s).*error", "[^\\n\\r\\u0085\\u2028\\u2029abcd]*error")) {
-            Assertions.assertThat<StartPlan?>(org.safere.Pattern.compile(regex).startPlan())
+            Assertions.assertThat<StartPlan?>(Pattern.compile(regex).startPlan())
                 .`as`(regex)
                 .isNotInstanceOf(StartPlan.LeadingExpansion::class.java)
         }
@@ -869,7 +869,7 @@ internal class MultiAnchorCompilerTest {
             "[a-z]+\\x{D800}\\x{DC00}[a-z]+",
             ".*a\\uDBFB$"
         )) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.matchDescriptor().literalMatch).`as`(regex).isNull()
             Assertions.assertThat(pattern.prefix()).`as`(regex).isNull()
             Assertions.assertThat(pattern.anchoredPrefix()).`as`(regex).isNull()
@@ -881,7 +881,7 @@ internal class MultiAnchorCompilerTest {
         }
 
         Assertions.assertThat<RejectPlan?>(
-            org.safere.Pattern.compile("(?:a\\x{D800}\\x{DC00}|za\uD800\uDC00|banana)").rejectPlan()
+            Pattern.compile("(?:a\\x{D800}\\x{DC00}|za\uD800\uDC00|banana)").rejectPlan()
         )
             .isNotInstanceOf(RejectPlan.DisjointLiterals::class.java)
     }
@@ -1003,11 +1003,11 @@ internal class MultiAnchorCompilerTest {
         }
 
         private fun startSubsumesFindReject(regex: String?): Boolean {
-            return org.safere.Pattern.compile(regex).multiAnchor().startSubsumesFindReject()
+            return Pattern.compile(regex).multiAnchor().startSubsumesFindReject()
         }
 
         private fun excludedCodePoints(regex: String?): IntArray? {
-            val le = org.safere.Pattern.compile(regex).startPlan() as StartPlan.LeadingExpansion
+            val le = Pattern.compile(regex).startPlan() as StartPlan.LeadingExpansion
             return MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
         }
 
@@ -1015,7 +1015,7 @@ internal class MultiAnchorCompilerTest {
          * Returns the [CharClassScanInfo] a leading `[ranges]` character class compiles to.
          */
         private fun charClassOf(ranges: String?): CharClassScanInfo? {
-            val plan = org.safere.Pattern.compile("[" + ranges + "].*ZZQQ").startPlan()
+            val plan = Pattern.compile("[" + ranges + "].*ZZQQ").startPlan()
             Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.CharClass::class.java)
             return (plan as StartPlan.CharClass).scanInfo
         }

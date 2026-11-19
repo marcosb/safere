@@ -35,7 +35,7 @@ internal class StartAnchoredReplaceRejectTest {
 
         for (regex in java.util.List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
             val jdk = java.util.regex.Pattern.compile(regex)
-            val safere = org.safere.Pattern.compile(regex)
+            val safere = Pattern.compile(regex)
             for (input in inputs) {
                 Assertions.assertThat(safere.matcher(input).replaceAll("X"))
                     .`as`("replaceAll %s on %s", regex, input)
@@ -58,7 +58,7 @@ internal class StartAnchoredReplaceRejectTest {
         )
 
         val jdk = java.util.regex.Pattern.compile(CITATION_PARENS)
-        val safere = org.safere.Pattern.compile(CITATION_PARENS)
+        val safere = Pattern.compile(CITATION_PARENS)
         for (input in inputs) {
             Assertions.assertThat(safere.matcher(input).replaceAll("X"))
                 .`as`("replaceAll on %s", input)
@@ -71,7 +71,7 @@ internal class StartAnchoredReplaceRejectTest {
 
     @Test
     fun anchoredCharacterClassPrefixRejectsAndMatches() {
-        val pattern = org.safere.Pattern.compile("^[0-9]+ items")
+        val pattern = Pattern.compile("^[0-9]+ items")
         Assertions.assertThat(pattern.matcher("no digits").replaceAll("X")).isEqualTo("no digits")
         Assertions.assertThat(pattern.matcher("12 items left").replaceAll("X")).isEqualTo("X left")
     }
@@ -80,7 +80,7 @@ internal class StartAnchoredReplaceRejectTest {
     fun multilineStartAnchorIsUnaffected() {
         // (?m)^ is a begin-line assertion, not prog().anchorStart(); matches on later lines must
         // still be found and replaced.
-        val pattern = org.safere.Pattern.compile("(?m)^\\(Source: \\d+\\)\\s*")
+        val pattern = Pattern.compile("(?m)^\\(Source: \\d+\\)\\s*")
         Assertions.assertThat(pattern.matcher("first\n(Source: 7) second").replaceAll(""))
             .isEqualTo("first\nsecond")
         Assertions.assertThat(pattern.matcher("first\nsecond").replaceAll("X")).isEqualTo("first\nsecond")
@@ -90,7 +90,7 @@ internal class StartAnchoredReplaceRejectTest {
     fun rejectedReplaceLeavesTheMatcherWithNoMatch() {
         // The fast path must leave the matcher in the same observable state as the slow path: no
         // match available, and the same state the sibling unanchored reject-prefilter arm produces.
-        val anchored = org.safere.Pattern.compile(CITATION_PARENS).matcher("no marker")
+        val anchored = Pattern.compile(CITATION_PARENS).matcher("no marker")
         Assertions.assertThat(anchored.replaceAll("X")).isEqualTo("no marker")
         Assertions.assertThatThrownBy(ThrowingCallable { anchored.group() })
             .isInstanceOf(IllegalStateException::class.java)
@@ -99,7 +99,7 @@ internal class StartAnchoredReplaceRejectTest {
         Assertions.assertThatThrownBy(ThrowingCallable { anchored.end() })
             .isInstanceOf(IllegalStateException::class.java)
 
-        val unanchored = org.safere.Pattern.compile("zqxjv[0-9]+").matcher("no marker")
+        val unanchored = Pattern.compile("zqxjv[0-9]+").matcher("no marker")
         Assertions.assertThat(unanchored.replaceAll("X")).isEqualTo("no marker")
         Assertions.assertThatThrownBy(ThrowingCallable { unanchored.group() })
             .isInstanceOf(IllegalStateException::class.java)
@@ -107,7 +107,7 @@ internal class StartAnchoredReplaceRejectTest {
 
     @Test
     fun matcherRemainsReusableAfterARejectedReplace() {
-        val matcher = org.safere.Pattern.compile(CITATION_PARENS).matcher("no marker")
+        val matcher = Pattern.compile(CITATION_PARENS).matcher("no marker")
         Assertions.assertThat(matcher.replaceAll("X")).isEqualTo("no marker")
 
         // Still usable for a fresh search, and for a fresh input.
@@ -122,7 +122,7 @@ internal class StartAnchoredReplaceRejectTest {
     fun regionIsResetByReplaceJustAsBefore() {
         // replaceImpl calls reset(), which clears any region, so a region set beforehand does not
         // narrow the anchored check. Pin that this is still true.
-        val matcher = org.safere.Pattern.compile(CITATION_PARENS).matcher("zz(Source: 1) body")
+        val matcher = Pattern.compile(CITATION_PARENS).matcher("zz(Source: 1) body")
         matcher.region(2, matcher.regionEnd())
         Assertions.assertThat(matcher.replaceAll("X")).isEqualTo("zz(Source: 1) body")
     }
@@ -133,7 +133,7 @@ internal class StartAnchoredReplaceRejectTest {
         // String overloads bypassed find(); after the fix both families must agree.
         for (regex in java.util.List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
             for (input in mutableListOf<String>("no marker", "(Source: 1) body", "[Source: 2] body")) {
-                val pattern = org.safere.Pattern.compile(regex)
+                val pattern = Pattern.compile(regex)
                 Assertions.assertThat(pattern.matcher(input).replaceAll(Function { r: MatchResult? -> "X" }))
                     .`as`("replaceAll(Function) %s on %s", regex, input)
                     .isEqualTo(pattern.matcher(input).replaceAll("X"))
@@ -148,7 +148,7 @@ internal class StartAnchoredReplaceRejectTest {
     fun replacementIsStillValidatedBeforeRejection() {
         // Objects.requireNonNull(replacement) runs before the reject arm, so a null replacement must
         // still throw even when the input cannot possibly match.
-        val matcher = org.safere.Pattern.compile(CITATION_PARENS).matcher("no marker")
+        val matcher = Pattern.compile(CITATION_PARENS).matcher("no marker")
         Assertions.assertThatThrownBy(ThrowingCallable { matcher.replaceAll(null as String?) })
             .isInstanceOf(NullPointerException::class.java)
     }

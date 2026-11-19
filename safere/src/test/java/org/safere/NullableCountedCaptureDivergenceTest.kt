@@ -54,7 +54,7 @@ internal class NullableCountedCaptureDivergenceTest {
     fun reluctantOuterLoopsRetainTheirLastConsumingCapture() {
         for (outer in arrayOf<String>("*?", "+?")) {
             val regex = "^(?:(\\b|a){2,3})" + outer + "$"
-            val matcher = org.safere.Pattern.compile(regex).matcher("aa")
+            val matcher = Pattern.compile(regex).matcher("aa")
             Assertions.assertThat(matcher.find()).`as`("/%s/", regex).isTrue()
             Assertions.assertThat(matcher.start()).isZero()
             Assertions.assertThat(matcher.end()).isEqualTo(2)
@@ -73,7 +73,7 @@ internal class NullableCountedCaptureDivergenceTest {
 
     @Test
     fun repeatedFindsAndSnapshotsRetainTheirOwnEmptyCapturePositions() {
-        val matcher = org.safere.Pattern.compile("(?:x)?(?:()|\\W+){0,2}y").matcher("aca cybb yyaaaaa")
+        val matcher = Pattern.compile("(?:x)?(?:()|\\W+){0,2}y").matcher("aca cybb yyaaaaa")
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.start()).isEqualTo(5)
         Assertions.assertThat(matcher.start(1)).isEqualTo(5)

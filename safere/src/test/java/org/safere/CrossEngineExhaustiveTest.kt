@@ -347,7 +347,7 @@ internal class CrossEngineExhaustiveTest {
                     tests++
                     try {
                         val jdkPat = java.util.regex.Pattern.compile(pat)
-                        val saferePat = org.safere.Pattern.compile(pat)
+                        val saferePat = Pattern.compile(pat)
 
                         val jdkResult = jdkPat.matcher(text).replaceAll("X")
                         val safereResult = saferePat.matcher(text).replaceAll("X")
@@ -432,7 +432,7 @@ internal class CrossEngineExhaustiveTest {
             )
 
             for (ch in specialChars) {
-                val quoted = org.safere.Pattern.quote(ch!!)
+                val quoted = Pattern.quote(ch!!)
                 val pat = "[" + quoted + "]+"
 
                 val texts = arrayOf<String?>(ch, ch + ch, "a" + ch + "b", "abc", ch!!.repeat(5), "#".repeat(260) + ch)
@@ -444,10 +444,10 @@ internal class CrossEngineExhaustiveTest {
 
             // Compound patterns: multiple quoted chars in a class
             val compoundPatterns = arrayOf<String?>(
-                "[" + org.safere.Pattern.quote("*") + org.safere.Pattern.quote(".") + "]+",
-                "[" + org.safere.Pattern.quote("\\") + org.safere.Pattern.quote("/") + "]+",
-                "[a-z" + org.safere.Pattern.quote("*") + "]+",
-                "[" + org.safere.Pattern.quote("[") + org.safere.Pattern.quote("]") + "]+",
+                "[" + Pattern.quote("*") + Pattern.quote(".") + "]+",
+                "[" + Pattern.quote("\\") + Pattern.quote("/") + "]+",
+                "[a-z" + Pattern.quote("*") + "]+",
+                "[" + Pattern.quote("[") + Pattern.quote("]") + "]+",
             )
 
             val compoundTexts = arrayOf<String?>("*.", "\\/", "abc*", "[]", "a*b.c", "#".repeat(260) + "*.")
@@ -478,13 +478,13 @@ internal class CrossEngineExhaustiveTest {
             // Patterns built like real code does
             val configs = arrayOf<Array<String?>?>(
                 // { pattern template, key, text }
-                arrayOf<String?>(org.safere.Pattern.quote("key") + "=(.+)", "key=value", "key=value"),
-                arrayOf<String?>(org.safere.Pattern.quote("key") + "=(.+)", "key=", "key="),
-                arrayOf<String?>(org.safere.Pattern.quote("key") + "=(\\d+)", "key=123", "key=123abc"),
-                arrayOf<String?>("(" + org.safere.Pattern.quote("hello") + ")\\s+(\\w+)", "hello world", "hello world"),
-                arrayOf<String?>(org.safere.Pattern.quote("$") + "\\{(\\w+)\\}", "\${var}", "\${var}"),
+                arrayOf<String?>(Pattern.quote("key") + "=(.+)", "key=value", "key=value"),
+                arrayOf<String?>(Pattern.quote("key") + "=(.+)", "key=", "key="),
+                arrayOf<String?>(Pattern.quote("key") + "=(\\d+)", "key=123", "key=123abc"),
+                arrayOf<String?>("(" + Pattern.quote("hello") + ")\\s+(\\w+)", "hello world", "hello world"),
+                arrayOf<String?>(Pattern.quote("$") + "\\{(\\w+)\\}", "\${var}", "\${var}"),
                 arrayOf<String?>(
-                    org.safere.Pattern.quote("[") + "(\\d+)" + org.safere.Pattern.quote("]"),
+                    Pattern.quote("[") + "(\\d+)" + Pattern.quote("]"),
                     "[42]",
                     "item[42]"
                 ),
@@ -555,7 +555,7 @@ internal class CrossEngineExhaustiveTest {
                         jdkRejects = true
                     }
                     try {
-                        org.safere.Pattern.compile(pat)
+                        Pattern.compile(pat)
                     } catch (e: PatternSyntaxException) {
                         safereRejects = true
                     }
@@ -685,7 +685,7 @@ internal class CrossEngineExhaustiveTest {
             val patterns = arrayOf<String?>("a+", "\\d+", "[a-z]+", "a.*b", "^a+$", "(a)(b)")
 
             for (pat in patterns) {
-                val saferePat = org.safere.Pattern.compile(pat)
+                val saferePat = Pattern.compile(pat)
                 val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val sb = StringBuilder()
@@ -723,7 +723,7 @@ internal class CrossEngineExhaustiveTest {
             val patterns = arrayOf<String?>("a+", "[a-z]+b", "\\d{3}", "^abc$", "(a|b)+")
 
             for (pat in patterns) {
-                val saferePat = org.safere.Pattern.compile(pat)
+                val saferePat = Pattern.compile(pat)
                 val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")
@@ -749,7 +749,7 @@ internal class CrossEngineExhaustiveTest {
             val patterns = arrayOf<String?>("a", "ab", "a+", "[a-z]")
 
             for (pat in patterns) {
-                val saferePat = org.safere.Pattern.compile(pat)
+                val saferePat = Pattern.compile(pat)
                 val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")
@@ -792,7 +792,7 @@ internal class CrossEngineExhaustiveTest {
             val texts = arrayOf<String?>("abc", "aabcc", "a1c", "hello123", "aaabbb")
 
             for (pat in patterns) {
-                val saferePat = org.safere.Pattern.compile(pat)
+                val saferePat = Pattern.compile(pat)
                 val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 for (text in texts) {
@@ -840,10 +840,10 @@ internal class CrossEngineExhaustiveTest {
             )
 
             for (pat in patterns) {
-                val saferePat: org.safere.Pattern?
+                val saferePat: Pattern?
                 val jdkPat: java.util.regex.Pattern?
                 try {
-                    saferePat = org.safere.Pattern.compile(pat)
+                    saferePat = Pattern.compile(pat)
                     jdkPat = java.util.regex.Pattern.compile(pat)
                 } catch (e: PatternSyntaxException) {
                     continue
@@ -893,7 +893,7 @@ internal class CrossEngineExhaustiveTest {
             val texts = arrayOf<String?>("aaa bbb", "x1y2z3", "abab", "  hello  world  ")
 
             for (pat in patterns) {
-                val saferePat = org.safere.Pattern.compile(pat)
+                val saferePat = Pattern.compile(pat)
                 val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")

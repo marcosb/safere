@@ -15,7 +15,7 @@ internal class ReplaceFastPathTest {
     fun replaceMatchesTheJdk() {
         for (regex in REGEXES) {
             val jdk = java.util.regex.Pattern.compile(regex)
-            val safere = org.safere.Pattern.compile(regex)
+            val safere = Pattern.compile(regex)
             for (input in INPUTS) {
                 for (replacement in REPLACEMENTS) {
                     Assertions.assertThat(safere.matcher(input).replaceAll(replacement))
@@ -34,7 +34,7 @@ internal class ReplaceFastPathTest {
         for (regex in mutableListOf<String>("[0-9]", "\\p{L}", "[é😀]")) {
             val input = "ab 😀 é 42"
             val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
-            val safere = org.safere.Pattern.compile(regex).matcher(input)
+            val safere = Pattern.compile(regex).matcher(input)
             jdk.replaceFirst("X")
             safere.replaceFirst("X")
             jdk.reset()

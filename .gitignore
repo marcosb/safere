@@ -1,6 +1,14 @@
 # Build output
 target/
 
+# Gradle (optional KMP sidecar; Maven remains the shipping JVM build)
+.gradle/
+/build/
+safere-kmp/build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
 # RE2 C++ reference (local only)
 re2-reference/
 

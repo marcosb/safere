@@ -298,12 +298,12 @@ internal class UnicodePropertySyntaxTest {
                 "(?U)\\p{Space}",
                 "[\\p{IsWhite_Space}&&[\\p{Cc}\\p{Z}]]"
             )) {
-                Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).matches())
+                Assertions.assertThat(Pattern.compile(regex).matcher(input).matches())
                     .`as`("%s at U+%04X", regex, cp)
                     .isEqualTo(expected)
             }
             for (regex in arrayOf<String>("\\P{IsWhite_Space}", "[^\\p{IsWhite_Space}]", "(?U)\\S")) {
-                Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).matches())
+                Assertions.assertThat(Pattern.compile(regex).matcher(input).matches())
                     .`as`("%s at U+%04X", regex, cp)
                     .isEqualTo(!expected)
             }
@@ -326,17 +326,17 @@ internal class UnicodePropertySyntaxTest {
                         || (cp >= 0xFF41 && cp <= 0xFF46)
             val input = Character.toString(cp)
             for (regex in arrayOf<String>("\\p{IsHex_Digit}", "[\\p{IsHex_Digit}]")) {
-                Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).matches())
+                Assertions.assertThat(Pattern.compile(regex).matcher(input).matches())
                     .`as`("%s at U+%04X", regex, cp)
                     .isEqualTo(expected)
             }
             for (regex in arrayOf<String>("\\P{IsHex_Digit}", "[^\\p{IsHex_Digit}]")) {
-                Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).matches())
+                Assertions.assertThat(Pattern.compile(regex).matcher(input).matches())
                     .`as`("%s at U+%04X", regex, cp)
                     .isEqualTo(!expected)
             }
             // Unicode XDigit is deliberately broader: [gc=Nd IsHex_Digit].
-            Assertions.assertThat(org.safere.Pattern.compile("(?U)\\p{XDigit}").matcher(input).matches())
+            Assertions.assertThat(Pattern.compile("(?U)\\p{XDigit}").matcher(input).matches())
                 .isEqualTo(expected || Character.isDigit(cp))
         }
 
@@ -715,14 +715,14 @@ internal class UnicodePropertySyntaxTest {
         @DisplayName("lowercase 'is' prefix is not recognized")
         fun lowercaseIsPrefix() {
             // "isLatin" doesn't match any script/category, "is" is not a recognized prefix.
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{isLatin}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{isLatin}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("lowercase 'in' prefix is not recognized")
         fun lowercaseInPrefix() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{inBasicLatin}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{inBasicLatin}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
@@ -733,7 +733,7 @@ internal class UnicodePropertySyntaxTest {
         )
         @DisplayName("Caret negation in property names is rejected")
         fun caretNegationInPropertyNameRejected(regex: String?) {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) }).isInstanceOf(
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) }).isInstanceOf(
                 PatternSyntaxException::class.java
             )
         }
@@ -741,49 +741,49 @@ internal class UnicodePropertySyntaxTest {
         @Test
         @DisplayName("Invalid script name throws")
         fun invalidScriptName() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{IsNotARealScript}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{IsNotARealScript}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid block name throws")
         fun invalidBlockName() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{InNotARealBlock}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{InNotARealBlock}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid binary property name throws")
         fun invalidBinaryProperty() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{IsNotAProperty}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{IsNotAProperty}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid keyword key throws")
         fun invalidKeywordKey() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{foo=bar}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{foo=bar}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid keyword value throws")
         fun invalidKeywordValue() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{script=NotAScript}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{script=NotAScript}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid block keyword value throws")
         fun invalidBlockKeywordValue() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{block=NotABlock}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{block=NotABlock}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         @Test
         @DisplayName("Invalid gc keyword value throws")
         fun invalidGcKeywordValue() {
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{gc=XX}") })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{gc=XX}") })
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
     }
@@ -873,7 +873,7 @@ internal class UnicodePropertySyntaxTest {
         fun re2StyleBareUnicodePropertyNamesAreRejected(regex: String) {
             Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
-            Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) }).isInstanceOf(
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) }).isInstanceOf(
                 PatternSyntaxException::class.java
             )
         }

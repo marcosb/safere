@@ -126,7 +126,7 @@ internal class CaptureDemandTest {
     @Throws(Exception::class)
     fun exactFallbackUsesDemandFromOtherMatchers(utf8: Boolean, bitState: Boolean) {
         val pattern =
-            org.safere.Pattern.compile("(a?)*y", 0, EnginePathOptions.builder().bitState(bitState).build())
+            Pattern.compile("(a?)*y", 0, EnginePathOptions.builder().bitState(bitState).build())
         val text = "a".repeat(1023) + "y"
         val first: Matcher = matcher(pattern, text, utf8)
         Assertions.assertThat(first.find()).isTrue()
@@ -140,7 +140,7 @@ internal class CaptureDemandTest {
 
     @Test
     fun internalResolutionAndGroupZeroAccessDoNotCreateDemand() {
-        val pattern = org.safere.Pattern.compile("a\\s+(.+)")
+        val pattern = Pattern.compile("a\\s+(.+)")
         val matcher = pattern.matcher("a value")
         Assertions.assertThat(matcher.find()).isTrue()
         matcher.useAnchoringBounds(false)
@@ -155,7 +155,7 @@ internal class CaptureDemandTest {
 
     @Test
     fun invalidAccessAndSnapshotsWithoutSuccessfulCapturesDoNotCreateDemand() {
-        val pattern = org.safere.Pattern.compile("(a+)")
+        val pattern = Pattern.compile("(a+)")
         val matcher = pattern.matcher("bbb")
         matcher.toMatchResult()
         Assertions.assertThat(matcher.find()).isFalse()
@@ -175,7 +175,7 @@ internal class CaptureDemandTest {
     @Test
     @Throws(Exception::class)
     fun emptySnapshotsDoNotMakeFutureFallbackSearchesEager() {
-        val pattern = org.safere.Pattern.compile("x(a+)y", 0, EXACT)
+        val pattern = Pattern.compile("x(a+)y", 0, EXACT)
         val matcher = pattern.matcher("xaay")
         matcher.toMatchResult()
         Assertions.assertThat(matcher.find()).isTrue()
@@ -190,7 +190,7 @@ internal class CaptureDemandTest {
     @Test
     @Throws(Exception::class)
     fun unsuccessfulReplacementDoesNotCreateFutureDemand() {
-        val pattern = org.safere.Pattern.compile("x(a+)y", 0, EXACT)
+        val pattern = Pattern.compile("x(a+)y", 0, EXACT)
         val matcher = pattern.matcher("no match")
         Assertions.assertThat(matcher.replaceAll("$1")).isEqualTo("no match")
         Assertions.assertThat(pattern.innerCapturesObserved()).isFalse()
@@ -201,13 +201,13 @@ internal class CaptureDemandTest {
 
     @Test
     fun snapshotsAndStreamsRecordConsumptionOfEagerCaptures() {
-        val snapshot = org.safere.Pattern.compile("(a+)")
+        val snapshot = Pattern.compile("(a+)")
         val matcher = snapshot.matcher("aaa")
         Assertions.assertThat(matcher.matches()).isTrue()
         Assertions.assertThat(matcher.toMatchResult().group(1)).isEqualTo("aaa")
         Assertions.assertThat(snapshot.innerCapturesObserved()).isTrue()
         val stream =
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 "(a+)", 0, EnginePathOptions.builder().lazyCaptureExtraction(false).build()
             )
         Assertions.assertThat(stream.matcher("aaa").results().findFirst().orElseThrow()!!.group(1)).isEqualTo("aaa")
@@ -217,7 +217,7 @@ internal class CaptureDemandTest {
     @Test
     fun functionalReplacementPromisesSnapshotCapturesEvenForLiteralOutput() {
         val pattern =
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 "(a+)", 0, EnginePathOptions.builder().lazyCaptureExtraction(false).build()
             )
         Assertions.assertThat(pattern.matcher("aaa").replaceAll(Function { result: MatchResult? -> "x" }))
@@ -228,14 +228,14 @@ internal class CaptureDemandTest {
     @Test
     @Throws(Exception::class)
     fun demandSurvivesInputAndRegionChangesButBelongsToThePattern() {
-        val first = org.safere.Pattern.compile("a\\s+(.+)", 0, EXACT)
+        val first = Pattern.compile("a\\s+(.+)", 0, EXACT)
         val matcher = first.matcher("a first")
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(matcher.group(1)).isEqualTo("first")
         matcher.reset("a second").region(0, 8).useAnchoringBounds(false)
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(resolved(matcher)).isTrue()
-        val second = org.safere.Pattern.compile("a\\s+(.+)", 0, EXACT)
+        val second = Pattern.compile("a\\s+(.+)", 0, EXACT)
         matcher.usePattern(second).reset()
         Assertions.assertThat(matcher.find()).isTrue()
         Assertions.assertThat(resolved(matcher)).isFalse()
@@ -273,7 +273,7 @@ internal class CaptureDemandTest {
         }
 
         @Throws(Exception::class)
-        private fun matcher(pattern: org.safere.Pattern, text: String, utf8: Boolean): Matcher {
+        private fun matcher(pattern: Pattern, text: String, utf8: Boolean): Matcher {
             if (!utf8) {
                 return pattern.matcher(text)
             }

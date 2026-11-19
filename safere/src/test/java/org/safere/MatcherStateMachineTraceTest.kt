@@ -342,7 +342,7 @@ internal class MatcherStateMachineTraceTest {
         fun replaceFirstWithMutation(mutation: Mutation?): String
     }
 
-    private class SafeReSubject(private val matcher: org.safere.Matcher) : TraceSubject {
+    private class SafeReSubject(private val matcher: Matcher) : TraceSubject {
         override fun matches(): Boolean {
             return matcher.matches()
         }
@@ -810,11 +810,11 @@ internal class MatcherStateMachineTraceTest {
             if (jdk) {
                 return JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input))
             }
-            return SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
+            return SafeReSubject(Pattern.compile(regex).matcher(input))
         }
 
         private fun assertTrace(regex: String, input: String, vararg steps: Step) {
-            val safere: TraceSubject = SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
+            val safere: TraceSubject = SafeReSubject(Pattern.compile(regex).matcher(input))
             val jdk: TraceSubject = JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input))
 
             val safereTrace: MutableList<String> = trace(safere, *steps)

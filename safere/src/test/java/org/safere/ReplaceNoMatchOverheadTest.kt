@@ -104,7 +104,7 @@ internal class ReplaceNoMatchOverheadTest {
         val input = "No match here at all."
 
         for (regex in java.util.List.of<String?>(PAREN_SOURCE, BRACKET_SOURCE, BRACKET_TAG, "needle", "[0-9]+")) {
-            val safere = org.safere.Pattern.compile(regex)
+            val safere = Pattern.compile(regex)
             val jdk = java.util.regex.Pattern.compile(regex)
 
             for (rep in invalidReplacements) {
@@ -124,7 +124,7 @@ internal class ReplaceNoMatchOverheadTest {
     @Test
     fun invalidReplacementTemplateThrowsOnMatchIdenticalToJdk() {
         val input = "prefix (Source: 42) suffix"
-        val safere = org.safere.Pattern.compile(PAREN_SOURCE)
+        val safere = Pattern.compile(PAREN_SOURCE)
         val jdk = java.util.regex.Pattern.compile(PAREN_SOURCE)
 
         // Trailing backslash
@@ -148,7 +148,7 @@ internal class ReplaceNoMatchOverheadTest {
 
     @Test
     fun nullReplacementThrowsNullPointerExceptionEvenOnNoMatch() {
-        val pattern = org.safere.Pattern.compile(PAREN_SOURCE)
+        val pattern = Pattern.compile(PAREN_SOURCE)
         val matcher = pattern.matcher("no match")
 
         Assertions.assertThatThrownBy(ThrowingCallable { matcher.replaceAll(null as String?) })
@@ -160,7 +160,7 @@ internal class ReplaceNoMatchOverheadTest {
     @Test
     fun matcherStateAfterNoMatchThrowsIllegalStateException() {
         for (regex in java.util.List.of<String?>(PAREN_SOURCE, "literalMatch", "[0-9]+")) {
-            val pattern = org.safere.Pattern.compile(regex)
+            val pattern = Pattern.compile(regex)
             val matcher = pattern.matcher("no matching text here")
 
             matcher.replaceAll("X")
@@ -188,7 +188,7 @@ internal class ReplaceNoMatchOverheadTest {
 
     @Test
     fun matcherStateAfterMatchMatchesJdkContract() {
-        val pattern = org.safere.Pattern.compile(PAREN_SOURCE)
+        val pattern = Pattern.compile(PAREN_SOURCE)
         val input = "first (Source: 1) second (Source: 2) end"
 
         // replaceFirst leaves MATCHED
@@ -236,7 +236,7 @@ internal class ReplaceNoMatchOverheadTest {
 
         for (pat in patterns) {
             val jdk = java.util.regex.Pattern.compile(pat)
-            val safere = org.safere.Pattern.compile(pat)
+            val safere = Pattern.compile(pat)
 
             for (`in` in inputs) {
                 for (rep in replacements) {
@@ -254,8 +254,8 @@ internal class ReplaceNoMatchOverheadTest {
 
     @Test
     fun diagnosticsEmitsSingleEventWithStartAccelerationAndNoNestedFind() {
-        org.safere.Pattern.setDiagnostics(diagnostics)
-        val pattern = org.safere.Pattern.compile(PAREN_SOURCE)
+        Pattern.setDiagnostics(diagnostics)
+        val pattern = Pattern.compile(PAREN_SOURCE)
 
         // 1. No match replaceAll
         val noMatchInput = "The quick brown fox jumps over the lazy dog without any source."
@@ -288,7 +288,7 @@ internal class ReplaceNoMatchOverheadTest {
         Assertions.assertThat<MatchStrategy?>(op.boundaryStrategy).isEqualTo(MatchStrategy.DFA)
     }
 
-    private fun operationsFor(pattern: org.safere.Pattern): MutableList<OperationDiagnostics> {
+    private fun operationsFor(pattern: Pattern): MutableList<OperationDiagnostics> {
         val patternId = pattern.descriptor().patternId
         return diagnostics.operations.stream()
             .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }

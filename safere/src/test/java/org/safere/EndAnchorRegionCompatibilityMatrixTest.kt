@@ -166,7 +166,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
 
         private fun safeTrace(regexCase: RegexCase, scenario: Scenario): Trace {
             val pattern = Pattern.compile(regexCase.regex, regexCase.flags)
-            val matcher: org.safere.Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
             val groupCount = matcher.groupCount()
 
             val matches: String =
@@ -199,7 +199,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
         }
 
-        private fun configure(matcher: org.safere.Matcher, scenario: Scenario): org.safere.Matcher {
+        private fun configure(matcher: Matcher, scenario: Scenario): Matcher {
             return matcher
                 .region(scenario.start, scenario.end)
                 .useTransparentBounds(scenario.transparentBounds)
@@ -215,7 +215,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
                 .useAnchoringBounds(scenario.anchoringBounds)
         }
 
-        private fun matchTrace(matcher: org.safere.Matcher, operation: Operation): String {
+        private fun matchTrace(matcher: Matcher, operation: Operation): String {
             val matched =
                 when (operation) {
                     Operation.MATCHES -> matcher.matches()
@@ -233,7 +233,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
         }
 
-        private fun findTrace(matcher: org.safere.Matcher): MutableList<String> {
+        private fun findTrace(matcher: Matcher): MutableList<String> {
             val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
@@ -255,7 +255,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return trace
         }
 
-        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String> {
+        private fun resultsTrace(matcher: Matcher): MutableList<String> {
             return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
@@ -265,7 +265,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
                 .toList()
         }
 
-        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String> {
+        private fun resultsAfterFindTrace(matcher: Matcher): MutableList<String> {
             if (!matcher.find()) {
                 return mutableListOf<String>()
             }
@@ -279,7 +279,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return resultsTrace(matcher)
         }
 
-        private fun capturedMatchTrace(matcher: org.safere.Matcher): String {
+        private fun capturedMatchTrace(matcher: Matcher): String {
             val builder = StringBuilder()
             builder.append(matcher.start()).append('-').append(matcher.end())
             for (group in 0..matcher.groupCount()) {

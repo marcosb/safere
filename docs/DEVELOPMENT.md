@@ -31,6 +31,23 @@ On a shared development machine, prefix Maven commands with
 Optional native benchmark engines have additional prerequisites; see
 [benchmark runners](../safere-benchmarks/README.md).
 
+### Optional Kotlin Multiplatform sidecar
+
+Maven remains the shipping JVM build. An opt-in Gradle module
+[`safere-kmp`](../safere-kmp/) compiles the same library sources against a host
+kotlin/native target so JVM-only APIs can be replaced iteratively. It is not
+part of the Maven reactor and is expected to fail until those references are
+ported.
+
+```bash
+# Host native compile (linuxX64 in WSL/Linux, mingwX64 on Windows, macOS* on Mac).
+./tools/machine-run --label "safere-kmp native" -- \
+  ./gradlew :safere-kmp:compileKotlinLinuxX64 --continue
+```
+
+Use the matching `compileKotlinMingwX64` / `compileKotlinMacos*` task on other
+hosts. Common-metadata-only checks: `./gradlew :safere-kmp:compileCommonMainKotlinMetadata`.
+
 ## Exclusive machine access
 
 Tests, builds, profiling, fuzzing, and benchmarks share one exclusive reservation

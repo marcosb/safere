@@ -49,7 +49,7 @@ internal class SmallAsciiClassSearchTest {
         // Only the later member is present: scans for earlier absent members must stay bounded.
         for (length in intArrayOf(1024, 8192, 65536)) {
             val text = "Z".repeat(length)
-            val matcher = org.safere.Pattern.compile(regex).matcher(text)
+            val matcher = Pattern.compile(regex).matcher(text)
             var matches = 0
             while (matcher.find()) {
                 Assertions.assertThat(matcher.start()).isEqualTo(matches)
@@ -68,7 +68,7 @@ internal class SmallAsciiClassSearchTest {
     fun repeatedSearchReturnsNearestMatchAfterSmallGaps(regex: String?) {
         for (gap in intArrayOf(16, 32, 64, 128, 4096)) {
             val text = ("a".repeat(gap) + "Z").repeat(257)
-            val matcher = org.safere.Pattern.compile(regex).matcher(text)
+            val matcher = Pattern.compile(regex).matcher(text)
             var matches = 0
             while (matcher.find()) {
                 Assertions.assertThat(matcher.start()).isEqualTo(matches * (gap + 1) + gap)
@@ -86,7 +86,7 @@ internal class SmallAsciiClassSearchTest {
         val storage = ("ZZ" + text + "ZZ").toByteArray(StandardCharsets.UTF_8)
         val byteLength = text.toByteArray(StandardCharsets.UTF_8).size
         val input = Utf8Input.validated(storage, 2, byteLength)
-        val pattern = org.safere.Pattern.compile(regex)
+        val pattern = Pattern.compile(regex)
         val actual = pattern.matcher(input)
         val expected = java.util.regex.Pattern.compile(regex).matcher(text)
         Assertions.assertThat(pattern.find(input)).isTrue()

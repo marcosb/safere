@@ -172,7 +172,7 @@ internal class Utf8ReplacementTest {
     fun wholeInputReplacementUsesSubjectAndReplacementWindows(all: Boolean) {
         val source = "beforeé😀éafter".toByteArray(StandardCharsets.UTF_8)
         val replacement = "before[$0]後after".toByteArray(StandardCharsets.UTF_8)
-        val matcher = org.safere.Pattern.compile("é").matcher(Utf8Input.validated(source, 6, 8))
+        val matcher = Pattern.compile("é").matcher(Utf8Input.validated(source, 6, 8))
         val sink = CollectingSink()
 
         replace(matcher, sink, Utf8Input.validated(replacement, 6, 7), all)
@@ -184,7 +184,7 @@ internal class Utf8ReplacementTest {
     @ValueSource(booleans = [false, true])
     fun wholeInputReplacementWithoutMatchesBorrowsOriginalRangeAndSkipsInvalidTemplate(all: Boolean) {
         val source = "beforeé😀after".toByteArray(StandardCharsets.UTF_8)
-        val matcher = org.safere.Pattern.compile("z").matcher(Utf8Input.validated(source, 6, 6))
+        val matcher = Pattern.compile("z").matcher(Utf8Input.validated(source, 6, 6))
         val ranges: MutableList<Range> = ArrayList<Range>()
 
         replace(
@@ -238,7 +238,7 @@ internal class Utf8ReplacementTest {
                     val subject = "前é😀ab後b"
                     val source: Utf8Input = windowedInput(subject, window)
                     val template: Utf8Input = windowedInput(replacement, window)
-                    val matcher = org.safere.Pattern.compile(regex).matcher(source)
+                    val matcher = Pattern.compile(regex).matcher(source)
                     val sink = CollectingSink()
 
                     Assertions.assertThatThrownBy(ThrowingCallable { replace(matcher, sink, template, operation) })
@@ -278,7 +278,7 @@ internal class Utf8ReplacementTest {
         )) {
             val regex = "(".repeat(c.groups) + "b" + ")".repeat(c.groups)
             val subject = "前é😀ab後b"
-            val stringMatcher = org.safere.Pattern.compile(regex).matcher(subject)
+            val stringMatcher = Pattern.compile(regex).matcher(subject)
             val expected =
                 if (operation == ReplacementOperation.ALL)
                     stringMatcher.replaceAll(c.replacement)
@@ -406,7 +406,7 @@ internal class Utf8ReplacementTest {
         val regex = "(?<user>\\w+)@(\\w+)"
         val source = "a@b café@hôte 😀 x@y"
         Assertions.assertThat(replace(regex, source, replacement))
-            .isEqualTo(org.safere.Pattern.compile(regex).matcher(source).replaceAll(replacement))
+            .isEqualTo(Pattern.compile(regex).matcher(source).replaceAll(replacement))
     }
 
     @Test
@@ -475,7 +475,7 @@ internal class Utf8ReplacementTest {
         val storage = ByteArray(logical.size + 6)
         System.arraycopy(logical, 0, storage, 3, logical.size)
         val source = Utf8Input.validated(storage, 3, logical.size)
-        val matcher = org.safere.Pattern.compile("(é)").matcher(source)
+        val matcher = Pattern.compile("(é)").matcher(source)
         val sink = CollectingSink()
 
         while (matcher.find()) {
@@ -492,7 +492,7 @@ internal class Utf8ReplacementTest {
         val storage = ByteArray(logical.size + 6)
         System.arraycopy(logical, 0, storage, 3, logical.size)
         val matcher =
-            org.safere.Pattern.compile("(é)").matcher(Utf8Input.validated(storage, 3, logical.size))
+            Pattern.compile("(é)").matcher(Utf8Input.validated(storage, 3, logical.size))
         val ranges: MutableList<Range> = ArrayList<Range>()
         val sink = Utf8Sink { bytes: ByteArray?, offset: Int, length: Int -> ranges.add(Range(bytes, offset, length)) }
 
@@ -721,7 +721,7 @@ internal class Utf8ReplacementTest {
         }
 
         private fun matcher(pattern: String?, input: String): Utf8Matcher {
-            return org.safere.Pattern.compile(pattern).matcher(input(input))
+            return Pattern.compile(pattern).matcher(input(input))
         }
 
         private fun input(input: String): Utf8Input {

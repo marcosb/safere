@@ -47,7 +47,7 @@ private fun assertMatchesJdk(pattern: String, input: String) {
 
 /** Compare all find() results (not just first) against JDK.  */
 private fun assertAllMatchesMatchJdk(pattern: String, input: String) {
-    val saferePattern = org.safere.Pattern.compile(pattern)
+    val saferePattern = Pattern.compile(pattern)
     val jdkPattern = java.util.regex.Pattern.compile(pattern)
 
     val safereM = saferePattern.matcher(input)
@@ -71,7 +71,7 @@ private fun assertAllMatchesMatchJdk(pattern: String, input: String) {
 
 /** Same as [.assertMatchesJdk] but also compares capture groups.  */
 private fun assertMatchesJdkWithGroups(pattern: String, input: String) {
-    val saferePattern = org.safere.Pattern.compile(pattern)
+    val saferePattern = Pattern.compile(pattern)
     val jdkPattern = java.util.regex.Pattern.compile(pattern)
 
     val safereM = saferePattern.matcher(input)

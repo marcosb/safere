@@ -17,7 +17,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     @MethodSource("cases")
     fun findSequenceMatchesJdk(regex: String, input: String) {
         val expected = java.util.regex.Pattern.compile(regex).matcher(input)
-        val actual = org.safere.Pattern.compile(regex).matcher(input)
+        val actual = Pattern.compile(regex).matcher(input)
         while (expected.find()) {
             Assertions.assertThat(actual.find()).`as`("find for %s", regex).isTrue()
             Assertions.assertThat(actual.start()).isEqualTo(expected.start())
@@ -32,7 +32,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     fun utf8FindSequenceMatchesJdk(regex: String, input: String) {
         val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         val actual =
-            org.safere.Pattern.compile(regex).matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
+            Pattern.compile(regex).matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         while (expected.find()) {
             Assertions.assertThat(actual.find()).`as`("UTF-8 find for %s", regex).isTrue()
             Assertions.assertThat(actual.start())
@@ -47,7 +47,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     @MethodSource("supplementaryCases")
     @DisabledForCrosscheck("SafeRE intentionally prevents matching bounds inside surrogate pairs")
     fun supplementaryWordClassesPreserveScalarBounds(regex: String?, bounds: IntArray) {
-        val actual = org.safere.Pattern.compile(regex).matcher(" 𐐀`\u180e")
+        val actual = Pattern.compile(regex).matcher(" 𐐀`\u180e")
         var i = 0
         while (i < bounds.size) {
             Assertions.assertThat(actual.find()).isTrue()

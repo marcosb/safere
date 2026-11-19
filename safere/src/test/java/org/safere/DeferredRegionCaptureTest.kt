@@ -115,7 +115,7 @@ internal class DeferredRegionCaptureTest {
 
     @Test
     fun defaultEnginePreservesCapturesBeyondTheBitStateLimit() {
-        val pattern = org.safere.Pattern.compile("(a+?)?")
+        val pattern = Pattern.compile("(a+?)?")
         val body = "a".repeat(BitState.maxTextSize(pattern.prog()) + 1)
         val matcher = pattern.matcher("x" + body + "!").region(1, 1 + body.length)
 
@@ -129,7 +129,7 @@ internal class DeferredRegionCaptureTest {
     @ValueSource(strings = ["a", "é", "\uD801\uDC00"])
     fun deferredUtf8RegionCapturesUseByteCoordinates(atom: String) {
         val pattern =
-            org.safere.Pattern.compile(
+            Pattern.compile(
                 "(" + atom + "+?)?",
                 0,
                 EnginePathOptions.builder().onePass(false).bitState(false).build()
@@ -158,7 +158,7 @@ internal class DeferredRegionCaptureTest {
                 Engine.DEFERRED_NFA -> EnginePathOptions.builder().onePass(false).bitState(false).build()
                 Engine.EAGER_NFA -> EnginePathOptions.builder().onePass(false).bitState(false).dfa(false).build()
             }
-        val pattern = org.safere.Pattern.compile(regex, 0, options)
+        val pattern = Pattern.compile(regex, 0, options)
         val jdkPattern = java.util.regex.Pattern.compile(regex)
         for (prefix in mutableListOf<String>("", "x", "\uD801\uDC00")) {
             for (suffix in mutableListOf<String>("", "x", "\n")) {

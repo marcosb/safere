@@ -208,7 +208,7 @@ internal class GraphemeJdkImplementationDetailTest {
         private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
             val jdkMatcher =
                 java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-            val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+            val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
             Assertions.assertThat(safeMatcher.matches())
                 .`as`("matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -236,7 +236,7 @@ internal class GraphemeJdkImplementationDetailTest {
                     .region(start, end)
                     .useTransparentBounds(true)
             val safeMatcher =
-                org.safere.Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
+                Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
 
             Assertions.assertThat(safeMatcher.matches())
                 .`as`("transparent matches() for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -260,7 +260,7 @@ internal class GraphemeJdkImplementationDetailTest {
         ) {
             val jdkMatcher =
                 java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
-            val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
+            val safeMatcher = Pattern.compile(regex).matcher(input).region(start, end)
 
             Assertions.assertThat<String?>(capturedFindTrace(safeMatcher))
                 .`as`("captured find() trace for /%s/ on %s region [%s,%s]", regex, input, start, end)
@@ -276,7 +276,7 @@ internal class GraphemeJdkImplementationDetailTest {
                     .region(start, end)
                     .useTransparentBounds(true)
             val safeMatcher =
-                org.safere.Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
+                Pattern.compile(regex).matcher(input).region(start, end).useTransparentBounds(true)
 
             Assertions.assertThat<String?>(capturedFindTrace(safeMatcher))
                 .`as`(
@@ -294,7 +294,7 @@ internal class GraphemeJdkImplementationDetailTest {
             return matches
         }
 
-        private fun findBounds(matcher: org.safere.Matcher): MutableList<IntArray?> {
+        private fun findBounds(matcher: Matcher): MutableList<IntArray?> {
             val matches: MutableList<IntArray?> = ArrayList<IntArray?>()
             while (matcher.find()) {
                 matches.add(intArrayOf(matcher.start(), matcher.end()))
@@ -310,7 +310,7 @@ internal class GraphemeJdkImplementationDetailTest {
             return trace
         }
 
-        private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String> {
+        private fun capturedFindTrace(matcher: Matcher): MutableList<String> {
             val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
@@ -328,7 +328,7 @@ internal class GraphemeJdkImplementationDetailTest {
             return builder.toString()
         }
 
-        private fun capturedMatchTrace(matcher: org.safere.Matcher): String {
+        private fun capturedMatchTrace(matcher: Matcher): String {
             val builder = StringBuilder()
             builder.append(matcher.start()).append('-').append(matcher.end()).append(':')
             builder.append(matcher.group())

@@ -276,10 +276,12 @@ internal class Nfa {
      * @param anchored whether to anchor the search at the context start
      */
     private fun doSearch(anchored: Boolean) {
-        val text = context!!.text!!
-        val startPos = context!!.searchStart
-        val searchLimit = context!!.searchLimit
-        val endPos = context!!.endPos
+        val ctx = context!!
+        val text = ctx.text!!
+        val prog = prog!!
+        val startPos = ctx.searchStart
+        val searchLimit = ctx.searchLimit
+        val endPos = ctx.endPos
         var runq = allocQueueState()
         var nextq = allocQueueState()
 
@@ -287,7 +289,7 @@ internal class Nfa {
 
         var pos = startPos
         while (true) {
-            val decoded = decodeAtConsumeBoundary(text!!, pos, endPos)
+            val decoded = decodeAtConsumeBoundary(text, pos, endPos)
             val cp: Int = InputScanner.codePoint(decoded)
             val nextPos: Int = InputScanner.position(decoded)
 
@@ -301,7 +303,7 @@ internal class Nfa {
                 // Always use prog.start() (anchored start). Unanchored matching is achieved
                 // by starting a new thread at each position. The startUnanchored() entry point
                 // (which includes a .*? prefix) is only for the DFA engine.
-                addToThreadq(runq, prog!!.start(), text, pos, initialCap, false)
+                addToThreadq(runq, prog.start(), text, pos, initialCap, false)
             }
 
             // If all threads have died, stop if anchored or we already have a match.
@@ -352,15 +354,18 @@ internal class Nfa {
      * programs containing only scalar consumers and `\b{g}` use [.doSearch].
      */
     private fun doSearchEveryCharPosition(anchored: Boolean) {
-        val text = context!!.text!!
-        val startPos = context!!.searchStart
-        val searchLimit = context!!.searchLimit
+        val ctx = context!!
+        val text = ctx.text!!
+        val prog = prog!!
+        val startPos = ctx.searchStart
+        val searchLimit = ctx.searchLimit
         val start = Math.max(0, startPos)
         val runq = allocQueueState()
 
         var delayedBuffer: Array<QueueState?>? = null
         var delayedGrapheme: MutableMap<Int?, QueueState>? = null
-        if (prog!!.hasGraphemeSemantics()) {
+        val hasGrapheme = prog.hasGraphemeSemantics()
+        if (hasGrapheme) {
             delayedGrapheme = HashMap<Int?, QueueState>()
         } else {
             delayedBuffer = arrayOfNulls<QueueState>(4)
@@ -368,14 +373,14 @@ internal class Nfa {
 
         val initialCap = IntArray(threadArraySize)
 
-        val endPos = context!!.endPos
+        val endPos = ctx.endPos
         val isUtf8 = text is Utf8InputScanner
         var pos = start
         while (pos < endPos + 2) {
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record()
             }
-            if (prog!!.hasGraphemeSemantics()) {
+            if (hasGrapheme) {
                 mergeDelayedQueue(delayedGrapheme!!, pos, runq)
             } else {
                 mergeDelayedQueue(delayedBuffer!!, pos, runq)
@@ -383,7 +388,7 @@ internal class Nfa {
             if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
                 Arrays.fill(initialCap, -1)
                 initialCap[0] = pos
-                addToThreadq(runq, prog!!.start(), text, pos, initialCap, false)
+                addToThreadq(runq, prog.start(), text, pos, initialCap, false)
             }
 
             val nextBoundaryPos: Int
@@ -404,7 +409,7 @@ internal class Nfa {
             }
             if (matched
                 && runq.isEmpty()
-                && (if (prog!!.hasGraphemeSemantics())
+                && (if (hasGrapheme)
                     delayedGrapheme!!.isEmpty()
                 else
                     isDelayedBufferEmpty(delayedBuffer!!))
@@ -419,7 +424,7 @@ internal class Nfa {
         }
 
         freeQueueState(runq)
-        if (prog!!.hasGraphemeSemantics()) {
+        if (hasGrapheme) {
             for (q in delayedGrapheme!!.values) {
                 freeQueueState(q)
             }

@@ -41,7 +41,7 @@ internal class NestedNullableLoopTest {
     fun freshLoopEntriesMatchJdkAcrossEngines(regex: String, input: String) {
         val jdkPattern = java.util.regex.Pattern.compile(regex)
         for (options in ENGINE_OPTIONS) {
-            val pattern = org.safere.Pattern.compile(regex, 0, options)
+            val pattern = Pattern.compile(regex, 0, options)
             var jdk = jdkPattern.matcher(input)
             val safere = pattern.matcher(input)
             val matches = jdk.matches()
@@ -156,7 +156,7 @@ internal class NestedNullableLoopTest {
             return cases.stream()
         }
 
-        private fun assertGroupsMatch(jdk: java.util.regex.Matcher, safere: org.safere.Matcher) {
+        private fun assertGroupsMatch(jdk: java.util.regex.Matcher, safere: Matcher) {
             for (group in 0..jdk.groupCount()) {
                 Assertions.assertThat(safere.group(group)).isEqualTo(jdk.group(group))
                 Assertions.assertThat(safere.start(group)).isEqualTo(jdk.start(group))

@@ -69,7 +69,7 @@ internal class UnicodeMatchBoundsTest {
     @DisabledForCrosscheck("Region-local scalar decoding and boundary positions differ from JDK")
     @DisplayName("scalar region bounds intentionally diverge from java.util.regex")
     fun scalarRegionBoundsIntentionallyDivergeFromJdk(dc: DivergentRegionCase) {
-        val safePattern = org.safere.Pattern.compile(dc.c!!.regex, dc.c.flags)
+        val safePattern = Pattern.compile(dc.c!!.regex, dc.c.flags)
         Assertions.assertThat(Companion.trace(safePattern.matcher(dc.c.input), dc.c))
             .`as`("%s trace", dc.c.label)
             .isEqualTo(dc.expectedSafeTrace)
@@ -79,7 +79,7 @@ internal class UnicodeMatchBoundsTest {
     @MethodSource
     @DisplayName("scalar region bounds match java.util.regex")
     fun scalarRegionBoundsMatchJdk(c: RegionCase) {
-        val safePattern = org.safere.Pattern.compile(c.regex, c.flags)
+        val safePattern = Pattern.compile(c.regex, c.flags)
         val jdkPattern = java.util.regex.Pattern.compile(c.regex, c.flags)
 
         Assertions.assertThat(trace(safePattern.matcher(c.input), c))
@@ -364,7 +364,7 @@ internal class UnicodeMatchBoundsTest {
             )
         }
 
-        private fun trace(matcher: org.safere.Matcher, c: RegionCase): String {
+        private fun trace(matcher: Matcher, c: RegionCase): String {
             matcher
                 .region(c.regionStart, c.regionEnd)
                 .useTransparentBounds(c.transparentBounds)
@@ -430,7 +430,7 @@ internal class UnicodeMatchBoundsTest {
             }
         }
 
-        private fun findOutcome(matcher: org.safere.Matcher): Outcome {
+        private fun findOutcome(matcher: Matcher): Outcome {
             val matched = matcher.find()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
@@ -440,7 +440,7 @@ internal class UnicodeMatchBoundsTest {
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
 
-        private fun lookingAtOutcome(matcher: org.safere.Matcher): Outcome {
+        private fun lookingAtOutcome(matcher: Matcher): Outcome {
             val matched = matcher.lookingAt()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
@@ -450,7 +450,7 @@ internal class UnicodeMatchBoundsTest {
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
 
-        private fun matchesOutcome(matcher: org.safere.Matcher): Outcome {
+        private fun matchesOutcome(matcher: Matcher): Outcome {
             val matched = matcher.matches()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }

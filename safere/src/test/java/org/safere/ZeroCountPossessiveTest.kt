@@ -64,14 +64,14 @@ internal class ZeroCountPossessiveTest {
     )
     fun consumingImmediateOperandsStayUnsupported(regex: String) {
         java.util.regex.Pattern.compile(regex)
-        Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
             .hasMessageContaining("possessive quantifiers are not supported")
     }
 
     companion object {
         private fun assertOperationsSame(regex: String, flags: Int, input: String) {
-            val safe = org.safere.Pattern.compile(regex, flags)
+            val safe = Pattern.compile(regex, flags)
             val jdk = java.util.regex.Pattern.compile(regex, flags)
             val actual = safe.matcher(input)
             val expected = jdk.matcher(input)
@@ -96,7 +96,7 @@ internal class ZeroCountPossessiveTest {
             Assertions.assertThat(actual.find()).isFalse()
         }
 
-        private fun assertGroupsSame(actual: org.safere.Matcher, expected: java.util.regex.Matcher) {
+        private fun assertGroupsSame(actual: Matcher, expected: java.util.regex.Matcher) {
             Assertions.assertThat(actual.groupCount()).isEqualTo(expected.groupCount())
             for (group in 0..expected.groupCount()) {
                 Assertions.assertThat(actual.group(group)).`as`("group %s", group).isEqualTo(expected.group(group))

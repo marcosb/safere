@@ -41,7 +41,7 @@ internal class PosixPropertyClassTest {
             .isEqualTo(tc.expectedMatch)
 
         // SafeRE must match
-        val safePattern = org.safere.Pattern.compile("\\p{" + tc.className + "}")
+        val safePattern = Pattern.compile("\\p{" + tc.className + "}")
         Assertions.assertThat(safePattern.matcher(tc.input).matches())
             .`as`("SafeRE for \\p{%s} on \"%s\"", tc.className, tc.input)
             .isEqualTo(tc.expectedMatch)
@@ -51,7 +51,7 @@ internal class PosixPropertyClassTest {
     @DisplayName("All 13 POSIX class names are accepted by Pattern.compile")
     fun allClassNamesAccepted() {
         for (name in ALL_POSIX_CLASS_NAMES) {
-            org.safere.Pattern.compile("\\p{" + name + "}")
+            Pattern.compile("\\p{" + name + "}")
         }
     }
 
@@ -61,7 +61,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("\\P{Lower} matches non-lowercase")
         fun upperPNegation() {
-            val p = org.safere.Pattern.compile("\\P{Lower}")
+            val p = Pattern.compile("\\P{Lower}")
             Assertions.assertThat(p.matcher("A").matches()).isTrue()
             Assertions.assertThat(p.matcher("0").matches()).isTrue()
             Assertions.assertThat(p.matcher(" ").matches()).isTrue()
@@ -71,7 +71,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("\\P{Digit} matches non-digit")
         fun upperPDigitNegation() {
-            val p = org.safere.Pattern.compile("\\P{Digit}")
+            val p = Pattern.compile("\\P{Digit}")
             Assertions.assertThat(p.matcher("a").matches()).isTrue()
             Assertions.assertThat(p.matcher(" ").matches()).isTrue()
             Assertions.assertThat(p.matcher("0").matches()).isFalse()
@@ -85,7 +85,7 @@ internal class PosixPropertyClassTest {
         )
         @DisplayName("\\P{...} negation compiles for all POSIX classes")
         fun allNegationsCompile(className: String?) {
-            org.safere.Pattern.compile("\\P{" + className + "}")
+            Pattern.compile("\\P{" + className + "}")
         }
     }
 
@@ -95,7 +95,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("\\p{Lower} works inside a character class")
         fun posixInsideCharClass() {
-            val p = org.safere.Pattern.compile("[\\p{Lower}\\p{Digit}]+")
+            val p = Pattern.compile("[\\p{Lower}\\p{Digit}]+")
             Assertions.assertThat(p.matcher("abc123").matches()).isTrue()
             Assertions.assertThat(p.matcher("ABC").matches()).isFalse()
         }
@@ -103,7 +103,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("\\p{Punct} combined with literal characters")
         fun posixCombinedWithLiterals() {
-            val p = org.safere.Pattern.compile("[\\p{Punct}a]+")
+            val p = Pattern.compile("[\\p{Punct}a]+")
             Assertions.assertThat(p.matcher("a!.@").matches()).isTrue()
             Assertions.assertThat(p.matcher("b").matches()).isFalse()
         }
@@ -115,7 +115,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("\\p{Alpha}\\p{Digit}+ matches identifier-like strings")
         fun alphaDigit() {
-            val p = org.safere.Pattern.compile("\\p{Alpha}\\p{Digit}+")
+            val p = Pattern.compile("\\p{Alpha}\\p{Digit}+")
             Assertions.assertThat(p.matcher("a123").matches()).isTrue()
             Assertions.assertThat(p.matcher("123").matches()).isFalse()
             Assertions.assertThat(p.matcher("abc").matches()).isFalse()
@@ -124,7 +124,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("Quantified POSIX class in find mode")
         fun findMode() {
-            val m = org.safere.Pattern.compile("\\p{XDigit}+").matcher("zz=DEADBEEF;")
+            val m = Pattern.compile("\\p{XDigit}+").matcher("zz=DEADBEEF;")
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.group()).isEqualTo("DEADBEEF")
         }
@@ -132,7 +132,7 @@ internal class PosixPropertyClassTest {
         @Test
         @DisplayName("Alternation with POSIX classes")
         fun alternation() {
-            val p = org.safere.Pattern.compile("\\p{Lower}+|\\p{Digit}+")
+            val p = Pattern.compile("\\p{Lower}+|\\p{Digit}+")
             Assertions.assertThat(p.matcher("abc").matches()).isTrue()
             Assertions.assertThat(p.matcher("123").matches()).isTrue()
             Assertions.assertThat(p.matcher("ABC").matches()).isFalse()
@@ -154,7 +154,7 @@ internal class PosixPropertyClassTest {
         @DisplayName("Exhaustive ASCII scan matches JDK for all 128 code points")
         fun exhaustiveAsciiScan(className: String?) {
             val jdkPattern = java.util.regex.Pattern.compile("\\p{" + className + "}")
-            val safePattern = org.safere.Pattern.compile("\\p{" + className + "}")
+            val safePattern = Pattern.compile("\\p{" + className + "}")
 
             for (cp in 0..127) {
                 val s = String(Character.toChars(cp))

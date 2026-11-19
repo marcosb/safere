@@ -49,9 +49,9 @@ internal class LineAnchorRegionTest {
     ) {
         for (anchoring in mutableListOf<Boolean>(false, true)) {
             for (transparent in mutableListOf<Boolean>(false, true)) {
-                val scalar: org.safere.Matcher = Companion.configure(Pattern.compile(regex), region, anchoring!!, transparent!!)
+                val scalar: Matcher = Companion.configure(Pattern.compile(regex), region, anchoring!!, transparent!!)
                 val mixedPattern = Pattern.compile("(?:" + regex + ")|(?:\\Xz)")
-                val mixed: org.safere.Matcher = Companion.configure(mixedPattern, region, anchoring, transparent)
+                val mixed: Matcher = Companion.configure(mixedPattern, region, anchoring, transparent)
                 val expected: MutableList<MutableList<Capture?>?> = trace(scalar, operation)
                 Assertions.assertThat<MutableList<Capture?>?>(trace(mixed, operation))
                     .`as`(
@@ -81,7 +81,7 @@ internal class LineAnchorRegionTest {
                 ) {
                     continue
                 }
-                val actual: org.safere.Matcher = Companion.configure(pattern, region, anchoring!!, transparent!!)
+                val actual: Matcher = Companion.configure(pattern, region, anchoring!!, transparent!!)
                 val expected =
                     java.util.regex.Pattern.compile(mixedRegex)
                         .matcher(region.input)
@@ -150,8 +150,8 @@ internal class LineAnchorRegionTest {
         }
 
         private fun configure(
-            pattern: org.safere.Pattern, region: InputRegion, anchoring: Boolean, transparent: Boolean
-        ): org.safere.Matcher {
+            pattern: Pattern, region: InputRegion, anchoring: Boolean, transparent: Boolean
+        ): Matcher {
             return pattern
                 .matcher(region.input)
                 .region(region.start, region.end)
@@ -159,7 +159,7 @@ internal class LineAnchorRegionTest {
                 .useTransparentBounds(transparent)
         }
 
-        private fun trace(matcher: org.safere.Matcher, operation: Operation): MutableList<MutableList<Capture?>?> {
+        private fun trace(matcher: Matcher, operation: Operation): MutableList<MutableList<Capture?>?> {
             val result: MutableList<MutableList<Capture?>?> = ArrayList<MutableList<Capture?>?>()
             var matched: Boolean
             do {
@@ -202,7 +202,7 @@ internal class LineAnchorRegionTest {
         }
 
         private fun assertUtf8Trace(
-            pattern: org.safere.Pattern,
+            pattern: Pattern,
             region: InputRegion,
             anchoring: Boolean,
             transparent: Boolean,

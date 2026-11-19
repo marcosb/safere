@@ -23,7 +23,7 @@ internal class ScopedLineModeAnchorTest {
     ) {
         val input = "x".repeat(padding) + "foo" + terminator
         val jdk = java.util.regex.Pattern.compile(regex, flags)
-        val safe = org.safere.Pattern.compile(regex, flags)
+        val safe = Pattern.compile(regex, flags)
         val expected: MutableList<String> = ArrayList<String>()
         val reference = jdk.matcher(input)
         while (reference.find()) {
@@ -97,7 +97,7 @@ internal class ScopedLineModeAnchorTest {
                 for (padding in intArrayOf(0, 512)) {
                     val inputs = mutableListOf<String>("\r\na\na", "\na\r\na", "\r\na", "a\na")
                     for (order in listOf(inputs, inputs.reversed())) {
-                        val safe = org.safere.Pattern.compile(regex, flags)
+                        val safe = Pattern.compile(regex, flags)
                         val jdk = java.util.regex.Pattern.compile(regex, flags)
                         for (suffix in order) {
                             val input = "x".repeat(padding) + suffix
@@ -137,7 +137,7 @@ internal class ScopedLineModeAnchorTest {
                     "(?m)(?" + mode + ":^)(foo|bar)",
                     "(?m)(?" + mode + ":^foo$)|(?-d:^bar$)"
                 )) {
-                    val safe = org.safere.Pattern.compile(regex, flags)
+                    val safe = Pattern.compile(regex, flags)
                     val jdk = java.util.regex.Pattern.compile(regex, flags)
                     for (terminator in mutableListOf<String>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")) {
                         val input = "x".repeat(2048) + terminator + "foo" + terminator
@@ -162,7 +162,7 @@ internal class ScopedLineModeAnchorTest {
             for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES)) {
                 for (mode in mutableListOf<String>("d", "-d")) {
                     val regex = "(foo|bar)(?" + mode + ":" + anchor + ")"
-                    val safe = org.safere.Pattern.compile(regex, flags)
+                    val safe = Pattern.compile(regex, flags)
                     val jdk = java.util.regex.Pattern.compile(regex, flags)
                     for (terminator in mutableListOf<String>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
                         val input = "xfoo" + terminator

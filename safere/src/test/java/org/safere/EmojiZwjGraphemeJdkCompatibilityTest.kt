@@ -28,7 +28,7 @@ internal class EmojiZwjGraphemeJdkCompatibilityTest {
         Assertions.assertThat<String?>(jdkClusters(java.util.regex.Pattern.compile("\\X").matcher(input)))
             .`as`("JDK \\X clusters")
             .isEqualTo(expected)
-        Assertions.assertThat<String?>(org.safere.Pattern.compile("\\b{g}").split(input))
+        Assertions.assertThat<String?>(Pattern.compile("\\b{g}").split(input))
             .containsExactlyElementsOf(expected)
             .containsExactly(*java.util.regex.Pattern.compile("\\b{g}").split(input))
     }
@@ -73,7 +73,7 @@ internal class EmojiZwjGraphemeJdkCompatibilityTest {
             )
         }
 
-        private fun clusters(matcher: org.safere.Matcher): MutableList<String> {
+        private fun clusters(matcher: Matcher): MutableList<String> {
             val clusters: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 clusters.add(matcher.group()!!)

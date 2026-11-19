@@ -37,7 +37,7 @@ internal class JavaCharacterClassesTest {
             .isEqualTo(tc.expectedMatch)
 
         // SafeRE must match
-        val safePattern = org.safere.Pattern.compile("\\p{" + tc.className + "}+")
+        val safePattern = Pattern.compile("\\p{" + tc.className + "}+")
         Assertions.assertThat(safePattern.matcher(tc.input).find())
             .`as`("SafeRE for \\p{%s} on \"%s\"", tc.className, tc.input)
             .isEqualTo(tc.expectedMatch)
@@ -47,14 +47,14 @@ internal class JavaCharacterClassesTest {
     @DisplayName("All 18 java character class names are accepted")
     fun allClassNamesAccepted() {
         for (name in ALL_JAVA_CLASS_NAMES) {
-            org.safere.Pattern.compile("\\p{" + name + "}")
+            Pattern.compile("\\p{" + name + "}")
         }
     }
 
     @Test
     @DisplayName("Negation with \\P{...} works")
     fun negationWorks() {
-        val p = org.safere.Pattern.compile("\\P{javaLowerCase}+")
+        val p = Pattern.compile("\\P{javaLowerCase}+")
         Assertions.assertThat(p.matcher("ABC").find()).isTrue()
         Assertions.assertThat(p.matcher("abc").find()).isFalse()
     }
@@ -62,7 +62,7 @@ internal class JavaCharacterClassesTest {
     @Test
     @DisplayName("Single java character class find matches one code point at a time")
     fun singleJavaCharacterClassFindMatchesOneCodePoint() {
-        val safe = org.safere.Pattern.compile("\\p{javaLetter}")
+        val safe = Pattern.compile("\\p{javaLetter}")
         val jdk = java.util.regex.Pattern.compile("\\p{javaLetter}")
         val text = "1a\uD835\uDD18_"
 
@@ -85,7 +85,7 @@ internal class JavaCharacterClassesTest {
     @Test
     @DisplayName("Caret negation in java character class names is rejected")
     fun caretNegationRejected() {
-        Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\p{^javaLowerCase}+") })
+        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("\\p{^javaLowerCase}+") })
             .isInstanceOf(PatternSyntaxException::class.java)
     }
 
@@ -93,7 +93,7 @@ internal class JavaCharacterClassesTest {
     @DisplayName("\\p{javaLowerCase}+ matches lowercase text")
     fun javaLowerCaseMatchesLowercaseText() {
         // Regression for issue #106.
-        val p = org.safere.Pattern.compile("\\p{javaLowerCase}+", org.safere.Pattern.UNICODE_CHARACTER_CLASS)
+        val p = Pattern.compile("\\p{javaLowerCase}+", org.safere.Pattern.UNICODE_CHARACTER_CLASS)
         Assertions.assertThat(p.matcher("foo").find()).isTrue()
     }
 
@@ -105,8 +105,8 @@ internal class JavaCharacterClassesTest {
     )
     fun javaClassesAgreeWithEquivalentUnicodeProperties(javaClass: String?, equivalent: String?) {
         // Both sides use the same Unicode data, so they agree on every JDK.
-        val actual = org.safere.Pattern.compile("\\p{" + javaClass + "}").matcher("")
-        val expected = org.safere.Pattern.compile(equivalent).matcher("")
+        val actual = Pattern.compile("\\p{" + javaClass + "}").matcher("")
+        val expected = Pattern.compile(equivalent).matcher("")
         for (cp in 0..java.lang.Character.MAX_CODE_POINT) {
             val s = java.lang.Character.toString(cp)
             Assertions.assertThat(actual.reset(s).matches()).`as`("U+%04X", cp).isEqualTo(expected.reset(s).matches())

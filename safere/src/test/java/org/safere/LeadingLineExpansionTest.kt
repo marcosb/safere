@@ -81,7 +81,7 @@ internal class LeadingLineExpansionTest {
     fun findAgreesWithJdk() {
         for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES, org.safere.Pattern.MULTILINE)) {
             for (regex in REGEXES) {
-                val pattern = org.safere.Pattern.compile(regex, flags)
+                val pattern = Pattern.compile(regex, flags)
                 val jdk = java.util.regex.Pattern.compile(regex, flags)
                 for (input in paddedInputs()) {
                     val what: String = "%s (flags %d) on %s".format(regex, flags, input)
@@ -122,7 +122,7 @@ internal class LeadingLineExpansionTest {
     fun failedAttemptAtLineStartMovesOnToLaterLine() {
         // The first line holds the literal, but its tail cannot match, so the start candidate at that
         // line's start fails and the search must find the match on the third line.
-        val pattern = org.safere.Pattern.compile(".*error: (\\d+)")
+        val pattern = Pattern.compile(".*error: (\\d+)")
         val input: String = PAD + " x error: none\nnothing\n" + PAD + " y error: 42\n"
         val thirdLine = input.indexOf("nothing\n") + "nothing\n".length
         val matcher = pattern.matcher(input)
@@ -139,7 +139,7 @@ internal class LeadingLineExpansionTest {
 
     @Test
     fun plusNeedsOneCharacterBeforeTheLiteral() {
-        val pattern = org.safere.Pattern.compile(".+error")
+        val pattern = Pattern.compile(".+error")
         val input: String = PAD + "\nerror\nerror\nxerror"
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
@@ -149,7 +149,7 @@ internal class LeadingLineExpansionTest {
 
     @Test
     fun supplementaryCharactersBeforeTheLiteral() {
-        val pattern = org.safere.Pattern.compile("(.*)error")
+        val pattern = Pattern.compile("(.*)error")
         val input: String = PAD + "\n" + "😀".repeat(150) + "b😀error"
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
@@ -210,7 +210,7 @@ internal class LeadingLineExpansionTest {
 
         private fun regionsAgreeWithJdk(input: String, startStep: Int, endStep: Int) {
             for (regex in REGEXES) {
-                val pattern = org.safere.Pattern.compile(regex)
+                val pattern = Pattern.compile(regex)
                 val jdk = java.util.regex.Pattern.compile(regex)
                 var start = 0
                 while (start <= input.length) {
@@ -246,7 +246,7 @@ internal class LeadingLineExpansionTest {
             return if (input.startsWith(PAD)) PAD.length else 0
         }
 
-        private fun findAll(matcher: org.safere.Matcher): MutableList<String> {
+        private fun findAll(matcher: Matcher): MutableList<String> {
             val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 out.add(groups(matcher))
@@ -270,7 +270,7 @@ internal class LeadingLineExpansionTest {
             return sb.toString()
         }
 
-        private fun findAllUtf8(pattern: org.safere.Pattern, input: String): MutableList<String> {
+        private fun findAllUtf8(pattern: Pattern, input: String): MutableList<String> {
             val matcher = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
             val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {

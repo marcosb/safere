@@ -264,10 +264,10 @@ internal class StartAcceleratorTest {
                 .`as`("JDK find for %s against %s", regex, inputs[i])
                 .isTrue()
             val utf8 = Utf8Input.validated(inputs[i]!!.toByteArray(StandardCharsets.UTF_8))
-            Assertions.assertThat(org.safere.Pattern.compile(regex, 0, noAcceleration).matcher(utf8).find())
+            Assertions.assertThat(Pattern.compile(regex, 0, noAcceleration).matcher(utf8).find())
                 .`as`("unaccelerated UTF-8 find for %s against %s", regex, inputs[i])
                 .isTrue()
-            Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(utf8).find())
+            Assertions.assertThat(Pattern.compile(regex).matcher(utf8).find())
                 .`as`("accelerated UTF-8 find for %s against %s", regex, inputs[i])
                 .isTrue()
         }
@@ -294,7 +294,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun charClassPrefixAcceleratesStringAndUtf8() {
-        val pairScanInfo = org.safere.Pattern.compile("[ab]").charClassPrefix()
+        val pairScanInfo = Pattern.compile("[ab]").charClassPrefix()
         val descPair: StartPlan = plan(null, false, null, pairScanInfo)
 
         val strAcc = StringStartAccelerator.create(descPair, false)!!
@@ -312,7 +312,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8PairAcc, utf8Scanner("xxxb"), 0))
             .isEqualTo(3)
 
-        val tripleScanInfo = org.safere.Pattern.compile("[abc]").charClassPrefix()
+        val tripleScanInfo = Pattern.compile("[abc]").charClassPrefix()
         val planTriple: StartPlan = plan(null, false, null, tripleScanInfo)
         val utf8TripleAcc = Utf8StartAccelerator.create(planTriple, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8TripleAcc)
@@ -321,22 +321,22 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8TripleAcc, utf8Scanner("xxxc"), 0))
             .isEqualTo(3)
 
-        val multiScanInfo = org.safere.Pattern.compile("[abcd]").charClassPrefix()
+        val multiScanInfo = Pattern.compile("[abcd]").charClassPrefix()
         val descMulti: StartPlan = plan(null, false, null, multiScanInfo)
         Assertions.assertThat<Utf8StartAccelerator?>(Utf8StartAccelerator.create(descMulti, false)).isNull()
         Assertions.assertThat<StringStartAccelerator?>(StringStartAccelerator.create(descMulti, false)).isNull()
 
-        val denseUnicodeScanInfo = org.safere.Pattern.compile("[0-9é]").charClassPrefix()
+        val denseUnicodeScanInfo = Pattern.compile("[0-9é]").charClassPrefix()
         val denseUnicode: StartPlan = plan(null, false, null, denseUnicodeScanInfo)
         Assertions.assertThat<Utf8StartAccelerator?>(Utf8StartAccelerator.create(denseUnicode, false)).isNull()
         Assertions.assertThat<StringStartAccelerator?>(StringStartAccelerator.create(denseUnicode, false)).isNull()
 
-        val sparseUnicodeScanInfo = org.safere.Pattern.compile("[aé]").charClassPrefix()
+        val sparseUnicodeScanInfo = Pattern.compile("[aé]").charClassPrefix()
         val sparseUnicode: StartPlan = plan(null, false, null, sparseUnicodeScanInfo)
         Assertions.assertThat<Utf8StartAccelerator?>(Utf8StartAccelerator.create(sparseUnicode, false)).isNotNull()
         Assertions.assertThat<StringStartAccelerator?>(StringStartAccelerator.create(sparseUnicode, false)).isNotNull()
 
-        val nonAsciiScanInfo = org.safere.Pattern.compile("[éê]").charClassPrefix()
+        val nonAsciiScanInfo = Pattern.compile("[éê]").charClassPrefix()
         val nonAscii: StartPlan = plan(null, false, null, nonAsciiScanInfo)
         Assertions.assertThat<Utf8StartAccelerator?>(Utf8StartAccelerator.create(nonAscii, false)).isNotNull()
         Assertions.assertThat<StringStartAccelerator?>(StringStartAccelerator.create(nonAscii, false)).isNotNull()
@@ -344,7 +344,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun unicodeCharClassPrefixAcceleratesStringAndUtf8() {
-        val pattern = org.safere.Pattern.compile("[aéĀ]+")
+        val pattern = Pattern.compile("[aéĀ]+")
         val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CharClass::class.java)
@@ -361,7 +361,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun supplementaryUnicodeCharClassPrefixAcceleratesStringAndUtf8() {
-        val pattern = org.safere.Pattern.compile("[(é)|(😀)]")
+        val pattern = Pattern.compile("[(é)|(😀)]")
         val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CharClass::class.java)
@@ -378,7 +378,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun unicodeCharClassPrefixResumesAsciiScanningAfterNonAsciiCodePoints() {
-        val accelerator = org.safere.Pattern.compile("[aéĀ]+").stringStartAccelerator()!!
+        val accelerator = Pattern.compile("[aéĀ]+").stringStartAccelerator()!!
 
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(accelerator, "000©000", 0, false))
             .isEqualTo(-1)
@@ -419,7 +419,7 @@ internal class StartAcceleratorTest {
         )
 
         for (patStr in testPatterns) {
-            val pattern = org.safere.Pattern.compile(patStr)
+            val pattern = Pattern.compile(patStr)
             val strAcc = pattern.stringStartAccelerator()
             val utf8Acc = pattern.utf8StartAccelerator()
 
@@ -449,7 +449,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun questLeadingExpansionBeforeNonAsciiCharClassAcceleratesStringOnly() {
-        val pattern = org.safere.Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]")
+        val pattern = Pattern.compile(" ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]")
         Assertions.assertThat<StringStartAccelerator?>(pattern.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(pattern.utf8StartAccelerator()).isNull()
     }
@@ -491,7 +491,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun compiledPatternPoliciesMatchExpectedAccelerators() {
-        val literalPat = org.safere.Pattern.compile("abc")
+        val literalPat = Pattern.compile("abc")
         Assertions.assertThat<StringStartAccelerator?>(literalPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(literalPat.utf8StartAccelerator()).isNotNull()
         Assertions.assertThat<AcceleratorPolicy?>(literalPat.stringStartAccelerator()!!.policy())
@@ -499,13 +499,13 @@ internal class StartAcceleratorTest {
         Assertions.assertThat<AcceleratorPolicy?>(literalPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
 
-        val caseInsensitivePat = org.safere.Pattern.compile("(?i)abc")
+        val caseInsensitivePat = Pattern.compile("(?i)abc")
         Assertions.assertThat<StringStartAccelerator?>(caseInsensitivePat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(caseInsensitivePat.utf8StartAccelerator()).isNotNull()
         Assertions.assertThat<MatchStrategy?>(caseInsensitivePat.utf8StartAccelerator()!!.policy().strategy)
             .isEqualTo(MatchStrategy.LITERAL)
 
-        val charClassPat = org.safere.Pattern.compile("[0-2][a-z]+")
+        val charClassPat = Pattern.compile("[0-2][a-z]+")
         Assertions.assertThat<StringStartAccelerator?>(charClassPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(charClassPat.utf8StartAccelerator()).isNotNull()
         Assertions.assertThat<AcceleratorPolicy?>(charClassPat.stringStartAccelerator()!!.policy())
@@ -513,11 +513,11 @@ internal class StartAcceleratorTest {
         Assertions.assertThat<AcceleratorPolicy?>(charClassPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.CHAR_CLASS)
 
-        val broadCharClassPat = org.safere.Pattern.compile("[0-9][a-z]+")
+        val broadCharClassPat = Pattern.compile("[0-9][a-z]+")
         Assertions.assertThat<StringStartAccelerator?>(broadCharClassPat.stringStartAccelerator()).isNull()
         Assertions.assertThat<Utf8StartAccelerator?>(broadCharClassPat.utf8StartAccelerator()).isNull()
 
-        val fixedOffsetPat = org.safere.Pattern.compile("..needle")
+        val fixedOffsetPat = Pattern.compile("..needle")
         Assertions.assertThat<StringStartAccelerator?>(fixedOffsetPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(fixedOffsetPat.utf8StartAccelerator()).isNotNull()
         Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.stringStartAccelerator()!!.policy())
@@ -525,7 +525,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
 
-        val unacceleratedPat = org.safere.Pattern.compile(".*")
+        val unacceleratedPat = Pattern.compile(".*")
         Assertions.assertThat<StringStartAccelerator?>(unacceleratedPat.stringStartAccelerator()).isNull()
         Assertions.assertThat<Utf8StartAccelerator?>(unacceleratedPat.utf8StartAccelerator()).isNull()
     }
@@ -543,7 +543,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun literalAlternationRetainsStringCharacterClassFallback() {
-        val pattern = org.safere.Pattern.compile("apple|banana|cherry")
+        val pattern = Pattern.compile("apple|banana|cherry")
 
         Assertions.assertThat<StartPlan?>(pattern.startPlan())
             .isInstanceOf(StartPlan.MultiLiteral::class.java)
@@ -622,7 +622,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun discreteOffsetsResolveTheExactStartAgainstTheLeadingClass() {
-        val plan = org.safere.Pattern.compile("https?://\\S*").startPlan()
+        val plan = Pattern.compile("https?://\\S*").startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.FixedOffset::class.java)
 
         // `://` sits four characters after `h` in `http://` and five in `https://`. Retreating by the
@@ -641,7 +641,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun discreteOffsetResolutionStaysBelowStartsBelongingToLaterLiterals() {
-        val plan = org.safere.Pattern.compile("(aq|b[a-z]{9})z").startPlan()
+        val plan = Pattern.compile("(aq|b[a-z]{9})z").startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.FixedOffset::class.java)
 
         // Offsets 2 and 10 are far apart, so the starts a literal occurrence implies are not ordered by
@@ -663,7 +663,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingWhitespaceCharClassExpansionAcceleratesStringAndUtf8() {
-        val pattern = org.safere.Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]")
+        val pattern = Pattern.compile("\\s*[\\[\\uff3b]\\d+[\\]\\uff3d]")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
 
@@ -702,7 +702,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingWhitespaceLiteralExpansionAcceleratesStringAndUtf8() {
-        val pattern = org.safere.Pattern.compile("\\s+https?://\\w+")
+        val pattern = Pattern.compile("\\s+https?://\\w+")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
 
@@ -738,7 +738,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingBoundedUnicodeExpansionAcceleratesStringAndUtf8() {
-        val pattern = org.safere.Pattern.compile("[\\u00e9\\u00e8]+:target")
+        val pattern = Pattern.compile("[\\u00e9\\u00e8]+:target")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le =
@@ -788,7 +788,7 @@ internal class StartAcceleratorTest {
     @Test
     fun leadingSupplementaryUnicodeExpansionAcceleratesStringAndUtf8() {
         // Supplementary code point class: U+1F600, U+1F601 (Grinning Face, Beaming Face)
-        val pattern = org.safere.Pattern.compile("[\\x{1F600}\\x{1F601}]+:target")
+        val pattern = Pattern.compile("[\\x{1F600}\\x{1F601}]+:target")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
 
@@ -826,13 +826,13 @@ internal class StartAcceleratorTest {
         }
         regex.append('z')
 
-        Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(regex.toString()) })
+        Assertions.assertThatCode(ThrowingCallable { Pattern.compile(regex.toString()) })
             .doesNotThrowAnyException()
     }
 
     @Test
     fun nullableLeadingExpansionVerifiesCandidateAtInnerMatch() {
-        val pattern = org.safere.Pattern.compile("(\\s*)# [Nn][Oo][Qq][Aa]")
+        val pattern = Pattern.compile("(\\s*)# [Nn][Oo][Qq][Aa]")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le =
@@ -877,7 +877,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingExpansionWithLeadingBoundaryPreservesAssertions() {
-        val pattern = org.safere.Pattern.compile("\\b[a-z]*target")
+        val pattern = Pattern.compile("\\b[a-z]*target")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le =
@@ -901,7 +901,7 @@ internal class StartAcceleratorTest {
     fun leadingExpansionExpandsBackwardAcrossMultiByteCharacters() {
         // `\s` is single-unit, so the other tests always take the singleUnitCodePointBefore fast
         // path. U+00E0..U+00FF are two bytes each in UTF-8, which forces decodeBackward.
-        val pattern = org.safere.Pattern.compile("[\\u00e0-\\u00ff]*RARE")
+        val pattern = Pattern.compile("[\\u00e0-\\u00ff]*RARE")
         Assertions.assertThat<StartPlan?>(pattern.startPlan())
             .isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val u8Acc = pattern.utf8StartAccelerator()
@@ -934,7 +934,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingExpansionWithUnicodeFoldedLiteralUsesScalarFallback() {
-        val pattern = org.safere.Pattern.compile("(?iu)[0-9]*Шерлок Холмс")
+        val pattern = Pattern.compile("(?iu)[0-9]*Шерлок Холмс")
         Assertions.assertThat<StartPlan?>(pattern.startPlan())
             .isInstanceOf(StartPlan.LeadingExpansion::class.java)
         Assertions.assertThat<Utf8StartAccelerator?>(pattern.utf8StartAccelerator()).isNull()
@@ -946,7 +946,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun leadingExpansionWithNonNullableRepetitionKeepsTheScalarPath() {
-        val pattern = org.safere.Pattern.compile("\\s+# noqa")
+        val pattern = Pattern.compile("\\s+# noqa")
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
         val le =
@@ -980,7 +980,7 @@ internal class StartAcceleratorTest {
     fun nullableLeadingExpansionVerifiesCandidateAtInnerMatchWhenSplitting() {
         // Pattern.split reaches Matcher.findSplitPositions -> findNextMatchPacked, a third copy of
         // the candidate-verification block that the find() tests never execute.
-        val pattern = org.safere.Pattern.compile("\\s*# noqa")
+        val pattern = Pattern.compile("\\s*# noqa")
 
         Assertions.assertThat<String?>(pattern.split("alpha    # noqa beta")).containsExactly("alpha", " beta")
 

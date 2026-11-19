@@ -63,7 +63,7 @@ internal class BoundedRepeatLeftmostPositionTest {
     companion object {
         private fun assertFindSameAsJdk(pattern: String, input: String) {
             val jdkMatcher = java.util.regex.Pattern.compile(pattern).matcher(input)
-            val safereMatcher = org.safere.Pattern.compile(pattern).matcher(input)
+            val safereMatcher = Pattern.compile(pattern).matcher(input)
 
             Assertions.assertThat(jdkMatcher.find()).isTrue()
             Assertions.assertThat(safereMatcher.find()).isTrue()
