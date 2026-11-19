@@ -7,11 +7,8 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Collectors
 import java.util.stream.Stream
 
@@ -21,7 +18,7 @@ internal class MatcherStateMachineTraceTest {
     @Test
     fun nullableRepeatFindPreservesPriorityWithinTransparentRegions() {
         // OSS-Fuzz 575905869: the empty alternative must win before the dot alternative.
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(?:[a-c]{0,2}(?:|.))+",
             "(?:a{0,2}(?:|.))+",
             "(?:a?(?:|.))+",
@@ -30,11 +27,11 @@ internal class MatcherStateMachineTraceTest {
             "(?:a{0,2}(?:|.)){1,3}",
             "(?:([a-c]{0,2})(?:|.))+"
         )) {
-            for (body in mutableListOf<String?>("!a!a!", "!a中a!", "!a😀a!", "!a\udc00a!")) {
-                for (padding in mutableListOf<Int?>(0, 1, 5)) {
+            for (body in mutableListOf<String>("!a!a!", "!a中a!", "!a😀a!", "!a\udc00a!")) {
+                for (padding in mutableListOf<Int>(0, 1, 5)) {
                     val input = "x".repeat(padding!!) + body + "z"
-                    for (anchoring in mutableListOf<Boolean?>(false, true)) {
-                        for (transparent in mutableListOf<Boolean?>(false, true)) {
+                    for (anchoring in mutableListOf<Boolean>(false, true)) {
+                        for (transparent in mutableListOf<Boolean>(false, true)) {
                             assertTrace(
                                 regex!!,
                                 input,
@@ -55,7 +52,7 @@ internal class MatcherStateMachineTraceTest {
 
     @Test
     fun failedExplicitFindStartRetainsResetContinuation() {
-        for (regex in mutableListOf<String?>("^[ab]*", "\\A(a?)", "a")) {
+        for (regex in mutableListOf<String>("^[ab]*", "\\A(a?)", "a")) {
             assertTrace(
                 regex!!,
                 "a!",
@@ -71,12 +68,12 @@ internal class MatcherStateMachineTraceTest {
     @DisplayName("failed find after an empty anchored match preserves continuation like the JDK")
     fun emptyAnchoredMatchContinuation() {
         // JDK 26 does not specify empty-match advancement after failure precisely (issue #817).
-        for (regex in mutableListOf<String?>("^[ab]*", "\\A(a?)", "^(a|b)*", "^(?:a*)", "(?m)^[ab]*")) {
-            for (input in List.of<String?>("", "!", "!a😀b!", "a!", "!".repeat(512), "!\na")) {
-                for (region in mutableListOf<Boolean?>(false, true)) {
-                    for (anchoring in mutableListOf<Boolean?>(false, true)) {
-                        for (initial in List.of<Step?>(Step.find(), Step.lookingAt())) {
-                            for (attempt in List.of<Step?>(
+        for (regex in mutableListOf<String>("^[ab]*", "\\A(a?)", "^(a|b)*", "^(?:a*)", "(?m)^[ab]*")) {
+            for (input in java.util.List.of<String?>("", "!", "!a😀b!", "a!", "!".repeat(512), "!\na")) {
+                for (region in mutableListOf<Boolean>(false, true)) {
+                    for (anchoring in mutableListOf<Boolean>(false, true)) {
+                        for (initial in java.util.List.of<Step?>(Step.find(), Step.lookingAt())) {
+                            for (attempt in java.util.List.of<Step?>(
                                 Step.find(),
                                 Step.lookingAt(),
                                 Step.matches()
@@ -109,11 +106,11 @@ internal class MatcherStateMachineTraceTest {
     @DisplayName("anchored attempts preserve find continuation after earlier matches")
     fun anchoredAttemptsPreserveFindContinuation() {
         // Covers issue #808, including empty matches and repeated failed attempts.
-        for (regex in mutableListOf<String?>("a", "(a+)", "a*", "(a|b)+", "😀*", "^a", "^[ab]")) {
-            for (input in mutableListOf<String?>("a a", "ba a", "a!", "!a", "😀!😀", "a")) {
-                for (initial in List.of<Step?>(Step.find(), Step.lookingAt())) {
-                    for (attempt in List.of<Step?>(Step.matches(), Step.lookingAt())) {
-                        for (region in mutableListOf<Boolean?>(false, true)) {
+        for (regex in mutableListOf<String>("a", "(a+)", "a*", "(a|b)+", "😀*", "^a", "^[ab]")) {
+            for (input in mutableListOf<String>("a a", "ba a", "a!", "!a", "😀!😀", "a")) {
+                for (initial in java.util.List.of<Step?>(Step.find(), Step.lookingAt())) {
+                    for (attempt in java.util.List.of<Step?>(Step.matches(), Step.lookingAt())) {
+                        for (region in mutableListOf<Boolean>(false, true)) {
                             val text: String = (if (region) "xx" + input + "yy" else input)!!
                             assertTrace(
                                 regex!!,
@@ -143,9 +140,9 @@ internal class MatcherStateMachineTraceTest {
     @DisplayName("interleaved match attempts retain continuation through exhaustion and resets")
     fun interleavedAttemptsRetainContinuation() {
         val operations =
-            List.of<Step?>(Step.findWithBounds(), Step.matches(), Step.lookingAt())
-        for (regex in mutableListOf<String?>("a", "a*", "(a|b)+", "^a", "^[ab]", "😀*")) {
-            for (input in List.of<String?>("", "a", "a a", "!a", "😀!😀", "ba".repeat(300))) {
+            java.util.List.of<Step?>(Step.findWithBounds(), Step.matches(), Step.lookingAt())
+        for (regex in mutableListOf<String>("a", "a*", "(a|b)+", "^a", "^[ab]", "😀*")) {
+            for (input in java.util.List.of<String?>("", "a", "a a", "!a", "😀!😀", "ba".repeat(300))) {
                 for (first in operations) {
                     for (second in operations) {
                         for (third in operations) {
@@ -345,7 +342,7 @@ internal class MatcherStateMachineTraceTest {
         fun replaceFirstWithMutation(mutation: Mutation?): String
     }
 
-    private class SafeReSubject(private val matcher: Matcher) : TraceSubject {
+    private class SafeReSubject(private val matcher: org.safere.Matcher) : TraceSubject {
         override fun matches(): Boolean {
             return matcher.matches()
         }
@@ -403,7 +400,7 @@ internal class MatcherStateMachineTraceTest {
         }
 
         override fun usePattern(regex: String?) {
-            matcher.usePattern(Pattern.compile(regex))
+            matcher.usePattern(Pattern.compile(regex!!))
         }
 
         override fun useAnchoringBounds(value: Boolean) {
@@ -418,41 +415,41 @@ internal class MatcherStateMachineTraceTest {
             return matcher.toMatchResult()
         }
 
-        override fun appendReplacement(builder: StringBuilder, replacement: String?) {
-            matcher.appendReplacement(builder, replacement)
+        override fun appendReplacement(builder: StringBuilder?, replacement: String?) {
+            matcher.appendReplacement(builder!!, replacement!!)
         }
 
-        override fun appendTail(builder: StringBuilder) {
-            matcher.appendTail(builder)
+        override fun appendTail(builder: StringBuilder?) {
+            matcher.appendTail(builder!!)
         }
 
-        override fun resultsWithMutation(mutation: Mutation): Stream<String?>? {
+        override fun resultsWithMutation(mutation: Mutation?): Stream<String?>? {
             return matcher
                 .results()
                 .map<String?> { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     result!!.group()
                 }
         }
 
-        override fun replaceAllWithMutation(mutation: Mutation): String? {
+        override fun replaceAllWithMutation(mutation: Mutation?): String? {
             return matcher.replaceAll(
                 Function { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     "x"
                 })
         }
 
-        override fun replaceFirstWithMutation(mutation: Mutation): String? {
+        override fun replaceFirstWithMutation(mutation: Mutation?): String {
             return matcher.replaceFirst(
                 Function { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     "x"
-                })
+                })!!
         }
     }
 
-    private class JdkSubject(private val matcher: Matcher) : TraceSubject {
+    private class JdkSubject(private val matcher: java.util.regex.Matcher) : TraceSubject {
         override fun matches(): Boolean {
             return matcher.matches()
         }
@@ -509,8 +506,8 @@ internal class MatcherStateMachineTraceTest {
             return matcher.regionEnd()
         }
 
-        override fun usePattern(regex: String) {
-            matcher.usePattern(Pattern.compile(regex))
+        override fun usePattern(regex: String?) {
+            matcher.usePattern(java.util.regex.Pattern.compile(regex!!))
         }
 
         override fun useAnchoringBounds(value: Boolean) {
@@ -525,35 +522,35 @@ internal class MatcherStateMachineTraceTest {
             return matcher.toMatchResult()
         }
 
-        override fun appendReplacement(builder: StringBuilder, replacement: String) {
-            matcher.appendReplacement(builder, replacement)
+        override fun appendReplacement(builder: StringBuilder?, replacement: String?) {
+            matcher.appendReplacement(builder!!, replacement)
         }
 
-        override fun appendTail(builder: StringBuilder) {
-            matcher.appendTail(builder)
+        override fun appendTail(builder: StringBuilder?) {
+            matcher.appendTail(builder!!)
         }
 
-        override fun resultsWithMutation(mutation: Mutation): Stream<String?>? {
+        override fun resultsWithMutation(mutation: Mutation?): Stream<String?>? {
             return matcher
                 .results()
                 .map<String?> { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     result!!.group()
                 }
         }
 
-        override fun replaceAllWithMutation(mutation: Mutation): String? {
+        override fun replaceAllWithMutation(mutation: Mutation?): String? {
             return matcher.replaceAll(
                 Function { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     "x"
                 })
         }
 
-        override fun replaceFirstWithMutation(mutation: Mutation): String? {
+        override fun replaceFirstWithMutation(mutation: Mutation?): String {
             return matcher.replaceFirst(
                 Function { result: MatchResult? ->
-                    mutation.apply(this)
+                    mutation!!.apply(this)
                     "x"
                 })
         }
@@ -725,7 +722,7 @@ internal class MatcherStateMachineTraceTest {
             }
 
             private fun snapshot(result: MatchResult): String {
-                val groups: MutableList<String?> = ArrayList<String?>()
+                val groups: MutableList<String> = ArrayList<String>()
                 for (group in 0..result.groupCount()) {
                     try {
                         groups.add(
@@ -746,17 +743,17 @@ internal class MatcherStateMachineTraceTest {
         }
     }
 
-    private interface Operation {
+    private fun interface Operation {
         fun apply(subject: TraceSubject?): Any?
     }
 
-    private interface Effect {
+    private fun interface Effect {
         fun apply(subject: TraceSubject?)
     }
 
     companion object {
         private fun structuralMutations(): MutableList<Mutation> {
-            return List.of<Mutation?>(
+            return java.util.List.of<Mutation?>(
                 Mutation(
                     "useTransparentBounds(true)",
                     MatcherStateMachineTraceTest.Effect { subject: TraceSubject? -> subject!!.useTransparentBounds(true) }),
@@ -811,23 +808,23 @@ internal class MatcherStateMachineTraceTest {
 
         private fun traceSubject(regex: String, input: String, jdk: Boolean): TraceSubject {
             if (jdk) {
-                return JdkSubject(Pattern.compile(regex).matcher(input))
+                return JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input))
             }
             return SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
         }
 
         private fun assertTrace(regex: String, input: String, vararg steps: Step) {
             val safere: TraceSubject = SafeReSubject(org.safere.Pattern.compile(regex).matcher(input))
-            val jdk: TraceSubject = JdkSubject(Pattern.compile(regex).matcher(input))
+            val jdk: TraceSubject = JdkSubject(java.util.regex.Pattern.compile(regex).matcher(input))
 
-            val safereTrace: MutableList<String?> = trace(safere, *steps)
-            val jdkTrace: MutableList<String?> = trace(jdk, *steps)
+            val safereTrace: MutableList<String> = trace(safere, *steps)
+            val jdkTrace: MutableList<String> = trace(jdk, *steps)
 
             Assertions.assertThat<String?>(safereTrace).`as`("trace for /%s/ on %s", regex, input).isEqualTo(jdkTrace)
         }
 
-        private fun trace(subject: TraceSubject?, vararg steps: Step): MutableList<String?> {
-            val events: MutableList<String?> = ArrayList<String?>()
+        private fun trace(subject: TraceSubject?, vararg steps: Step): MutableList<String> {
+            val events: MutableList<String> = ArrayList<String>()
             for (step in steps) {
                 events.add(step.apply(subject))
             }

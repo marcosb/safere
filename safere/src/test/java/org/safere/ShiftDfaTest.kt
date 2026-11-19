@@ -10,14 +10,13 @@ import org.junit.jupiter.api.Test
 import org.safere.Matcher.*
 import org.safere.StateAccelerator.SingleAsciiEscape
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("ShiftDfa is an internal SafeRE engine")
 internal class ShiftDfaTest {
     @Test
     @DisplayName("simple literals and short tokens")
     fun simpleLiteralsAndShortTokens() {
-        val dfa: ShiftDfa = compile("abc")
+        val dfa = compile("abc")!!
         Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
         Assertions.assertThat(dfa.numStates()).isEqualTo(4)
         Assertions.assertThat(dfa.matches("abc", 0, 3)).isTrue()
@@ -33,7 +32,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("json boolean and null tokens")
     fun jsonBooleanAndNullTokens() {
-        val boolDfa: ShiftDfa = compile("true|false")
+        val boolDfa = compile("true|false")!!
         Assertions.assertThat<ShiftDfa?>(boolDfa).isNotNull()
         Assertions.assertThat(boolDfa.numStates()).isLessThanOrEqualTo(10)
         Assertions.assertThat(boolDfa.matches("true", 0, 4)).isTrue()
@@ -42,7 +41,7 @@ internal class ShiftDfaTest {
         Assertions.assertThat(boolDfa.matches("truee", 0, 5)).isFalse()
         Assertions.assertThat(boolDfa.matches("null", 0, 4)).isFalse()
 
-        val nullDfa: ShiftDfa = compile("null")
+        val nullDfa = compile("null")!!
         Assertions.assertThat<ShiftDfa?>(nullDfa).isNotNull()
         Assertions.assertThat(nullDfa.numStates()).isEqualTo(5)
         Assertions.assertThat(nullDfa.matches("null", 0, 4)).isTrue()
@@ -52,7 +51,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("UTF-8 matching honors the scanner backing-array offset")
     fun utf8MatchingHonorsScannerOffset() {
-        val dfa: ShiftDfa = compile("true|false")
+        val dfa = compile("true|false")!!
         val storage = "xxxxfalseyyyy".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(storage, 4, 5)
 
@@ -74,7 +73,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("quantified digits and repetition ranges")
     fun quantifiedDigitsAndRepetitions() {
-        val dfa: ShiftDfa = compile("[0-9]{1,3}")
+        val dfa = compile("[0-9]{1,3}")!!
         Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
         Assertions.assertThat(dfa.numStates()).isLessThanOrEqualTo(10)
 
@@ -89,7 +88,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("c-style identifiers")
     fun identifiers() {
-        val dfa: ShiftDfa = compile("[a-zA-Z_][a-zA-Z0-9_]*")
+        val dfa = compile("[a-zA-Z_][a-zA-Z0-9_]*")!!
         Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
         Assertions.assertThat(dfa.numStates()).isLessThanOrEqualTo(10)
 
@@ -102,7 +101,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("year-month date pattern")
     fun yearMonthDatePattern() {
-        val dfa: ShiftDfa = compile("[0-9]{4}-[0-9]{2}")
+        val dfa = compile("[0-9]{4}-[0-9]{2}")!!
         Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
         Assertions.assertThat(dfa.numStates()).isLessThanOrEqualTo(10)
 
@@ -115,7 +114,7 @@ internal class ShiftDfaTest {
     @Test
     @DisplayName("self-loop vector acceleration via StateAccelerator")
     fun stateAcceleratorSelfLoop() {
-        val dfa: ShiftDfa = compile("[\\x00-\\x21\\x23-\\x7F]*\"")
+        val dfa = compile("[\\x00-\\x21\\x23-\\x7F]*\"")!!
         Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
         Assertions.assertThat<StateAccelerator?>(dfa.accelerators()).isNotNull()
 
@@ -146,7 +145,7 @@ internal class ShiftDfaTest {
     @DisplayName("state acceleration stops at non-ASCII dead transitions")
     fun stateAccelerationStopsAtNonAsciiDeadTransitions() {
         val pattern = Pattern.compile("[\\x00-\\x21\\x23-\\x7F]*\"")
-        for (nonAscii in mutableListOf<String?>("é", "Ω", "😀")) {
+        for (nonAscii in mutableListOf<String>("é", "Ω", "😀")) {
             for (prefixLength in intArrayOf(0, 15, 16, 20, 64)) {
                 val input = "a".repeat(prefixLength) + nonAscii + "\""
                 Assertions.assertThat(pattern.matcher(input).matches())
@@ -166,14 +165,14 @@ internal class ShiftDfaTest {
     fun rejectsExcessiveStates() {
         // 15 linear states
         val longPattern = "a".repeat(15)
-        val dfa: ShiftDfa = compile(longPattern)
+        val dfa = compile(longPattern)
         Assertions.assertThat<ShiftDfa?>(dfa).isNull()
     }
 
     @Test
     fun asciiPartitionsPreserveEveryShortInput() {
         // Exercise overlapping classes, both bitmap words, epsilon cycles, and saved DFA frontiers.
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "[\\x00-\\x7f]{0,2}",
             "[\\x00-\\x3f]*[\\x40-\\x7f]?",
             "[\\x00\\x3f\\x40\\x7f]+",
@@ -183,9 +182,9 @@ internal class ShiftDfaTest {
             "(?:[A-Z_][a-z0-9]*|[a-z]+)",
             "[a-c]*?[b-d]?"
         )) {
-            val dfa: ShiftDfa = compile(regex)
+            val dfa = compile(regex)!!
             Assertions.assertThat<ShiftDfa?>(dfa).`as`(regex).isNotNull()
-            val expected = Pattern.compile(regex)
+            val expected = java.util.regex.Pattern.compile(regex)
             assertSameMatch(dfa, expected, "")
             for (first in 0..127) {
                 assertSameMatch(dfa, expected, Character.toString(first))
@@ -193,7 +192,7 @@ internal class ShiftDfaTest {
                     assertSameMatch(dfa, expected, "" + first.toChar() + second.toChar())
                 }
             }
-            for (input in mutableListOf<String?>("abcabc", "bababa", "Az09", "\u0080", "é", "😀")) {
+            for (input in mutableListOf<String>("abcabc", "bababa", "Az09", "\u0080", "é", "😀")) {
                 assertSameMatch(dfa, expected, input!!)
             }
         }
@@ -201,11 +200,10 @@ internal class ShiftDfaTest {
 
     @Test
     fun stateBudgetIncludesExactlyTenStates() {
-        val dfa: ShiftDfa = compile("a".repeat(9))
-        Assertions.assertThat<ShiftDfa?>(dfa).isNotNull()
+        val dfa = compile("a".repeat(9))!!
         Assertions.assertThat(dfa.numStates()).isEqualTo(ShiftDfa.MAX_STATES)
         Assertions.assertThat(dfa.matches("a".repeat(9), 0, 9)).isTrue()
-        Assertions.assertThat<ShiftDfa?>(compile("a".repeat(10))).isNull()
+        Assertions.assertThat(compile("a".repeat(10))).isNull()
     }
 
     @Test
@@ -246,7 +244,7 @@ internal class ShiftDfaTest {
 
     @Test
     fun unsupportedInstructionsStillRejectConstruction() {
-        for (regex in mutableListOf<String?>("a\\b", "a\\p{L}", "\\X", "ab$", "(ab)")) {
+        for (regex in mutableListOf<String>("a\\b", "a\\p{L}", "\\X", "ab$", "(ab)")) {
             Assertions.assertThat<ShiftDfa?>(compile(regex)).`as`(regex).isNull()
         }
     }
@@ -309,17 +307,17 @@ internal class ShiftDfaTest {
 
     companion object {
         private fun compile(regex: String?, flags: Int): ShiftDfa? {
-            val ast = Parser.parse(regex, flags)
+            val ast = Parser.parse(regex, flags)!!
             val prog = Compiler.compile(ast)
             return ShiftDfa.compile(prog)
         }
 
-        private fun compile(regex: String?): ShiftDfa {
-            return compile(regex, ParseFlags.LIKE_PERL)!!
+        private fun compile(regex: String?): ShiftDfa? {
+            return compile(regex, ParseFlags.LIKE_PERL)
         }
 
         private fun assertSameMatch(
-            dfa: ShiftDfa, expected: Pattern, input: String
+            dfa: ShiftDfa, expected: java.util.regex.Pattern, input: String
         ) {
             val matched = expected.matcher(input).matches()
             Assertions.assertThat(dfa.matches(input, 0, input.length)).`as`("String %s", expected).isEqualTo(matched)

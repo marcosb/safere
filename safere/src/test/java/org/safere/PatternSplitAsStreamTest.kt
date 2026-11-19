@@ -14,11 +14,10 @@ import java.util.stream.Collectors
 /** Tests for [Pattern.splitAsStream].  */
 internal class PatternSplitAsStreamTest {
     private class LiteralCharSequence(private val value: String) : CharSequence {
-        override fun length(): Int {
-            return value.length
-        }
+        override val length: Int
+            get() = value.length
 
-        override fun charAt(index: Int): Char {
+        override fun get(index: Int): Char {
             return value.get(index)
         }
 
@@ -39,11 +38,10 @@ internal class PatternSplitAsStreamTest {
             value.append(newValue)
         }
 
-        override fun length(): Int {
-            return value.length
-        }
+        override val length: Int
+            get() = value.length
 
-        override fun charAt(index: Int): Char {
+        override fun get(index: Int): Char {
             return value.get(index)
         }
 

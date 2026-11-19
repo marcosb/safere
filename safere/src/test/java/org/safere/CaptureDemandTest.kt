@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets
 import java.util.function.Consumer
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Capture consumption is a Pattern hint independent of how a result was produced.  */
@@ -112,7 +111,7 @@ internal class CaptureDemandTest {
         val pattern = Pattern.compile("x(a+)y", 0, EXACT)
         val matcher = pattern.matcher("xaay")
         val expected =
-            Pattern.compile(pattern.pattern())
+            java.util.regex.Pattern.compile(pattern.pattern())
                 .matcher("xaay")
                 .replaceFirst(replacement)
         Assertions.assertThat(matcher.replaceFirst(replacement)).isEqualTo(expected)
@@ -211,7 +210,7 @@ internal class CaptureDemandTest {
             org.safere.Pattern.compile(
                 "(a+)", 0, EnginePathOptions.builder().lazyCaptureExtraction(false).build()
             )
-        Assertions.assertThat(stream.matcher("aaa").results().findFirst().orElseThrow().group(1)).isEqualTo("aaa")
+        Assertions.assertThat(stream.matcher("aaa").results().findFirst().orElseThrow()!!.group(1)).isEqualTo("aaa")
         Assertions.assertThat(stream.innerCapturesObserved()).isTrue()
     }
 
@@ -249,6 +248,7 @@ internal class CaptureDemandTest {
     companion object {
         private val EXACT: EnginePathOptions = EnginePathOptions.builder().onePass(false).dfa(false).build()
 
+        @JvmStatic
         fun captureReads(): Stream<Arguments?>? {
             return Stream.of<Consumer<Matcher?>?>(
                 Consumer { m: Matcher? -> m!!.start(1) },

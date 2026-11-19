@@ -8,26 +8,25 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import org.safere.Matcher.LiteralAlternationPreparedRunner
 import org.safere.Matcher.PreparedMatchRunner
-import java.util.List
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("compares the optimized and forced fallback paths with the JDK")
 internal class LiteralAlternationTest {
     @Test
     fun onlyCompleteCaptureFreeAsciiAlternationsSelectTheRunner() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "apple|banana|cherry",
             "foo|barfoo",
             "red|green|blue",
             "ab|cherry|abc",
             "abc|cherry|ab"
         )) {
-            Assertions.assertThat(Pattern.compile(regex).preparedMatchRunner(false).javaClass.getSimpleName())
+            Assertions.assertThat(
+                Pattern.compile(regex).preparedMatchRunner(false)!!.javaClass.getSimpleName()
+            )
                 .`as`(regex)
                 .isEqualTo("LiteralAlternationPreparedRunner")
         }
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(apple)|banana",
             "(?i)apple|banana",
             "apple|banana$",
@@ -36,7 +35,9 @@ internal class LiteralAlternationTest {
             "(?:apple|banana)+",
             "gardening|gardener|gardens"
         )) {
-            Assertions.assertThat(Pattern.compile(regex).preparedMatchRunner(false).javaClass.getSimpleName())
+            Assertions.assertThat(
+                Pattern.compile(regex).preparedMatchRunner(false)!!.javaClass.getSimpleName()
+            )
                 .`as`(regex)
                 .isNotEqualTo("LiteralAlternationPreparedRunner")
         }
@@ -46,7 +47,7 @@ internal class LiteralAlternationTest {
     fun longAlternativesRetainTheExistingRunner() {
         for (length in intArrayOf(13, 16, 17, 65, 4097)) {
             val literal = "a".repeat(length - 1) + "z"
-            for (regex in List.of<String?>(
+            for (regex in java.util.List.of<String?>(
                 literal + "|banana|cherry|durian|elderberry|fig",
                 literal + "|banana|cherry",
                 "banana|" + literal + "|cherry"
@@ -54,12 +55,12 @@ internal class LiteralAlternationTest {
                 val pattern = Pattern.compile(regex)
                 val fallback =
                     Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
-                Assertions.assertThat(pattern.preparedMatchRunner(false).javaClass)
+                Assertions.assertThat(pattern.preparedMatchRunner(false)!!.javaClass)
                     .`as`(regex)
-                    .isEqualTo(fallback.preparedMatchRunner(false).javaClass)
-                for (suffix in mutableListOf<String?>("", "banana", "z")) {
+                    .isEqualTo(fallback.preparedMatchRunner(false)!!.javaClass)
+                for (suffix in mutableListOf<String>("", "banana", "z")) {
                     val text = "a".repeat(8192) + suffix
-                    compareFinds(pattern.matcher(text), Pattern.compile(regex).matcher(text))
+                    compareFinds(pattern.matcher(text), java.util.regex.Pattern.compile(regex).matcher(text))
                 }
             }
         }
@@ -77,15 +78,15 @@ internal class LiteralAlternationTest {
                             + "barfoo banana gardens abc red 😀éclair apple"
                             + "x".repeat(5000)
                             + "cherry blue banana")
-                for (pattern in List.of<org.safere.Pattern>(optimized, fallback)) {
-                    compareFinds(pattern.matcher(text), Pattern.compile(regex).matcher(text))
+                for (pattern in java.util.List.of<org.safere.Pattern>(optimized, fallback)) {
+                    compareFinds(pattern.matcher(text), java.util.regex.Pattern.compile(regex).matcher(text))
                     Assertions.assertThat(pattern.matcher(text).replaceAll("<$0>"))
                         .`as`("replacement %s offset %s", regex, offset)
-                        .isEqualTo(Pattern.compile(regex).matcher(text).replaceAll("<$0>"))
+                        .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(text).replaceAll("<$0>"))
                     Assertions.assertThat(pattern.matcher(text).replaceFirst("<$0>"))
-                        .isEqualTo(Pattern.compile(regex).matcher(text).replaceFirst("<$0>"))
+                        .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(text).replaceFirst("<$0>"))
                     val actual = pattern.matcher(text)
-                    val expected = Pattern.compile(regex).matcher(text)
+                    val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                     Assertions.assertThat(actual.matches()).isEqualTo(expected.matches())
                     Assertions.assertThat(actual.lookingAt()).isEqualTo(expected.lookingAt())
                     compareFinds(actual, expected)
@@ -98,12 +99,12 @@ internal class LiteralAlternationTest {
 
     @Test
     fun regionsAndNonAsciiPaddingPreserveBounds() {
-        for (regex in mutableListOf<String?>("apple|banana|cherry", "foo|barfoo", "ab|abc", "abc|ab")) {
-            for (padding in mutableListOf<String?>("x", "é", "😀", "\uD800", "\uDC00")) {
+        for (regex in mutableListOf<String>("apple|banana|cherry", "foo|barfoo", "ab|abc", "abc|ab")) {
+            for (padding in mutableListOf<String>("x", "é", "😀", "\uD800", "\uDC00")) {
                 val text = padding!!.repeat(1024) + "barfoo banana apple abc cherry" + padding
                 for (transparent in booleanArrayOf(false, true)) {
                     for (anchoring in booleanArrayOf(false, true)) {
-                        for (start in intArrayOf(0, 1, padding.size * 1024 + 3)) {
+                        for (start in intArrayOf(0, 1, padding.length * 1024 + 3)) {
                             val actual =
                                 org.safere.Pattern.compile(regex)
                                     .matcher(text)
@@ -111,7 +112,7 @@ internal class LiteralAlternationTest {
                                     .useTransparentBounds(transparent)
                                     .useAnchoringBounds(anchoring)
                             val expected =
-                                Pattern.compile(regex)
+                                java.util.regex.Pattern.compile(regex)
                                     .matcher(text)
                                     .region(start, text.length - 1)
                                     .useTransparentBounds(transparent)
@@ -126,7 +127,7 @@ internal class LiteralAlternationTest {
 
     @Test
     fun growingWindowBoundariesPreserveLeftmostMatchAndAlternativePriority() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "ab|cherry|abc",
             "abc|cherry|ab",
             "ab|durian|cherry|elderberry|fig|abc",
@@ -138,7 +139,7 @@ internal class LiteralAlternationTest {
             for (boundary in intArrayOf(256, 768, 1024, 1792, 3072, 3840, 7168, 7936, 15360, 31744)) {
                 for (offset in intArrayOf(boundary - 1, boundary, boundary + 1)) {
                     val text = "x".repeat(offset) + "abc" + "x".repeat(65536) + "cherry"
-                    compareFinds(pattern.matcher(text), Pattern.compile(regex).matcher(text))
+                    compareFinds(pattern.matcher(text), java.util.regex.Pattern.compile(regex).matcher(text))
                 }
             }
         }
@@ -147,13 +148,13 @@ internal class LiteralAlternationTest {
     @Test
     fun longLiteralsCrossingTheProbeBoundaryStillSelectTheLeftmostMatch() {
         val literal = "a".repeat(2048) + "z"
-        for (regex in List.of<String?>(literal + "|banana|cherry", literal + "|banana|cherry|durian|elderberry|fig")) {
+        for (regex in java.util.List.of<String?>(literal + "|banana|cherry", literal + "|banana|cherry|durian|elderberry|fig")) {
             for (offset in intArrayOf(255, 256, 1023, 1024, 4095, 4096)) {
-                for (prefix in List.of<String?>("x".repeat(offset), "banana" + "x".repeat(offset))) {
+                for (prefix in java.util.List.of<String?>("x".repeat(offset), "banana" + "x".repeat(offset))) {
                     val text = prefix + literal + "x".repeat(8192) + "cherry"
                     compareFinds(
                         org.safere.Pattern.compile(regex).matcher(text),
-                        Pattern.compile(regex).matcher(text)
+                        java.util.regex.Pattern.compile(regex).matcher(text)
                     )
                 }
             }
@@ -170,9 +171,9 @@ internal class LiteralAlternationTest {
     @Test
     fun fullAndPrefixMatchesPreserveTheExistingRunnerSemantics() {
         for (regex in PATTERNS) {
-            for (text in mutableListOf<String?>("", "apple", "banana", "cherry", "barfoo", "ab", "abc")) {
+            for (text in mutableListOf<String>("", "apple", "banana", "cherry", "barfoo", "ab", "abc")) {
                 val actual = org.safere.Pattern.compile(regex).matcher(text)
-                val expected = Pattern.compile(regex).matcher(text)
+                val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 Assertions.assertThat(actual.matches()).isEqualTo(expected.matches())
                 Assertions.assertThat(actual.lookingAt()).isEqualTo(expected.lookingAt())
                 compareFinds(actual, expected)
@@ -181,7 +182,7 @@ internal class LiteralAlternationTest {
     }
 
     companion object {
-        private val PATTERNS: MutableList<String> = mutableListOf<String?>(
+        private val PATTERNS: MutableList<String> = mutableListOf<String>(
             "apple|banana|cherry",
             "blossom|sparkling|gardens",
             "foo|barfoo",
@@ -198,7 +199,7 @@ internal class LiteralAlternationTest {
             "éclair|😀"
         )
 
-        private fun compareFinds(actual: org.safere.Matcher, expected: Matcher) {
+        private fun compareFinds(actual: org.safere.Matcher, expected: java.util.regex.Matcher) {
             while (true) {
                 val found = expected.find()
                 Assertions.assertThat(actual.find()).isEqualTo(found)

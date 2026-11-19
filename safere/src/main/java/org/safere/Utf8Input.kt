@@ -38,6 +38,7 @@ interface Utf8Input {
          * @return the borrowed input view
          * @throws NullPointerException if `bytes` is null
          */
+        @JvmStatic
         fun trusted(bytes: ByteArray?): Utf8Input {
             Objects.requireNonNull<ByteArray?>(bytes, "bytes")
             return trusted(bytes!!, 0, bytes!!.size)
@@ -53,6 +54,7 @@ interface Utf8Input {
          * @throws NullPointerException if `bytes` is null
          * @throws IndexOutOfBoundsException if the window is outside `bytes`
          */
+        @JvmStatic
         fun trusted(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
             Objects.requireNonNull(bytes, "bytes")
             return ArrayUtf8Input(bytes!!, offset, length, false)
@@ -66,6 +68,7 @@ interface Utf8Input {
          * @throws NullPointerException if `bytes` is null
          * @throws IllegalArgumentException if the first malformed sequence is encountered
          */
+        @JvmStatic
         fun validated(bytes: ByteArray?): Utf8Input {
             Objects.requireNonNull<ByteArray?>(bytes, "bytes")
             return validated(bytes!!, 0, bytes!!.size)
@@ -82,6 +85,7 @@ interface Utf8Input {
          * @throws IndexOutOfBoundsException if the window is outside `bytes`
          * @throws IllegalArgumentException if malformed UTF-8 occurs, with a relative byte offset
          */
+        @JvmStatic
         fun validated(bytes: ByteArray?, offset: Int, length: Int): Utf8Input {
             Objects.requireNonNull(bytes, "bytes")
             Utf8InputScanner.validate(bytes!!, offset, length)

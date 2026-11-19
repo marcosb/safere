@@ -30,9 +30,9 @@ internal class LeadingLineExpansionWorkTest {
                         val result =
                             pattern
                                 .forwardFirstMatchDfa()
-                                .doSearch(Utf8InputScanner(bytes), 0, false, false, true)
+                                .doSearch(Utf8InputScanner(bytes), 0, false, false, true)!!
                         Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                        Assertions.assertThat(result!!.matched).isEqualTo(expected)
+                        Assertions.assertThat(result.matched).isEqualTo(expected)
                     })
             for (diagnostics in booleanArrayOf(false, true)) {
                 val work =
@@ -97,8 +97,8 @@ internal class LeadingLineExpansionWorkTest {
                     Assertions.assertThat(count(pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))))
                         .isEqualTo(lines)
                 })
-        Assertions.assertThat(stringSteps).isLessThan((text.size / 2).toLong())
-        Assertions.assertThat(utf8Steps).isLessThan((text.size / 2).toLong())
+        Assertions.assertThat(stringSteps).isLessThan((text.length / 2).toLong())
+        Assertions.assertThat(utf8Steps).isLessThan((text.length / 2).toLong())
     }
 
     @ParameterizedTest
@@ -119,11 +119,12 @@ internal class LeadingLineExpansionWorkTest {
                                 count(pattern.matcher(input))
                         Assertions.assertThat(matches).isEqualTo(expected)
                     })
-            Assertions.assertThat(work).isLessThan(10L * input.size)
+            Assertions.assertThat(work).isLessThan(10L * input.length)
         }
     }
 
     companion object {
+        @JvmStatic
         fun excludedSeparatorCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(".+error", "\r", false),

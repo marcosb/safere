@@ -12,7 +12,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Differential coverage for captures resolved against temporary region views (see issue #880).  */
@@ -20,7 +19,7 @@ import java.util.stream.Stream
 internal class DeferredRegionCaptureTest {
     @Test
     fun regionFindDefersCapturesUntilRequested() {
-        for (regex in mutableListOf<String?>("(a+?)b", "(a+)b", "\\b(a+?)b\\b")) {
+        for (regex in mutableListOf<String>("(a+?)b", "(a+)b", "\\b(a+?)b\\b")) {
             val pattern = Pattern.compile(regex)
             val matcher = pattern.matcher("xaabx").region(1, 4)
             Assertions.assertThat(matcher.find()).`as`(regex).isTrue()
@@ -39,7 +38,7 @@ internal class DeferredRegionCaptureTest {
 
     @Test
     fun anchoredAttemptsDiscardPreviousDeferredRegionContext() {
-        for (fullMatch in mutableListOf<Boolean?>(false, true)) {
+        for (fullMatch in mutableListOf<Boolean>(false, true)) {
             val matcher = Pattern.compile("(a+?)b").matcher("xaabx").region(1, 4)
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.capturesResolved()).isFalse()
@@ -68,7 +67,7 @@ internal class DeferredRegionCaptureTest {
     @ParameterizedTest
     @ValueSource(strings = ["\\b(a+?)(z)?b\\b", "(?m)^(a+?)(z)?b$", "\\A(a+?)(z)?b\\z"])
     fun freshNfaFindReplaysBoundarySensitiveCapturesAgainstTheRetainedRegion(regex: String) {
-        for (changeBounds in mutableListOf<Boolean?>(false, true)) {
+        for (changeBounds in mutableListOf<Boolean>(false, true)) {
             // Keep the Pattern fresh: an earlier capture read would make the exact fallback eager.
             val pattern =
                 Pattern.compile(
@@ -78,7 +77,7 @@ internal class DeferredRegionCaptureTest {
                 )
             val actual = pattern.matcher("qaabq").region(1, 4)
             val expected =
-                Pattern.compile(regex).matcher("qaabq").region(1, 4)
+                java.util.regex.Pattern.compile(regex).matcher("qaabq").region(1, 4)
 
             Assertions.assertThat(actual.find()).isEqualTo(expected.find()).isTrue()
             Assertions.assertThat(actual.capturesResolved()).isFalse()
@@ -99,13 +98,13 @@ internal class DeferredRegionCaptureTest {
         }
     }
 
-    private enum class Engine {
+    internal enum class Engine {
         DEFAULT,
         DEFERRED_NFA,
         EAGER_NFA
     }
 
-    private enum class Operation {
+    internal enum class Operation {
         MATCHES,
         LOOKING_AT,
         FIND
@@ -135,7 +134,7 @@ internal class DeferredRegionCaptureTest {
                 0,
                 EnginePathOptions.builder().onePass(false).bitState(false).build()
             )
-        for (prefix in mutableListOf<String?>("x", "é", "\uD801\uDC00")) {
+        for (prefix in mutableListOf<String>("x", "é", "\uD801\uDC00")) {
             val body = atom.repeat(2)
             val input = (prefix + body + "!").toByteArray(StandardCharsets.UTF_8)
             val start = prefix!!.toByteArray(StandardCharsets.UTF_8).size
@@ -152,7 +151,7 @@ internal class DeferredRegionCaptureTest {
 
     @ParameterizedTest(name = "{0} {1} {2}")
     @MethodSource("regionCaptureCases")
-    fun capturesUseTheActiveRegionCoordinates(regex: String, engine: Engine, operation: Operation?) {
+    fun capturesUseTheActiveRegionCoordinates(regex: String, engine: Engine, operation: Operation) {
         val options =
             when (engine) {
                 Engine.DEFAULT -> EnginePathOptions.allEnabled()
@@ -160,16 +159,16 @@ internal class DeferredRegionCaptureTest {
                 Engine.EAGER_NFA -> EnginePathOptions.builder().onePass(false).bitState(false).dfa(false).build()
             }
         val pattern = org.safere.Pattern.compile(regex, 0, options)
-        val jdkPattern = Pattern.compile(regex)
-        for (prefix in mutableListOf<String?>("", "x", "\uD801\uDC00")) {
-            for (suffix in mutableListOf<String?>("", "x", "\n")) {
-                for (anchoring in mutableListOf<Boolean?>(false, true)) {
-                    for (transparent in mutableListOf<Boolean?>(false, true)) {
+        val jdkPattern = java.util.regex.Pattern.compile(regex)
+        for (prefix in mutableListOf<String>("", "x", "\uD801\uDC00")) {
+            for (suffix in mutableListOf<String>("", "x", "\n")) {
+                for (anchoring in mutableListOf<Boolean>(false, true)) {
+                    for (transparent in mutableListOf<Boolean>(false, true)) {
                         // New matchers borrow pooled engines; reset also exercises reuse after successes and
                         // failures with different region lengths and capture participation.
                         val actual = pattern.matcher("")
                         val expected = jdkPattern.matcher("")
-                        for (body in mutableListOf<String?>("a", "", "aa", "b", "aaa", "aa!", "a")) {
+                        for (body in mutableListOf<String>("a", "", "aa", "b", "aaa", "aa!", "a")) {
                             val input = prefix + body + suffix
                             val start = prefix!!.length
                             val end = start + body!!.length
@@ -231,6 +230,7 @@ internal class DeferredRegionCaptureTest {
     }
 
     companion object {
+        @JvmStatic
         private fun regionCaptureCases(): Stream<Arguments?>? {
             return Stream.of<String?>(
                 "(a+?)?",

@@ -10,8 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Differential coverage for JDK-visible captures across alternation branches.  */
@@ -21,7 +19,7 @@ internal class AlternationCaptureSemanticsTest {
     @MethodSource("alternationCaptureCases")
     @DisplayName("compiled alternations preserve JDK-visible capture group count")
     fun compiledAlternationsPreserveCaptureGroupCount(regex: String, flags: Int, input: String) {
-        val jdkPattern = Pattern.compile(regex, flags)
+        val jdkPattern = java.util.regex.Pattern.compile(regex, flags)
         val saferePattern = org.safere.Pattern.compile(regex, flags)
 
         Assertions.assertThat(saferePattern.matcher(input).groupCount())
@@ -57,6 +55,7 @@ internal class AlternationCaptureSemanticsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun alternationCaptureCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("()|\\W+", 0, " "),
@@ -82,7 +81,7 @@ internal class AlternationCaptureSemanticsTest {
         private fun assertSingleOperationMatchesJdk(
             regex: String, flags: Int, input: String, operation: Operation
         ) {
-            val jdk = Pattern.compile(regex, flags).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex, flags).matcher(input)
             val safere = org.safere.Pattern.compile(regex, flags).matcher(input)
 
             val jdkMatched =
@@ -108,7 +107,7 @@ internal class AlternationCaptureSemanticsTest {
         }
 
         private fun assertGroupsMatch(
-            regex: String?, input: String?, matched: Boolean, jdk: Matcher, safere: org.safere.Matcher
+            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: org.safere.Matcher
         ) {
             Assertions.assertThat(safere.groupCount()).isEqualTo(jdk.groupCount())
             if (!matched) {

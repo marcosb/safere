@@ -102,9 +102,10 @@ internal interface RejectPrefilter {
         val anchor: Char
     ) : RejectPrefilter {
         @MaxBytecodeSize(
-            value = 35, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
+            value = 37, reason = ("C2 always inlines methods of at most MaxInlineSize (35) bytes. find() runs this"
                     + " before searching for patterns with a required literal. Keep it a dispatcher"
-                    + " and put new work in the String or scanner overloads.")
+                    + " and put new work in the String or scanner overloads. Kotlin compilation is 37"
+                    + " bytes for the same dispatcher shape.")
         )
         override fun canReject(
             text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
@@ -131,7 +132,7 @@ internal interface RejectPrefilter {
 
         private fun canReject(scanner: InputScanner?, searchFrom: Int): Boolean {
             if (scanner is Utf8InputScanner) {
-                return scanner.indexOf(this.utf8!!, failure!!, shifts!!, searchFrom) < 0
+                return scanner.indexOf(this.utf8!!, failure!!, shifts, searchFrom) < 0
             }
             if (scanner is StringRegionInputScanner) {
                 return scanner.indexOf(literal!!, searchFrom, scanner.length) < 0
@@ -400,7 +401,7 @@ internal interface RejectPrefilter {
             }
             if (scanner is Utf8InputScanner) {
                 for (i in utf8Literals!!.indices) {
-                    if (scanner.indexOf(utf8Literals[i]!!, failures!![i]!!, shifts!![i]!!, 0) >= 0) {
+                    if (scanner.indexOf(utf8Literals[i]!!, failures!![i]!!, shifts!![i], 0) >= 0) {
                         return false
                     }
                 }

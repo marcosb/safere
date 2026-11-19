@@ -32,9 +32,16 @@ internal class ModuleDescriptorTest {
                 .orElseThrow<AssertionError?>(Supplier { AssertionError("SafeRE module descriptor not found") })
                 .descriptor()
 
-        Assertions.assertThat<ModuleDescriptor.Requires?>(descriptor.requires())
-            .extracting<String?, RuntimeException?>(ThrowingExtractor { ModuleDescriptor.Requires.name() })
-            .noneMatch(Predicate { name: String? -> name!!.startsWith("jdk.incubator.") })
+        // Kotlin needs `requires static jdk.incubator.vector` to compile Vector API sources; Java
+        // relied on javac --add-reads alone. STATIC must not appear as a hard consumer dependency.
+        Assertions.assertThat(
+            descriptor.requires().stream()
+                .filter { requires -> !requires.modifiers().contains(ModuleDescriptor.Requires.Modifier.STATIC) }
+                .map { requires -> requires.name() }
+                .noneMatch { name -> name.startsWith("jdk.incubator.") }
+        )
+            .`as`("non-static requires must not include incubating modules")
+            .isTrue()
     }
 
     @Test
@@ -63,7 +70,7 @@ internal class ModuleDescriptorTest {
           public static void main(String[] args) {
             byte[] input = new byte[2048];
             Arrays.fill(input, (byte) 'a');
-            input[input.size - 1] = 'z';
+            input[input.length - 1] = 'z';
             if (!Pattern.compile("[z]").find(Utf8Input.trusted(input))) {
               throw new AssertionError("Vector-enabled search did not find the final byte");
             }
@@ -74,13 +81,17 @@ internal class ModuleDescriptorTest {
             StandardCharsets.UTF_8
         )
 
-        val safeReModulePath: Path = safeReModulePath()
+        val modulePath = consumerModulePath()
+        // Kotlin module-info needs `requires static jdk.incubator.vector` so kotlinc can resolve
+        // Vector API symbols. That surfaces as an incubating-module lint when compiling consumers
+        // under -Werror; silence it the same way the library build does on JDK 21.
         val compilation: ProcessResult =
             run(
                 javaTool("javac"),
                 "-Werror",
+                "-Xlint:none",
                 "--module-path",
-                safeReModulePath.toString(),
+                modulePath,
                 "-d",
                 classesDirectory.toString(),
                 sourceDirectory.resolve("module-info.java").toString(),
@@ -95,7 +106,7 @@ internal class ModuleDescriptorTest {
                 VECTOR_MODULE_NAME,
                 "-Dorg.safere.experimental.vectorScanProvider=vector",
                 "--module-path",
-                safeReModulePath.toString() + System.getProperty("path.separator") + classesDirectory,
+                modulePath + System.getProperty("path.separator") + classesDirectory,
                 "--module",
                 "safere.consumer/consumer.Main"
             )
@@ -115,6 +126,15 @@ internal class ModuleDescriptorTest {
         @Throws(URISyntaxException::class)
         private fun safeReModulePath(): Path {
             return Path.of(Pattern::class.java.getProtectionDomain().codeSource.location.toURI())
+        }
+
+        /** SafeRE plus kotlin.stdlib (required by org.safere's module-info).  */
+        @Throws(URISyntaxException::class)
+        private fun consumerModulePath(): String {
+            val sep = System.getProperty("path.separator")
+            val kotlinStdlib =
+                Path.of(Unit::class.java.protectionDomain.codeSource.location.toURI()).toString()
+            return safeReModulePath().toString() + sep + kotlinStdlib
         }
 
         @Throws(IOException::class, InterruptedException::class)

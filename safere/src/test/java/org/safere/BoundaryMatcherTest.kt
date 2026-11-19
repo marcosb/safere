@@ -11,10 +11,7 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.List
 import java.util.function.IntFunction
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /**
@@ -190,7 +187,7 @@ internal class BoundaryMatcherTest {
     // ---------------------------------------------------------------------------
     @Nested
     @DisplayName("\\b{g} (grapheme cluster boundary)")
-    internal inner class GraphemeClusterBoundary {
+    internal class GraphemeClusterBoundary {
         @Test
         @DisplayName("\\b{g} compiles without error")
         fun compiles() {
@@ -270,7 +267,7 @@ internal class BoundaryMatcherTest {
         @DisplayName("\\b{g} composes across opaque region edges inside ZWJ sequences")
         fun composesAcrossOpaqueRegionEdgesInsideZwjSequences() {
             val zwjSequence = "\uD83D\uDC69\u200D\uD83D\uDC69"
-            assertSafeReFindBounds("\\b{g}\\X", zwjSequence, 2, 5, mutableListOf<String?>("2-3", "3-5"))
+            assertSafeReFindBounds("\\b{g}\\X", zwjSequence, 2, 5, mutableListOf<String>("2-3", "3-5"))
         }
 
         @Test
@@ -320,7 +317,7 @@ internal class BoundaryMatcherTest {
 
             val splitLowSurrogateBeforeModifier = "\uD83D\uDC4D\uD83C\uDFFB"
             // JDK-8394894: a transparent assertion cannot justify consuming outside the region.
-            for (regex in mutableListOf<String?>("\\X\\b{g}", "\\b{g}\\X\\b{g}")) {
+            for (regex in mutableListOf<String>("\\X\\b{g}", "\\b{g}\\X\\b{g}")) {
                 Assertions.assertThat(
                     Pattern.compile(regex)
                         .matcher(splitLowSurrogateBeforeModifier)
@@ -354,8 +351,8 @@ internal class BoundaryMatcherTest {
         @DisplayName("chained \\X find() preserves leftmost starts inside Indic conjunct clusters")
         fun chainedGraphemeClustersPreserveLeftmostStartsInsideIndicConjuncts() {
             val oracle = BreakIterator.getCharacterInstance(ULocale.ROOT)
-            for (conjunct in mutableListOf<String?>("\u0915\u094D\u200D\u0915", "\u0995\u09CD\u200D\u0995")) {
-                for (input in List.of<String>(conjunct, conjunct!!.repeat(2), "a" + conjunct + "b")) {
+            for (conjunct in mutableListOf<String>("\u0915\u094D\u200D\u0915", "\u0995\u09CD\u200D\u0995")) {
+                for (input in java.util.List.of<String>(conjunct, conjunct!!.repeat(2), "a" + conjunct + "b")) {
                     val initial = icuGraphemePair(oracle, input, 0)
                     val expectedFinds: MutableList<GraphemePair> = ArrayList<GraphemePair>()
                     var start = 0
@@ -368,7 +365,7 @@ internal class BoundaryMatcherTest {
                             start = pair.end
                         }
                     }
-                    for (regex in mutableListOf<String?>(
+                    for (regex in mutableListOf<String>(
                         "\\X\\X",
                         "(?:\\X)(?:\\X)",
                         "(?:\\X){2}",
@@ -436,7 +433,7 @@ internal class BoundaryMatcherTest {
 
         companion object {
             private fun assertFindSameAsJdk(regex: String, input: String) {
-                val jdkMatcher = Pattern.compile(regex).matcher(input)
+                val jdkMatcher = java.util.regex.Pattern.compile(regex).matcher(input)
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input)
 
                 val jdkMatches: MutableList<IntArray?> = ArrayList<IntArray?>()
@@ -456,7 +453,7 @@ internal class BoundaryMatcherTest {
 
             private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
-                    Pattern.compile(regex).matcher(input).region(start, end)
+                    java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.matches())
@@ -501,10 +498,10 @@ internal class BoundaryMatcherTest {
             }
 
             private fun assertSafeReFindBounds(
-                regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String?>?
+                regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String>?
             ) {
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatches: MutableList<String?> = ArrayList<String?>()
+                val safeMatches: MutableList<String> = ArrayList<String>()
                 while (safeMatcher.find()) {
                     safeMatches.add(safeMatcher.start().toString() + "-" + safeMatcher.end())
                 }
@@ -517,7 +514,7 @@ internal class BoundaryMatcherTest {
                 regex: String, input: String, start: Int, end: Int
             ) {
                 val jdkMatcher =
-                    Pattern.compile(regex)
+                    java.util.regex.Pattern.compile(regex)
                         .matcher(input)
                         .region(start, end)
                         .useTransparentBounds(true)
@@ -568,7 +565,7 @@ internal class BoundaryMatcherTest {
                 regex: String, input: String, start: Int, end: Int
             ) {
                 val jdkMatcher =
-                    Pattern.compile(regex).matcher(input).region(start, end)
+                    java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
                 val jdkMatches = capturedFindTrace(jdkMatcher)
@@ -579,23 +576,23 @@ internal class BoundaryMatcherTest {
                     .containsExactlyElementsOf(jdkMatches)
             }
 
-            private fun capturedFindTrace(matcher: Matcher): MutableList<String?> {
-                val trace: MutableList<String?> = ArrayList<String?>()
+            private fun capturedFindTrace(matcher: java.util.regex.Matcher): MutableList<String> {
+                val trace: MutableList<String> = ArrayList<String>()
                 while (matcher.find()) {
                     trace.add(capturedMatchTrace(matcher))
                 }
                 return trace
             }
 
-            private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String?> {
-                val trace: MutableList<String?> = ArrayList<String?>()
+            private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String> {
+                val trace: MutableList<String> = ArrayList<String>()
                 while (matcher.find()) {
                     trace.add(capturedMatchTrace(matcher))
                 }
                 return trace
             }
 
-            private fun capturedMatchTrace(matcher: Matcher): String {
+            private fun capturedMatchTrace(matcher: java.util.regex.Matcher): String {
                 val builder = StringBuilder()
                 builder.append(matcher.start()).append('-').append(matcher.end()).append(':')
                 builder.append(matcher.group())
@@ -692,7 +689,7 @@ internal class BoundaryMatcherTest {
     // ---------------------------------------------------------------------------
     @Nested
     @DisplayName("existing boundary matchers")
-    internal inner class ExistingBoundaryMatchers {
+    internal class ExistingBoundaryMatchers {
         @Test
         @DisplayName("\\A matches only at start of text")
         fun beginText() {

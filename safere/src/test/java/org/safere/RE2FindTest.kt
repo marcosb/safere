@@ -116,7 +116,7 @@ internal class RE2FindTest {
          * group 0 end, group 1 start, group 1 end, ...).
          */
         private fun tc(pat: String?, text: String?, n: Int, vararg x: Int): FindTestCase {
-            val matches: Array<IntArray> = arrayOfNulls<IntArray>(n)
+            val matches: Array<IntArray?> = arrayOfNulls<IntArray>(n)
             if (n > 0) {
                 val runLength = x.size / n
                 var j = 0
@@ -128,7 +128,7 @@ internal class RE2FindTest {
                     i++
                 }
             }
-            return FindTestCase(pat, text, matches)
+            return FindTestCase(pat, text, matches.requireNoNulls())
         }
 
         /**
@@ -166,6 +166,7 @@ internal class RE2FindTest {
         // All test data from RE2/J FindTest.FIND_TESTS.
         // Each entry: tc(pattern, text, numMatches, start0, end0, [start1, end1, ...], ...)
         // Offsets are UTF-8 byte positions (converted to char positions during verification).
+        @JvmStatic
         fun findTests(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(tc("", "", 1, 0, 0)),

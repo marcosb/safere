@@ -9,8 +9,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.safere.UnicodeMatchBoundsTest.Companion.trace
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 @DisplayName("Unicode match bounds")
@@ -46,7 +44,7 @@ internal class UnicodeMatchBoundsTest {
     @DisplayName("dot and anchor bounds match java.util.regex")
     fun dotAndAnchorBoundsMatchJdk(c: Case) {
         val safePattern = Pattern.compile(c.regex, c.flags)
-        val jdkPattern = Pattern.compile(c.regex, c.flags)
+        val jdkPattern = java.util.regex.Pattern.compile(c.regex, c.flags)
 
         Assertions.assertThat<Outcome?>(findOutcome(safePattern.matcher(c.input)))
             .`as`("%s find", c.label)
@@ -82,7 +80,7 @@ internal class UnicodeMatchBoundsTest {
     @DisplayName("scalar region bounds match java.util.regex")
     fun scalarRegionBoundsMatchJdk(c: RegionCase) {
         val safePattern = org.safere.Pattern.compile(c.regex, c.flags)
-        val jdkPattern = Pattern.compile(c.regex, c.flags)
+        val jdkPattern = java.util.regex.Pattern.compile(c.regex, c.flags)
 
         Assertions.assertThat(trace(safePattern.matcher(c.input), c))
             .`as`("%s trace", c.label)
@@ -90,6 +88,7 @@ internal class UnicodeMatchBoundsTest {
     }
 
     companion object {
+        @JvmStatic
         fun dotAndAnchorBoundsMatchJdk(): Stream<Case?> {
             return Stream.of<Case?>(
                 Case("dot-empty-alternative", ".|", 352, "\ud85c"),
@@ -107,6 +106,7 @@ internal class UnicodeMatchBoundsTest {
             )
         }
 
+        @JvmStatic
         fun scalarRegionBoundsMatchJdk(): Stream<RegionCase?> {
             return Stream.of<RegionCase?>(
                 RegionCase(
@@ -202,6 +202,7 @@ internal class UnicodeMatchBoundsTest {
             )
         }
 
+        @JvmStatic
         fun scalarRegionBoundsIntentionallyDivergeFromJdk(): Stream<DivergentRegionCase?> {
             return Stream.of<DivergentRegionCase?>(
                 DivergentRegionCase(
@@ -363,7 +364,7 @@ internal class UnicodeMatchBoundsTest {
             )
         }
 
-        private fun trace(matcher: Matcher, c: RegionCase): String {
+        private fun trace(matcher: org.safere.Matcher, c: RegionCase): String {
             matcher
                 .region(c.regionStart, c.regionEnd)
                 .useTransparentBounds(c.transparentBounds)
@@ -391,7 +392,7 @@ internal class UnicodeMatchBoundsTest {
             return trace.toString()
         }
 
-        private fun trace(matcher: Matcher, c: RegionCase): String {
+        private fun trace(matcher: java.util.regex.Matcher, c: RegionCase): String {
             matcher
                 .region(c.regionStart, c.regionEnd)
                 .useTransparentBounds(c.transparentBounds)
@@ -434,7 +435,7 @@ internal class UnicodeMatchBoundsTest {
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
 
-        private fun findOutcome(matcher: Matcher): Outcome {
+        private fun findOutcome(matcher: java.util.regex.Matcher): Outcome {
             val matched = matcher.find()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
@@ -444,7 +445,7 @@ internal class UnicodeMatchBoundsTest {
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
 
-        private fun lookingAtOutcome(matcher: Matcher): Outcome {
+        private fun lookingAtOutcome(matcher: java.util.regex.Matcher): Outcome {
             val matched = matcher.lookingAt()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
@@ -454,7 +455,7 @@ internal class UnicodeMatchBoundsTest {
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }
 
-        private fun matchesOutcome(matcher: Matcher): Outcome {
+        private fun matchesOutcome(matcher: java.util.regex.Matcher): Outcome {
             val matched = matcher.matches()
             return Outcome(matched, if (matched) matcher.start() else -1, if (matched) matcher.end() else -1)
         }

@@ -14,8 +14,6 @@ import org.junit.jupiter.api.parallel.Isolated
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 @Isolated
 @DisabledForCrosscheck("SafeRE-specific diagnostics and deterministic work counters")
 internal class DiagnosticsLengthTest {
@@ -59,9 +57,9 @@ internal class DiagnosticsLengthTest {
     fun minimumLengthAndMultibyteMatchesArePreserved(regex: String) {
         val pattern = Pattern.compile(regex)
         val unit = if (regex.startsWith("é")) "é" else if (regex.startsWith("😀")) "😀" else "a"
-        for (enabled in mutableListOf<Boolean?>(false, true)) {
+        for (enabled in mutableListOf<Boolean>(false, true)) {
             Pattern.setDiagnostics(if (enabled) listener else SafeReMatchDiagnostics.NONE)
-            for (size in mutableListOf<Int?>(2, 3, 4)) {
+            for (size in mutableListOf<Int>(2, 3, 4)) {
                 val text = unit.repeat(size!!)
                 val storage = ("prefix" + text + "suffix").toByteArray(StandardCharsets.UTF_8)
                 val input = Utf8Input.trusted(storage, 6, text.toByteArray(StandardCharsets.UTF_8).size)
@@ -164,10 +162,10 @@ internal class DiagnosticsLengthTest {
     @ValueSource(strings = ["a{1000}", "[ab]{1000}", "[ab]{1000}\\z", "^[ab]{1000}"])
     fun diagnosticsPreserveConstantWorkForShortInputs(regex: String?) {
         val pattern = Pattern.compile(regex)
-        for (size in mutableListOf<Int?>(200, 800)) {
+        for (size in mutableListOf<Int>(200, 800)) {
             val text = "a".repeat(size!!)
             val input = Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))
-            for (search in List.of<Runnable?>(
+            for (search in java.util.List.of<Runnable?>(
                 Runnable { Assertions.assertThat(pattern.find(input)).isFalse() },
                 Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
                 Runnable { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })) {

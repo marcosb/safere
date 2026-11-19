@@ -47,8 +47,16 @@ internal class UnicodeCaseIndexInitializationTest {
 
         @Throws(IOException::class, InterruptedException::class, URISyntaxException::class)
         private fun runFreshProcess(regex: String, locale: String = ""): String {
-            val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+            val javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString()
             val pathSeparator: String = java.lang.System.getProperty("path.separator")
+            val kotlinStdlib =
+                java.nio.file.Path.of(
+                    kotlin.jvm.internal.Intrinsics::class.java
+                        .protectionDomain
+                        .codeSource
+                        .location
+                        .toURI()
+                )
             val classPath =
                 (java.nio.file.Path.of(Pattern::class.java.getProtectionDomain().codeSource.location.toURI())
                     .toString() + pathSeparator
@@ -58,13 +66,15 @@ internal class UnicodeCaseIndexInitializationTest {
                         .codeSource
                         .location
                         .toURI()
-                ))
+                )
+                        + pathSeparator
+                        + kotlinStdlib)
             // Process arguments use the platform's native encoding, which may be ASCII in isolation.
             val encodedRegex: String? =
                 java.util.Base64.getEncoder().encodeToString(regex.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
             val processBuilder: ProcessBuilder =
                 java.lang.ProcessBuilder(
-                    java,
+                    javaExecutable,
                     "-Xmx12m",
                     "-Xlog:class+init=info",
                     "-cp",

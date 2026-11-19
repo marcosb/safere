@@ -376,7 +376,7 @@ class Matcher : MatchResult {
     private var capturesResolved = true
 
     /** Returns whether inner captures are currently resolved without triggering lazy extraction.  */
-    fun capturesResolved(): Boolean {
+    internal fun capturesResolved(): Boolean {
         return capturesResolved
     }
 
@@ -1008,7 +1008,7 @@ class Matcher : MatchResult {
                 return matchesFullTextRegion()
             }
             if (regionActive) {
-                useRegionInput(savedTextScanner!!)
+                useRegionInput(savedTextScanner)
                 regionSubstituted = true
             }
             return parentPattern.preparedMatchRunner(regionActive)!!.matches(this)
@@ -1253,7 +1253,7 @@ class Matcher : MatchResult {
                 return lookingAtFullTextRegion()
             }
             if (regionActive) {
-                useRegionInput(savedTextScanner!!)
+                useRegionInput(savedTextScanner)
                 regionSubstituted = true
             }
             return parentPattern.preparedMatchRunner(regionActive)!!.lookingAt(this)
@@ -1569,7 +1569,7 @@ class Matcher : MatchResult {
                 return doFindFullTextRegion()
             }
             if (regionActive) {
-                useRegionInput(savedTextScanner!!)
+                useRegionInput(savedTextScanner)
                 searchFrom = Math.max(0, savedSearchFrom - regionStart)
                 regionSubstituted = true
             }
@@ -1608,7 +1608,7 @@ class Matcher : MatchResult {
     }
 
     /** Installs one independent input view for every opaque region operation.  */
-    private fun useRegionInput(savedScanner: InputScanner) {
+    private fun useRegionInput(savedScanner: InputScanner?) {
         if (cachedRegionScanner == null || cachedRegionStart != regionStart || cachedRegionEnd != regionEnd) {
             cachedRegionScanner =
                 if (text != null)
@@ -2810,10 +2810,7 @@ class Matcher : MatchResult {
      * @throws IllegalArgumentException if there is no capturing group with the given name
      */
     override fun group(name: String?): String? {
-        Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
-        requireNotNull(idx) { "No group with name <" + name + ">" }
-        return group(idx)
+        return group(namedGroupIndex(name))
     }
 
     /**
@@ -2890,10 +2887,7 @@ class Matcher : MatchResult {
      * @throws IllegalArgumentException if there is no capturing group with the given name
      */
     override fun start(name: String?): Int {
-        Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
-        requireNotNull(idx) { "No group with name <" + name + ">" }
-        return start(idx)
+        return start(namedGroupIndex(name))
     }
 
     /**
@@ -2917,10 +2911,7 @@ class Matcher : MatchResult {
      * @throws IllegalArgumentException if there is no capturing group with the given name
      */
     override fun end(name: String?): Int {
-        Objects.requireNonNull<String?>(name, "Group name")
-        val idx: Int = parentPattern.namedGroups()!!.get(name)!!
-        requireNotNull(idx) { "No group with name <" + name + ">" }
-        return end(idx)
+        return end(namedGroupIndex(name))
     }
 
     /**
@@ -3173,7 +3164,7 @@ class Matcher : MatchResult {
 
         val cursor = DfaMatchCursor(searchFrom)
         var matchResult =
-            findNextDfaMatch(fwdDfa, isStartAnchored, prefix!!, foldCase, hasStartAcceleration, cursor)
+            findNextDfaMatch(fwdDfa, isStartAnchored, prefix, foldCase, hasStartAcceleration, cursor)
 
         if (matchResult < 0) {
             return null
@@ -3302,7 +3293,7 @@ class Matcher : MatchResult {
     private fun findNextDfaMatch(
         fwdDfa: Dfa,
         isStartAnchored: Boolean,
-        prefix: String,
+        prefix: String?,
         foldCase: Boolean,
         hasStartAcceleration: Boolean,
         cursor: DfaMatchCursor
@@ -3336,8 +3327,10 @@ class Matcher : MatchResult {
             if (hasStartAcceleration && pos < textLen && text != null) {
                 // Literal prefixes never contain surrogate code units (MultiAnchorCompiler drops literals
                 // with surrogate runes), so a prefix match always starts on a code point boundary.
+                val literalPrefix = prefix!!
                 val idx =
-                    if (foldCase) indexOfIgnoreCase(text!!, prefix, pos) else text!!.indexOf(prefix, pos)
+                    if (foldCase) indexOfIgnoreCase(text!!, literalPrefix, pos)
+                    else text!!.indexOf(literalPrefix, pos)
                 if (idx < 0) {
                     diagnosticBoundary(MatchStrategy.LITERAL)
                     break
@@ -4111,12 +4104,8 @@ class Matcher : MatchResult {
      * @return an unmodifiable map from group names to group numbers
      */
     override fun namedGroups(): MutableMap<String?, Int?> {
-        val groups = parentPattern.namedGroups()
-        val out = LinkedHashMap<String?, Int?>(groups.size)
-        for ((name, index) in groups) {
-            out[name] = index
-        }
-        return out
+        // MatchResult.namedGroups is Map; return Pattern's unmodifiable view (Java did the same).
+        return Collections.unmodifiableMap(parentPattern.namedGroups())
     }
 
     /**
@@ -4153,7 +4142,7 @@ class Matcher : MatchResult {
      * @return this matcher
      * @throws IllegalArgumentException if newPattern is null
      */
-    fun usePattern(newPattern: Pattern): Matcher {
+    fun usePattern(newPattern: Pattern?): Matcher {
         requireNotNull(newPattern) { "Pattern cannot be null" }
         modCount++
         val preservedGroupZero = hasMatch
@@ -4379,6 +4368,12 @@ class Matcher : MatchResult {
         check(resultStatus == ResultStatus.MATCHED) { "No match found" }
     }
 
+    private fun namedGroupIndex(name: String?): Int {
+        Objects.requireNonNull(name, "Group name")
+        return parentPattern.namedGroups()[name]
+            ?: throw IllegalArgumentException("No group with name <$name>")
+    }
+
     private fun checkGroup(group: Int) {
         if (group < 0 || group > groupCount()) {
             throw IndexOutOfBoundsException(
@@ -4422,9 +4417,7 @@ class Matcher : MatchResult {
                     require(i < replacement.length) { "Missing closing '}' in replacement string" }
                     val name = replacement.substring(nameStart, i)
                     i++ // skip '}'
-                    val idx: Int = parentPattern.namedGroups()!!.get(name)!!
-                    requireNotNull(idx) { "No group with name <" + name + ">" }
-                    val g = idx
+                    val g = namedGroupIndex(name)
                     val start = start(g)
                     val end = end(g)
                     if (start >= 0 && end >= 0) {

@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.function.BiConsumer
 
 /**
@@ -29,12 +28,17 @@ import java.util.function.BiConsumer
 internal class PrefilterQuadrantWorkTest {
     /** A pattern with a start literal and a different required literal.  */
     internal enum class Shape(
-        regex: String,
-        start: String,
-        required: String,
-        match: String,
-        startFirst: Boolean,
-        startScanCost: Int
+        val regex: String?,
+        /** Text containing the start literal but not a match.  */
+        val start: String?,
+        /** The required literal, which the pattern uses as a reject prefilter.  */
+        val required: String,
+        /** The shortest match.  */
+        val match: String,
+        /** Whether short inputs scan for the start literal first.  */
+        val startFirst: Boolean,
+        /** An upper bound on the work per input unit of scanning for the start literal.  */
+        val startScanCost: Int
     ) {
         /** An exact start literal that is as selective as the required literal, as in #1115.  */
         COMPETITIVE_START(
@@ -55,26 +59,7 @@ internal class PrefilterQuadrantWorkTest {
             "Status=301 took=12ms",
             false,
             2
-        );
-
-        val regex: String?
-
-        /** Text containing the start literal but not a match.  */
-        val start: String?
-
-        /** The required literal, which the pattern uses as a reject prefilter.  */
-        val required: String
-
-        /** The shortest match.  */
-        val match: String
-
-        /** Whether short inputs scan for the start literal first.  */
-        val startFirst: Boolean
-
-        /** An upper bound on the work per input unit of scanning for the start literal.  */
-        val startScanCost: Int
-
-
+        )
     }
 
     @JvmRecord
@@ -89,7 +74,7 @@ internal class PrefilterQuadrantWorkTest {
         Assertions.assertThat<StringStartAccelerator?>(pattern.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(pattern.utf8StartAccelerator()).isNotNull()
 
-        val failures: MutableList<String?> = ArrayList<String?>()
+        val failures: MutableList<String> = ArrayList<String>()
         for (size in SIZES) {
             // Without the required literal, rejecting the input is a single pass.
             val rejectBound: Long = size.toLong() + SLACK
@@ -102,7 +87,7 @@ internal class PrefilterQuadrantWorkTest {
             // the first start candidate, so an input with both literals and no match is read up to twice.
             val bothBound = if (shape.startFirst && size < START_FIRST_LIMIT) 2L * size + SLACK else scanBound
             val cases =
-                List.of<Case?>(
+                java.util.List.of<Case?>(
                     Case("neither literal", filler(size), rejectBound),
                     Case("start literal only", dense(size, shape.start, ""), rejectBound),
                     Case(

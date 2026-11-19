@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 internal class TeddyModelTest {
     @Test
     fun compilationFollowsVectorProviderAvailability() {
-        val model = TeddyModel.compileForSelectedProvider(arrayOf<String>("INFO", "WARN"))
+        val model = TeddyModel.compileForSelectedProvider(arrayOf<String?>("INFO", "WARN"))
 
         if (!VectorScanProviders.vectorProviderAvailable()) {
             Assertions.assertThat<TeddyModel?>(model).isNull()

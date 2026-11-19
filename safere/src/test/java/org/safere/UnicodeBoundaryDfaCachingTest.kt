@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Regression coverage for Unicode word classification in cached DFA transitions.  */
@@ -17,7 +16,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     @ParameterizedTest
     @MethodSource("cases")
     fun findSequenceMatchesJdk(regex: String, input: String) {
-        val expected = Pattern.compile(regex).matcher(input)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         val actual = org.safere.Pattern.compile(regex).matcher(input)
         while (expected.find()) {
             Assertions.assertThat(actual.find()).`as`("find for %s", regex).isTrue()
@@ -31,7 +30,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     @MethodSource("cases")
     @DisabledForCrosscheck("UTF-8 input is a SafeRE extension")
     fun utf8FindSequenceMatchesJdk(regex: String, input: String) {
-        val expected = Pattern.compile(regex).matcher(input)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         val actual =
             org.safere.Pattern.compile(regex).matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         while (expected.find()) {
@@ -60,6 +59,7 @@ internal class UnicodeBoundaryDfaCachingTest {
     }
 
     companion object {
+        @JvmStatic
         fun supplementaryCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("(?U).\\b", intArrayOf(0, 1, 1, 3)),
@@ -69,6 +69,7 @@ internal class UnicodeBoundaryDfaCachingTest {
             )
         }
 
+        @JvmStatic
         fun cases(): Stream<Arguments?>? {
             return Stream.of<String?>("α", "中", "\u0301", "\u0660", "\u200c")
                 .flatMap<Arguments?> { word: String? ->

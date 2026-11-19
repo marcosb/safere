@@ -61,6 +61,7 @@ internal class CommentQuotingModelTest {
     }
 
     companion object {
+        @JvmStatic
         private fun commentContexts(): Stream<Arguments?>? {
             return Stream.of<String?>("\n", "\r", "\r\n")
                 .flatMap<Arguments?> { newline: String? ->

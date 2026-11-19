@@ -9,8 +9,6 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.util.function.IntFunction
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 /**
  * Inventory of observed JDK grapheme-region behavior that appears to depend on `java.util.regex` implementation details rather than on specified regex semantics.
@@ -209,7 +207,7 @@ internal class GraphemeJdkImplementationDetailTest {
     companion object {
         private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
             val jdkMatcher =
-                Pattern.compile(regex).matcher(input).region(start, end)
+                java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
             val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
             Assertions.assertThat(safeMatcher.matches())
@@ -233,7 +231,7 @@ internal class GraphemeJdkImplementationDetailTest {
             regex: String, input: String, start: Int, end: Int
         ) {
             val jdkMatcher =
-                Pattern.compile(regex)
+                java.util.regex.Pattern.compile(regex)
                     .matcher(input)
                     .region(start, end)
                     .useTransparentBounds(true)
@@ -261,7 +259,7 @@ internal class GraphemeJdkImplementationDetailTest {
             regex: String, input: String, start: Int, end: Int
         ) {
             val jdkMatcher =
-                Pattern.compile(regex).matcher(input).region(start, end)
+                java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
             val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
             Assertions.assertThat<String?>(capturedFindTrace(safeMatcher))
@@ -273,7 +271,7 @@ internal class GraphemeJdkImplementationDetailTest {
             regex: String, input: String, start: Int, end: Int
         ) {
             val jdkMatcher =
-                Pattern.compile(regex)
+                java.util.regex.Pattern.compile(regex)
                     .matcher(input)
                     .region(start, end)
                     .useTransparentBounds(true)
@@ -288,7 +286,7 @@ internal class GraphemeJdkImplementationDetailTest {
                 .containsExactlyElementsOf(capturedFindTrace(jdkMatcher))
         }
 
-        private fun findBounds(matcher: Matcher): MutableList<IntArray?> {
+        private fun findBounds(matcher: java.util.regex.Matcher): MutableList<IntArray?> {
             val matches: MutableList<IntArray?> = ArrayList<IntArray?>()
             while (matcher.find()) {
                 matches.add(intArrayOf(matcher.start(), matcher.end()))
@@ -304,23 +302,23 @@ internal class GraphemeJdkImplementationDetailTest {
             return matches
         }
 
-        private fun capturedFindTrace(matcher: Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun capturedFindTrace(matcher: java.util.regex.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
             }
             return trace
         }
 
-        private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun capturedFindTrace(matcher: org.safere.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
             }
             return trace
         }
 
-        private fun capturedMatchTrace(matcher: Matcher): String {
+        private fun capturedMatchTrace(matcher: java.util.regex.Matcher): String {
             val builder = StringBuilder()
             builder.append(matcher.start()).append('-').append(matcher.end()).append(':')
             builder.append(matcher.group())

@@ -11,10 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.safere.MultiAnchorDescriptor.StartPlan
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.regex.Pattern
 import kotlin.math.max
-
-()
 import kotlin.text.split
 import kotlin.text.toByteArray
 import kotlin.text.toCharArray
@@ -40,7 +37,7 @@ internal class MultiLiteralTest {
     @Test
     fun testMultiLiteralInfoCreation() {
         val lits = arrayOf<String?>("apple", "banana", "cherry")
-        val info = MultiLiteralInfo.create(lits)
+        val info = MultiLiteralInfo.create(lits)!!
         Assertions.assertThat<MultiLiteralInfo?>(info).isNotNull()
         Assertions.assertThat<String?>(info.literals).containsExactly("apple", "banana", "cherry")
         Assertions.assertThat(info.minLength).isEqualTo(5)
@@ -49,13 +46,13 @@ internal class MultiLiteralTest {
         Assertions.assertThat(info.anchorRanges).containsExactly('a'.code, 'c'.code)
 
         val disjoint =
-            MultiLiteralInfo.create(arrayOf<String>("apple", "banana", "watermelon"))
+            MultiLiteralInfo.create(arrayOf<String?>("apple", "banana", "watermelon"))!!
         Assertions.assertThat(disjoint.anchorRanges).containsExactly('a'.code, 'b'.code, 'w'.code, 'w'.code)
 
-        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String>("single"))).isNull()
-        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String>("1", "2", "3", "4", "5")))
+        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String?>("single"))).isNull()
+        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String?>("1", "2", "3", "4", "5")))
             .isNull()
-        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String>("valid", "café"))).isNull()
+        Assertions.assertThat<MultiLiteralInfo?>(MultiLiteralInfo.create(arrayOf<String?>("valid", "café"))).isNull()
     }
 
     @ParameterizedTest
@@ -70,7 +67,7 @@ internal class MultiLiteralTest {
             val m = pattern.matcher(Utf8Input.validated(bytes))
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.start()).isEqualTo(7)
-            Assertions.assertThat(m.end()).isEqualTo(7 + kw.size)
+            Assertions.assertThat(m.end()).isEqualTo(7 + kw.length)
             Assertions.assertThat(String(bytes, m.start(), m.end() - m.start(), StandardCharsets.UTF_8)).isEqualTo(kw)
         }
 
@@ -126,10 +123,10 @@ internal class MultiLiteralTest {
     @Test
     fun testFuzzEquivalenceWithJavaRegex() {
         val keywords = arrayOf<String>("alpha", "beta", "gamma", "delta")
-        val regex = String.join("|", *keywords)
+        val regex = java.lang.String.join("|", *keywords)
         val safere = Pattern.compile(regex)
         Assertions.assertThat<StartPlan?>(safere.startPlan()).isInstanceOf(StartPlan.MultiLiteral::class.java)
-        val jre = Pattern.compile(regex)
+        val jre = java.util.regex.Pattern.compile(regex)
 
         val rnd = Random(42)
         val alphabet = "abcdefghijklmnopqrstuvwxyz ".toCharArray()
@@ -138,12 +135,12 @@ internal class MultiLiteralTest {
             val len = 64 + rnd.nextInt(500)
             val chars = CharArray(len)
             for (i in 0..<len) {
-                chars[i] = alphabet[rnd.nextInt(alphabet.length)]
+                chars[i] = alphabet[rnd.nextInt(alphabet.size)]
             }
             if (rnd.nextBoolean()) {
                 val kw = keywords[rnd.nextInt(keywords.size)]
-                val insertPos = rnd.nextInt(max(1, len - kw.size))
-                for (i in 0..<kw.size) {
+                val insertPos = rnd.nextInt(max(1, len - kw.length))
+                for (i in 0..<kw.length) {
                     chars[insertPos + i] = kw.get(i)
                 }
             }

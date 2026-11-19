@@ -88,7 +88,7 @@ internal class RejectPrefilterTest {
         val plan: RejectPlan =
             RequiredLiteral("needle")
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.Literal::class.java)
         val lit = prefilter as RejectPrefilter.Literal
         Assertions.assertThat<MatchStrategy?>(lit.strategy()).isEqualTo(MatchStrategy.LITERAL)
@@ -128,7 +128,7 @@ internal class RejectPrefilterTest {
         val plan: RejectPlan =
             RequiredCharClass(scanInfo)
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.CharClass::class.java)
         val cc = prefilter as RejectPrefilter.CharClass
         Assertions.assertThat<MatchStrategy?>(cc.strategy()).isEqualTo(MatchStrategy.CHARACTER_CLASS)
@@ -166,7 +166,7 @@ internal class RejectPrefilterTest {
                     RequiredCharClass(scanInfo)
                 )
             )
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
 
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.Composite::class.java)
         val composite = prefilter as RejectPrefilter.Composite
@@ -205,7 +205,7 @@ internal class RejectPrefilterTest {
     fun rejectionStrategyReportsExactRejectingStrategy() {
         val plan: RejectPlan =
             RequiredLiteral("needle")
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
 
         val scanner: Utf8InputScanner = utf8Scanner("no match here")
         val strategy =
@@ -213,7 +213,7 @@ internal class RejectPrefilterTest {
         Assertions.assertThat<MatchStrategy?>(strategy).isEqualTo(MatchStrategy.LITERAL)
 
         val accumulator = DiagnosticAccumulator()
-        accumulator.participate(strategy, StrategyRole.REJECT_PREFILTER)
+        accumulator.participate(strategy!!, StrategyRole.REJECT_PREFILTER)
         accumulator.boundary(strategy)
 
         val pattern = Pattern.compile("needle")
@@ -232,11 +232,11 @@ internal class RejectPrefilterTest {
 
     @Test
     fun disjointLiteralsRejectPrefilterRejectsWhenAllMissing() {
-        val literals: Array<String?> = arrayOf<String>("apple", "banana", "orange")
+        val literals: Array<String?> = arrayOf<String?>("apple", "banana", "orange")
         val plan: RejectPlan =
             RejectPlan.DisjointLiterals(literals)
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.DisjointLiterals::class.java)
         val d = prefilter as RejectPrefilter.DisjointLiterals
         Assertions.assertThat<MatchStrategy?>(d.strategy()).isEqualTo(MatchStrategy.LITERAL)
@@ -267,7 +267,7 @@ internal class RejectPrefilterTest {
     fun disjointLiteralsOmitsUnpairedSurrogateBranchesFromUtf8Table() {
         val options = EnginePathOptions.allEnabled()
 
-        val mixed: Array<String?> = arrayOf<String>("a\uD83D", "za\uD83D\uDE00", "banana")
+        val mixed: Array<String?> = arrayOf<String?>("a\uD83D", "za\uD83D\uDE00", "banana")
         val mixedFilter =
             RejectPrefilter.create(RejectPlan.DisjointLiterals(mixed)) as RejectPrefilter.DisjointLiterals
         Assertions.assertThat(mixedFilter.utf8Literals).hasNumberOfRows(2)
@@ -287,7 +287,7 @@ internal class RejectPrefilterTest {
         Assertions.assertThat(pattern.matcher(Utf8Input.trusted(cesu8HighSurrogate)).matches()).isFalse()
         Assertions.assertThat(pattern.matcher(Utf8Input.trusted(cesu8HighSurrogate)).find()).isFalse()
 
-        val allSurrogates: Array<String?> = arrayOf<String>("a\uD83D", "\uDE00b")
+        val allSurrogates: Array<String?> = arrayOf<String?>("a\uD83D", "\uDE00b")
         val allSurrogateFilter =
             RejectPrefilter.create(
                 RejectPlan.DisjointLiterals(allSurrogates)
@@ -301,7 +301,7 @@ internal class RejectPrefilterTest {
     fun withoutDisjointLiteralsPreservesRemainingFilters() {
         val disjoint =
             RejectPrefilter.create(
-                RejectPlan.DisjointLiterals(arrayOf<String>("foo", "bar"))
+                RejectPlan.DisjointLiterals(arrayOf<String?>("foo", "bar"))
             )
         val literal =
             RejectPrefilter.create(RequiredLiteral("foo"))
@@ -317,12 +317,12 @@ internal class RejectPrefilterTest {
         Assertions.assertThat<RejectPrefilter?>(RejectPrefilter.withoutDisjointLiterals(literal)).isSameAs(literal)
 
         val compositeWithDisjoint: RejectPrefilter =
-            RejectPrefilter.Composite(arrayOf<RejectPrefilter?>(disjoint, suffix))
+            RejectPrefilter.Composite(arrayOf<RejectPrefilter>(disjoint!!, suffix!!))
         Assertions.assertThat<RejectPrefilter?>(RejectPrefilter.withoutDisjointLiterals(compositeWithDisjoint))
             .isSameAs(suffix)
 
         val compositeWithoutDisjoint: RejectPrefilter =
-            RejectPrefilter.Composite(arrayOf<RejectPrefilter?>(literal, suffix))
+            RejectPrefilter.Composite(arrayOf<RejectPrefilter>(literal!!, suffix!!))
         Assertions.assertThat<RejectPrefilter?>(RejectPrefilter.withoutDisjointLiterals(compositeWithoutDisjoint))
             .isSameAs(compositeWithoutDisjoint)
     }
@@ -333,7 +333,7 @@ internal class RejectPrefilterTest {
         val plan: RejectPlan =
             RejectPlan.EndAnchoredSuffix(info)
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.EndAnchoredSuffix::class.java)
         Assertions.assertThat<MatchStrategy?>(prefilter.strategy()).isEqualTo(MatchStrategy.LITERAL)
 
@@ -366,7 +366,7 @@ internal class RejectPrefilterTest {
         // UNIX_LINES suffix prefilter
         val unixInfo = SuffixInfo(".json", true, true)
         val unixPrefilter =
-            RejectPrefilter.create(RejectPlan.EndAnchoredSuffix(unixInfo))
+            RejectPrefilter.create(RejectPlan.EndAnchoredSuffix(unixInfo))!!
         Assertions.assertThat(unixPrefilter.canReject("config.json\n", null, 0, options)).isFalse()
         Assertions.assertThat(unixPrefilter.canReject("config.json\r", null, 0, options)).isTrue()
         Assertions.assertThat(unixPrefilter.canReject("config.json\u0085", null, 0, options)).isTrue()
@@ -387,7 +387,7 @@ internal class RejectPrefilterTest {
         val plan: RejectPlan =
             RejectPlan.EndAnchoredSuffix(info)
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.EndAnchoredSuffix::class.java)
         Assertions.assertThat<MatchStrategy?>(prefilter.strategy()).isEqualTo(MatchStrategy.LITERAL)
 
@@ -419,7 +419,7 @@ internal class RejectPrefilterTest {
         val plan: RejectPlan =
             RejectPlan.EndAnchoredCharClass(info)
 
-        val prefilter = RejectPrefilter.create(plan)
+        val prefilter = RejectPrefilter.create(plan)!!
         Assertions.assertThat<RejectPrefilter?>(prefilter)
             .isInstanceOf(RejectPrefilter.EndAnchoredCharClass::class.java)
         Assertions.assertThat<MatchStrategy?>(prefilter.strategy()).isEqualTo(MatchStrategy.CHARACTER_CLASS)
@@ -452,7 +452,7 @@ internal class RejectPrefilterTest {
         val unixInfo =
             EndAnchoredCharClassInfo(builder.build(), true, true)
         val unixPrefilter =
-            RejectPrefilter.create(RejectPlan.EndAnchoredCharClass(unixInfo))
+            RejectPrefilter.create(RejectPlan.EndAnchoredCharClass(unixInfo))!!
         Assertions.assertThat(unixPrefilter.canReject("item123\n", null, 0, options)).isFalse()
         Assertions.assertThat(unixPrefilter.canReject("item123\r", null, 0, options)).isTrue()
         Assertions.assertThat(unixPrefilter.canReject("item123\u0085", null, 0, options)).isTrue()
@@ -470,13 +470,13 @@ internal class RejectPrefilterTest {
 
         // Negative text with {Link:...} but missing <<!nav>> should reject in Tier 0
         val textNoNav = "{Link: home_page}{Link: about_page}{Link: contact_page}"
-        Assertions.assertThat(p.rejectPrefilter().canReject(textNoNav, null, 0, EnginePathOptions.allEnabled()))
+        Assertions.assertThat(p.rejectPrefilter()!!.canReject(textNoNav, null, 0, EnginePathOptions.allEnabled()))
             .isTrue()
         Assertions.assertThat(p.find(Utf8Input.validated(textNoNav.toByteArray(StandardCharsets.UTF_8)))).isFalse()
 
         // Positive text with <<!nav>> should match and capture properly
         val textWithNav = "{Link: home_page}{Link: section<<!nav>>item}"
-        Assertions.assertThat(p.rejectPrefilter().canReject(textWithNav, null, 0, EnginePathOptions.allEnabled()))
+        Assertions.assertThat(p.rejectPrefilter()!!.canReject(textWithNav, null, 0, EnginePathOptions.allEnabled()))
             .isFalse()
         val m = p.matcher(textWithNav)
         Assertions.assertThat(m.find()).isTrue()
@@ -494,7 +494,7 @@ internal class RejectPrefilterTest {
         Assertions.assertThat<RejectPrefilter?>(p.rejectPrefilter()).isNotNull()
 
         val inputNoEnd = "<meta_start>Thinking process: analyzing query...\n".repeat(1000)
-        Assertions.assertThat(p.rejectPrefilter().canReject(inputNoEnd, null, 0, EnginePathOptions.allEnabled()))
+        Assertions.assertThat(p.rejectPrefilter()!!.canReject(inputNoEnd, null, 0, EnginePathOptions.allEnabled()))
             .isTrue()
         Assertions.assertThat(p.matcher(inputNoEnd).replaceAll("")).isEqualTo(inputNoEnd)
     }
@@ -513,7 +513,7 @@ internal class RejectPrefilterTest {
         Assertions.assertThat<CharClassScanInfo?>(scanInfo).isInstanceOf(AsciiSmallSet::class.java)
 
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         Assertions.assertThat<RejectPrefilter?>(prefilter).isInstanceOf(RejectPrefilter.CharClass::class.java)
         Assertions.assertThat((prefilter as RejectPrefilter.CharClass).singleAscii).isEqualTo('#'.code)
 
@@ -548,7 +548,7 @@ internal class RejectPrefilterTest {
         val scanInfo =
             CharClassScanInfo.fromCharClass(CharClassBuilder().addRune('#'.code).build())
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         val options = EnginePathOptions.allEnabled()
 
         val earlyHit: Utf8InputScanner = utf8Scanner("\u4E00#" + "\u4E00".repeat(10000))
@@ -563,7 +563,7 @@ internal class RejectPrefilterTest {
         Assertions.assertThat<CharClassScanInfo?>(scanInfo).isInstanceOf(AsciiSmallSet::class.java)
 
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         Assertions.assertThat((prefilter as RejectPrefilter.CharClass).singleAscii).isEqualTo(-1)
 
         val options = EnginePathOptions.allEnabled()
@@ -579,7 +579,7 @@ internal class RejectPrefilterTest {
                 CharClassBuilder().addRune(']'.code).addRune('\uFF3D'.code).build()
             )
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         val options = EnginePathOptions.allEnabled()
 
         Assertions.assertThat(prefilter.canReject(null, utf8Scanner("no brackets here"), 0, options)).isTrue()
@@ -623,7 +623,7 @@ internal class RejectPrefilterTest {
                 CharClassBuilder().addRune(']'.code).addRune('\uFF3D'.code).build()
             )
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         val options = EnginePathOptions.allEnabled()
 
         // When the non-ASCII member appears near the start of a long non-ASCII input that lacks the
@@ -642,7 +642,7 @@ internal class RejectPrefilterTest {
                 CharClassBuilder().addRune(']'.code).addRune('\uFF3D'.code).build()
             )
         val prefilter =
-            RejectPrefilter.create(RequiredCharClass(scanInfo))
+            RejectPrefilter.create(RequiredCharClass(scanInfo))!!
         val options = EnginePathOptions.allEnabled()
 
         // From the start of the input, each member is found on either side of the near-window edge

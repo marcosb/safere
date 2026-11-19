@@ -11,8 +11,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.Isolated
-import java.util.List
-import java.util.regex.Pattern
 
 /**
  * Tests for the optimized no-match path in `Matcher.replaceAll` and `replaceFirst`.
@@ -44,7 +42,7 @@ internal class ReplaceNoMatchOverheadTest {
     @Test
     fun noMatchReturnsSameStringInstance() {
         val patterns =
-            List.of<String?>(
+            java.util.List.of<String?>(
                 PAREN_SOURCE,
                 BRACKET_SOURCE,
                 BRACKET_TAG,
@@ -55,7 +53,7 @@ internal class ReplaceNoMatchOverheadTest {
             )
         val noMatchInput = "The quick brown fox jumps over the lazy dog in normal prose."
 
-        val replacements = mutableListOf<String?>("", "replacement", "$1", "\${foo}", "\\n", "\\$", "\\\\")
+        val replacements = mutableListOf<String>("", "replacement", "$1", "\${foo}", "\\n", "\\$", "\\\\")
 
         for (patternStr in patterns) {
             val pattern = Pattern.compile(patternStr)
@@ -80,11 +78,11 @@ internal class ReplaceNoMatchOverheadTest {
     fun literalReplacementDoesNotMaterializeInputScanner() {
         val scanner = Matcher::class.java.getDeclaredField("textScanner")
         scanner.setAccessible(true)
-        for (regex in mutableListOf<String?>("hello", "é😀", "a\\.b", "(?i)hello")) {
+        for (regex in mutableListOf<String>("hello", "é😀", "a\\.b", "(?i)hello")) {
             val pattern = Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
-            for (input in mutableListOf<String?>("", "absent", "hello hello", "é😀 é😀", "a.b a.b", "HELLO")) {
-                for (replacement in mutableListOf<String?>("X", "")) {
+            val jdk = java.util.regex.Pattern.compile(regex)
+            for (input in mutableListOf<String>("", "absent", "hello hello", "é😀 é😀", "a.b a.b", "HELLO")) {
+                for (replacement in mutableListOf<String>("X", "")) {
                     val all = pattern.matcher(input)
                     Assertions.assertThat(all.replaceAll(replacement))
                         .isEqualTo(jdk.matcher(input).replaceAll(replacement))
@@ -102,12 +100,12 @@ internal class ReplaceNoMatchOverheadTest {
     @Test
     fun invalidReplacementTemplateDoesNotThrowOnNoMatch() {
         val invalidReplacements: MutableList<String> =
-            mutableListOf<String?>("\\", "$", "$99", "\${invalid", "$<unclosed>")
+            mutableListOf<String>("\\", "$", "$99", "\${invalid", "$<unclosed>")
         val input = "No match here at all."
 
-        for (regex in List.of<String?>(PAREN_SOURCE, BRACKET_SOURCE, BRACKET_TAG, "needle", "[0-9]+")) {
+        for (regex in java.util.List.of<String?>(PAREN_SOURCE, BRACKET_SOURCE, BRACKET_TAG, "needle", "[0-9]+")) {
             val safere = org.safere.Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
+            val jdk = java.util.regex.Pattern.compile(regex)
 
             for (rep in invalidReplacements) {
                 // SafeRE must not throw and must return same instance
@@ -127,7 +125,7 @@ internal class ReplaceNoMatchOverheadTest {
     fun invalidReplacementTemplateThrowsOnMatchIdenticalToJdk() {
         val input = "prefix (Source: 42) suffix"
         val safere = org.safere.Pattern.compile(PAREN_SOURCE)
-        val jdk = Pattern.compile(PAREN_SOURCE)
+        val jdk = java.util.regex.Pattern.compile(PAREN_SOURCE)
 
         // Trailing backslash
         Assertions.assertThatThrownBy(ThrowingCallable { safere.matcher(input).replaceAll("\\") })
@@ -161,7 +159,7 @@ internal class ReplaceNoMatchOverheadTest {
 
     @Test
     fun matcherStateAfterNoMatchThrowsIllegalStateException() {
-        for (regex in List.of<String?>(PAREN_SOURCE, "literalMatch", "[0-9]+")) {
+        for (regex in java.util.List.of<String?>(PAREN_SOURCE, "literalMatch", "[0-9]+")) {
             val pattern = org.safere.Pattern.compile(regex)
             val matcher = pattern.matcher("no matching text here")
 
@@ -212,7 +210,7 @@ internal class ReplaceNoMatchOverheadTest {
     @Test
     fun differentialCheckAgainstJdk() {
         val patterns =
-            List.of<String?>(
+            java.util.List.of<String?>(
                 PAREN_SOURCE,
                 BRACKET_SOURCE,
                 BRACKET_TAG,
@@ -223,7 +221,7 @@ internal class ReplaceNoMatchOverheadTest {
                 "(?m)^line"
             )
 
-        val inputs: MutableList<String> = mutableListOf<String?>(
+        val inputs: MutableList<String> = mutableListOf<String>(
             "",
             "The quick brown fox jumps over the lazy dog.",
             "test (Source: 123) and (Source: 456, 789) end",
@@ -234,10 +232,10 @@ internal class ReplaceNoMatchOverheadTest {
             "foo:10 bar:20 baz:30"
         )
 
-        val replacements: MutableList<String> = mutableListOf<String?>("", "REPLACED", "[$0]", "-")
+        val replacements: MutableList<String> = mutableListOf<String>("", "REPLACED", "[$0]", "-")
 
         for (pat in patterns) {
-            val jdk = Pattern.compile(pat)
+            val jdk = java.util.regex.Pattern.compile(pat)
             val safere = org.safere.Pattern.compile(pat)
 
             for (`in` in inputs) {
@@ -293,8 +291,10 @@ internal class ReplaceNoMatchOverheadTest {
     private fun operationsFor(pattern: org.safere.Pattern): MutableList<OperationDiagnostics> {
         val patternId = pattern.descriptor().patternId
         return diagnostics.operations.stream()
-            .filter { event: OperationDiagnostics? -> event!!.pattern.patternId == patternId }
+            .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }
             .toList()
+            .requireNoNulls()
+            .toMutableList()
     }
 
     private class RecordingDiagnostics : SafeReMatchDiagnostics() {

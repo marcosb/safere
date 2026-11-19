@@ -391,7 +391,7 @@ internal class Nfa {
                 val stepResult = inputStep(text, pos)
                 val cp = (stepResult ushr 32).toInt()
                 val nextPos = stepResult.toInt()
-                step(runq, delayedBuffer!!, delayedGrapheme!!, cp, text, pos, nextPos)
+                step(runq, delayedBuffer, delayedGrapheme, cp, text, pos, nextPos)
                 nextBoundaryPos = nextPos
             } else {
                 freeQueue(runq)
@@ -508,7 +508,7 @@ internal class Nfa {
             graphemeStart,
             context!!.consumeRegionStart,
             context!!.endPos,
-            context!!.graphemeContext!!
+            context!!.graphemeContext
         ).toLong())
     }
 
@@ -755,8 +755,8 @@ internal class Nfa {
      */
     private fun step(
         rq: QueueState,
-        delayedBuffer: Array<QueueState?>,
-        delayedGrapheme: MutableMap<Int?, QueueState>,
+        delayedBuffer: Array<QueueState?>?,
+        delayedGrapheme: MutableMap<Int?, QueueState>?,
         cp: Int,
         text: InputScanner,
         matchPos: Int,
@@ -783,9 +783,9 @@ internal class Nfa {
                     if (cp >= 0 && ip.matchesChar(cp)) {
                         val destination =
                             if (prog!!.hasGraphemeSemantics())
-                                delayedQueueAt(delayedGrapheme, nextPos)
+                                delayedQueueAt(delayedGrapheme!!, nextPos)
                             else
-                                delayedQueueAt(delayedBuffer, nextPos)
+                                delayedQueueAt(delayedBuffer!!, nextPos)
                         if (destination != null) {
                             addToThreadq(destination, ip.out, text, nextPos, capture, true)
                         }
@@ -796,9 +796,9 @@ internal class Nfa {
                     if (cp >= 0 && ip.matchesCharClass(cp)) {
                         val destination =
                             if (prog!!.hasGraphemeSemantics())
-                                delayedQueueAt(delayedGrapheme, nextPos)
+                                delayedQueueAt(delayedGrapheme!!, nextPos)
                             else
-                                delayedQueueAt(delayedBuffer, nextPos)
+                                delayedQueueAt(delayedBuffer!!, nextPos)
                         if (destination != null) {
                             addToThreadq(destination, ip.out, text, nextPos, capture, true)
                         }
@@ -815,9 +815,9 @@ internal class Nfa {
                         val scalarEnd = graphemeNextPos(text, matchPos)
                         val destination =
                             if (prog!!.hasGraphemeSemantics())
-                                delayedQueueAt(delayedGrapheme, scalarEnd)
+                                delayedQueueAt(delayedGrapheme!!, scalarEnd)
                             else
-                                delayedQueueAt(delayedBuffer, scalarEnd)
+                                delayedQueueAt(delayedBuffer!!, scalarEnd)
                         if (destination != null) {
                             if (scalarEnd == context!!.endPos
                                 || GraphemeSupport.isGraphemeClusterBoundary(

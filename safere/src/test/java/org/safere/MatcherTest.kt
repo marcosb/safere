@@ -16,20 +16,17 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 /** Tests for [Matcher].  */
 internal class MatcherTest {
     @Test
     fun capturesInImpossibleAlternativesRemainUnmatched() {
-        for (alternatives in mutableListOf<String?>("(a)|(b)", "(a)|(b)|(c)|(d)|(e)", "((a)|(b))", "(é)|(😀)")) {
-            for (impossible in mutableListOf<String?>("[^\\s\\S]", "[a&&b]")) {
+        for (alternatives in mutableListOf<String>("(a)|(b)", "(a)|(b)|(c)|(d)|(e)", "((a)|(b))", "(é)|(😀)")) {
+            for (impossible in mutableListOf<String>("[^\\s\\S]", "[a&&b]")) {
                 val deadBranch = "(?:" + alternatives + ")" + impossible
-                for (regex in List.of<String?>(deadBranch + "|x|xx", "x|xx|" + deadBranch)) {
+                for (regex in java.util.List.of<String?>(deadBranch + "|x|xx", "x|xx|" + deadBranch)) {
                     val matcher = Pattern.compile(regex).matcher("xxy")
                     for (start in 0..1) {
                         Assertions.assertThat(matcher.find()).`as`(regex).isTrue()
@@ -217,7 +214,7 @@ internal class MatcherTest {
             for (input in arrayOf<String>("a b", "a\nb c", "a\n \nc", "a\n\nc")) {
                 Assertions.assertThat(p.matcher(input).matches())
                     .`as`("SafeRE and JDK should agree on %s", input.replace("\n", "\\n"))
-                    .isEqualTo(Pattern.compile(".*\\s+.*").matcher(input).matches())
+                    .isEqualTo(java.util.regex.Pattern.compile(".*\\s+.*").matcher(input).matches())
             }
         }
 
@@ -284,7 +281,7 @@ internal class MatcherTest {
                         + "$ .1")
             val input = ",69\u00c3"
 
-            val expected = Pattern.compile(regex).matcher(input).find()
+            val expected = java.util.regex.Pattern.compile(regex).matcher(input).find()
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).find()).isEqualTo(expected)
         }
@@ -307,7 +304,7 @@ internal class MatcherTest {
             val pattern: String = repeatedDotStarCapturePattern(5, captures)
             val input: String = repeatedDotStarCaptureInput(5, captures)
             val m = org.safere.Pattern.compile(pattern).matcher(input)
-            val jdk = Pattern.compile(pattern).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(pattern).matcher(input)
 
             Assertions.assertThat(m.matches()).isTrue()
             Assertions.assertThat(jdk.matches()).isTrue()
@@ -337,7 +334,7 @@ internal class MatcherTest {
 
     @Nested
     @DisplayName("find()")
-    internal inner class FindTests {
+    internal class FindTests {
         @Test
         @DisplayName("find() locates a single match in the input")
         fun findSingle() {
@@ -716,7 +713,7 @@ internal class MatcherTest {
             val regex = "(?is).*\\b(you|your)\\b.*"
             val input = "ignore YOU, then keep your answer"
             val safere = org.safere.Pattern.compile(regex).matcher(input)
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
 
             Assertions.assertThat(safere.find(12)).isEqualTo(jdk.find(12))
             Assertions.assertThat(safere.start()).isEqualTo(jdk.start())
@@ -797,7 +794,7 @@ internal class MatcherTest {
           xxabcde yy aaa failed bcX
           """.trimIndent()
             val m = org.safere.Pattern.compile(regex).matcher(text)
-            val jdk = Pattern.compile(regex).matcher(text)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(text)
 
             val safereFound = m.find()
             val jdkFound = jdk.find()
@@ -849,7 +846,7 @@ internal class MatcherTest {
         fun findFallbackNoMatchForUnreliableDfaStartPatterns(regex: String) {
             val m = org.safere.Pattern.compile(regex).matcher("plain text without the target shape")
             val jdk =
-                Pattern.compile(regex).matcher("plain text without the target shape")
+                java.util.regex.Pattern.compile(regex).matcher("plain text without the target shape")
 
             Assertions.assertThat(m.find()).isEqualTo(jdk.find())
         }
@@ -927,7 +924,7 @@ internal class MatcherTest {
 
             private fun assertAllFindsMatchJdk(regex: String, flags: Int, input: String) {
                 val m = org.safere.Pattern.compile(regex, flags).matcher(input)
-                val jdk = Pattern.compile(regex, flags).matcher(input)
+                val jdk = java.util.regex.Pattern.compile(regex, flags).matcher(input)
 
                 while (true) {
                     val safereFound = m.find()
@@ -1117,7 +1114,7 @@ internal class MatcherTest {
         @DisabledForCrosscheck("JDK suppresses completed empty captures for direct repeat operands")
         @DisplayName("find() publishes completed captures in empty iterations")
         fun findPublishesCompletedCapturesInEmptyIterations() {
-            for (regex in mutableListOf<String?>("()*", "(())*", "(?:())*", "(a?)*", "(?:((^){2}))*")) {
+            for (regex in mutableListOf<String>("()*", "(())*", "(?:())*", "(a?)*", "(?:((^){2}))*")) {
                 val matcher = org.safere.Pattern.compile(regex).matcher("")
                 Assertions.assertThat(matcher.find()).`as`("/%s/", regex).isTrue()
                 for (group in 0..matcher.groupCount()) {
@@ -1274,7 +1271,7 @@ internal class MatcherTest {
 
     @Nested
     @DisplayName("Replace operations")
-    internal inner class ReplaceTests {
+    internal class ReplaceTests {
         @Test
         @DisplayName("quoteReplacement() escapes dollar signs and backslashes")
         fun quoteReplacement() {
@@ -1394,7 +1391,7 @@ internal class MatcherTest {
             val input = "a"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("X"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceAll("X"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("X"))
         }
 
         @ParameterizedTest
@@ -1404,7 +1401,7 @@ internal class MatcherTest {
             val input = "a"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceFirst("X"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceFirst("X"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceFirst("X"))
         }
 
         @ParameterizedTest
@@ -1414,9 +1411,9 @@ internal class MatcherTest {
             val regex = "a*"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("xyz"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceAll("xyz"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("xyz"))
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
         }
 
         @Test
@@ -1430,9 +1427,9 @@ internal class MatcherTest {
             val input = "💰a💰"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("xyz"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceAll("xyz"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("xyz"))
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceFirst("xyz"))
         }
 
         @ParameterizedTest
@@ -1443,7 +1440,7 @@ internal class MatcherTest {
             val replacement = "[$0]"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll(replacement))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceAll(replacement))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceAll(replacement))
         }
 
         @Test
@@ -1453,7 +1450,7 @@ internal class MatcherTest {
             val input = "bbaaa"
 
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("X"))
-                .isEqualTo(Pattern.compile(regex).matcher(input).replaceAll("X"))
+                .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("X"))
         }
 
         @Test
@@ -1714,7 +1711,7 @@ internal class MatcherTest {
         fun replaceAllTerminalEmptyMatchInvalidatesState(regex: String) {
             for (input in arrayOf<String>("", "x", "yxxy", "yyyy")) {
                 val matcher = org.safere.Pattern.compile(regex).matcher(input)
-                val jdk = Pattern.compile(regex).matcher(input)
+                val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
                 Assertions.assertThat(matcher.replaceAll("-")).isEqualTo(jdk.replaceAll("-"))
                 Assertions.assertThat(matcher.groupCount()).isEqualTo(jdk.groupCount())
                 assertExhaustedMatchState(matcher)
@@ -1737,7 +1734,7 @@ internal class MatcherTest {
         fun replaceAllNonNullableMatchInvalidatesStateLikeJdk(regex: String) {
             for (input in arrayOf<String>("", "x", "yxxy", "yyyy")) {
                 val matcher = org.safere.Pattern.compile(regex).matcher(input)
-                val jdk = Pattern.compile(regex).matcher(input)
+                val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
                 Assertions.assertThat(matcher.replaceAll("-")).isEqualTo(jdk.replaceAll("-"))
                 assertExhaustedMatchState(matcher)
                 assertExhaustedMatchState(jdk)
@@ -1750,7 +1747,7 @@ internal class MatcherTest {
         fun replaceFirstPreservesMatchStateLikeJdk(regex: String) {
             for (input in arrayOf<String>("", "x", "yxxy", "yyyy")) {
                 val matcher = org.safere.Pattern.compile(regex).matcher(input)
-                val jdk = Pattern.compile(regex).matcher(input)
+                val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
                 Assertions.assertThat(matcher.replaceFirst("-")).isEqualTo(jdk.replaceFirst("-"))
                 Assertions.assertThat(matcher.hasMatch()).isEqualTo(jdk.hasMatch())
                 Assertions.assertThat(matcher.groupCount()).isEqualTo(jdk.groupCount())
@@ -1806,7 +1803,7 @@ internal class MatcherTest {
         @DisplayName("nullable DFA replaceAll() consumes its terminal empty match")
         fun nullableDfaReplaceAllConsumesTerminalEmptyMatch(input: String) {
             val matcher = org.safere.Pattern.compile("a?").matcher(input)
-            val jdkMatcher = Pattern.compile("a?").matcher(input)
+            val jdkMatcher = java.util.regex.Pattern.compile("a?").matcher(input)
 
             Assertions.assertThat(matcher.replaceAll("X")).isEqualTo(jdkMatcher.replaceAll("X"))
 
@@ -1862,7 +1859,7 @@ internal class MatcherTest {
                 Assertions.assertThat(org.safere.Pattern.compile(pattern).matcher(input).replaceAll(replacement))
                     .`as`("replaceAll(%s) for /%s/ on %s", replacement, pattern, input)
                     .isEqualTo(
-                        Pattern.compile(pattern).matcher(input).replaceAll(replacement)
+                        java.util.regex.Pattern.compile(pattern).matcher(input).replaceAll(replacement)
                     )
             }
         }
@@ -2032,9 +2029,9 @@ internal class MatcherTest {
                 .isInstanceOf(IllegalArgumentException::class.java)
             val m = p.matcher("a")
             Assertions.assertThat(m.find()).isTrue()
-            Assertions.assertThatThrownBy(ThrowingCallable { m.appendReplacement(StringBuilder(), replacement) })
+            Assertions.assertThatThrownBy(ThrowingCallable { m.appendReplacement(StringBuilder(), replacement!!) })
                 .isInstanceOf(IllegalArgumentException::class.java)
-            Assertions.assertThatThrownBy(ThrowingCallable { m.appendReplacement(StringBuffer(), replacement) })
+            Assertions.assertThatThrownBy(ThrowingCallable { m.appendReplacement(StringBuffer(), replacement!!) })
                 .isInstanceOf(IllegalArgumentException::class.java)
         }
 
@@ -2146,7 +2143,7 @@ internal class MatcherTest {
             val m = p.matcher(input)
             val result = m.replaceAll("X")
 
-            val jdkP = Pattern.compile(regex)
+            val jdkP = java.util.regex.Pattern.compile(regex)
             val jdkM = jdkP.matcher(input)
             val jdkResult = jdkM.replaceAll("X")
 
@@ -2160,7 +2157,7 @@ internal class MatcherTest {
             val input = "ab".repeat(600) + "c"
             val p = org.safere.Pattern.compile(regex)
             val m = p.matcher(input)
-            val jdkP = Pattern.compile(regex)
+            val jdkP = java.util.regex.Pattern.compile(regex)
             val jdkM = jdkP.matcher(input)
 
             while (jdkM.find()) {
@@ -2215,7 +2212,7 @@ internal class MatcherTest {
             val regex = "(?i)keyword_to_find"
             val input = "KEYWORD_TO_FIND ".repeat(200)
             val p = org.safere.Pattern.compile(regex)
-            val jdkP = Pattern.compile(regex)
+            val jdkP = java.util.regex.Pattern.compile(regex)
 
             Assertions.assertThat(p.matcher(input).replaceAll("")).isEqualTo(jdkP.matcher(input).replaceAll(""))
             Assertions.assertThat(p.matcher(input).replaceFirst("X"))
@@ -2298,11 +2295,10 @@ internal class MatcherTest {
             val data = "hello world".toByteArray(StandardCharsets.US_ASCII)
             val byteSeq: CharSequence =
                 object : CharSequence {
-                    override fun length(): Int {
-                        return data.size
-                    }
+                    override val length: Int
+                        get() = data.size
 
-                    override fun charAt(index: Int): Char {
+                    override fun get(index: Int): Char {
                         return (data[index].toInt() and 0xff).toChar()
                     }
 
@@ -2746,7 +2742,7 @@ internal class MatcherTest {
         @DisplayName("grapheme matches() stays bounded to region without anchoring bounds")
         fun graphemeMatchesStaysRegionBoundedWithoutAnchoringBounds() {
             val jdk =
-                Pattern.compile("\\X").matcher("#a$").region(1, 2)
+                java.util.regex.Pattern.compile("\\X").matcher("#a$").region(1, 2)
             jdk.useAnchoringBounds(false)
             Assertions.assertThat(jdk.matches()).isTrue()
 
@@ -2969,7 +2965,7 @@ internal class MatcherTest {
 
     @Nested
     @DisplayName("Reverse-first DFA optimization for end-anchored patterns")
-    internal inner class ReverseFirstDfaTests {
+    internal class ReverseFirstDfaTests {
         @Test
         @DisplayName("end-anchored pattern, no match on large text — fast fail")
         fun endAnchoredNoMatch() {
@@ -3114,13 +3110,13 @@ internal class MatcherTest {
         @DisplayName("end-anchored pattern with a leading expansion matches like the JDK")
         fun endAnchoredLeadingExpansionAgreesWithJdk() {
             val prose = "fine food offer ".repeat(200)
-            for (regex in mutableListOf<String?>(
+            for (regex in mutableListOf<String>(
                 "(?i)\\s*(foo|fax)$",
                 "\\s*(foo|fax)\\z",
                 "(?i)_?(foo|fax)$",
                 "\\s+foo$"
             )) {
-                for (text in List.of<String>(
+                for (text in java.util.List.of<String>(
                     prose,
                     prose + "foo",
                     prose + "  FOO",
@@ -3129,7 +3125,7 @@ internal class MatcherTest {
                     prose + "foo bar",
                     "foo" + prose
                 )) {
-                    val expected = Pattern.compile(regex).matcher(text)
+                    val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                     val actual = org.safere.Pattern.compile(regex).matcher(text)
                     val found = expected.find()
                     Assertions.assertThat(actual.find())
@@ -3242,7 +3238,7 @@ internal class MatcherTest {
             // First match: \\B at position 0 is not a word boundary (start of string before 'b'),
             // but JDK considers position 0 a word boundary, so \\B fails and 'a' is not at pos 0.
             // Actual behavior depends on JDK semantics — just verify we match JDK.
-            val jdkM = Pattern.compile("(?:\\B|a)").matcher("ba _")
+            val jdkM = java.util.regex.Pattern.compile("(?:\\B|a)").matcher("ba _")
             Assertions.assertThat(jdkM.find()).isTrue()
             Assertions.assertThat(m.group(0)).isEqualTo(jdkM.group(0))
         }
@@ -3531,7 +3527,7 @@ internal class MatcherTest {
 
     @Nested
     @DisplayName("Tier 1 Trivial match specializations")
-    internal inner class TrivialMatchSpecializationTests {
+    internal class TrivialMatchSpecializationTests {
         @Test
         @DisplayName("exact literal matches and lookingAt on String")
         fun literalStringMatches() {
@@ -3848,7 +3844,7 @@ internal class MatcherTest {
         fun citationScrubberPatternMatchesAndReplaces() {
             val regex = " ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]"
             val pattern = org.safere.Pattern.compile(regex)
-            val jdkPattern = Pattern.compile(regex)
+            val jdkPattern = java.util.regex.Pattern.compile(regex)
 
             val inputs = arrayOf<String?>( // Match at index 0 (no leading space)
                 "[1.2.3.4] suffix text",
@@ -3898,7 +3894,7 @@ internal class MatcherTest {
         fun smallSetSearchesStayCorrectAcrossMatcherReuse() {
             val regex = "[a\uFF3B][0-9]"
             val pattern = org.safere.Pattern.compile(regex)
-            val jdkPattern = Pattern.compile(regex)
+            val jdkPattern = java.util.regex.Pattern.compile(regex)
             val first = "x1 \uFF3B2 y3 a4 \uFF3B5 z6"
             val second = "a7 b8 a9"
 
@@ -3924,11 +3920,11 @@ internal class MatcherTest {
 
             // A different pattern queries different chars over the same text.
             matcher.reset(first).usePattern(org.safere.Pattern.compile("[y\uFF3B][0-9]"))
-            assertSameMatches(matcher, Pattern.compile("[y\uFF3B][0-9]").matcher(first))
+            assertSameMatches(matcher, java.util.regex.Pattern.compile("[y\uFF3B][0-9]").matcher(first))
         }
 
         companion object {
-            private fun assertSameMatches(matcher: org.safere.Matcher, jdkMatcher: Matcher) {
+            private fun assertSameMatches(matcher: org.safere.Matcher, jdkMatcher: java.util.regex.Matcher) {
                 while (jdkMatcher.find()) {
                     Assertions.assertThat(matcher.find()).isTrue()
                     Assertions.assertThat(matcher.start()).isEqualTo(jdkMatcher.start())
@@ -3943,7 +3939,7 @@ internal class MatcherTest {
         private val PERFORMANCE_SCENARIO_TIMEOUT: Duration = Duration.ofSeconds(30)
 
         private fun assertZeroCountGroupBehavior(regex: String, input: String) {
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             val safere = org.safere.Pattern.compile(regex).matcher(input)
 
             Assertions.assertThat(safere.groupCount()).isEqualTo(jdk.groupCount())
@@ -3963,7 +3959,7 @@ internal class MatcherTest {
         }
 
         private fun assertFirstFindMatchesJdk(regex: String, input: String) {
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             val safere = org.safere.Pattern.compile(regex).matcher(input)
 
             Assertions.assertThat(safere.find()).isEqualTo(jdk.find())

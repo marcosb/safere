@@ -16,7 +16,7 @@ internal class PatternPredicateEngineOptionsTest {
     @ParameterizedTest
     @MethodSource("engineOptions")
     fun asPredicateHonorsEnginePathOptions(name: String?, options: EnginePathOptions.Builder) {
-        val failures: MutableList<String?> = ArrayList<String?>()
+        val failures: MutableList<String> = ArrayList<String>()
         PatternPredicateTest.patterns()
             .forEach { arguments: Arguments? ->
                 val regex = arguments!!.get()[0] as String?
@@ -39,6 +39,7 @@ internal class PatternPredicateEngineOptionsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun engineOptions(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("literal fast paths off", EnginePathOptions.builder().literalFastPaths(false)),

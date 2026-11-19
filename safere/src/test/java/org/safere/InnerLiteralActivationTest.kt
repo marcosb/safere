@@ -7,8 +7,6 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("Compares SafeRE and the JDK directly")
 internal class InnerLiteralActivationTest {
@@ -17,7 +15,7 @@ internal class InnerLiteralActivationTest {
         val suffix = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         val regex = "record:[^;]*" + suffix
         val pattern = Pattern.compile(regex)
-        val reference = Pattern.compile(regex)
+        val reference = java.util.regex.Pattern.compile(regex)
         val ast =
             Parser.parse(
                 regex,
@@ -31,9 +29,9 @@ internal class InnerLiteralActivationTest {
         for (budget in intArrayOf(32, 48, 64)) {
             val dfa =
                 Dfa(
-                    pattern.flatDfaProg(),
+                    pattern.flatDfaProg()!!,
                     budget,
-                    Dfa.buildSetup(pattern.flatDfaProg()),
+                    Dfa.buildSetup(pattern.flatDfaProg()!!),
                     false,
                     pattern.utf8StartAccelerator(),
                     pattern.stringStartAccelerator(),
@@ -41,13 +39,13 @@ internal class InnerLiteralActivationTest {
                 )
             var completedMatch = false
             for (pass in 0..3) {
-                for (input in List.of<String?>(
+                for (input in java.util.List.of<String?>(
                     "record:x;".repeat(256) + "record:" + "x".repeat(512) + suffix,
                     "record:x;".repeat(256),
                     "record:ok" + suffix,
                     "record:x;".repeat(256) + "record:ok" + suffix
                 )) {
-                    for (scanner in List.of<InputScanner?>(
+                    for (scanner in java.util.List.of<InputScanner?>(
                         StringInputScanner(input),
                         Utf8InputScanner(input.toByteArray(StandardCharsets.UTF_8))
                     )) {
@@ -67,7 +65,7 @@ internal class InnerLiteralActivationTest {
 
     @Test
     fun mixedDenseAndFailedCandidatesPreserveEveryResult() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "record:[^;\\r\\n]*val=200",
             "record:.*val=200",
             "record:[^;]{0,64}val=200",
@@ -80,8 +78,8 @@ internal class InnerLiteralActivationTest {
             "😀[^;]*終"
         )) {
             val pattern = org.safere.Pattern.compile(regex)
-            val reference = Pattern.compile(regex)
-            for (body in List.of<String?>(
+            val reference = java.util.regex.Pattern.compile(regex)
+            for (body in java.util.List.of<String?>(
                 "record:ok_val=200;".repeat(32) + "record:x;".repeat(128) + "record:target_val=200;",
                 ("record:" + "x".repeat(128) + ";").repeat(128) + "record:target_val=200",
                 "record:x;\n".repeat(128) + "record:target_val=200\n",
@@ -93,9 +91,9 @@ internal class InnerLiteralActivationTest {
             )) {
                 for (padding in intArrayOf(0, 1)) {
                     val input = if (padding == 0) body else "«" + body + "»"
-                    val actual = pattern.matcher(input).region(padding, input.size - padding)
+                    val actual = pattern.matcher(input).region(padding, input.length - padding)
                     val expected =
-                        reference.matcher(input).region(padding, input.size - padding)
+                        reference.matcher(input).region(padding, input.length - padding)
                     val bytes = pattern.matcher(Utf8Input.validated(body.toByteArray(StandardCharsets.UTF_8)))
                     while (expected.find()) {
                         Assertions.assertThat(actual.find()).isTrue()

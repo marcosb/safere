@@ -7,15 +7,13 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 
 /** Searching through a required inner literal preserves match priority and captures.  */
 @DisabledForCrosscheck("compares the JDK and forced SafeRE engine paths directly")
 internal class InnerLiteralSearchTest {
     @Test
     fun literalGapSearchPreservesFindSequencesAndRegions() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "record:[^;\\r\\n]*val=200",
             "(record:)([^;\\r\\n]*?)(val=200)",
             "record:[^;]{0,64}val=200",
@@ -34,13 +32,13 @@ internal class InnerLiteralSearchTest {
             "(?m:^record:[^;\\r\\n]*val=200$)",
             "record:[^;]*val=200|earlier"
         )) {
-            val reference = Pattern.compile(regex)
-            for (options in List.of<EnginePathOptions?>(
+            val reference = java.util.regex.Pattern.compile(regex)
+            for (options in java.util.List.of<EnginePathOptions?>(
                 EnginePathOptions.allEnabled(),
                 EnginePathOptions.builder().startAcceleration(false).build()
             )) {
                 val pattern = org.safere.Pattern.compile(regex, 0, options)
-                for (body in mutableListOf<String?>(
+                for (body in mutableListOf<String>(
                     "record:x;val=200;record:target_val=200",
                     "record:val=200_record:later_val=200",
                     "record:val=200;record:later_val=200",
@@ -65,7 +63,7 @@ internal class InnerLiteralSearchTest {
 
     @Test
     fun bulkOperationsAndBooleanSearchPreserveResults() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "record:[^;\\r\\n]*val=200",
             "(record:)([^;]*?)(val=200)",
             "aa[^;]*aba",
@@ -73,8 +71,8 @@ internal class InnerLiteralSearchTest {
             "record:[^😀]*val=200"
         )) {
             val pattern = org.safere.Pattern.compile(regex)
-            val expected = Pattern.compile(regex)
-            for (input in List.of<String?>(
+            val expected = java.util.regex.Pattern.compile(regex)
+            for (input in java.util.List.of<String?>(
                 "record:x;".repeat(512) + "record:val=200;record:later_val=200",
                 "record:" + "x".repeat(1024) + "val=200",
                 "clé:x;".repeat(512) + "clé:é😀fin;clé:fin",
@@ -96,7 +94,7 @@ internal class InnerLiteralSearchTest {
 
     companion object {
         private fun assertFindSequence(
-            pattern: org.safere.Pattern, reference: Pattern, input: String, start: Int, end: Int
+            pattern: org.safere.Pattern, reference: java.util.regex.Pattern, input: String, start: Int, end: Int
         ) {
             val expected = reference.matcher(input).region(start, end)
             val actual = pattern.matcher(input).region(start, end)

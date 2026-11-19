@@ -17,6 +17,7 @@ internal object ShortVectorScan {
         return indexOfCharClass(SPECIES, chars, offset, length, ranges, start)
     }
 
+    @JvmStatic
     fun indexOfCharClass(
         species: VectorSpecies<Short?>, chars: CharArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {

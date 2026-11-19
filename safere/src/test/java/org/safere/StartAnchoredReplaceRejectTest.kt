@@ -7,10 +7,8 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.junit.jupiter.api.Test
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 
 /**
  * Tests for the start-anchored fast reject in `Matcher.replaceImpl`.
@@ -23,7 +21,7 @@ import java.util.regex.Pattern
 internal class StartAnchoredReplaceRejectTest {
     @Test
     fun rejectedInputIsReturnedUnchangedAndIdenticalToTheJdk() {
-        val inputs: MutableList<String> = mutableListOf<String?>(
+        val inputs: MutableList<String> = mutableListOf<String>(
             "",
             "x",
             "(",
@@ -35,8 +33,8 @@ internal class StartAnchoredReplaceRejectTest {
             "\n(Source: 1) leading newline defeats the anchor"
         )
 
-        for (regex in List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
-            val jdk = Pattern.compile(regex)
+        for (regex in java.util.List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
+            val jdk = java.util.regex.Pattern.compile(regex)
             val safere = org.safere.Pattern.compile(regex)
             for (input in inputs) {
                 Assertions.assertThat(safere.matcher(input).replaceAll("X"))
@@ -51,7 +49,7 @@ internal class StartAnchoredReplaceRejectTest {
 
     @Test
     fun matchingInputStillReplacesCorrectly() {
-        val inputs: MutableList<String> = mutableListOf<String?>(
+        val inputs: MutableList<String> = mutableListOf<String>(
             "(Source: 1) body",
             "(Source: 1, 2) body",
             "(Source: 1, Source: 2)   body",
@@ -59,7 +57,7 @@ internal class StartAnchoredReplaceRejectTest {
             "(Source: 1) (Source: 2) body"
         )
 
-        val jdk = Pattern.compile(CITATION_PARENS)
+        val jdk = java.util.regex.Pattern.compile(CITATION_PARENS)
         val safere = org.safere.Pattern.compile(CITATION_PARENS)
         for (input in inputs) {
             Assertions.assertThat(safere.matcher(input).replaceAll("X"))
@@ -133,8 +131,8 @@ internal class StartAnchoredReplaceRejectTest {
     fun functionOverloadsAgreeWithStringOverloads() {
         // The Function overloads route through find(), which already had the anchored reject. The
         // String overloads bypassed find(); after the fix both families must agree.
-        for (regex in List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
-            for (input in mutableListOf<String?>("no marker", "(Source: 1) body", "[Source: 2] body")) {
+        for (regex in java.util.List.of<String?>(CITATION_PARENS, CITATION_BRACKETS)) {
+            for (input in mutableListOf<String>("no marker", "(Source: 1) body", "[Source: 2] body")) {
                 val pattern = org.safere.Pattern.compile(regex)
                 Assertions.assertThat(pattern.matcher(input).replaceAll(Function { r: MatchResult? -> "X" }))
                     .`as`("replaceAll(Function) %s on %s", regex, input)

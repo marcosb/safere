@@ -73,7 +73,7 @@ internal class Utf8AllocationScalingTest {
                 }
                 return AllocationTracker(threadBean, allocated)
             } catch (e: ReflectiveOperationException) {
-                Assumptions.abort<Any?>("thread allocation tracking is unavailable: " + e)
+                Assumptions.abort<Any>("thread allocation tracking is unavailable: " + e)
                 throw LinkageError(e.message, e)
             }
         }

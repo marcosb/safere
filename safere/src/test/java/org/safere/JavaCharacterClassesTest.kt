@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 
@@ -32,7 +31,7 @@ internal class JavaCharacterClassesTest {
     @MethodSource("crossCheckCases")
     fun matchesJdkBehavior(tc: TestCase) {
         // Verify JDK expectation first
-        val jdkPattern = Pattern.compile("\\p{" + tc.className + "}+")
+        val jdkPattern = java.util.regex.Pattern.compile("\\p{" + tc.className + "}+")
         Assertions.assertThat(jdkPattern.matcher(tc.input).find())
             .`as`("JDK baseline for \\p{%s} on \"%s\"", tc.className, tc.input)
             .isEqualTo(tc.expectedMatch)
@@ -64,7 +63,7 @@ internal class JavaCharacterClassesTest {
     @DisplayName("Single java character class find matches one code point at a time")
     fun singleJavaCharacterClassFindMatchesOneCodePoint() {
         val safe = org.safere.Pattern.compile("\\p{javaLetter}")
-        val jdk = Pattern.compile("\\p{javaLetter}")
+        val jdk = java.util.regex.Pattern.compile("\\p{javaLetter}")
         val text = "1a\uD835\uDD18_"
 
         val safeMatcher = safe.matcher(text)
@@ -106,11 +105,11 @@ internal class JavaCharacterClassesTest {
     )
     fun javaClassesAgreeWithEquivalentUnicodeProperties(javaClass: String?, equivalent: String?) {
         // Both sides use the same Unicode data, so they agree on every JDK.
-        val java = org.safere.Pattern.compile("\\p{" + javaClass + "}").matcher("")
+        val actual = org.safere.Pattern.compile("\\p{" + javaClass + "}").matcher("")
         val expected = org.safere.Pattern.compile(equivalent).matcher("")
         for (cp in 0..java.lang.Character.MAX_CODE_POINT) {
             val s = java.lang.Character.toString(cp)
-            Assertions.assertThat(java.reset(s).matches()).`as`("U+%04X", cp).isEqualTo(expected.reset(s).matches())
+            Assertions.assertThat(actual.reset(s).matches()).`as`("U+%04X", cp).isEqualTo(expected.reset(s).matches())
         }
     }
 
@@ -138,6 +137,7 @@ internal class JavaCharacterClassesTest {
         )
 
         /** Cross-checks SafeRE against `java.util.regex` for a representative sample.  */
+        @JvmStatic
         fun crossCheckCases(): Stream<TestCase?> {
             return Stream.of<TestCase?>( // javaLowerCase
                 TestCase("javaLowerCase", "abc", true),
@@ -218,6 +218,7 @@ internal class JavaCharacterClassesTest {
             )
         }
 
+        @JvmStatic
         fun javaClassesAndEquivalentProperties(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("javaLowerCase", "\\p{IsLowercase}"),

@@ -57,6 +57,7 @@ internal class RE2ReplaceTest {
     }
 
     companion object {
+        @JvmStatic
         fun replaceTests(): Stream<Arguments?> {
             return Stream.of<Arguments?>( // Test empty input and/or replacement,
                 // with pattern that matches the empty string.

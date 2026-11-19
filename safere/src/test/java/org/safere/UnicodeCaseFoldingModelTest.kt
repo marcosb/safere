@@ -77,7 +77,7 @@ internal class UnicodeCaseFoldingModelTest {
                                 source == target
                                         || (insensitive
                                         && ((unicode && target != '!'.code)
-                                        || (source < 128 && target < 128 && (source.lowercaseChar() == target.lowercaseChar()))))
+                                        || (source < 128 && target < 128 && (Character.toLowerCase(source) == Character.toLowerCase(target)))))
                             Assertions.assertThat(pattern.matcher(String(Character.toChars(target))).matches())
                                 .`as`("%s flags=%s input=U+%04X", regex, flag, target)
                                 .isEqualTo(if (regex.startsWith("[^")) !member else member)
@@ -125,6 +125,7 @@ internal class UnicodeCaseFoldingModelTest {
     }
 
     companion object {
+        @JvmStatic
         private fun closedRangeCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(

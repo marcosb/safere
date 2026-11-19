@@ -9,10 +9,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.List
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Focused differential matrix for end anchors under matcher regions and bounds.  */
@@ -46,7 +43,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
     private data class BoundsCase(val name: String?, val transparentBounds: Boolean, val anchoringBounds: Boolean)
 
     @JvmRecord
-    private data class Scenario(
+    internal data class Scenario(
         val name: String,
         val input: String?,
         val start: Int,
@@ -60,7 +57,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
     }
 
     @JvmRecord
-    private data class RegexCase(val name: String, val regex: String?, val flags: Int) {
+    internal data class RegexCase(val name: String, val regex: String?, val flags: Int) {
         override fun toString(): String {
             return name
         }
@@ -71,9 +68,9 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         val groupCount: Int,
         val matches: String?,
         val lookingAt: String?,
-        val finds: MutableList<String?>?,
-        val results: MutableList<String?>?,
-        val resultsAfterFind: MutableList<String?>?
+        val finds: MutableList<String>?,
+        val results: MutableList<String>?,
+        val resultsAfterFind: MutableList<String>?
     )
 
     private enum class Operation {
@@ -84,6 +81,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
     companion object {
         private const val FIND_LIMIT = 16
 
+        @JvmStatic
         private fun endAnchorRegionCases(): Stream<Arguments?>? {
             return scenarios().stream()
                 .flatMap<Arguments?> { scenario: Scenario? ->
@@ -111,7 +109,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         }
 
         private fun inputRegions(): MutableList<InputRegion> {
-            return List.of<InputRegion?>(
+            return java.util.List.of<InputRegion?>(
                 InputRegion("before final lf", "ab\n", 0, 2),
                 InputRegion("including final lf", "ab\n", 0, 3),
                 InputRegion("before final cr", "ab\r", 0, 2),
@@ -128,7 +126,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         }
 
         private fun boundsCases(): MutableList<BoundsCase> {
-            return List.of<BoundsCase?>(
+            return java.util.List.of<BoundsCase?>(
                 BoundsCase("opaque anchoring", false, true),
                 BoundsCase("opaque non-anchoring", false, false),
                 BoundsCase("transparent anchoring", true, true),
@@ -137,7 +135,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         }
 
         private fun regexCases(): MutableList<RegexCase?> {
-            return List.of<RegexCase?>(
+            return java.util.List.of<RegexCase?>(
                 regex("scoped standard dollar", "[\\s\\S][\\s\\S](?-d:$)", Pattern.UNIX_LINES),
                 regex("scoped unix dollar", "[\\s\\S][\\s\\S](?d:$)", 0),
                 regex("scoped standard Z", "[\\s\\S][\\s\\S](?-d:\\Z)", Pattern.UNIX_LINES),
@@ -168,16 +166,16 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
 
         private fun safeTrace(regexCase: RegexCase, scenario: Scenario): Trace {
             val pattern = Pattern.compile(regexCase.regex, regexCase.flags)
-            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val matcher: org.safere.Matcher = configure(pattern.matcher(scenario.input), scenario)
             val groupCount = matcher.groupCount()
 
             val matches: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
             val lookingAt: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
-            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
-            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
-            val resultsAfterFind: MutableList<String?> =
+            val finds: MutableList<String> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String> =
                 resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
 
             return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
@@ -185,17 +183,17 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
 
         private fun jdkTrace(regexCase: RegexCase, scenario: Scenario): Trace {
             val pattern =
-                Pattern.compile(regexCase.regex, regexCase.flags)
-            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+                java.util.regex.Pattern.compile(regexCase.regex, regexCase.flags)
+            val matcher: java.util.regex.Matcher = configure(pattern.matcher(scenario.input), scenario)
             val groupCount = matcher.groupCount()
 
             val matches: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
             val lookingAt: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
-            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
-            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
-            val resultsAfterFind: MutableList<String?> =
+            val finds: MutableList<String> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String> =
                 resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
 
             return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
@@ -209,8 +207,8 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
         }
 
         private fun configure(
-            matcher: Matcher, scenario: Scenario
-        ): Matcher {
+            matcher: java.util.regex.Matcher, scenario: Scenario
+        ): java.util.regex.Matcher {
             return matcher
                 .region(scenario.start, scenario.end)
                 .useTransparentBounds(scenario.transparentBounds)
@@ -226,7 +224,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
         }
 
-        private fun matchTrace(matcher: Matcher, operation: Operation): String {
+        private fun matchTrace(matcher: java.util.regex.Matcher, operation: Operation): String {
             val matched =
                 when (operation) {
                     Operation.MATCHES -> matcher.matches()
@@ -235,8 +233,8 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
         }
 
-        private fun findTrace(matcher: org.safere.Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: org.safere.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
                 if (trace.size > FIND_LIMIT) {
@@ -246,8 +244,8 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return trace
         }
 
-        private fun findTrace(matcher: Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: java.util.regex.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
                 if (trace.size > FIND_LIMIT) {
@@ -257,26 +255,26 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return trace
         }
 
-        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String?> {
+        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String> {
             return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 
-        private fun resultsTrace(matcher: Matcher): MutableList<String?> {
+        private fun resultsTrace(matcher: java.util.regex.Matcher): MutableList<String> {
             return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 
-        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String?> {
+        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String> {
             if (!matcher.find()) {
-                return mutableListOf<String?>()
+                return mutableListOf<String>()
             }
             return resultsTrace(matcher)
         }
 
-        private fun resultsAfterFindTrace(matcher: Matcher): MutableList<String?> {
+        private fun resultsAfterFindTrace(matcher: java.util.regex.Matcher): MutableList<String> {
             if (!matcher.find()) {
-                return mutableListOf<String?>()
+                return mutableListOf<String>()
             }
             return resultsTrace(matcher)
         }
@@ -290,7 +288,7 @@ internal class EndAnchorRegionCompatibilityMatrixTest {
             return builder.toString()
         }
 
-        private fun capturedMatchTrace(matcher: Matcher): String {
+        private fun capturedMatchTrace(matcher: java.util.regex.Matcher): String {
             val builder = StringBuilder()
             builder.append(matcher.start()).append('-').append(matcher.end())
             for (group in 0..matcher.groupCount()) {

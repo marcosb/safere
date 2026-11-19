@@ -4,6 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+import java.util.Collections
+
 /**
  * Encapsulates structural analysis of a regular expression AST in a single bottom-up pass using the
  * stack-safe [Walker].
@@ -182,7 +184,8 @@ internal data class AstAnalysis(
                 root.canMatchEmpty,
                 root.hasUserCaptures,
                 root.minMatchLength,
-                namedGroups?.toMap() ?: emptyMap()
+                if (namedGroups == null) emptyMap()
+                else Collections.unmodifiableMap(namedGroups)
             )
         }
     }

@@ -78,7 +78,7 @@ internal class GraphemeLinearTimeTest {
     @Test
     fun mixedRuleInteractionsAndExplicitBoundariesStayLinear() {
         val unit =
-            String.join(
+            java.lang.String.join(
                 "",
                 "\u0600",
                 "👩\u0300\u200D👩",

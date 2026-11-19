@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Search-start compatibility when a nullable pattern begins inside a surrogate pair.  */
@@ -16,7 +15,7 @@ internal class DfaNullableSurrogateFindTest {
     @ParameterizedTest
     @MethodSource("cases")
     fun findFromSurrogateInteriorMatchesJdk(regex: String, input: String, start: Int) {
-        val expected = Pattern.compile(regex).matcher(input)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         val actual = org.safere.Pattern.compile(regex).matcher(input)
         Assertions.assertThat(actual.find(start)).isEqualTo(expected.find(start))
         Assertions.assertThat(actual.start()).isEqualTo(expected.start())
@@ -25,6 +24,7 @@ internal class DfaNullableSurrogateFindTest {
     }
 
     companion object {
+        @JvmStatic
         fun cases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(".|", "\uDB7D\uDF02A", 1),

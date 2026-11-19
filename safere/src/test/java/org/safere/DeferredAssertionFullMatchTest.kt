@@ -7,15 +7,14 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.regex.Pattern
 
 internal class DeferredAssertionFullMatchTest {
     @ParameterizedTest
     @ValueSource(strings = ["a", "!", "α", "😀", "\n", "\r\n", "\u2028"])
     fun deferredMatchKeepsConsumingAlternatives(atom: String) {
         val literal = Pattern.quote(atom)
-        for (assertion in mutableListOf<String?>("\\b", "\\B", "(?m:$)")) {
-            for (quantifier in mutableListOf<String?>("*", "*?")) {
+        for (assertion in mutableListOf<String>("\\b", "\\B", "(?m:$)")) {
+            for (quantifier in mutableListOf<String>("*", "*?")) {
                 for (assertionFirst in booleanArrayOf(false, true)) {
                     val consuming = literal + literal
                     val alternatives =
@@ -27,12 +26,12 @@ internal class DeferredAssertionFullMatchTest {
                         // The consuming alternative covers the entire input, regardless of assertion priority.
                         Assertions.assertThat(pattern.matcher(input).matches()).`as`("%s, size=%s", regex, size)
                             .isTrue()
-                        Assertions.assertThat(pattern.matcher("x" + input + "x").region(1, 1 + input.size).matches())
+                        Assertions.assertThat(pattern.matcher("x" + input + "x").region(1, 1 + input.length).matches())
                             .`as`("region: %s, size=%s", regex, size)
                             .isTrue()
                         val actual = pattern.matcher(input)
                         val expected =
-                            Pattern.compile(regex).matcher(input)
+                            java.util.regex.Pattern.compile(regex).matcher(input)
                         Assertions.assertThat(actual.lookingAt()).isEqualTo(expected.lookingAt())
                         Assertions.assertThat(actual.end()).`as`("lookingAt: %s", regex).isEqualTo(expected.end())
                         actual.reset()

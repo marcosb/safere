@@ -34,8 +34,8 @@ internal class LeadingExpansionVerificationWorkTest {
     fun failedInnerCandidatesCostComparableWorkAcrossEntryPoints(diagnostics: Boolean) {
         Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
-        val failures: MutableList<String?> = ArrayList<String?>()
-        for (regex in mutableListOf<String?>("\\s*# noqa[0-9]", "\\s*# noqa\\b", "[é😀]*# noqa[0-9]")) {
+        val failures: MutableList<String> = ArrayList<String>()
+        for (regex in mutableListOf<String>("\\s*# noqa[0-9]", "\\s*# noqa\\b", "[é😀]*# noqa[0-9]")) {
             val pattern = Pattern.compile(regex)
             for (size in intArrayOf(2000, 20000)) {
                 val input = (if (regex!!.startsWith("[é")) "é😀" else " ").repeat(size) + "# noqaX"

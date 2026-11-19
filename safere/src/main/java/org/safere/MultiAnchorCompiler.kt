@@ -547,7 +547,8 @@ internal object MultiAnchorCompiler {
         copy.max = re.max
         copy.cap = re.cap
         copy.name = re.name
-        copy.charClass = re.charClass!!
+        // charClass is null for non-CHAR_CLASS ops; preserve that like the Java original.
+        copy.charClass = re.charClass
         copy.subs = List.copyOf<Regexp?>(newSubs)
         return copy
     }
@@ -947,7 +948,7 @@ internal object MultiAnchorCompiler {
             }
 
             if (node.op == RegexpOp.CHAR_CLASS) {
-                val representative = simpleFoldClassRepresentative(node.charClass!!)
+                val representative = simpleFoldClassRepresentative(node.charClass)
                 if (representative < 0) {
                     break
                 }
@@ -1645,7 +1646,7 @@ internal object MultiAnchorCompiler {
             }
         }
         val builder = AsciiBitmap.Builder()
-        if (sub.op == RegexpOp.CHAR_CLASS && addAsciiCharClass(sub.charClass!!, builder)) {
+        if (sub.op == RegexpOp.CHAR_CLASS && addAsciiCharClass(sub.charClass, builder)) {
             val unixLines = (last.flags and ParseFlags.UNIX_LINES) != 0
             return EndAnchoredCharClassInfo(builder.build(), wasDollar, unixLines)
         }
@@ -2303,7 +2304,7 @@ internal object MultiAnchorCompiler {
 
             private fun visitCharClass(node: Regexp): NodeAnalysis {
                 val width = AsciiWidthRangeWalker.characterClassWidth(node)
-                val cc = node.charClass!!
+                val cc = node.charClass
                 val ccPrefix: CharClassScanInfo? =
                     if (cc != null && !cc.isEmpty() && cc.numRunes() <= 0x80000)
                         CharClassScanInfo.fromCharClass(cc)

@@ -8,7 +8,6 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import java.util.List
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
@@ -18,7 +17,7 @@ import java.util.concurrent.Executors
 internal class ProgTest {
     @Test
     fun greedyAndLazyLoopMetadataCoexistRegardlessOfFirstAccess() {
-        for (greedyFirst in mutableListOf<Boolean?>(false, true)) {
+        for (greedyFirst in mutableListOf<Boolean>(false, true)) {
             val prog = Pattern.compile("([a-z]*)(.*?)(z)").prog()
             if (greedyFirst) {
                 Assertions.assertThat<Inst?>(prog.greedyRunes()).isNotEmpty()
@@ -45,13 +44,13 @@ internal class ProgTest {
 
     @Test
     fun greedyRuneMetadataRequiresAnImmediatePreferredConsumingCycle() {
-        for (regex in mutableListOf<String?>("a+", "[a-z]*b", "[é😀]+")) {
+        for (regex in mutableListOf<String>("a+", "[a-z]*b", "[é😀]+")) {
             val prog = Pattern.compile(regex).prog()
             val runes = prog.greedyRunes()
             Assertions.assertThat<Inst?>(runes).`as`(regex).isNotNull()
             Assertions.assertThat<Inst?>(prog.greedyRunes()).isSameAs(runes)
         }
-        for (regex in mutableListOf<String?>("a+?", "(a)+", "(a?)*", "abc")) {
+        for (regex in mutableListOf<String>("a+?", "(a)+", "(a?)*", "abc")) {
             Assertions.assertThat<Inst?>(Pattern.compile(regex).prog().greedyRunes()).`as`(regex).isNull()
         }
     }
@@ -110,7 +109,7 @@ internal class ProgTest {
                         start.await()
                         BitState.search(prog, "abc", true, false, true, prog.numCaptures())
                     }
-                val results = executor.invokeAll<IntArray?>(List.of<Callable<IntArray?>?>(search, search))
+                val results = executor.invokeAll<IntArray?>(java.util.List.of<Callable<IntArray?>?>(search, search))
                 for (result in results) {
                     Assertions.assertThat(result.get()).containsExactly(0, 3, 0, 1, 2, 3)
                 }
@@ -124,11 +123,11 @@ internal class ProgTest {
         for (i in 0..4) {
             prog.allocInst()
         }
-        prog.mutableInst(0).initFail()
-        prog.mutableInst(1).initGraphemeCluster(2)
-        prog.mutableInst(2).initAlt(3, 4)
-        prog.mutableInst(3).initNop(2)
-        prog.mutableInst(4).initMatch(0)
+        prog.mutableInst(0)!!.initFail()
+        prog.mutableInst(1)!!.initGraphemeCluster(2)
+        prog.mutableInst(2)!!.initAlt(3, 4)
+        prog.mutableInst(3)!!.initNop(2)
+        prog.mutableInst(4)!!.initMatch(0)
         prog.setStart(1)
         prog.setStartUnanchored(1)
         prog.freeze()
@@ -142,10 +141,10 @@ internal class ProgTest {
         for (i in 0..3) {
             prog.allocInst()
         }
-        prog.mutableInst(0).initFail()
-        prog.mutableInst(1).initAlt(2, 3)
-        prog.mutableInst(2).initGraphemeCluster(1)
-        prog.mutableInst(3).initMatch(0)
+        prog.mutableInst(0)!!.initFail()
+        prog.mutableInst(1)!!.initAlt(2, 3)
+        prog.mutableInst(2)!!.initGraphemeCluster(1)
+        prog.mutableInst(3)!!.initMatch(0)
         prog.setStart(1)
         prog.setStartUnanchored(1)
         prog.freeze()
@@ -175,7 +174,7 @@ internal class ProgTest {
     fun instReturnsCorrectInstruction() {
         val prog = Prog()
         val idx = prog.allocInst()
-        prog.mutableInst(idx).initMatch(42)
+        prog.mutableInst(idx)!!.initMatch(42)
         prog.freeze()
         Assertions.assertThat<InstOp?>(prog.inst(idx).op).isEqualTo(InstOp.MATCH)
         Assertions.assertThat(prog.inst(idx).arg).isEqualTo(42)
@@ -214,8 +213,8 @@ internal class ProgTest {
         prog.setStart(0)
         val i0 = prog.allocInst()
         val i1 = prog.allocInst()
-        prog.mutableInst(i0).initCharRange('a'.code, 'a'.code, false, 1)
-        prog.mutableInst(i1).initMatch(0)
+        prog.mutableInst(i0)!!.initCharRange('a'.code, 'a'.code, false, 1)
+        prog.mutableInst(i1)!!.initMatch(0)
         prog.freeze()
 
         val dump = prog.dump()

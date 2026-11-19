@@ -8,8 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.List
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Split searches that start from the input end or scan for keywords must agree with the JDK.
@@ -19,9 +17,9 @@ import java.util.stream.Stream
 internal class SplitSearchPathTest {
     @ParameterizedTest
     @MethodSource("cases")
-    fun splitMatchesJdk(regex: String, flags: Int, input: String?) {
+    fun splitMatchesJdk(regex: String, flags: Int, input: String) {
         val pattern = Pattern.compile(regex, flags)
-        val expected = Pattern.compile(regex, flags)
+        val expected = java.util.regex.Pattern.compile(regex, flags)
         for (limit in intArrayOf(-1, 0, 1, 2, 3)) {
             Assertions.assertThat<String?>(pattern.split(input, limit))
                 .`as`("split limit=%s", limit)
@@ -37,8 +35,9 @@ internal class SplitSearchPathTest {
     companion object {
         private val FILLER = "the quick brown fox jumps over the lazy dog ".repeat(50).trim { it <= ' ' }
 
+        @JvmStatic
         private fun cases(): Stream<Arguments?>? {
-            val regexes = mutableListOf<String?>(
+            val regexes = mutableListOf<String>(
                 "(?:foo|fax)$",
                 "\\s*(?:foo|fax)\\z",
                 "(?:foo|fax)\\Z",
@@ -47,7 +46,7 @@ internal class SplitSearchPathTest {
                 "\\b(?:foo|bar|baz)\\b"
             )
             val inputs =
-                List.of<String?>(
+                java.util.List.of<String?>(
                     FILLER + " foo",
                     FILLER + " foo\n",
                     FILLER + " fax\r\n",

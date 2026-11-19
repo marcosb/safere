@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 internal class TeddyTest {
     @Test
@@ -18,10 +17,10 @@ internal class TeddyTest {
         val text = "2026-08-18 [WARN] system running normally, no ERROR reported"
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         val starts: MutableList<Int?> = ArrayList<Int?>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
             starts.add(m.start())
         }
 
@@ -35,10 +34,10 @@ internal class TeddyTest {
         val text = "日本の都市: 東京と京都と大阪を訪問しました。"
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         val starts: MutableList<Int?> = ArrayList<Int?>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
             starts.add(m.start())
         }
 
@@ -52,7 +51,7 @@ internal class TeddyTest {
         val text = "the quick brown dog jumped over the lazy bird".toByteArray(StandardCharsets.UTF_8)
 
         val m = p.matcher(Utf8Input.validated(text))
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         while (m.find()) {
             matches.add(String(text, m.start(), m.end() - m.start(), StandardCharsets.UTF_8))
         }
@@ -97,10 +96,10 @@ internal class TeddyTest {
         val text = "Packages shipped from CA and NY arrived in TX safely."
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         val starts: MutableList<Int?> = ArrayList<Int?>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
             starts.add(m.start())
         }
 
@@ -114,7 +113,7 @@ internal class TeddyTest {
         val text = "Orders processed in WA, OR, and NV yesterday.".toByteArray(StandardCharsets.UTF_8)
 
         val m = p.matcher(Utf8Input.validated(text))
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         while (m.find()) {
             matches.add(String(text, m.start(), m.end() - m.start(), StandardCharsets.UTF_8))
         }
@@ -128,9 +127,9 @@ internal class TeddyTest {
         val text = "200 OK after receiving POST /api/v1/resource followed by GET /api/v1/resource"
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
         }
 
         Assertions.assertThat<String?>(matches).containsExactly("POST", "GET")
@@ -142,10 +141,10 @@ internal class TeddyTest {
         val text = "Schedule: MON at 9am, WED at 2pm, and SUN at 8pm"
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         val starts: MutableList<Int?> = ArrayList<Int?>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
             starts.add(m.start())
         }
 
@@ -154,7 +153,7 @@ internal class TeddyTest {
 
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         val utf8Matcher = p.matcher(Utf8Input.validated(bytes))
-        val utf8Matches: MutableList<String?> = ArrayList<String?>()
+        val utf8Matches: MutableList<String> = ArrayList<String>()
         while (utf8Matcher.find()) {
             utf8Matches.add(
                 String(bytes, utf8Matcher.start(), utf8Matcher.end() - utf8Matcher.start(), StandardCharsets.UTF_8)
@@ -223,7 +222,7 @@ internal class TeddyTest {
 
         for (pat in testPatterns) {
             val safeRe = Pattern.compile(pat)
-            val jdk = Pattern.compile(pat)
+            val jdk = java.util.regex.Pattern.compile(pat)
 
             for (input in testInputs) {
                 val m1 = safeRe.matcher(input)
@@ -247,10 +246,10 @@ internal class TeddyTest {
         val text = "リクエストログ: POST /api/v1/user 📦 レスポンス受信後に GET /api/v1/user 🚀 完了"
 
         val m = p.matcher(text)
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         val starts: MutableList<Int?> = ArrayList<Int?>()
         while (m.find()) {
-            matches.add(m.group())
+            matches.add(m.group()!!)
             starts.add(m.start())
         }
 

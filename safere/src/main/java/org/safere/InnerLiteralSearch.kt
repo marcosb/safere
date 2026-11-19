@@ -33,7 +33,7 @@ internal class InnerLiteralSearch private constructor(
         }
         val inner: Int
         if (scanner is Utf8InputScanner) {
-            inner = scanner.indexOf(suffix.utf8!!, suffix.failure!!, suffix.shifts!!, from)
+            inner = scanner.indexOf(suffix.utf8!!, suffix.failure!!, suffix.shifts, from)
         } else if (scanner is StringRegionInputScanner) {
             inner = scanner.indexOf(suffix.literal!!, from, scanner.length)
         } else {

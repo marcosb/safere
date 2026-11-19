@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets
 internal class RepetitionPolicyWorkTest {
     @Test
     fun nestedFiniteInvocationsKeepLinearWorkAcrossInputLengths() {
-        for (bitState in mutableListOf<Boolean?>(false, true)) {
+        for (bitState in mutableListOf<Boolean>(false, true)) {
             val options =
                 EnginePathOptions.builder()
                     .literalFastPaths(false)
@@ -29,12 +29,12 @@ internal class RepetitionPolicyWorkTest {
                     .bitState(bitState!!)
                     .lazyCaptureExtraction(false)
                     .build()
-            for (regex in mutableListOf<String?>("^(?:(?:()|a){0,3})*b$", "^(?:(a?){1,3})+b$")) {
+            for (regex in mutableListOf<String>("^(?:(?:()|a){0,3})*b$", "^(?:(a?){1,3})+b$")) {
                 val pattern = Pattern.compile(regex, 0, options)
-                for (rejects in mutableListOf<Boolean?>(false, true)) {
-                    for (utf8 in mutableListOf<Boolean?>(false, true)) {
+                for (rejects in mutableListOf<Boolean>(false, true)) {
+                    for (utf8 in mutableListOf<Boolean>(false, true)) {
                         var previous: Long = 0
-                        for (length in mutableListOf<Int?>(32, 256, 2048)) {
+                        for (length in mutableListOf<Int>(32, 256, 2048)) {
                             val input = "a".repeat(length!!) + (if (rejects) "!b" else "b")
                             val bytes = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
                             val work =

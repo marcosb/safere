@@ -11,7 +11,6 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.safere.RegexLexer.RepetitionMode
-import java.util.List
 import java.util.function.Consumer
 import java.util.regex.PatternSyntaxException
 import java.util.stream.IntStream
@@ -22,8 +21,8 @@ internal class RegexLexerTest {
     fun quotedLiteralsKeepSpansAndLeaveFollowingSyntaxAvailable() {
         for (rune in IntStream.concat(IntStream.range(0, 128), IntStream.of(0xe9, 0x1f600)).toArray()) {
             val quoted = "\\Q" + String(Character.toChars(rune)) + "\\E"
-            for (flags in List.of<Int?>(ParseFlags.LIKE_PERL, ParseFlags.LIKE_PERL or ParseFlags.COMMENTS)) {
-                for (inClass in mutableListOf<Boolean?>(false, true)) {
+            for (flags in java.util.List.of<Int?>(ParseFlags.LIKE_PERL, ParseFlags.LIKE_PERL or ParseFlags.COMMENTS)) {
+                for (inClass in mutableListOf<Boolean>(false, true)) {
                     val lexer = RegexLexer(quoted + "+", flags)
                     val literal = if (inClass) lexer.takeClass() else lexer.next()
                     Assertions.assertThat<RegexLexer.Kind?>(literal.kind).isEqualTo(RegexLexer.Kind.LITERAL)
@@ -73,7 +72,7 @@ internal class RegexLexerTest {
 
     @Test
     fun graphemeBoundariesKeepSpansAcrossEmptyQuotes() {
-        for (regex in mutableListOf<String?>("😀\\b{g}a", "😀\\b{\\Q\\Eg}a")) {
+        for (regex in mutableListOf<String>("😀\\b{g}a", "😀\\b{\\Q\\Eg}a")) {
             val lexer = RegexLexer(regex, ParseFlags.LIKE_PERL)
             Assertions.assertThat(lexer.next().rune).isEqualTo(0x1f600)
             val boundary = lexer.next()
@@ -104,7 +103,7 @@ internal class RegexLexerTest {
 
     @Test
     fun lookaheadAtEndKeepsMalformedRepeatCoordinates() {
-        for (regex in mutableListOf<String?>("\\b{", "\\b{g", "\\b{g\\Q\\E")) {
+        for (regex in mutableListOf<String>("\\b{", "\\b{g", "\\b{g\\Q\\E")) {
             val lexer = RegexLexer(regex, ParseFlags.LIKE_PERL)
             val boundary = lexer.next()
             Assertions.assertThat<RegexLexer.Kind?>(boundary.kind).isEqualTo(RegexLexer.Kind.BOUNDARY)
@@ -135,8 +134,8 @@ internal class RegexLexerTest {
 
     @Test
     fun rangeLookaheadKeepsRawBracketRolesAfterTrivia() {
-        for (gap in mutableListOf<String?>("", " ", "#c\n", "\\Q\\E", " \\Q\\E")) {
-            for (bracket in mutableListOf<String?>("[", "]")) {
+        for (gap in mutableListOf<String>("", " ", "#c\n", "\\Q\\E", " \\Q\\E")) {
+            for (bracket in mutableListOf<String>("[", "]")) {
                 val lexer =
                     RegexLexer(gap + bracket, ParseFlags.LIKE_PERL or ParseFlags.COMMENTS)
                 val token = lexer.peekClassRangeEndpoint()

@@ -10,7 +10,6 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Behavioral tests for patterns containing literal surrogate code points.  */
@@ -18,7 +17,7 @@ internal class SurrogateLiteralTest {
     @ParameterizedTest
     @MethodSource("nonMatchingValidUtf16Cases")
     fun surrogateLiteralsDoNotFalselyMatchOnStringOrUtf8(regex: String, input: String) {
-        val jdkPattern = Pattern.compile(regex)
+        val jdkPattern = java.util.regex.Pattern.compile(regex)
         Assertions.assertThat(jdkPattern.matcher(input).find()).isFalse()
         Assertions.assertThat(jdkPattern.matcher(input).matches()).isFalse()
         Assertions.assertThat(jdkPattern.matcher(input).lookingAt()).isFalse()
@@ -40,7 +39,7 @@ internal class SurrogateLiteralTest {
     fun unpairedSurrogateLiteralsMatchUnpairedSurrogatesInString(
         regex: String, input: String, expectedStart: Int, expectedEnd: Int
     ) {
-        val expected = Pattern.compile(regex).matcher(input)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         val actual = org.safere.Pattern.compile(regex).matcher(input)
 
         Assertions.assertThat(actual.find()).isEqualTo(expected.find()).isTrue()
@@ -52,7 +51,7 @@ internal class SurrogateLiteralTest {
     @ParameterizedTest
     @MethodSource("entryPointCases")
     fun surrogateLiteralsAgreeWithJdkAcrossEntryPoints(regex: String, input: String) {
-        val expected = Pattern.compile(regex)
+        val expected = java.util.regex.Pattern.compile(regex)
         val actual = org.safere.Pattern.compile(regex)
 
         Assertions.assertThat(actual.matcher(input).replaceAll("_"))
@@ -70,6 +69,7 @@ internal class SurrogateLiteralTest {
     }
 
     companion object {
+        @JvmStatic
         fun nonMatchingValidUtf16Cases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("\"\\uDBFB", "\"?"),
@@ -89,6 +89,7 @@ internal class SurrogateLiteralTest {
             )
         }
 
+        @JvmStatic
         fun matchingUnpairedSurrogateStringCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("\"\\uDBFB", "\"\uDBFB", 0, 2),
@@ -99,6 +100,7 @@ internal class SurrogateLiteralTest {
             )
         }
 
+        @JvmStatic
         fun entryPointCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("\\uDBFB", "a\uDBFB\uDDBDb\uDBFBc"),

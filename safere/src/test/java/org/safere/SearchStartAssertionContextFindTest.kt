@@ -18,14 +18,14 @@ import java.util.stream.Stream
 internal class SearchStartAssertionContextFindTest {
     @ParameterizedTest
     @MethodSource("findAllCases")
-    fun findAllKeepsMatchAtPreviousMatchEnd(regex: String?, input: String?, expected: MutableList<String?>?) {
+    fun findAllKeepsMatchAtPreviousMatchEnd(regex: String?, input: String?, expected: MutableList<String>?) {
         Assertions.assertThat<String?>(findAll(Pattern.compile(regex).matcher(input))).isEqualTo(expected)
     }
 
     @ParameterizedTest
     @MethodSource("findAllCases")
     fun findAllKeepsMatchAtPreviousMatchEndAfterCaptureUse(
-        regex: String?, input: String?, expected: MutableList<String?>?
+        regex: String?, input: String?, expected: MutableList<String>?
     ) {
         val pattern = Pattern.compile(regex)
         val warmup = pattern.matcher(input)
@@ -84,22 +84,23 @@ internal class SearchStartAssertionContextFindTest {
     }
 
     companion object {
+        @JvmStatic
         fun findAllCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
-                Arguments.of("(\\w?)(b|\\b-)?", "1b-", mutableListOf<String?>("0:2", "2:3", "3:3")),
-                Arguments.of("\\w?(?:b|\\b-)?", "1b-", mutableListOf<String?>("0:2", "2:3", "3:3")),
-                Arguments.of("(x?)(x|\\Bb)?", "xxb", mutableListOf<String?>("0:2", "2:3", "3:3")),
-                Arguments.of("(?m)\\n?(?:\\n|^b)?", "\n\nb", mutableListOf<String?>("0:2", "2:3", "3:3")),
+                Arguments.of("(\\w?)(b|\\b-)?", "1b-", mutableListOf<String>("0:2", "2:3", "3:3")),
+                Arguments.of("\\w?(?:b|\\b-)?", "1b-", mutableListOf<String>("0:2", "2:3", "3:3")),
+                Arguments.of("(x?)(x|\\Bb)?", "xxb", mutableListOf<String>("0:2", "2:3", "3:3")),
+                Arguments.of("(?m)\\n?(?:\\n|^b)?", "\n\nb", mutableListOf<String>("0:2", "2:3", "3:3")),
                 Arguments.of(
                     "(\\w?)(b|\\b\uD83D\uDE00)?",
                     "1b\uD83D\uDE00",
-                    mutableListOf<String?>("0:2", "2:4", "4:4")
+                    mutableListOf<String>("0:2", "2:4", "4:4")
                 )
             )
         }
 
-        private fun findAll(matcher: Matcher): MutableList<String?> {
-            val spans: MutableList<String?> = ArrayList<String?>()
+        private fun findAll(matcher: Matcher): MutableList<String> {
+            val spans: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 spans.add(matcher.start().toString() + ":" + matcher.end())
             }

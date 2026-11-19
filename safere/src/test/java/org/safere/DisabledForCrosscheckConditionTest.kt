@@ -38,9 +38,10 @@ internal class DisabledForCrosscheckConditionTest {
                         arrayOf<Class<*>>(ExtensionContext::class.java),
                         InvocationHandler { proxy: Any?, method: Method?, args: Array<Any?>? ->
                             if (method!!.getName() == "getElement") {
-                                return@newProxyInstance Optional.of<AnnotatedElement?>(element)
+                                Optional.of<AnnotatedElement?>(element)
+                            } else {
+                                throw UnsupportedOperationException(method.getName())
                             }
-                            throw UnsupportedOperationException(method.getName())
                         }) as ExtensionContext
                 System.clearProperty(property)
                 Assertions.assertThat(condition.evaluateExecutionCondition(context).isDisabled()).isFalse()

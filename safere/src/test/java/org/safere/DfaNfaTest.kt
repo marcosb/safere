@@ -75,6 +75,7 @@ internal class DfaNfaTest {
         // ---------------------------------------------------------------------------
         // Test corpus
         // ---------------------------------------------------------------------------
+        @JvmStatic
         fun testCases(): Stream<TestCase?> {
             val cases: MutableList<TestCase?> = ArrayList<TestCase?>()
 
@@ -310,8 +311,8 @@ internal class DfaNfaTest {
          * end-position semantics legitimately differ between the two engines.
          */
         private fun assertMatchAgreement(tc: TestCase, anchored: Boolean, longest: Boolean) {
-            val re = Parser.parse(tc.pattern, FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(tc.pattern, FLAGS)!!
+            val prog = Compiler.compile(re)!!
 
             // Run DFA.
             val dfaResult = Dfa.search(prog, tc.input, anchored, longest)
@@ -319,7 +320,7 @@ internal class DfaNfaTest {
             // Run NFA with matching settings.
             val nfaAnchor = if (anchored) Nfa.Anchor.ANCHORED else Nfa.Anchor.UNANCHORED
             val nfaKind = if (longest) Nfa.MatchKind.LONGEST_MATCH else Nfa.MatchKind.FIRST_MATCH
-            val nfaResult = Nfa.search(prog, tc.input, nfaAnchor, nfaKind, 1)
+            val nfaResult = Nfa.search(prog, tc.input!!, nfaAnchor, nfaKind, 1)
 
             if (dfaResult == null) {
                 // DFA bailed out due to budget -- skip consistency check.
@@ -339,14 +340,14 @@ internal class DfaNfaTest {
          * longest mode where both engines have the same semantics (start at position 0, maximize).
          */
         private fun assertMatchAndEndPosition(tc: TestCase, anchored: Boolean, longest: Boolean) {
-            val re = Parser.parse(tc.pattern, FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(tc.pattern, FLAGS)!!
+            val prog = Compiler.compile(re)!!
 
             val dfaResult = Dfa.search(prog, tc.input, anchored, longest)
 
             val nfaAnchor = if (anchored) Nfa.Anchor.ANCHORED else Nfa.Anchor.UNANCHORED
             val nfaKind = if (longest) Nfa.MatchKind.LONGEST_MATCH else Nfa.MatchKind.FIRST_MATCH
-            val nfaResult = Nfa.search(prog, tc.input, nfaAnchor, nfaKind, 1)
+            val nfaResult = Nfa.search(prog, tc.input!!, nfaAnchor, nfaKind, 1)
 
             if (dfaResult == null) {
                 return

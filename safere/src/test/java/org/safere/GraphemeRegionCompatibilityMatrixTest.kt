@@ -11,10 +11,7 @@ import org.junit.jupiter.api.condition.JRE
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.List
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Focused differential matrix for SafeRE's supported grapheme-region contract.  */
@@ -36,7 +33,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
     }
 
     @JvmRecord
-    private data class Scenario(
+    internal data class Scenario(
         val name: String,
         val invariant: String?,
         val input: String?,
@@ -44,7 +41,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
         val end: Int,
         val transparentBounds: Boolean,
         val anchoringBounds: Boolean,
-        val regexes: MutableList<String?>?
+        val regexes: MutableList<String>?
     ) {
         override fun toString(): String {
             return name
@@ -56,9 +53,9 @@ internal class GraphemeRegionCompatibilityMatrixTest {
         val groupCount: Int,
         val matches: String?,
         val lookingAt: String?,
-        val finds: MutableList<String?>?,
-        val results: MutableList<String?>?,
-        val resultsAfterFind: MutableList<String?>?
+        val finds: MutableList<String>?,
+        val results: MutableList<String>?,
+        val resultsAfterFind: MutableList<String>?
     )
 
     private enum class Operation {
@@ -85,6 +82,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                 .isEqualTo(jdkTrace)
         }
 
+        @JvmStatic
         private fun supportedContractCases(): Stream<Arguments?>? {
             return scenarios().stream()
                 .flatMap<Arguments?> { scenario: Scenario? ->
@@ -92,6 +90,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                 }
         }
 
+        @JvmStatic
         private fun indicConjunctCases(): Stream<Arguments?>? {
             val scenario =
                 Scenario(
@@ -103,7 +102,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     true,
-                    mutableListOf<String?>("\\X", "\\X+", "(\\X)+", "\\X\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\X", "\\X+", "(\\X)+", "\\X\\b{g}", "\\b{g}\\X\\b{g}")
                 )
             return scenario.regexes!!.stream().map<Arguments?> { regex: String? -> Arguments.of(scenario, regex) }
         }
@@ -111,7 +110,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
         private fun scenarios(): MutableList<Scenario?> {
             // Split-surrogate cases use the independent substring oracle in OpaqueRegionContractTest.
             // JDK-8394894 identifies the JDK's region overrun as a bug, not a compatibility requirement.
-            return List.of<Scenario?>(
+            return java.util.List.of<Scenario?>(
                 Scenario(
                     "interior non-anchoring bounds do not satisfy anchors",
                     "With non-anchoring bounds, region edges are not anchor positions for ^ or $ even when"
@@ -121,7 +120,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     false,
-                    mutableListOf<String?>("^\\X$", "\\X$")
+                    mutableListOf<String>("^\\X$", "\\X$")
                 ),
                 Scenario(
                     "non-anchoring grapheme matches remain region bounded",
@@ -132,7 +131,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     2,
                     false,
                     false,
-                    mutableListOf<String?>("\\X", "\\X+", "(\\X)", "\\b{g}?")
+                    mutableListOf<String>("\\X", "\\X+", "(\\X)", "\\b{g}?")
                 ),
                 Scenario(
                     "non-anchoring bounds do not expose region-local line terminator anchors",
@@ -143,7 +142,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     false,
-                    mutableListOf<String?>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
+                    mutableListOf<String>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
                 ),
                 Scenario(
                     "non-anchoring dollar sees final crlf across region edge",
@@ -154,7 +153,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     false,
-                    mutableListOf<String?>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
+                    mutableListOf<String>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
                 ),
                 Scenario(
                     "transparent non-anchoring dollar sees final crlf across region edge",
@@ -165,7 +164,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     true,
                     false,
-                    mutableListOf<String?>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
+                    mutableListOf<String>("^\\X\\X$", "\\X\\X$", "^(?:\\X){2}$", "^\\X{2}$")
                 ),
                 Scenario(
                     "transparent low surrogate sees preceding high surrogate",
@@ -176,7 +175,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     true,
                     true,  // \X\b{g} is covered by the bounded-consumption model, since the JDK overruns.
-                    mutableListOf<String?>("\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\b{g}", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "opaque non-surrogate cluster edge",
@@ -187,7 +186,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     2,
                     false,
                     true,
-                    mutableListOf<String?>("\\b{g}", "\\b{g}\\X", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\b{g}", "\\b{g}\\X", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "empty opaque region inside base-plus-mark cluster",
@@ -198,7 +197,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     false,
                     true,
-                    mutableListOf<String?>("\\b{g}", "(\\b{g})", "\\b{g}|a", "\\b{g}\\X?")
+                    mutableListOf<String>("\\b{g}", "(\\b{g})", "\\b{g}|a", "\\b{g}\\X?")
                 ),
                 Scenario(
                     "empty transparent region inside base-plus-mark cluster",
@@ -209,7 +208,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\b{g}", "(\\b{g})", "\\b{g}|a", "\\b{g}\\X?")
+                    mutableListOf<String>("\\b{g}", "(\\b{g})", "\\b{g}|a", "\\b{g}\\X?")
                 ),
                 Scenario(
                     "empty transparent region inside surrogate pair",
@@ -220,7 +219,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\b{g}", "(\\b{g})", "\\b{g}|a")
+                    mutableListOf<String>("\\b{g}", "(\\b{g})", "\\b{g}|a")
                 ),
                 Scenario(
                     "transparent trailing boundary sees hidden extender",
@@ -231,7 +230,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\X\\b{g}", "^\\X\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\X\\b{g}", "^\\X\\b{g}", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "opaque regional-indicator parity starts at region",
@@ -242,7 +241,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     6,
                     false,
                     true,
-                    mutableListOf<String?>("\\X", "\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\X", "\\b{g}", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "opaque crlf remains atomic at region edge",
@@ -252,7 +251,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     true,
-                    mutableListOf<String?>("\\X", "\\X\\b{g}")
+                    mutableListOf<String>("\\X", "\\X\\b{g}")
                 ),
                 Scenario(
                     "control characters remain standalone before extenders",
@@ -262,7 +261,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     true,
-                    mutableListOf<String?>("\\X", "\\X\\b{g}")
+                    mutableListOf<String>("\\X", "\\X\\b{g}")
                 ),
                 Scenario(
                     "transparent crlf boundary sees hidden line feed",
@@ -273,7 +272,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\X\\b{g}", "\\r\\b{g}\\n?")
+                    mutableListOf<String>("\\X\\b{g}", "\\r\\b{g}\\n?")
                 ),
                 Scenario(
                     "transparent hangul continuation sees suffix",
@@ -284,7 +283,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\X\\b{g}")
+                    mutableListOf<String>("\\X\\b{g}")
                 ),
                 Scenario(
                     "opaque region inside zwj sequence starts at edge",
@@ -295,7 +294,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     5,
                     false,
                     true,
-                    mutableListOf<String?>("\\b{g}")
+                    mutableListOf<String>("\\b{g}")
                 ),
                 Scenario(
                     "transparent prepend sees following cluster",
@@ -306,7 +305,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     true,
                     true,
-                    mutableListOf<String?>("\\X\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\X\\b{g}", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "opaque prepend edge is region local",
@@ -317,7 +316,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     1,
                     false,
                     true,
-                    mutableListOf<String?>("\\X", "\\X\\b{g}", "\\b{g}\\X\\b{g}")
+                    mutableListOf<String>("\\X", "\\X\\b{g}", "\\b{g}\\X\\b{g}")
                 ),
                 Scenario(
                     "transparent spacing mark sees preceding base",
@@ -328,7 +327,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     2,
                     true,
                     true,
-                    mutableListOf<String?>("\\b{g}", "\\b{g}\\X", "\\X\\b{g}")
+                    mutableListOf<String>("\\b{g}", "\\b{g}\\X", "\\X\\b{g}")
                 ),
                 Scenario(
                     "greedy grapheme quantifiers preserve priority",
@@ -339,7 +338,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     3,
                     false,
                     true,
-                    mutableListOf<String?>("(\\X)+", "(\\X)+?", "(\\X)(\\X)", "\\X{2}", "a|\\X", "\\X|a")
+                    mutableListOf<String>("(\\X)+", "(\\X)+?", "(\\X)(\\X)", "\\X{2}", "a|\\X", "\\X|a")
                 ),
                 Scenario(
                     "long end-anchored base-plus-mark input uses grapheme engine semantics",
@@ -350,7 +349,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     2001,
                     false,
                     true,
-                    mutableListOf<String?>("\\Xz$", "\\X\\b{g}z$")
+                    mutableListOf<String>("\\Xz$", "\\X\\b{g}z$")
                 ),
                 Scenario(
                     "long regional-indicator parity remains context relative",
@@ -360,40 +359,40 @@ internal class GraphemeRegionCompatibilityMatrixTest {
                     2002,
                     false,
                     true,
-                    mutableListOf<String?>("\\X$")
+                    mutableListOf<String>("\\X$")
                 )
             )
         }
 
         private fun safeTrace(regex: String?, scenario: Scenario): Trace {
             val pattern = Pattern.compile(regex)
-            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val matcher: org.safere.Matcher = configure(pattern.matcher(scenario.input), scenario)
             val groupCount = matcher.groupCount()
 
             val matches: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
             val lookingAt: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
-            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
-            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
-            val resultsAfterFind: MutableList<String?> =
+            val finds: MutableList<String> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String> =
                 resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
 
             return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
         }
 
         private fun jdkTrace(regex: String, scenario: Scenario): Trace {
-            val pattern = Pattern.compile(regex)
-            val matcher: Matcher = configure(pattern.matcher(scenario.input), scenario)
+            val pattern = java.util.regex.Pattern.compile(regex)
+            val matcher: java.util.regex.Matcher = configure(pattern.matcher(scenario.input), scenario)
             val groupCount = matcher.groupCount()
 
             val matches: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.MATCHES)
             val lookingAt: String =
                 matchTrace(configure(pattern.matcher(scenario.input), scenario), Operation.LOOKING_AT)
-            val finds: MutableList<String?> = findTrace(configure(pattern.matcher(scenario.input), scenario))
-            val results: MutableList<String?> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
-            val resultsAfterFind: MutableList<String?> =
+            val finds: MutableList<String> = findTrace(configure(pattern.matcher(scenario.input), scenario))
+            val results: MutableList<String> = resultsTrace(configure(pattern.matcher(scenario.input), scenario))
+            val resultsAfterFind: MutableList<String> =
                 resultsAfterFindTrace(configure(pattern.matcher(scenario.input), scenario))
 
             return Trace(groupCount, matches, lookingAt, finds, results, resultsAfterFind)
@@ -407,8 +406,8 @@ internal class GraphemeRegionCompatibilityMatrixTest {
         }
 
         private fun configure(
-            matcher: Matcher, scenario: Scenario
-        ): Matcher {
+            matcher: java.util.regex.Matcher, scenario: Scenario
+        ): java.util.regex.Matcher {
             return matcher
                 .region(scenario.start, scenario.end)
                 .useTransparentBounds(scenario.transparentBounds)
@@ -424,7 +423,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
             return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
         }
 
-        private fun matchTrace(matcher: Matcher, operation: Operation): String {
+        private fun matchTrace(matcher: java.util.regex.Matcher, operation: Operation): String {
             val matched =
                 when (operation) {
                     Operation.MATCHES -> matcher.matches()
@@ -433,42 +432,42 @@ internal class GraphemeRegionCompatibilityMatrixTest {
             return if (matched) capturedMatchTrace(matcher) else "NO_MATCH"
         }
 
-        private fun findTrace(matcher: org.safere.Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: org.safere.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
             }
             return trace
         }
 
-        private fun findTrace(matcher: Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: java.util.regex.Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 trace.add(capturedMatchTrace(matcher))
             }
             return trace
         }
 
-        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String?> {
+        private fun resultsTrace(matcher: org.safere.Matcher): MutableList<String> {
             return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 
-        private fun resultsTrace(matcher: Matcher): MutableList<String?> {
+        private fun resultsTrace(matcher: java.util.regex.Matcher): MutableList<String> {
             return matcher.results().map<String?> { result: MatchResult? -> matchResultTrace(result!!) }
                 .toList()
         }
 
-        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String?> {
+        private fun resultsAfterFindTrace(matcher: org.safere.Matcher): MutableList<String> {
             if (!matcher.find()) {
-                return mutableListOf<String?>()
+                return mutableListOf<String>()
             }
             return resultsTrace(matcher)
         }
 
-        private fun resultsAfterFindTrace(matcher: Matcher): MutableList<String?> {
+        private fun resultsAfterFindTrace(matcher: java.util.regex.Matcher): MutableList<String> {
             if (!matcher.find()) {
-                return mutableListOf<String?>()
+                return mutableListOf<String>()
             }
             return resultsTrace(matcher)
         }
@@ -491,7 +490,7 @@ internal class GraphemeRegionCompatibilityMatrixTest {
             return builder.toString()
         }
 
-        private fun capturedMatchTrace(matcher: Matcher): String {
+        private fun capturedMatchTrace(matcher: java.util.regex.Matcher): String {
             val builder = StringBuilder()
             builder.append(matcher.start()).append('-').append(matcher.end())
             for (group in 0..matcher.groupCount()) {

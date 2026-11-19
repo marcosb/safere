@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
 import java.util.stream.Stream
 import kotlin.Boolean
 import kotlin.Int
@@ -35,9 +34,9 @@ import kotlin.text.toByteArray
 internal class OpaqueRegionContractTest {
     @Test
     fun anchoredOpaqueRegionsMatchIndependentSubstrings() {
-        val patterns: MutableList<String?> = ArrayList<String?>(LOCAL_PATTERNS)
+        val patterns: MutableList<String> = ArrayList<String>(LOCAL_PATTERNS)
         patterns.addAll(
-            mutableListOf<String?>(
+            mutableListOf<String>(
                 "^.*$",
                 "\\A[\\s\\S]*\\z",
                 "^\\X$",
@@ -62,7 +61,7 @@ internal class OpaqueRegionContractTest {
 
     @Test
     fun opaqueSubstringsPreserveTheContractAcrossEnginePaths() {
-        for (options in List.of<EnginePathOptions?>(
+        for (options in java.util.List.of<EnginePathOptions?>(
             EnginePathOptions.builder()
                 .literalFastPaths(false)
                 .charClassMatchFastPaths(false)
@@ -114,7 +113,7 @@ internal class OpaqueRegionContractTest {
     @Test
     fun scalarGraphemeSearchKeepsAnchorsInTheirConfiguredCoordinates() {
         val input = "\na😀😀\n"
-        for (regex in mutableListOf<String?>("(?m)^(\\X?)(\\p{Cs})", "(\\X?)(\\p{Cs})(?m:$)")) {
+        for (regex in mutableListOf<String>("(?m)^(\\X?)(\\p{Cs})", "(\\X?)(\\p{Cs})(?m:$)")) {
             val pattern = Pattern.compile(regex)
             val anchored = pattern.matcher(input).region(2, 5)
             Assertions.assertThat(anchored.find()).`as`(regex).isTrue()
@@ -132,7 +131,7 @@ internal class OpaqueRegionContractTest {
     fun scalarClassSearchStateSurvivesRegionChangesAndIsClearedForNewInputsAndPatterns() {
         val pattern = Pattern.compile("\\X?\\uDE00")
         val matcher = pattern.matcher("")
-        for (visible in mutableListOf<String?>("😀😀\uDE00!", "😀😀!", "😀\uD83D!", "\uDE00😀!")) {
+        for (visible in mutableListOf<String>("😀😀\uDE00!", "😀😀!", "😀\uD83D!", "\uDE00😀!")) {
             val input = "a" + visible + "!"
             matcher.reset(input)
             for (direction in intArrayOf(1, -1)) {
@@ -162,7 +161,7 @@ internal class OpaqueRegionContractTest {
 
     @Test
     fun disabledAnchorsUseOriginalInputWhileOtherAssertionsStayOpaque() {
-        for (regex in mutableListOf<String?>("cat", "\\bcat\\b", "\\b{g}cat\\b{g}")) {
+        for (regex in mutableListOf<String>("cat", "\\bcat\\b", "\\b{g}cat\\b{g}")) {
             Assertions.assertThat(
                 Pattern.compile(regex)
                     .matcher("xcaty")
@@ -173,7 +172,7 @@ internal class OpaqueRegionContractTest {
                 .`as`(regex)
                 .isTrue()
         }
-        for (regex in mutableListOf<String?>("^cat$", "\\Acat\\z", "cat\\Z")) {
+        for (regex in mutableListOf<String>("^cat$", "\\Acat\\z", "cat\\Z")) {
             Assertions.assertThat(
                 Pattern.compile(regex)
                     .matcher("xcaty")
@@ -184,7 +183,7 @@ internal class OpaqueRegionContractTest {
                 .`as`(regex)
                 .isFalse()
         }
-        for (regex in mutableListOf<String?>("(?m)^cat$", "cat$", "cat\\Z")) {
+        for (regex in mutableListOf<String>("(?m)^cat$", "cat$", "cat\\Z")) {
             Assertions.assertThat(
                 Pattern.compile(regex)
                     .matcher("x\ncat\n")
@@ -250,7 +249,7 @@ internal class OpaqueRegionContractTest {
     @Test
     fun transparentAssertionContextDoesNotAllowConsumptionPastTheRegion() {
         val input = "\uD83D\uDC4D\uD83C\uDFFB"
-        for (regex in mutableListOf<String?>("\\X\\b{g}", "\\b{g}\\X\\b{g}")) {
+        for (regex in mutableListOf<String>("\\X\\b{g}", "\\b{g}\\X\\b{g}")) {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.matcher(input).region(1, 3).useTransparentBounds(true).matches())
                 .`as`(regex)
@@ -313,7 +312,7 @@ internal class OpaqueRegionContractTest {
     }
 
     companion object {
-        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+        private val INPUTS: MutableList<String> = mutableListOf<String>(
             "",
             "xcaty",
             "x\uD801\uDC00b\r\n",
@@ -335,7 +334,7 @@ internal class OpaqueRegionContractTest {
             "\uD83Dx\uDE00"
         )
 
-        private val LOCAL_PATTERNS = mutableListOf<String?>(
+        private val LOCAL_PATTERNS = mutableListOf<String>(
             ".",
             ".*",
             "(.)*",
@@ -370,9 +369,10 @@ internal class OpaqueRegionContractTest {
             "|\\X"
         )
 
+        @JvmStatic
         private fun graphemeCandidateCases(): Stream<Arguments?> {
             val cases = Stream.builder<Arguments?>()
-            for (regex in mutableListOf<String?>(
+            for (regex in mutableListOf<String>(
                 "\\uDE00\\X?",
                 "\\p{Cs}\\X?",
                 "[a\\uDE00]\\X?",
@@ -390,7 +390,7 @@ internal class OpaqueRegionContractTest {
                 "(?:\\p{Cs}\\X?)|(?m:^Q)",
                 "(?:\\X?\\uDE00)|(?m:^Q)"
             )) {
-                for (visible in mutableListOf<String?>(
+                for (visible in mutableListOf<String>(
                     "😀",
                     "😀😀",
                     "😀\uDE00",
@@ -401,8 +401,8 @@ internal class OpaqueRegionContractTest {
                     "😀\uDE00!",
                     "😀\uD83D!"
                 )) {
-                    for (prefix in mutableListOf<String?>("", "a", "ab", "\uD83D")) {
-                        for (anchoring in mutableListOf<Boolean?>(false, true)) {
+                    for (prefix in mutableListOf<String>("", "a", "ab", "\uD83D")) {
+                        for (anchoring in mutableListOf<Boolean>(false, true)) {
                             cases.add(Arguments.of(regex, visible, prefix, anchoring))
                         }
                     }
@@ -412,7 +412,7 @@ internal class OpaqueRegionContractTest {
         }
 
         private fun checkSubstrings(
-            patterns: MutableList<String?>,
+            patterns: MutableList<String>,
             anchoring: Boolean,
             options: EnginePathOptions? = EnginePathOptions.allEnabled()
         ) {

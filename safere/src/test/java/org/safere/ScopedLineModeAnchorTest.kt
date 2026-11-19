@@ -10,9 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Scoped line modes belong to each anchor, including when both modes occur in one program.  */
@@ -24,23 +22,23 @@ internal class ScopedLineModeAnchorTest {
         regex: String, flags: Int, terminator: String?, description: String?, padding: Int
     ) {
         val input = "x".repeat(padding) + "foo" + terminator
-        val jdk = Pattern.compile(regex, flags)
+        val jdk = java.util.regex.Pattern.compile(regex, flags)
         val safe = org.safere.Pattern.compile(regex, flags)
-        val expected: MutableList<String?> = ArrayList<String?>()
+        val expected: MutableList<String> = ArrayList<String>()
         val reference = jdk.matcher(input)
         while (reference.find()) {
-            expected.add(captureTrace(reference))
+            expected.add(captureTrace(reference)!!)
         }
-        val actual: MutableList<String?> = ArrayList<String?>()
+        val actual: MutableList<String> = ArrayList<String>()
         val matcher = safe.matcher(input)
         while (matcher.find()) {
-            actual.add(captureTrace(matcher))
+            actual.add(captureTrace(matcher)!!)
         }
         Assertions.assertThat<String?>(actual).`as`("String find sequence").isEqualTo(expected)
         actual.clear()
         val utf8 = safe.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
         while (utf8.find()) {
-            val captures: MutableList<String?> = ArrayList<String?>()
+            val captures: MutableList<String> = ArrayList<String>()
             for (group in 0..utf8.groupCount()) {
                 val start = utf8.start(group)
                 val end = utf8.end(group)
@@ -91,24 +89,24 @@ internal class ScopedLineModeAnchorTest {
 
     @Test
     fun mixedLineEndsRetainCrContextWithinAndAcrossSearches() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(?-d:(?m:$))(?dm:$)", "(?dm:$)(?-d:(?m:$))",
             "((?-d:(?m:$)))(?dm:$)", "(?-d:(?m:$))(?dm:$)a?"
         )) {
             for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES)) {
                 for (padding in intArrayOf(0, 512)) {
-                    val inputs = mutableListOf<String?>("\r\na\na", "\na\r\na", "\r\na", "a\na")
-                    for (order in List.of<MutableList<String?>>(inputs, inputs.reversed())) {
+                    val inputs = mutableListOf<String>("\r\na\na", "\na\r\na", "\r\na", "a\na")
+                    for (order in listOf(inputs, inputs.reversed())) {
                         val safe = org.safere.Pattern.compile(regex, flags)
-                        val jdk = Pattern.compile(regex, flags)
+                        val jdk = java.util.regex.Pattern.compile(regex, flags)
                         for (suffix in order) {
                             val input = "x".repeat(padding) + suffix
-                            val expected: MutableList<String?> = ArrayList<String?>()
+                            val expected: MutableList<String> = ArrayList<String>()
                             val reference = jdk.matcher(input)
                             while (reference.find()) {
                                 expected.add(reference.start().toString() + ":" + reference.end())
                             }
-                            val actual: MutableList<String?> = ArrayList<String?>()
+                            val actual: MutableList<String> = ArrayList<String>()
                             val matcher = safe.matcher(input)
                             while (matcher.find()) {
                                 actual.add(matcher.start().toString() + ":" + matcher.end())
@@ -134,14 +132,14 @@ internal class ScopedLineModeAnchorTest {
     @Test
     fun scopedLineStartsAndCachedTransitionsMatchJdk() {
         for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES)) {
-            for (mode in mutableListOf<String?>("d", "-d")) {
-                for (regex in List.of<String?>(
+            for (mode in mutableListOf<String>("d", "-d")) {
+                for (regex in java.util.List.of<String?>(
                     "(?m)(?" + mode + ":^)(foo|bar)",
                     "(?m)(?" + mode + ":^foo$)|(?-d:^bar$)"
                 )) {
                     val safe = org.safere.Pattern.compile(regex, flags)
-                    val jdk = Pattern.compile(regex, flags)
-                    for (terminator in mutableListOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")) {
+                    val jdk = java.util.regex.Pattern.compile(regex, flags)
+                    for (terminator in mutableListOf<String>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")) {
                         val input = "x".repeat(2048) + terminator + "foo" + terminator
                         val expected = jdk.matcher(input).find()
                         Assertions.assertThat(safe.matcher(input).find())
@@ -160,13 +158,13 @@ internal class ScopedLineModeAnchorTest {
 
     @Test
     fun scopedEndAnchorsRespectUtf8RegionsAndBounds() {
-        for (anchor in mutableListOf<String?>("$", "\\Z", "(?m:$)")) {
+        for (anchor in mutableListOf<String>("$", "\\Z", "(?m:$)")) {
             for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES)) {
-                for (mode in mutableListOf<String?>("d", "-d")) {
+                for (mode in mutableListOf<String>("d", "-d")) {
                     val regex = "(foo|bar)(?" + mode + ":" + anchor + ")"
                     val safe = org.safere.Pattern.compile(regex, flags)
-                    val jdk = Pattern.compile(regex, flags)
-                    for (terminator in mutableListOf<String?>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
+                    val jdk = java.util.regex.Pattern.compile(regex, flags)
+                    for (terminator in mutableListOf<String>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
                         val input = "xfoo" + terminator
                         for (end in 4..input.length) {
                             for (anchoring in booleanArrayOf(false, true)) {
@@ -203,20 +201,21 @@ internal class ScopedLineModeAnchorTest {
 
     companion object {
         private fun captureTrace(matcher: MatchResult): String? {
-            val captures: MutableList<String?> = ArrayList<String?>()
+            val captures: MutableList<String> = ArrayList<String>()
             for (group in 0..matcher.groupCount()) {
                 captures.add(matcher.start(group).toString() + ":" + matcher.end(group) + ":" + matcher.group(group))
             }
             return captures.toString()
         }
 
+        @JvmStatic
         private fun anchorCases(): Stream<Arguments?> {
             val cases: MutableList<Arguments?> = ArrayList<Arguments?>()
             val terminators = arrayOf<String?>("", "\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")
             val names = arrayOf<String?>("empty", "LF", "CR", "CRLF", "NEL", "LS", "PS")
-            for (anchor in mutableListOf<String?>("$", "\\Z", "\\z", "(?m:$)")) {
+            for (anchor in mutableListOf<String>("$", "\\Z", "\\z", "(?m:$)")) {
                 for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES)) {
-                    for (body in mutableListOf<String?>(
+                    for (body in mutableListOf<String>(
                         "foo",
                         "fo[op]",
                         "(?:foo|bar)",
@@ -224,7 +223,7 @@ internal class ScopedLineModeAnchorTest {
                         "^foo",
                         "[a-z]+"
                     )) {
-                        for (suffix in List.of<String?>(
+                        for (suffix in java.util.List.of<String?>(
                             "(?-d:" + anchor + ")",
                             "(?d:" + anchor + ")",
                             "(?d:(?-d:" + anchor + "))",

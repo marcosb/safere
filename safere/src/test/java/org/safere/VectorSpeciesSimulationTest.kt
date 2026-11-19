@@ -9,8 +9,6 @@ import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Method
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 @DisabledForCrosscheck("implementation test uses package-private Vector API internals")
 internal class VectorSpeciesSimulationTest {
     @JvmRecord
@@ -126,9 +124,11 @@ internal class VectorSpeciesSimulationTest {
     companion object {
         private val VECTOR_AVAILABLE: Boolean = isVectorApiAvailable
         private val BYTE_SPECIES: MutableList<SpeciesHandle> =
-            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ByteVector") else mutableListOf<SpeciesHandle?>()
+            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ByteVector")
+            else mutableListOf<SpeciesHandle>()
         private val SHORT_SPECIES: MutableList<SpeciesHandle> =
-            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ShortVector") else mutableListOf<SpeciesHandle?>()
+            if (VECTOR_AVAILABLE) getSpeciesList("jdk.incubator.vector.ShortVector")
+            else mutableListOf<SpeciesHandle>()
         private val BYTE_INDEX_OF_ASCII_CLASS: Method? = if (VECTOR_AVAILABLE) resolveByteIndexOfAsciiClass() else null
         private val BYTE_INDEX_OF_IGNORE_CASE: Method? = if (VECTOR_AVAILABLE) resolveByteIndexOfIgnoreCase() else null
         private val SHORT_INDEX_OF_CHAR_CLASS: Method? = if (VECTOR_AVAILABLE) resolveShortIndexOfCharClass() else null
@@ -146,7 +146,7 @@ internal class VectorSpeciesSimulationTest {
         private fun getSpeciesList(vectorClassName: String?): MutableList<SpeciesHandle> {
             try {
                 val vectorClass = Class.forName(vectorClassName)
-                return List.of<SpeciesHandle?>(
+                return mutableListOf(
                     SpeciesHandle(vectorClass.getField("SPECIES_64").get(null)),
                     SpeciesHandle(vectorClass.getField("SPECIES_128").get(null)),
                     SpeciesHandle(vectorClass.getField("SPECIES_256").get(null)),

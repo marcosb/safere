@@ -22,11 +22,11 @@ internal class CompilerPreparationTest {
         ]
     )
     fun preparationCanBeReusedWithoutMutatingSourceOrPrograms(regex: String?) {
-        val source = Parser.parse(regex, FLAGS)
+        val source = Parser.parse(regex, FLAGS)!!
         val sourceForm = source.toString()
         val prepared = Compiler.prepare(source)
         Assertions.assertThat<Compiler.Prepared?>(prepared).isNotNull()
-        val first = Compiler.compile(prepared, false)
+        val first = Compiler.compile(prepared, false)!!
         val instructions = first.dump()
 
         // Compile the other variants before reusing the same tree for the original variant.
@@ -36,7 +36,7 @@ internal class CompilerPreparationTest {
         val flattened = Prog(first)
         flattened.flatten()
         flattened.freeze()
-        val second = Compiler.compile(prepared, false)
+        val second = Compiler.compile(prepared, false)!!
 
         Assertions.assertThat<Prog?>(second).isNotSameAs(first)
         Assertions.assertThat<Inst?>(second.inst(second.start())).isNotSameAs(first.inst(first.start()))
@@ -52,14 +52,14 @@ internal class CompilerPreparationTest {
     ) {
         for (unixLines in booleanArrayOf(false, true)) {
             val prepared =
-                Compiler.prepare(Parser.parse(regex, FLAGS or (if (unixLines) ParseFlags.UNIX_LINES else 0)))
+                Compiler.prepare(Parser.parse(regex, FLAGS or (if (unixLines) ParseFlags.UNIX_LINES else 0))!!)
             for (reversed in booleanArrayOf(true, false)) {
                 for (forDfa in booleanArrayOf(true, false)) {
                     val prog =
-                        if (forDfa)
+                        (if (forDfa)
                             Compiler.compileForDfa(prepared, reversed)
                         else
-                            Compiler.compile(prepared, reversed)
+                            Compiler.compile(prepared, reversed))!!
                     Assertions.assertThat(prog.numCaptures()).isEqualTo(3)
                     Assertions.assertThat(prog.reversed()).isEqualTo(reversed)
                     Assertions.assertThat(prog.anchorStart()).isEqualTo(if (reversed) end else start)
@@ -73,10 +73,10 @@ internal class CompilerPreparationTest {
 
     @Test
     fun captureAndDfaVariantsKeepTheirOwnLoopRegisters() {
-        val prepared = Compiler.prepare(Parser.parse("(a?)*b", FLAGS))
+        val prepared = Compiler.prepare(Parser.parse("(a?)*b", FLAGS)!!)
         for (reversed in booleanArrayOf(false, true)) {
-            val captures = Compiler.compile(prepared, reversed)
-            val dfa = Compiler.compileForDfa(prepared, reversed)
+            val captures = Compiler.compile(prepared, reversed)!!
+            val dfa = Compiler.compileForDfa(prepared, reversed)!!
             Assertions.assertThat(captures.numLoopRegs()).isPositive()
             Assertions.assertThat(dfa.numLoopRegs()).isZero()
             Assertions.assertThat(captures.numCaptures()).isEqualTo(2)
@@ -161,10 +161,10 @@ internal class CompilerPreparationTest {
     @Test
     fun reverseDfaSetupBelongsToTheDfaProgram() {
         val pattern = Pattern.compile("(a?)*b")
-        val dfa = pattern.flatReverseDfaProg()
-        val setup = pattern.reverseDfaSetup()
+        val dfa = pattern.flatReverseDfaProg()!!
+        val setup = pattern.reverseDfaSetup()!!
         Assertions.assertThat(dfa.numLoopRegs()).isZero()
-        Assertions.assertThat(pattern.flatReverseProg().numLoopRegs()).isPositive()
+        Assertions.assertThat(pattern.flatReverseProg()!!.numLoopRegs()).isPositive()
         Assertions.assertThat<Dfa.Setup?>(pattern.reverseDfaSetup()).isSameAs(setup)
         val expected = Dfa.buildSetup(dfa)
         Assertions.assertThat(setup.boundaries).containsExactly(*expected.boundaries)
@@ -176,6 +176,7 @@ internal class CompilerPreparationTest {
     companion object {
         private val FLAGS = ParseFlags.LIKE_PERL
 
+        @JvmStatic
         private fun anchors(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("(a){0}(b)", false, false, false),

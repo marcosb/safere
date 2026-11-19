@@ -8,7 +8,15 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.regex.Pattern
+
+private fun assertMatchesSameAsJdk(regex: String, flags: Int, input: String) {
+    val jdkMatches = java.util.regex.Pattern.compile(regex, flags).matcher(input).matches()
+    val safeMatches = org.safere.Pattern.compile(regex, flags).matcher(input).matches()
+
+    Assertions.assertThat(safeMatches)
+        .`as`("matches() for /%s/ (flags=%d) on \"%s\"", regex, flags, input)
+        .isEqualTo(jdkMatches)
+}
 
 /**
  * Tests for [Pattern.COMMENTS] flag and `(?x)` inline verbose mode.
@@ -18,16 +26,7 @@ import java.util.regex.Pattern
  * whitespace is ignored, `#` starts a comment to end of line, and these rules apply both
  * outside and inside character classes.
  */
-internal object CommentsTest {
-    private fun assertMatchesSameAsJdk(regex: String, flags: Int, input: String) {
-        val jdkMatches = Pattern.compile(regex, flags).matcher(input).matches()
-        val safeMatches = org.safere.Pattern.compile(regex, flags).matcher(input).matches()
-
-        Assertions.assertThat(safeMatches)
-            .`as`("matches() for /%s/ (flags=%d) on \"%s\"", regex, flags, input)
-            .isEqualTo(jdkMatches)
-    }
-
+internal class CommentsTest {
     // ---------------------------------------------------------------------------
     // Pattern.COMMENTS compile flag
     // ---------------------------------------------------------------------------
@@ -52,7 +51,7 @@ internal object CommentsTest {
         @Test
         @DisplayName("COMMENTS whitespace set matches JDK parser")
         fun commentsWhitespaceSetMatchesJdkParser() {
-            val ignoredByJdkComments = intArrayOf('\t'.code, '\n'.code, 0x0B, '\f'.code, '\r'.code, ' '.code)
+            val ignoredByJdkComments = intArrayOf('\t'.code, '\n'.code, 0x0B, 0x0C, '\r'.code, ' '.code)
             for (cp in ignoredByJdkComments) {
                 val pattern = "a" + String(Character.toChars(cp)) + "b"
                 Assertions.assertThat(
@@ -185,7 +184,7 @@ internal object CommentsTest {
         @Test
         @DisplayName("COMMENTS character-class whitespace set matches JDK parser")
         fun commentsCharacterClassWhitespaceSetMatchesJdkParser() {
-            val ignoredByJdkComments = intArrayOf('\t'.code, '\n'.code, 0x0B, '\f'.code, '\r'.code, ' '.code)
+            val ignoredByJdkComments = intArrayOf('\t'.code, '\n'.code, 0x0B, 0x0C, '\r'.code, ' '.code)
             for (cp in ignoredByJdkComments) {
                 val pattern = "[a" + String(Character.toChars(cp)) + "b]"
                 val p = org.safere.Pattern.compile(pattern, org.safere.Pattern.COMMENTS)
@@ -333,7 +332,7 @@ internal object CommentsTest {
 
             for (regex in regexes) {
                 for (input in inputs) {
-                    CommentsTest.assertMatchesSameAsJdk(regex!!, org.safere.Pattern.COMMENTS, input!!)
+                    assertMatchesSameAsJdk(regex!!, org.safere.Pattern.COMMENTS, input!!)
                 }
             }
         }
@@ -389,4 +388,5 @@ internal object CommentsTest {
             Assertions.assertThat(result).isEqualTo("hello world")
         }
     }
+
 }

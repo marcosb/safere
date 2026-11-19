@@ -6,7 +6,6 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import java.util.regex.Pattern
 
 /**
  * Pins `replaceAll` and `replaceFirst` against the JDK for patterns that have a `find()` fast path or an end anchor, which skip the DFA-driven replace loop.
@@ -15,7 +14,7 @@ internal class ReplaceFastPathTest {
     @Test
     fun replaceMatchesTheJdk() {
         for (regex in REGEXES) {
-            val jdk = Pattern.compile(regex)
+            val jdk = java.util.regex.Pattern.compile(regex)
             val safere = org.safere.Pattern.compile(regex)
             for (input in INPUTS) {
                 for (replacement in REPLACEMENTS) {
@@ -32,9 +31,9 @@ internal class ReplaceFastPathTest {
 
     @Test
     fun matcherStateAfterReplaceFirstMatchesTheJdk() {
-        for (regex in mutableListOf<String?>("[0-9]", "\\p{L}", "[é😀]")) {
+        for (regex in mutableListOf<String>("[0-9]", "\\p{L}", "[é😀]")) {
             val input = "ab 😀 é 42"
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             val safere = org.safere.Pattern.compile(regex).matcher(input)
             jdk.replaceFirst("X")
             safere.replaceFirst("X")
@@ -50,7 +49,7 @@ internal class ReplaceFastPathTest {
     }
 
     companion object {
-        private val REGEXES: MutableList<String> = mutableListOf<String?>(
+        private val REGEXES: MutableList<String> = mutableListOf<String>(
             "[0-9]",
             "\\p{L}",
             "[é😀]",
@@ -61,7 +60,7 @@ internal class ReplaceFastPathTest {
             "\\s*(?:foo|fax)$"
         )
 
-        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+        private val INPUTS: MutableList<String> = mutableListOf<String>(
             "",
             "no digits or keywords here",
             "order 12345 shipped on 2025-03-22",
@@ -74,6 +73,6 @@ internal class ReplaceFastPathTest {
             "  foo"
         )
 
-        private val REPLACEMENTS: MutableList<String> = mutableListOf<String?>("X", "", "<$0>")
+        private val REPLACEMENTS: MutableList<String> = mutableListOf<String>("X", "", "<$0>")
     }
 }

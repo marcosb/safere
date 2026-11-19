@@ -5,6 +5,7 @@
 package org.safere
 
 import org.assertj.core.api.Assertions
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Test
 import org.objectweb.asm.*
 import java.io.IOException
@@ -34,7 +35,7 @@ internal class BytecodeBudgetTest {
             "-Pwork-counters compiles WorkCounter calls into the methods, which enlarges them"
         )
         val budgets: MutableList<Budget> = ArrayList<Budget>()
-        forEachClassFile(ClassFileConsumer { bytes: ByteArray? -> budgets.addAll(budgets(ClassReader(bytes))) })
+        forEachClassFile(ClassFileConsumer { bytes: ByteArray? -> budgets.addAll(budgets(ClassReader(bytes)).filterNotNull()) })
 
         Assertions.assertThat<Budget?>(budgets).hasSizeGreaterThanOrEqualTo(MIN_ANNOTATED_METHODS)
         val failures: MutableList<String> = ArrayList<String>()
@@ -51,7 +52,7 @@ internal class BytecodeBudgetTest {
         Assertions.assertThat<String?>(failures).isEmpty()
     }
 
-    private interface ClassFileConsumer {
+    private fun interface ClassFileConsumer {
         @Throws(IOException::class)
         fun accept(bytes: ByteArray?)
     }

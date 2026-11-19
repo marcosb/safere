@@ -14,8 +14,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.time.Duration
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Differential coverage for JDK-visible captures inside quantified expressions.  */
@@ -25,7 +23,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @MethodSource("quantifiedCaptureCases")
     @DisplayName("find() exposes quantified captures like java.util.regex")
     fun findCapturesMatchJdk(regex: String, input: String) {
-        val jdk = Pattern.compile(regex).matcher(input)
+        val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
         val safere = org.safere.Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.find()
@@ -37,7 +35,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @MethodSource("quantifiedCaptureCases")
     @DisplayName("matches() exposes quantified captures like java.util.regex")
     fun matchesCapturesMatchJdk(regex: String, input: String) {
-        val jdk = Pattern.compile(regex).matcher(input)
+        val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
         val safere = org.safere.Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.matches()
@@ -57,7 +55,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @MethodSource("quantifiedCaptureCases")
     @DisplayName("replacement APIs consume quantified captures like java.util.regex")
     fun replacementApisMatchJdk(regex: String, input: String) {
-        val jdkPattern = Pattern.compile(regex)
+        val jdkPattern = java.util.regex.Pattern.compile(regex)
         val saferePattern = org.safere.Pattern.compile(regex)
 
         Assertions.assertThat(saferePattern.matcher(input).replaceAll("[$1]"))
@@ -99,7 +97,7 @@ internal class QuantifiedCaptureSemanticsTest {
     @MethodSource("lazyNullableGroupZeroCases")
     @DisplayName("capture observation preserves lazy nullable group zero")
     fun captureObservationPreservesLazyNullableGroupZero(regex: String, input: String) {
-        val jdk = Pattern.compile(regex).matcher(input)
+        val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
         val safere = org.safere.Pattern.compile(regex).matcher(input)
 
         val jdkMatched = jdk.find()
@@ -156,11 +154,11 @@ internal class QuantifiedCaptureSemanticsTest {
     }
 
     @JvmRecord
-    private data class GeneratedCase(
+    internal data class GeneratedCase(
         val family: String?,
         val regex: String?,
         val input: String?,
-        val namedGroup: String
+        val namedGroup: String?
     ) {
         override fun toString(): String {
             return family + " /" + regex + "/ on \"" + input + "\""
@@ -170,6 +168,7 @@ internal class QuantifiedCaptureSemanticsTest {
     companion object {
         private val CAPTURE_OBSERVATION_TIMEOUT: Duration = Duration.ofSeconds(5)
 
+        @JvmStatic
         private fun quantifiedCaptureCases(): Stream<Arguments?> {
             // Nested-repeat JDK differences use explicit expectations in AcceptedPathCaptureTest.
             return Stream.of<Arguments?>(
@@ -189,6 +188,7 @@ internal class QuantifiedCaptureSemanticsTest {
             )
         }
 
+        @JvmStatic
         private fun failedStartLeakageCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("(?:(a){1})*$", "ab"),
@@ -197,6 +197,7 @@ internal class QuantifiedCaptureSemanticsTest {
             )
         }
 
+        @JvmStatic
         private fun lazyNullableGroupZeroCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("(?:(?:(a){0,2})*?)", "a"),
@@ -206,6 +207,7 @@ internal class QuantifiedCaptureSemanticsTest {
             )
         }
 
+        @JvmStatic
         private fun zeroWidthPossessiveCaptureCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(GeneratedCase("empty group star possessive", "((?:))*+", "", null)),
@@ -244,21 +246,22 @@ internal class QuantifiedCaptureSemanticsTest {
             )
         }
 
+        @JvmStatic
         private fun generatedQuantifiedCaptureCases(): Stream<Arguments?>? {
             val cases: MutableList<GeneratedCase?> = ArrayList<GeneratedCase?>()
-            addGeneratedCases(cases, "simple repeated capture", "(a)", mutableListOf<String?>("", "a", "aa", "aaa"))
-            addGeneratedCases(cases, "nullable repeated capture", "(a?)", mutableListOf<String?>("", "a", "aa"))
-            addGeneratedCases(cases, "optional repeated capture", "(a)?", mutableListOf<String?>("", "a", "aa"))
+            addGeneratedCases(cases, "simple repeated capture", "(a)", mutableListOf<String>("", "a", "aa", "aaa"))
+            addGeneratedCases(cases, "nullable repeated capture", "(a?)", mutableListOf<String>("", "a", "aa"))
+            addGeneratedCases(cases, "optional repeated capture", "(a)?", mutableListOf<String>("", "a", "aa"))
             addGeneratedCases(
-                cases, "alternating repeated capture", "(a|aa)", mutableListOf<String?>("", "a", "aa", "aaa")
+                cases, "alternating repeated capture", "(a|aa)", mutableListOf<String>("", "a", "aa", "aaa")
             )
-            addGeneratedCases(cases, "nested repeated capture", "((a))", mutableListOf<String?>("", "a", "aa", "aaa"))
-            addGeneratedCases(cases, "suffix repeated capture", "(a)b", mutableListOf<String?>("", "ab", "abab"))
+            addGeneratedCases(cases, "nested repeated capture", "((a))", mutableListOf<String>("", "a", "aa", "aaa"))
+            addGeneratedCases(cases, "suffix repeated capture", "(a)b", mutableListOf<String>("", "ab", "abab"))
             addGeneratedCases(
-                cases, "optional-branch repeated capture", "(a)?b", mutableListOf<String?>("", "b", "ab", "abab")
+                cases, "optional-branch repeated capture", "(a)?b", mutableListOf<String>("", "b", "ab", "abab")
             )
             addGeneratedCases(
-                cases, "empty-alternative repeated capture", "(?:|(a))", mutableListOf<String?>("", "a", "aa")
+                cases, "empty-alternative repeated capture", "(?:|(a))", mutableListOf<String>("", "a", "aa")
             )
 
             cases.add(GeneratedCase("named repeated capture", "(?:(?<word>a)){1,2}", "aa", "word"))
@@ -275,10 +278,10 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun addGeneratedCases(
-            cases: MutableList<GeneratedCase?>, family: String?, atom: String, inputs: MutableList<String?>
+            cases: MutableList<GeneratedCase?>, family: String?, atom: String, inputs: MutableList<String>
         ) {
             val quantifiers =
-                mutableListOf<String?>("*", "+", "?", "{0,2}", "{1,2}", "*?", "+?", "??", "{0,2}?", "{1,2}?")
+                mutableListOf<String>("*", "+", "?", "{0,2}", "{1,2}", "*?", "+?", "??", "{0,2}?", "{1,2}?")
             for (quantifier in quantifiers) {
                 val regex = "(?:" + atom + ")" + quantifier
                 for (input in inputs) {
@@ -301,7 +304,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertGroupsMatch(
-            regex: String?, input: String?, matched: Boolean, jdk: Matcher, safere: org.safere.Matcher
+            regex: String?, input: String?, matched: Boolean, jdk: java.util.regex.Matcher, safere: org.safere.Matcher
         ) {
             if (!matched) {
                 return
@@ -321,7 +324,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertOperationTraceMatchesJdk(testCase: GeneratedCase) {
-            val jdkPattern = Pattern.compile(testCase.regex)
+            val jdkPattern = java.util.regex.Pattern.compile(testCase.regex)
             val saferePattern = org.safere.Pattern.compile(testCase.regex)
 
             assertSingleOperationMatchesJdk(testCase, jdkPattern, saferePattern, Operation.FIND)
@@ -332,7 +335,7 @@ internal class QuantifiedCaptureSemanticsTest {
 
         private fun assertSingleOperationMatchesJdk(
             testCase: GeneratedCase,
-            jdkPattern: Pattern,
+            jdkPattern: java.util.regex.Pattern,
             saferePattern: org.safere.Pattern,
             operation: Operation
         ) {
@@ -360,7 +363,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertFindSequenceMatchesJdk(
-            testCase: GeneratedCase, jdkPattern: Pattern, saferePattern: org.safere.Pattern
+            testCase: GeneratedCase, jdkPattern: java.util.regex.Pattern, saferePattern: org.safere.Pattern
         ) {
             val jdk = jdkPattern.matcher(testCase.input)
             val safere = saferePattern.matcher(testCase.input)
@@ -398,7 +401,7 @@ internal class QuantifiedCaptureSemanticsTest {
         }
 
         private fun assertReplacementTraceMatchesJdk(testCase: GeneratedCase) {
-            val jdkPattern = Pattern.compile(testCase.regex)
+            val jdkPattern = java.util.regex.Pattern.compile(testCase.regex)
             val saferePattern = org.safere.Pattern.compile(testCase.regex)
             val numberedReplacement = "[$1]"
 
@@ -438,7 +441,7 @@ internal class QuantifiedCaptureSemanticsTest {
             return result.toString()
         }
 
-        private fun appendReplacementResult(matcher: Matcher): String {
+        private fun appendReplacementResult(matcher: java.util.regex.Matcher): String {
             val result = StringBuffer()
             while (matcher.find()) {
                 matcher.appendReplacement(result, "[$1]")

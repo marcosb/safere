@@ -34,13 +34,13 @@ internal class UtilsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = ['0', '5', '9', 'a', 'z', 'A', 'Z'])
+    @ValueSource(ints = [0x30, 0x35, 0x39, 0x61, 0x7A, 0x41, 0x5A])
     fun isAlnum_trueForAlnumChars(r: Int) {
         Assertions.assertThat(Utils.isAlnum(r)).isTrue()
     }
 
     @ParameterizedTest
-    @ValueSource(ints = ['!', ' ', '@', '[', '{', 0x00, 0xFF])
+    @ValueSource(ints = [0x21, 0x20, 0x40, 0x5B, 0x7B, 0x00, 0xFF])
     fun isAlnum_falseForNonAlnumChars(r: Int) {
         Assertions.assertThat(Utils.isAlnum(r)).isFalse()
     }

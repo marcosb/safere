@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.Map
 import java.util.function.BiConsumer
 
@@ -33,14 +32,14 @@ internal class EntryPointWorkParityTest {
         override fun toString(): String {
             val leading = tail.substring(0, tail.length - tail.trimStart().length)
             val shown =
-                if (leading.size > 8) "<" + leading.size + " spaces>" + tail.trimStart() else tail
+                if (leading.length > 8) "<" + leading.length + " spaces>" + tail.trimStart() else tail
             return "/" + regex + "/" + (if (tail.isEmpty()) " no match" else " + '" + shown + "'")
         }
     }
 
     @Test
     fun noEntryPointDoesMuchMoreWorkThanFind() {
-        val failures: MutableList<String?> = ArrayList<String?>()
+        val failures: MutableList<String> = ArrayList<String>()
         for (scenario in SCENARIOS) {
             val pattern = Pattern.compile(scenario.regex)
             for (size in SIZES) {
@@ -159,7 +158,7 @@ internal class EntryPointWorkParityTest {
 
         private const val SLACK = 100
 
-        private val SCENARIOS: MutableList<Scenario> = List.of<Scenario?>(
+        private val SCENARIOS: MutableList<Scenario> = java.util.List.of<Scenario?>(
             Scenario("hello", ""),
             Scenario("hello", "hello"),
             Scenario("[0-9]", ""),
@@ -202,7 +201,7 @@ internal class EntryPointWorkParityTest {
                 "replaceAll",
                 BiConsumer { p: Pattern?, s: String? -> consume(p!!.matcher(s).replaceAll("X")) },
                 "split",
-                BiConsumer { p: Pattern?, s: String? -> consume(p!!.split(s)) })
+                BiConsumer { p: Pattern?, s: String? -> consume(p!!.split(s!!)) })
 
         /**
          * Known gaps, keyed by `scenario + " " + entry point`. Each is expected to exceed the
@@ -215,7 +214,7 @@ internal class EntryPointWorkParityTest {
         }
 
         private fun check(
-            failures: MutableList<String?>,
+            failures: MutableList<String>,
             scenario: Scenario?,
             size: Int,
             entryPoint: String?,

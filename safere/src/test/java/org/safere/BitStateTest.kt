@@ -13,7 +13,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.safere.Nfa
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.stream.Stream
 import kotlin.math.max
 import kotlin.math.min
@@ -29,11 +28,11 @@ import kotlin.math.min
 internal class BitStateTest {
     @Test
     fun greedyRuneLoopsPreserveExitPriorityAndCaptureRollback() {
-        for (body in mutableListOf<String?>("a", "[a-z]", "[a-z0-9_]", "[é😀]", "(?i:a)")) {
-            for (suffix in mutableListOf<String?>("(a|ab)", "(ab|a)", "(a?)b", "b")) {
-                for (quantifier in mutableListOf<String?>("*", "+", "*?")) {
+        for (body in mutableListOf<String>("a", "[a-z]", "[a-z0-9_]", "[é😀]", "(?i:a)")) {
+            for (suffix in mutableListOf<String>("(a|ab)", "(ab|a)", "(a?)b", "b")) {
+                for (quantifier in mutableListOf<String>("*", "+", "*?")) {
                     val regex = "(" + body + quantifier + ")" + suffix
-                    for (input in mutableListOf<String?>("", "a", "aab", "aaaab", "aaaac", "é😀b", "AAAAab")) {
+                    for (input in mutableListOf<String>("", "a", "aab", "aaaab", "aaaac", "é😀b", "AAAAab")) {
                         assertConsistentAnchored(regex, input, false, false)
                         assertConsistentAnchored(regex, input, true, false)
                         assertConsistentAnchored(regex, input, true, true)
@@ -51,14 +50,14 @@ internal class BitStateTest {
         val prog = Pattern.compile(testCase.pattern).prog()
         Assertions.assertThat<Inst?>(prog.greedyRunes()).isNotNull()
         val text = testCase.input
-        for (scanner in List.of<InputScanner?>(
+        for (scanner in java.util.List.of<InputScanner?>(
             StringInputScanner(text), Utf8InputScanner(
                 text.toByteArray(
                     StandardCharsets.UTF_8
                 )
             )
         )) {
-            for (anchored in mutableListOf<Boolean?>(false, true)) {
+            for (anchored in mutableListOf<Boolean>(false, true)) {
                 val length = scanner.length
                 val ncap = 2 * prog.numCaptures()
                 val fused = BitState.getOrCreate(null, prog, scanner, 0, length, ncap, false, false)
@@ -85,7 +84,7 @@ internal class BitStateTest {
 
     @Test
     fun lazyCharacterLoopsPreserveCapturesAcrossFailedExitsAndStarts() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(.*?)z",
             "(.*?)(z)",
             "x([ab]*?)z",
@@ -99,7 +98,7 @@ internal class BitStateTest {
             "(a.*?)z|x(.*?)z"
         )) {
             val prog = Pattern.compile(regex).prog()
-            for (input in List.of<String?>(
+            for (input in java.util.List.of<String?>(
                 "",
                 "z",
                 "aaab",
@@ -112,15 +111,15 @@ internal class BitStateTest {
                 "x" + "a".repeat(100) + "z",
                 "a".repeat(100)
             )) {
-                for (scanner in List.of<InputScanner?>(
+                for (scanner in java.util.List.of<InputScanner?>(
                     StringInputScanner(input), Utf8InputScanner(
                         input.toByteArray(
                             StandardCharsets.UTF_8
                         )
                     )
                 )) {
-                    for (anchored in mutableListOf<Boolean?>(false, true)) {
-                        for (kind in Nfa.MatchKind.Nfa.MatchKind.entries.toTypedArray()) {
+                    for (anchored in mutableListOf<Boolean>(false, true)) {
+                        for (kind in Nfa.MatchKind.entries.toTypedArray()) {
                             val expected =
                                 Nfa.search(
                                     prog,
@@ -189,11 +188,11 @@ internal class BitStateTest {
 
     @Test
     fun unreachableCaptureAlternativesDoNotAffectFusion() {
-        for (alternatives in mutableListOf<String?>("(a)|(b)", "(a)|(b)|(c)|(d)|(e)", "((a)|(b))", "(é)|(😀)")) {
-            for (impossible in mutableListOf<String?>("[^\\s\\S]", "[a&&b]")) {
+        for (alternatives in mutableListOf<String>("(a)|(b)", "(a)|(b)|(c)|(d)|(e)", "((a)|(b))", "(é)|(😀)")) {
+            for (impossible in mutableListOf<String>("[^\\s\\S]", "[a&&b]")) {
                 val deadBranch = "(?:" + alternatives + ")" + impossible
-                for (regex in List.of<String?>(deadBranch, deadBranch + "|x|xx", "x|xx|" + deadBranch)) {
-                    for (input in mutableListOf<String?>("", "ab", "xxy", "é😀")) {
+                for (regex in java.util.List.of<String?>(deadBranch, deadBranch + "|x|xx", "x|xx|" + deadBranch)) {
+                    for (input in mutableListOf<String>("", "ab", "xxy", "é😀")) {
                         assertConsistentAnchored(regex, input, false, false)
                         assertConsistentAnchored(regex, input, true, true)
                         assertConsistentUnanchored(regex, input)
@@ -205,12 +204,12 @@ internal class BitStateTest {
 
     @Test
     fun capturesAndLoopRegistersRollBackAcrossNestedRepeatAlternatives() {
-        for (atom in mutableListOf<String?>("(a)", "((a))", "(a|aa)", "(é|😀)")) {
-            for (inner in mutableListOf<String?>("{0,2}", "{1,2}", "+?")) {
-                for (outer in mutableListOf<String?>("*", "+?")) {
-                    for (suffix in mutableListOf<String?>("b", "ab")) {
+        for (atom in mutableListOf<String>("(a)", "((a))", "(a|aa)", "(é|😀)")) {
+            for (inner in mutableListOf<String>("{0,2}", "{1,2}", "+?")) {
+                for (outer in mutableListOf<String>("*", "+?")) {
+                    for (suffix in mutableListOf<String>("b", "ab")) {
                         val regex = "(?:" + atom + inner + ")" + outer + suffix
-                        for (input in mutableListOf<String?>(
+                        for (input in mutableListOf<String>(
                             "",
                             "a",
                             "ab",
@@ -234,18 +233,18 @@ internal class BitStateTest {
 
     @Test
     fun nullableLoopEntriesPreservePriorityAndRollbackAcrossSearchModes() {
-        for (atom in mutableListOf<String?>("(a?)", "((a)?)", "(a??)", "(?:()|a)", "(?:(é)|😀)?")) {
-            for (inner in mutableListOf<String?>("{0,2}", "{1,3}", "{2,3}", "{0,2}?", "+?")) {
-                for (outer in mutableListOf<String?>("*", "+", "*?", "+?")) {
+        for (atom in mutableListOf<String>("(a?)", "((a)?)", "(a??)", "(?:()|a)", "(?:(é)|😀)?")) {
+            for (inner in mutableListOf<String>("{0,2}", "{1,3}", "{2,3}", "{0,2}?", "+?")) {
+                for (outer in mutableListOf<String>("*", "+", "*?", "+?")) {
                     val regex = "(?:(?:" + atom + ")" + inner + ")" + outer + "(?:ab|b)"
                     val prog = Pattern.compile(regex).prog()
-                    for (input in mutableListOf<String?>("", "b", "ab", "aab", "aaaab", "aaaaac", "é😀ab")) {
-                        for (scanner in List.of<InputScanner?>(
+                    for (input in mutableListOf<String>("", "b", "ab", "aab", "aaaab", "aaaaac", "é😀ab")) {
+                        for (scanner in java.util.List.of<InputScanner?>(
                             StringInputScanner(input), Utf8InputScanner(input!!.toByteArray(StandardCharsets.UTF_8))
                         )) {
                             for (groups in intArrayOf(0, 1, prog.numCaptures())) {
-                                for (kind in Nfa.MatchKind.Nfa.MatchKind.entries.toTypedArray()) {
-                                    for (anchor in Nfa.Anchor.Nfa.Anchor.entries.toTypedArray()) {
+                                for (kind in Nfa.MatchKind.entries.toTypedArray()) {
+                                    for (anchor in Nfa.Anchor.entries.toTypedArray()) {
                                         val expected =
                                             Nfa.search(
                                                 prog,
@@ -304,7 +303,7 @@ internal class BitStateTest {
 
     @Test
     fun captureBoundariesAndPartialCaptureTrackingSurviveFailedAlternatives() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(a)b(c)",
             "(a)b(c)|ab(d)",
             "(a)b()c",
@@ -312,8 +311,8 @@ internal class BitStateTest {
             "(é).(😀)",
             "(?i:(a)b(c))"
         )) {
-            val prog = Compiler.compile(Parser.parse(regex, FLAGS))
-            for (input in mutableListOf<String?>("", "ab", "abc", "abd", "abcc", "ABc", "éa😀", "é😀")) {
+            val prog = Compiler.compile(Parser.parse(regex, FLAGS)!!)!!
+            for (input in mutableListOf<String>("", "ab", "abc", "abd", "abcc", "ABc", "éa😀", "é😀")) {
                 for (submatches in 0..prog.numCaptures()) {
                     for (full in booleanArrayOf(false, true)) {
                         val result = BitState.search(prog, input, true, false, full, submatches)
@@ -498,7 +497,7 @@ internal class BitStateTest {
         @Test
         fun cachedWorkspaceGrowsCapturesWithoutDiscardingSearchBuffers() {
             for (regex in arrayOf<String>("(a?){20}a{20}", "((a)(a?)){2}", "((a)|b)+")) {
-                val prog = Compiler.compile(Parser.parse(regex, FLAGS))
+                val prog = Compiler.compile(Parser.parse(regex, FLAGS)!!)!!
                 val text = "a".repeat(1024)
                 val fullNcap = 2 * prog.numCaptures()
                 val cached = BitState.getOrCreate(null, prog, text, 0, text.length, 2, false, false)
@@ -506,10 +505,10 @@ internal class BitStateTest {
                     val bounds =
                         BitState.getOrCreate(cached, prog, text, 0, text.length, 2, false, false)
                     Assertions.assertThat<BitState?>(bounds).isSameAs(cached)
-                    val match = bounds.doSearch(0, text.length, false)
+                    val match = bounds.doSearch(0, text.length, false)!!
                     Assertions.assertThat(match).isNotNull()
                     val captures =
-                        BitState.getOrCreate(cached, prog, text, match!![0], match[1], fullNcap, false, false)
+                        BitState.getOrCreate(cached, prog, text, match[0], match[1], fullNcap, false, false)
                     Assertions.assertThat<BitState?>(captures).`as`("capture growth for /%s/", regex).isSameAs(cached)
                     Assertions.assertThat(captures.doSearch(match[0], match[1], true))
                         .isEqualTo(
@@ -527,8 +526,8 @@ internal class BitStateTest {
 
         @Test
         fun tooLargeReturnsNull() {
-            val re = Parser.parse("abc", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("abc", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             // Create a text larger than the max BitState budget.
             val maxLen = BitState.maxTextSize(prog)
             if (maxLen > 0) {
@@ -540,8 +539,8 @@ internal class BitStateTest {
 
         @Test
         fun withinBudgetWorks() {
-            val re = Parser.parse("abc", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("abc", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val maxLen = BitState.maxTextSize(prog)
             if (maxLen > 3) {
                 val result = BitState.search(prog, "abc", true, false, true, 1)
@@ -553,8 +552,8 @@ internal class BitStateTest {
 
         @Test
         fun workBudgetDependsOnSearchedRangeNotAbsoluteOffset() {
-            val re = Parser.parse("a+", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("a+", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val ncap = 2 * max(prog.numCaptures(), 1)
             val suffix = "aaaa"
             val nearStart =
@@ -564,7 +563,7 @@ internal class BitStateTest {
             val prefix = "x".repeat(10000)
             val shiftedText = prefix + suffix
             val shiftedStart = prefix.length
-            val shiftedEnd = shiftedText.size
+            val shiftedEnd = shiftedText.length
             val shifted =
                 BitState.getOrCreate(
                     null, prog, shiftedText, shiftedStart, shiftedEnd, ncap, false, false
@@ -578,8 +577,8 @@ internal class BitStateTest {
         fun failedStartsPruneLaterStartsSoGreedyRunsStayLinear() {
             // Without cross-start pruning every start position re-walks the whole run of 'a's, which is
             // quadratic and exhausts the work budget long before the last start is tried.
-            val re = Parser.parse("(a*)b", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("(a*)b", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val ncap = 2 * max(prog.numCaptures(), 1)
             val text = "a".repeat(20000)
             Assertions.assertThat(text.length).isLessThanOrEqualTo(BitState.maxTextSize(prog))
@@ -595,8 +594,8 @@ internal class BitStateTest {
             // The dead-pruning bitmap is allocated lazily on the first unanchored search. Exercise a
             // single cached instance through anchored, then unanchored, then anchored again to make sure
             // that lazy allocation and the reset() bookkeeping around it don't corrupt reused state.
-            val re = Parser.parse("(a*)b", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("(a*)b", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val ncap = 2 * max(prog.numCaptures(), 1)
             val text = "xxxaaab"
 
@@ -612,8 +611,8 @@ internal class BitStateTest {
 
         @Test
         fun prunedStartsDoNotHideALaterLeftmostMatch() {
-            val re = Parser.parse("(a*)c", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("(a*)c", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             // Start 0 walks "aaa", fails at 'b', and marks those positions dead; the match begins at 5.
             val result = BitState.search(prog, "aaabbaac", false, false, false, prog.numCaptures())
 
@@ -641,8 +640,8 @@ internal class BitStateTest {
 
         @Test
         fun pruningActivatesMidStartAndPreservesReuseAcrossShortAndBoundedSearches() {
-            val re = Parser.parse("((?:.+?)*)c", FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse("((?:.+?)*)c", FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val ncap = 2 * max(prog.numCaptures(), 1)
 
             // Short unanchored search finishes below PRUNE_ACTIVATION_STEPS.
@@ -672,8 +671,8 @@ internal class BitStateTest {
 
             // Reusing again for an unanchored search that matches after crossing the threshold.
             val laterHitText = "b".repeat(80) + "xac"
-            val greedyRe = Parser.parse("(a*)c", FLAGS)
-            val greedyProg = Compiler.compile(greedyRe)
+            val greedyRe = Parser.parse("(a*)c", FLAGS)!!
+            val greedyProg = Compiler.compile(greedyRe)!!
             val greedyBs =
                 BitState.getOrCreate(
                     null,
@@ -745,6 +744,7 @@ internal class BitStateTest {
         private val FLAGS =
             ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
 
+        @JvmStatic
         private fun greedyRuneLoopWorkCases(): Stream<TestCase?> {
             return Stream.of<TestCase?>(
                 TestCase("(a*)(a|ab)", "a".repeat(128) + "b"),
@@ -757,30 +757,30 @@ internal class BitStateTest {
         private fun assertConsistentAnchored(
             pattern: String?, text: String?, longest: Boolean, endMatch: Boolean
         ) {
-            val re = Parser.parse(pattern, FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(pattern, FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val nsubmatch = prog.numCaptures()
 
-            val bsResult = BitState.search(prog, text, true, longest, endMatch, nsubmatch)
+            val bsResult = BitState.search(prog, text!!, true, longest, endMatch, nsubmatch)
             val kind =
                 if (endMatch)
                     Nfa.MatchKind.FULL_MATCH
                 else
                     (if (longest) Nfa.MatchKind.LONGEST_MATCH else Nfa.MatchKind.FIRST_MATCH)
-            val nfaResult = Nfa.search(prog, text, Nfa.Anchor.ANCHORED, kind, nsubmatch)
+            val nfaResult = Nfa.search(prog, text!!, Nfa.Anchor.ANCHORED, kind, nsubmatch)
 
             assertCapturesEqual(pattern, text, bsResult, nfaResult)
         }
 
         /** Asserts BitState and NFA agree on an unanchored search.  */
         private fun assertConsistentUnanchored(pattern: String?, text: String?) {
-            val re = Parser.parse(pattern, FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(pattern, FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val nsubmatch = prog.numCaptures()
 
-            val bsResult = BitState.search(prog, text, false, false, false, nsubmatch)
+            val bsResult = BitState.search(prog, text!!, false, false, false, nsubmatch)
             val nfaResult =
-                Nfa.search(prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FIRST_MATCH, nsubmatch)
+                Nfa.search(prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FIRST_MATCH, nsubmatch)
 
             assertCapturesEqual(pattern, text, bsResult, nfaResult)
         }
@@ -806,8 +806,8 @@ internal class BitStateTest {
         }
 
         private fun assertReusableResultConsistent(tc: ResultBufferCase) {
-            val re = Parser.parse(tc.pattern, FLAGS)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(tc.pattern, FLAGS)!!
+            val prog = Compiler.compile(re)!!
             val nsubmatch = prog.numCaptures()
             val ncap = 2 * max(nsubmatch, 1)
             val resultBuffer = IntArray(ncap + 2)
@@ -845,6 +845,7 @@ internal class BitStateTest {
                 .isEqualTo(-1000 - ncap)
         }
 
+        @JvmStatic
         fun consistencyCases(): Stream<TestCase?> {
             val cases: MutableList<TestCase?> = ArrayList<TestCase?>()
             cases.add(TestCase("abc", "abc"))
@@ -871,6 +872,7 @@ internal class BitStateTest {
             return cases.stream()
         }
 
+        @JvmStatic
         fun resultBufferCases(): Stream<ResultBufferCase?> {
             return Stream.of<ResultBufferCase?>(
                 ResultBufferCase("(a(b(c)))", "abc", true, false, true),

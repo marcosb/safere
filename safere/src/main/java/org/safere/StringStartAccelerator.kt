@@ -734,6 +734,39 @@ internal interface StringStartAccelerator {
         fun findNextCandidate(
             accelerator: StringStartAccelerator, text: String, fromIndex: Int, unixLines: Boolean
         ): Int {
+            return findNextCandidateString(accelerator, text, fromIndex, unixLines)
+        }
+
+        /** Uses the same plans on a bounded, region-relative String view.  */
+        fun findNextCandidate(
+            accelerator: StringStartAccelerator,
+            text: StringRegionInputScanner,
+            fromIndex: Int,
+            unixLines: Boolean
+        ): Int {
+            return findNextCandidateRegion(accelerator, text, fromIndex, unixLines)
+        }
+
+        /**
+         * Dispatches composite plans without copying their input view.
+         *
+         *
+         * Routes through distinctly named helpers so Kotlin overload resolution cannot recurse into
+         * this CharSequence dispatcher when the argument is a [String] or
+         * [StringRegionInputScanner] (both are [CharSequence] subtypes).
+         */
+        fun findNextCandidate(
+            accelerator: StringStartAccelerator, text: CharSequence?, fromIndex: Int, unixLines: Boolean
+        ): Int {
+            return if (text is String)
+                findNextCandidateString(accelerator, text, fromIndex, unixLines)
+            else
+                findNextCandidateRegion(accelerator, text as StringRegionInputScanner, fromIndex, unixLines)
+        }
+
+        private fun findNextCandidateString(
+            accelerator: StringStartAccelerator, text: String, fromIndex: Int, unixLines: Boolean
+        ): Int {
             return when (accelerator) {
                 is Literal -> accelerator.findCandidate(text, fromIndex, unixLines)
                 is CaseInsensitiveLiteral -> accelerator.findCandidate(text, fromIndex, unixLines)
@@ -747,8 +780,7 @@ internal interface StringStartAccelerator {
             }
         }
 
-        /** Uses the same plans on a bounded, region-relative String view.  */
-        fun findNextCandidate(
+        private fun findNextCandidateRegion(
             accelerator: StringStartAccelerator,
             text: StringRegionInputScanner,
             fromIndex: Int,
@@ -783,16 +815,6 @@ internal interface StringStartAccelerator {
                 is LeadingExpansion -> accelerator.findCandidate(text, fromIndex, unixLines)
                 else -> -1
             }
-        }
-
-        /** Dispatches composite plans without copying their input view.  */
-        fun findNextCandidate(
-            accelerator: StringStartAccelerator, text: CharSequence?, fromIndex: Int, unixLines: Boolean
-        ): Int {
-            return if (text is String)
-                findNextCandidate(accelerator, text, fromIndex, unixLines)
-            else
-                findNextCandidate(accelerator, text as StringRegionInputScanner?, fromIndex, unixLines)
         }
 
         private fun indexOfPlanned(

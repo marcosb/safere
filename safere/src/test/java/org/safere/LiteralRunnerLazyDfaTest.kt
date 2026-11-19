@@ -11,12 +11,10 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.safere.Matcher.*
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /**
@@ -42,7 +40,7 @@ internal class LiteralRunnerLazyDfaTest {
             for (text in TEXTS) {
                 Assertions.assertThat(Pattern.compile(regex).matcher(text).matches())
                     .`as`("%s matches %s", regex, text)
-                    .isEqualTo(Pattern.compile(regex).matcher(text).matches())
+                    .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(text).matches())
             }
         }
     }
@@ -52,7 +50,7 @@ internal class LiteralRunnerLazyDfaTest {
         for (regex in PATTERNS) {
             for (text in TEXTS) {
                 val actual = org.safere.Pattern.compile(regex).matcher(text)
-                val expected = Pattern.compile(regex).matcher(text)
+                val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 Assertions.assertThat(actual.lookingAt())
                     .`as`("%s lookingAt %s", regex, text)
                     .isEqualTo(expected.lookingAt())
@@ -68,7 +66,7 @@ internal class LiteralRunnerLazyDfaTest {
         for (regex in PATTERNS) {
             for (text in TEXTS) {
                 val bytes = text.toByteArray(StandardCharsets.UTF_8)
-                val jdk = Pattern.compile(regex)
+                val jdk = java.util.regex.Pattern.compile(regex)
                 Assertions.assertThat(org.safere.Pattern.compile(regex).find(Utf8Input.trusted(bytes)))
                     .`as`("%s find %s", regex, text)
                     .isEqualTo(jdk.matcher(text).find())
@@ -166,9 +164,9 @@ internal class LiteralRunnerLazyDfaTest {
 
     companion object {
         private val PATTERNS: MutableList<String> =
-            mutableListOf<String?>("needle", "apple|banana|cherry", "foo|barfoo", "red|green|blue")
+            mutableListOf<String>("needle", "apple|banana|cherry", "foo|barfoo", "red|green|blue")
 
-        private val TEXTS: MutableList<String> = List.of<String?>(
+        private val TEXTS: MutableList<String> = java.util.List.of<String>(
             "",
             "needle",
             "apple",
@@ -181,6 +179,7 @@ internal class LiteralRunnerLazyDfaTest {
             "xx red green blue"
         )
 
+        @JvmStatic
         private fun sharedArtifacts(): Stream<Arguments?>? {
             return Stream.of<String?>("hello", "apple|banana|cherry", "needle".repeat(256))
                 .flatMap<Arguments?> { regex: String? ->

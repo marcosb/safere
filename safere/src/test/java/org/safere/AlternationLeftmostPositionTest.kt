@@ -11,9 +11,102 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 import kotlin.math.min
+
+private fun assertMatchesJdk(pattern: String, input: String) {
+    val saferePattern = Pattern.compile(pattern)
+    val jdkPattern = java.util.regex.Pattern.compile(pattern)
+
+    val safereM = saferePattern.matcher(input)
+    val jdkM = jdkPattern.matcher(input)
+
+    val jdkFound = jdkM.find()
+    val safereFound = safereM.find()
+
+    Assertions.assertThat(safereFound).`as`("find() for /%s/ on \"%s\"", pattern, input).isEqualTo(jdkFound)
+
+    if (jdkFound && safereFound) {
+        Assertions.assertThat(safereM.start())
+            .`as`(
+                "start() for /%s/ on \"%s\": SafeRE matched '%s', JDK matched '%s'",
+                pattern,
+                input,
+                input.substring(safereM.start(), safereM.end()),
+                input.substring(jdkM.start(), jdkM.end())
+            )
+            .isEqualTo(jdkM.start())
+        Assertions.assertThat(safereM.end())
+            .`as`("end() for /%s/ on \"%s\"", pattern, input)
+            .isEqualTo(jdkM.end())
+        Assertions.assertThat(safereM.group())
+            .`as`("group() for /%s/ on \"%s\"", pattern, input)
+            .isEqualTo(jdkM.group())
+    }
+}
+
+/** Compare all find() results (not just first) against JDK.  */
+private fun assertAllMatchesMatchJdk(pattern: String, input: String) {
+    val saferePattern = org.safere.Pattern.compile(pattern)
+    val jdkPattern = java.util.regex.Pattern.compile(pattern)
+
+    val safereM = saferePattern.matcher(input)
+    val jdkM = jdkPattern.matcher(input)
+
+    val safereResults: MutableList<String> = ArrayList<String>()
+    while (safereM.find()) {
+        safereResults.add(
+            String.format("[%d,%d)='%s'", safereM.start(), safereM.end(), safereM.group())
+        )
+    }
+    val jdkResults: MutableList<String> = ArrayList<String>()
+    while (jdkM.find()) {
+        jdkResults.add(String.format("[%d,%d)='%s'", jdkM.start(), jdkM.end(), jdkM.group()))
+    }
+
+    Assertions.assertThat<String?>(safereResults)
+        .`as`("all find() results for /%s/ on \"%s\"", pattern, input)
+        .isEqualTo(jdkResults)
+}
+
+/** Same as [.assertMatchesJdk] but also compares capture groups.  */
+private fun assertMatchesJdkWithGroups(pattern: String, input: String) {
+    val saferePattern = org.safere.Pattern.compile(pattern)
+    val jdkPattern = java.util.regex.Pattern.compile(pattern)
+
+    val safereM = saferePattern.matcher(input)
+    val jdkM = jdkPattern.matcher(input)
+
+    val jdkFound = jdkM.find()
+    val safereFound = safereM.find()
+
+    Assertions.assertThat(safereFound).`as`("find() for /%s/ on \"%s\"", pattern, input).isEqualTo(jdkFound)
+
+    if (jdkFound && safereFound) {
+        Assertions.assertThat(safereM.start())
+            .`as`("start() for /%s/ on \"%s\"", pattern, input)
+            .isEqualTo(jdkM.start())
+        Assertions.assertThat(safereM.end())
+            .`as`("end() for /%s/ on \"%s\"", pattern, input)
+            .isEqualTo(jdkM.end())
+        Assertions.assertThat(safereM.group())
+            .`as`("group() for /%s/ on \"%s\"", pattern, input)
+            .isEqualTo(jdkM.group())
+
+        val groupCount = min(safereM.groupCount(), jdkM.groupCount())
+        for (g in 1..groupCount) {
+            Assertions.assertThat(safereM.group(g))
+                .`as`("group(%d) for /%s/ on \"%s\"", g, pattern, input)
+                .isEqualTo(jdkM.group(g))
+            Assertions.assertThat(safereM.start(g))
+                .`as`("start(%d) for /%s/ on \"%s\"", g, pattern, input)
+                .isEqualTo(jdkM.start(g))
+            Assertions.assertThat(safereM.end(g))
+                .`as`("end(%d) for /%s/ on \"%s\"", g, pattern, input)
+                .isEqualTo(jdkM.end(g))
+        }
+    }
+}
 
 /**
  * Tests for leftmost-match semantics with alternation when different alternatives can match at
@@ -29,104 +122,7 @@ import kotlin.math.min
  * See [issue #150](https://github.com/safere/safere/issues/150).
  */
 @DisplayName("Alternation: leftmost position across alternatives")
-internal object AlternationLeftmostPositionTest {
-    // ---------------------------------------------------------------------------
-    // Helper: compare SafeRE find() against JDK for a single pattern + input
-    // ---------------------------------------------------------------------------
-    private fun assertMatchesJdk(pattern: String, input: String) {
-        val saferePattern = Pattern.compile(pattern)
-        val jdkPattern = Pattern.compile(pattern)
-
-        val safereM = saferePattern.matcher(input)
-        val jdkM = jdkPattern.matcher(input)
-
-        val jdkFound = jdkM.find()
-        val safereFound = safereM.find()
-
-        Assertions.assertThat(safereFound).`as`("find() for /%s/ on \"%s\"", pattern, input).isEqualTo(jdkFound)
-
-        if (jdkFound && safereFound) {
-            Assertions.assertThat(safereM.start())
-                .`as`(
-                    "start() for /%s/ on \"%s\": SafeRE matched '%s', JDK matched '%s'",
-                    pattern,
-                    input,
-                    input.substring(safereM.start(), safereM.end()),
-                    input.substring(jdkM.start(), jdkM.end())
-                )
-                .isEqualTo(jdkM.start())
-            Assertions.assertThat(safereM.end())
-                .`as`("end() for /%s/ on \"%s\"", pattern, input)
-                .isEqualTo(jdkM.end())
-            Assertions.assertThat(safereM.group())
-                .`as`("group() for /%s/ on \"%s\"", pattern, input)
-                .isEqualTo(jdkM.group())
-        }
-    }
-
-    /** Compare all find() results (not just first) against JDK.  */
-    private fun assertAllMatchesMatchJdk(pattern: String, input: String) {
-        val saferePattern = org.safere.Pattern.compile(pattern)
-        val jdkPattern = Pattern.compile(pattern)
-
-        val safereM = saferePattern.matcher(input)
-        val jdkM = jdkPattern.matcher(input)
-
-        val safereResults: MutableList<String?> = ArrayList<String?>()
-        while (safereM.find()) {
-            safereResults.add(
-                String.format("[%d,%d)='%s'", safereM.start(), safereM.end(), safereM.group())
-            )
-        }
-        val jdkResults: MutableList<String?> = ArrayList<String?>()
-        while (jdkM.find()) {
-            jdkResults.add(String.format("[%d,%d)='%s'", jdkM.start(), jdkM.end(), jdkM.group()))
-        }
-
-        Assertions.assertThat<String?>(safereResults)
-            .`as`("all find() results for /%s/ on \"%s\"", pattern, input)
-            .isEqualTo(jdkResults)
-    }
-
-    /** Same as [.assertMatchesJdk] but also compares capture groups.  */
-    private fun assertMatchesJdkWithGroups(pattern: String, input: String) {
-        val saferePattern = org.safere.Pattern.compile(pattern)
-        val jdkPattern = Pattern.compile(pattern)
-
-        val safereM = saferePattern.matcher(input)
-        val jdkM = jdkPattern.matcher(input)
-
-        val jdkFound = jdkM.find()
-        val safereFound = safereM.find()
-
-        Assertions.assertThat(safereFound).`as`("find() for /%s/ on \"%s\"", pattern, input).isEqualTo(jdkFound)
-
-        if (jdkFound && safereFound) {
-            Assertions.assertThat(safereM.start())
-                .`as`("start() for /%s/ on \"%s\"", pattern, input)
-                .isEqualTo(jdkM.start())
-            Assertions.assertThat(safereM.end())
-                .`as`("end() for /%s/ on \"%s\"", pattern, input)
-                .isEqualTo(jdkM.end())
-            Assertions.assertThat(safereM.group())
-                .`as`("group() for /%s/ on \"%s\"", pattern, input)
-                .isEqualTo(jdkM.group())
-
-            val groupCount = min(safereM.groupCount(), jdkM.groupCount())
-            for (g in 1..groupCount) {
-                Assertions.assertThat(safereM.group(g))
-                    .`as`("group(%d) for /%s/ on \"%s\"", g, pattern, input)
-                    .isEqualTo(jdkM.group(g))
-                Assertions.assertThat(safereM.start(g))
-                    .`as`("start(%d) for /%s/ on \"%s\"", g, pattern, input)
-                    .isEqualTo(jdkM.start(g))
-                Assertions.assertThat(safereM.end(g))
-                    .`as`("end(%d) for /%s/ on \"%s\"", g, pattern, input)
-                    .isEqualTo(jdkM.end(g))
-            }
-        }
-    }
-
+internal class AlternationLeftmostPositionTest {
     /** A test case comparing SafeRE find() results against JDK java.util.regex.  */
     @JvmRecord
     internal data class FindCase(val description: String, val pattern: String?, val input: String?) {
@@ -429,7 +425,7 @@ internal object AlternationLeftmostPositionTest {
     // ==========================================================================
     @Nested
     @DisplayName("Long text (>256 chars, forces DFA engine path)")
-    internal inner class LongText {
+    internal class LongText {
         // --- Capturing groups (DFA sandwich + NFA capture extraction) ---
         @Test
         @DisplayName("(bcd|abcde) in long text — capturing, second alt starts earlier")
@@ -638,7 +634,7 @@ internal object AlternationLeftmostPositionTest {
     // ==========================================================================
     @Nested
     @DisplayName("Systematic: shorter alt at offset N, longer alt at offset 0")
-    internal inner class SystematicOffsets {
+    internal class SystematicOffsets {
         @ParameterizedTest(name = "{0}")
         @MethodSource("offsetCases")
         fun shorterAltAtOffset(desc: String?, pattern: String, input: String) {
@@ -646,6 +642,7 @@ internal object AlternationLeftmostPositionTest {
         }
 
         companion object {
+            @JvmStatic
             fun offsetCases(): Stream<Arguments?> {
                 val cases: MutableList<Arguments?> = ArrayList<Arguments?>()
                 // For each offset 1..5, test that the longer alternative matching at position 0
@@ -685,10 +682,10 @@ internal object AlternationLeftmostPositionTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", "ab", "ba", "b"),  /* ops= */
-                        mutableListOf<String?>("%s|%s", "%s%s"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "ab", "ba", "b"),  /* ops= */
+                        mutableListOf<String>("%s|%s", "%s%s"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b"),  /* wrapper= */
+                        mutableListOf<String>("a", "b"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -705,10 +702,10 @@ internal object AlternationLeftmostPositionTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", "abc", "bc", "c"),  /* ops= */
-                        mutableListOf<String?>("%s|%s"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "abc", "bc", "c"),  /* ops= */
+                        mutableListOf<String>("%s|%s"),  /* maxStrLen= */
                         5,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "c"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "c"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -725,10 +722,10 @@ internal object AlternationLeftmostPositionTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", "ab", "b", "ba"),  /* ops= */
-                        mutableListOf<String?>("%s|%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "ab", "b", "ba"),  /* ops= */
+                        mutableListOf<String>("%s|%s", "%s*", "%s+"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b"),  /* wrapper= */
+                        mutableListOf<String>("a", "b"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -745,10 +742,10 @@ internal object AlternationLeftmostPositionTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         3,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "ab", "b"),  /* ops= */
-                        mutableListOf<String?>("%s|%s"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "ab", "b"),  /* ops= */
+                        mutableListOf<String>("%s|%s"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b"),  /* wrapper= */
+                        mutableListOf<String>("a", "b"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true

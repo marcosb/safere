@@ -13,17 +13,17 @@ object TeddyVectorScanStress {
     @JvmStatic
     fun main(args: Array<String>) {
         val models = arrayOf<TeddyModel>(
-            TeddyModel.compile(arrayOf<String>("apple", "banana", "cherry"), 64),
-            TeddyModel.compile(arrayOf<String>("ab", "cherry", "abc"), 64),
-            TeddyModel.compile(arrayOf<String>("abc", "cherry", "ab"), 64),
-            TeddyModel.compile(arrayOf<String>("abc", "bcd", "cde"), 64)
+            TeddyModel.compile(arrayOf<String?>("apple", "banana", "cherry"), 64)!!,
+            TeddyModel.compile(arrayOf<String?>("ab", "cherry", "abc"), 64)!!,
+            TeddyModel.compile(arrayOf<String?>("abc", "cherry", "ab"), 64)!!,
+            TeddyModel.compile(arrayOf<String?>("abc", "bcd", "cde"), 64)!!
         )
         val data = ByteArray(4096)
         Arrays.fill(data, 'x'.code.toByte())
         val prefix = "a b c ".repeat(32).toByteArray(StandardCharsets.UTF_8)
-        System.arraycopy(prefix, 0, data, 0, prefix.length)
+        System.arraycopy(prefix, 0, data, 0, prefix.size)
         val suffix = "abcde cherry".toByteArray(StandardCharsets.UTF_8)
-        System.arraycopy(suffix, 0, data, data.size - suffix.length, suffix.length)
+        System.arraycopy(suffix, 0, data, data.size - suffix.size, suffix.size)
         var sum: Long = 0
         for (phase in 0..3) {
             println("phase=" + phase)

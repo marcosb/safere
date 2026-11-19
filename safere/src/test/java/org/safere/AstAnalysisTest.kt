@@ -67,7 +67,7 @@ internal class AstAnalysisTest {
 
         Assertions.assertThat(analysis.hasUserCaptures).isTrue()
         Assertions.assertThat<String?, Int?>(analysis.namedGroups)
-            .isEqualTo(Map.of<String?, Int?>("year", 1, "month", 2))
+            .isEqualTo(java.util.Map.of<String?, Int?>("year", 1, "month", 2))
     }
 
     @Test

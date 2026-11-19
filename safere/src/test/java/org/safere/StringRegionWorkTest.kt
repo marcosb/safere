@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 internal class StringRegionWorkTest {
     @Test
     fun unusedRegionCapturesSkipExtractionWork() {
-        for (size in mutableListOf<Int?>(256, 4096)) {
+        for (size in mutableListOf<Int>(256, 4096)) {
             val pattern = Pattern.compile("(a+?)b")
             val body = "a".repeat(size!!) + "b"
             val matcher = pattern.matcher("x" + body + "x").region(1, body.length + 1)
@@ -35,10 +35,10 @@ internal class StringRegionWorkTest {
 
     @Test
     fun regionFindDoesComparableWorkToIndependentText() {
-        for (regex in mutableListOf<String?>("q[a-z]+k\\s+b", "[a-z]*q[a-z]+k\\s+b")) {
+        for (regex in mutableListOf<String>("q[a-z]+k\\s+b", "[a-z]*q[a-z]+k\\s+b")) {
             val pattern = Pattern.compile(regex)
-            for (size in mutableListOf<Int?>(256, 4096)) {
-                for (matches in mutableListOf<Boolean?>(false, true)) {
+            for (size in mutableListOf<Int>(256, 4096)) {
+                for (matches in mutableListOf<Boolean>(false, true)) {
                     val visible = "x ".repeat(size!! / 2) + (if (matches) "qabck b" else "")
                     val input = "q!" + visible + "!qabck b"
                     pattern.matcher(visible).find()

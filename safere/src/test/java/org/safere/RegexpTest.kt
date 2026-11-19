@@ -7,8 +7,6 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.junit.jupiter.api.Test
-import java.util.List
-
 /** Tests for [Regexp].  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
 internal class RegexpTest {
@@ -45,9 +43,9 @@ internal class RegexpTest {
     fun concat() {
         val a = Regexp.literal('a'.code, 0)
         val b = Regexp.literal('b'.code, 0)
-        val re = Regexp.concat(List.of<Regexp?>(a, b), 0)
+        val re = Regexp.concat(java.util.List.of<Regexp?>(a, b), 0)
         Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CONCAT)
-        Assertions.assertThat(re.subs.size).isEqualTo(2)
+        Assertions.assertThat(re.subs!!.size).isEqualTo(2)
         Assertions.assertThat(re.toString()).isEqualTo("ab")
     }
 
@@ -55,9 +53,9 @@ internal class RegexpTest {
     fun alternate() {
         val a = Regexp.literal('a'.code, 0)
         val b = Regexp.literal('b'.code, 0)
-        val re = Regexp.alternate(List.of<Regexp?>(a, b), 0)
+        val re = Regexp.alternate(java.util.List.of<Regexp?>(a, b), 0)
         Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.ALTERNATE)
-        Assertions.assertThat(re.subs.size).isEqualTo(2)
+        Assertions.assertThat(re.subs!!.size).isEqualTo(2)
         Assertions.assertThat(re.toString()).isEqualTo("a|b")
     }
 
@@ -157,7 +155,7 @@ internal class RegexpTest {
 
     @Test
     fun sub_throwsForWrongArity() {
-        val re = Regexp.concat(List.of<Regexp?>(Regexp.literal('a'.code, 0), Regexp.literal('b'.code, 0)), 0)
+        val re = Regexp.concat(java.util.List.of<Regexp?>(Regexp.literal('a'.code, 0), Regexp.literal('b'.code, 0)), 0)
         Assertions.assertThatThrownBy(ThrowingCallable { re.sub() }).isInstanceOf(IllegalStateException::class.java)
     }
 
@@ -236,7 +234,7 @@ internal class RegexpTest {
     @Test
     fun toStringConcatNeedsParen() {
         // Concat inside a quantifier needs (?:...) wrapping.
-        val ab = Regexp.concat(List.of<Regexp?>(Regexp.literal('a'.code, 0), Regexp.literal('b'.code, 0)), 0)
+        val ab = Regexp.concat(java.util.List.of<Regexp?>(Regexp.literal('a'.code, 0), Regexp.literal('b'.code, 0)), 0)
         val star = Regexp.star(ab, 0)
         Assertions.assertThat(star.toString()).isEqualTo("(?:ab)*")
     }

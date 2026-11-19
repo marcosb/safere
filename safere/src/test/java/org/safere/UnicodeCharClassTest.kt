@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 /**
  * Tests for [Pattern.UNICODE_CHARACTER_CLASS] flag behavior. When this flag is set, `\d`, `\w`, `\s`, and `\b` use Unicode definitions instead of ASCII-only.
  */
-internal object UnicodeCharClassTest {
+internal class UnicodeCharClassTest {
     private val UCC = Pattern.UNICODE_CHARACTER_CLASS
 
     @Nested

@@ -8,16 +8,15 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Literal split delimiters must fit in the input before their characters are compared.  */
 internal class SplitLiteralBoundsTest {
     @ParameterizedTest
     @MethodSource("literalCases")
-    fun splitApisHandleLiteralLengthBoundaries(regex: String, flags: Int, input: String?) {
+    fun splitApisHandleLiteralLengthBoundaries(regex: String, flags: Int, input: String) {
         val pattern = Pattern.compile(regex, flags)
-        val expected = Pattern.compile(regex, flags)
+        val expected = java.util.regex.Pattern.compile(regex, flags)
         Assertions.assertThat<String?>(pattern.split(input)).containsExactly(*expected.split(input))
         Assertions.assertThat<String?>(pattern.splitWithDelimiters(input))
             .containsExactly(*expected.splitWithDelimiters(input, 0))
@@ -34,6 +33,7 @@ internal class SplitLiteralBoundsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun literalCases(): Stream<Arguments?>? {
             // Refs #1050. Include unanchored and case-sensitive controls, both absolute anchors,
             // successful delimiters, and short prefixes ending at supplementary code point boundaries.

@@ -24,7 +24,6 @@ import java.net.URL
 import java.net.URLClassLoader
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
@@ -78,7 +77,7 @@ internal class PatternInternalTest {
                             val matcher = pattern.matcher(input)
                             Assertions.assertThat(matcher.find()).isTrue()
                             Assertions.assertThat(matcher.group()).isEqualTo(match)
-                            List.of<Any?>(pattern.reverseProg(), reverseDfaProg, pattern.reverseDfaSetup())
+                            java.util.List.of<Any?>(pattern.reverseProg(), reverseDfaProg, pattern.reverseDfaSetup())
                         })
                 )
             }
@@ -98,7 +97,7 @@ internal class PatternInternalTest {
     fun reverseDfaPreparationWaitsForInitializationLock() {
         val pattern = Pattern.compile("((a?)+){2}b")
         val ast = pattern.ast()
-        val children = ast.subs
+        val children = ast.subs!!
         val sourceReads = AtomicInteger()
         // Observe source-tree traversal without retaining or exposing Compiler.Prepared.
         ast.subs =
@@ -108,9 +107,8 @@ internal class PatternInternalTest {
                     return children.get(index)
                 }
 
-                override fun size(): Int {
-                    return children.size
-                }
+                override val size: Int
+                    get() = children.size
             }
 
         val result = FutureTask<Prog?>(Callable { pattern.flatReverseDfaProg() })
@@ -182,7 +180,7 @@ internal class PatternInternalTest {
 
     @Test
     fun progressGuardedFiniteRepeatsRequireAnExactEngine() {
-        for (regex in mutableListOf<String?>("(?:a?){0,2}b", "((?:a?)?){1,3}b")) {
+        for (regex in mutableListOf<String>("(?:a?){0,2}b", "((?:a?)?){1,3}b")) {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.prog().numLoopRegs()).isPositive()
             Assertions.assertThat(pattern.canOnePassPrimary()).isFalse()
@@ -266,9 +264,9 @@ internal class PatternInternalTest {
     fun transparentGroupsPreserveCharacterClassAccelerators() {
         val p = Pattern.compile("(?:[A-Z]+)")
 
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('A'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('A'.code)).isTrue()
         Assertions.assertThat<CharClassMatchInfo?>(p.matchDescriptor().charClassMatch).isNotNull()
     }
 
@@ -279,16 +277,16 @@ internal class PatternInternalTest {
         Assertions.assertThat(Pattern.compile("\\A\\bhttps://.*").anchoredPrefix()).isEqualTo("https://")
         Assertions.assertThat(Pattern.compile("(\\A)https://.*").anchoredPrefix()).isEqualTo("https://")
 
-        val prefix = Pattern.compile("^[0-9]+").anchoredCharClassPrefix()
+        val prefix = Pattern.compile("^[0-9]+").anchoredCharClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('0'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('0'.code)).isTrue()
         Assertions.assertThat(prefix.contains('9'.code)).isTrue()
         Assertions.assertThat(prefix.contains('a'.code)).isFalse()
 
         for (regex in arrayOf<String>("\\A\\b[0-9]+", "(\\A)[0-9]+")) {
-            val separatedPrefix = Pattern.compile(regex).anchoredCharClassPrefix()
+            val separatedPrefix = Pattern.compile(regex).anchoredCharClassPrefix()!!
             Assertions.assertThat<CharClassScanInfo?>(separatedPrefix).`as`(regex).isNotNull()
-            Assertions.assertThat(separatedPrefix!!.contains('0'.code)).`as`(regex).isTrue()
+            Assertions.assertThat(separatedPrefix.contains('0'.code)).`as`(regex).isTrue()
             Assertions.assertThat(separatedPrefix.contains('9'.code)).`as`(regex).isTrue()
             Assertions.assertThat(separatedPrefix.contains('a'.code)).`as`(regex).isFalse()
         }
@@ -332,7 +330,7 @@ internal class PatternInternalTest {
         val p = Pattern.compile("(?is).*\\b(you|your)\\b.*")
 
         Assertions.assertThat<KeywordAlternation?>(p.keywordAlternation()).isNotNull()
-        Assertions.assertThat(p.keywordAlternation().greedyWholeInput).isTrue()
+        Assertions.assertThat(p.keywordAlternation()!!.greedyWholeInput).isTrue()
     }
 
     @Test
@@ -379,9 +377,9 @@ internal class PatternInternalTest {
     @Test
     fun alternatePrefixAcceleration() {
         val p = Pattern.compile("(?:cat|dog|bird)s?")
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('c'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('c'.code)).isTrue()
         Assertions.assertThat(prefix.contains('d'.code)).isTrue()
         Assertions.assertThat(prefix.contains('b'.code)).isTrue()
         Assertions.assertThat(prefix.contains('a'.code)).isFalse()
@@ -390,9 +388,9 @@ internal class PatternInternalTest {
     @Test
     fun alternatePrefixCaseInsensitiveAcceleration() {
         val p = Pattern.compile("(?i)(?:cat|dog|bird)s?")
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('c'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('c'.code)).isTrue()
         Assertions.assertThat(prefix.contains('C'.code)).isTrue()
         Assertions.assertThat(prefix.contains('d'.code)).isTrue()
         Assertions.assertThat(prefix.contains('D'.code)).isTrue()
@@ -404,9 +402,9 @@ internal class PatternInternalTest {
     @Test
     fun unicodeCharacterClassPrefixAcceleration() {
         val p = Pattern.compile("[\\p{IsAlphabetic}]+")
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.isAscii).isFalse()
+        Assertions.assertThat(prefix.isAscii).isFalse()
         Assertions.assertThat(prefix.contains('a'.code)).isTrue()
         Assertions.assertThat(prefix.contains('Z'.code)).isTrue()
         Assertions.assertThat(prefix.contains('\u00e9'.code)).isTrue() // é
@@ -419,9 +417,9 @@ internal class PatternInternalTest {
     fun deeplyNestedRequiredQuantifierPrefixExtractionIsStackSafe() {
         val p = Pattern.compile(nestedRequiredPlusPattern(1000, "[ab]"))
 
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('a'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('a'.code)).isTrue()
         Assertions.assertThat(prefix.contains('b'.code)).isTrue()
         Assertions.assertThat(prefix.contains('c'.code)).isFalse()
     }
@@ -430,9 +428,9 @@ internal class PatternInternalTest {
     fun deeplyNestedAlternationPrefixExtractionIsStackSafe() {
         val p = Pattern.compile(nestedAlternationPattern(1000))
 
-        val prefix = p.charClassPrefix()
+        val prefix = p.charClassPrefix()!!
         Assertions.assertThat<CharClassScanInfo?>(prefix).isNotNull()
-        Assertions.assertThat(prefix!!.contains('a'.code)).isTrue()
+        Assertions.assertThat(prefix.contains('a'.code)).isTrue()
         Assertions.assertThat(prefix.contains('b'.code)).isTrue()
         Assertions.assertThat(prefix.contains('c'.code)).isFalse()
     }
@@ -462,8 +460,8 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.literal()).hasSize(2000)
-                    Assertions.assertThat(plan.fol.minOffset()).isEqualTo(1)
+                    Assertions.assertThat(plan!!.fol!!.literal()).hasSize(2000)
+                    Assertions.assertThat(plan.fol!!.minOffset()).isEqualTo(1)
                 })
     }
 
@@ -505,8 +503,8 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.literal()).isEqualTo(literal)
-                    Assertions.assertThat(plan.fol.offset()).isEqualTo(offset)
+                    Assertions.assertThat(plan!!.fol!!.literal()).isEqualTo(literal)
+                    Assertions.assertThat(plan.fol!!.offset()).isEqualTo(offset)
                 })
     }
 
@@ -523,9 +521,9 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.minOffset()).isEqualTo(1)
-                    Assertions.assertThat(plan.fol.maxOffset()).isEqualTo(1)
-                    Assertions.assertThat(plan.fol.discreteOffsets()).isNull()
+                    Assertions.assertThat(plan!!.fol!!.minOffset()).isEqualTo(1)
+                    Assertions.assertThat(plan.fol!!.maxOffset()).isEqualTo(1)
+                    Assertions.assertThat(plan.fol!!.discreteOffsets()).isNull()
                 })
     }
 
@@ -535,10 +533,10 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.literal()).isEqualTo("#!customTag")
-                    Assertions.assertThat(plan.fol.minOffset()).isZero()
-                    Assertions.assertThat(plan.fol.maxOffset()).isEqualTo(1)
-                    Assertions.assertThat(plan.fol.discreteOffsets()).containsExactly(0, 1)
+                    Assertions.assertThat(plan!!.fol!!.literal()).isEqualTo("#!customTag")
+                    Assertions.assertThat(plan.fol!!.minOffset()).isZero()
+                    Assertions.assertThat(plan.fol!!.maxOffset()).isEqualTo(1)
+                    Assertions.assertThat(plan.fol!!.discreteOffsets()).containsExactly(0, 1)
                 })
     }
 
@@ -548,9 +546,9 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.literal()).isEqualTo("renderElement(")
-                    Assertions.assertThat(plan.fol.minOffset()).isEqualTo(0)
-                    Assertions.assertThat(plan.fol.maxOffset()).isEqualTo(8)
+                    Assertions.assertThat(plan!!.fol!!.literal()).isEqualTo("renderElement(")
+                    Assertions.assertThat(plan.fol!!.minOffset()).isEqualTo(0)
+                    Assertions.assertThat(plan.fol!!.maxOffset()).isEqualTo(8)
                 })
     }
 
@@ -618,8 +616,8 @@ internal class PatternInternalTest {
         "'.*(?i:test)\\z',                     test,                         true"
     )
     fun endAnchoredLiteralSuffixIsRecorded(regex: String?, expected: String?, foldCase: Boolean) {
-        val info: SuffixInfo? = endAnchoredSuffix(Pattern.compile(regex))
-        Assertions.assertThat(info!!.suffix).isEqualTo(expected)
+        val info: SuffixInfo = endAnchoredSuffix(Pattern.compile(regex))!!
+        Assertions.assertThat(info.suffix).isEqualTo(expected)
         Assertions.assertThat(info.foldCase).isEqualTo(foldCase)
     }
 
@@ -640,7 +638,7 @@ internal class PatternInternalTest {
     fun disjointRequiredLiteralsAreRecordedForAlternations() {
         val p = Pattern.compile(".*(?:apple|banana|cherry).*")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -654,7 +652,7 @@ internal class PatternInternalTest {
 
         val p2 = Pattern.compile("(foo.*|bar.*|baz.*)")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p2,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -666,7 +664,7 @@ internal class PatternInternalTest {
 
         val p3 = Pattern.compile("(?:\\bfirstToken\\b|\\bsecondToken\\b)")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p3,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -683,7 +681,7 @@ internal class PatternInternalTest {
         // pineapple contains apple, so pineapple is pruned and apple + banana are required.
         val p1 = Pattern.compile(".*(?:apple|pineapple|banana).*")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p1,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -696,7 +694,7 @@ internal class PatternInternalTest {
         // prefix_foo contains foo, bar_baz contains baz
         val p2 = Pattern.compile(".*(?:prefix_foo|foo|bar_baz|baz).*")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p2,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -709,7 +707,7 @@ internal class PatternInternalTest {
         // https contains http, ftp is distinct
         val p3 = Pattern.compile(".*(?:http|https|ftp).*")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p3,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -722,7 +720,7 @@ internal class PatternInternalTest {
         // A lone surrogate is not a code-point substring of a supplementary character.
         val p4 = Pattern.compile("(?:a\uD83D|za\uD83D\uDE00|banana)")
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 p4,
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -744,7 +742,7 @@ internal class PatternInternalTest {
         regex.append(')')
 
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 Pattern.compile(regex.toString()),
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -755,7 +753,7 @@ internal class PatternInternalTest {
     @Test
     fun disjointRequiredLiteralCountIsBoundedByMeasuredCrossover() {
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 Pattern.compile("(?:apple|banana|cherry|orange)\\d"),
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -767,7 +765,7 @@ internal class PatternInternalTest {
                         .containsExactly("apple", "banana", "cherry", "orange")
                 })
         Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-            Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+            Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                 Pattern.compile("(?:apple|banana|cherry|orange|papaya)\\d"),
                 RejectPlan.DisjointLiterals::class.java
             )
@@ -784,7 +782,7 @@ internal class PatternInternalTest {
         val p = Pattern.compile(regex)
         if (p.prefix() == null && requiredLiteral(p) == null) {
             Assertions.assertThat<RejectPlan.DisjointLiterals?>(
-                Companion.findRejectPlan<RejectPlan.DisjointLiterals?>(
+                Companion.findRejectPlan<RejectPlan.DisjointLiterals>(
                     p,
                     RejectPlan.DisjointLiterals::class.java
                 )
@@ -846,7 +844,7 @@ internal class PatternInternalTest {
             .isInstanceOfSatisfying<StartPlan.FixedOffset?>(
                 StartPlan.FixedOffset::class.java,
                 Consumer { plan: StartPlan.FixedOffset? ->
-                    Assertions.assertThat(plan!!.fol.literal()).isEqualTo("zq")
+                    Assertions.assertThat(plan!!.fol!!.literal()).isEqualTo("zq")
                 })
     }
 
@@ -872,7 +870,7 @@ internal class PatternInternalTest {
     fun forwardDfaSupportsProgramsAfterUnreachableGraphemeInstructionsAreRemoved(regex: String?) {
         val pattern = Pattern.compile(regex)
         Assertions.assertThat(pattern.prog().hasGraphemeSemantics()).isTrue()
-        Assertions.assertThat(pattern.flatDfaProg().hasGraphemeSemantics()).isFalse()
+        Assertions.assertThat(pattern.flatDfaProg()!!.hasGraphemeSemantics()).isFalse()
         Assertions.assertThat(pattern.forwardDfaSupported()).isTrue()
         Assertions.assertThat(pattern.matcher("a".repeat(5000)).matches()).isTrue()
     }
@@ -915,7 +913,7 @@ internal class PatternInternalTest {
                 0,
                 EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
             )
-        for (pattern in List.of<Pattern>(bitStatePattern, nfaPattern)) {
+        for (pattern in java.util.List.of<Pattern>(bitStatePattern, nfaPattern)) {
             Assertions.assertThat(pattern.matcher("abc123").find()).isTrue()
             clearThreadCacheReference(pattern)
             Assertions.assertThat<BitState?>(pattern.borrowBitState()).isNull()
@@ -956,6 +954,7 @@ internal class PatternInternalTest {
             EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
         )
 
+        @JvmStatic
         @Throws(ReflectiveOperationException::class)
         fun populateThreadCaches(): MutableList<SoftReference<*>?> {
             if (DFA_PATTERN.forwardFirstMatchDfa() == null || DFA_PATTERN.forwardLongestMatchDfa() == null || DFA_PATTERN.reverseDfa() == null) {
@@ -966,7 +965,7 @@ internal class PatternInternalTest {
             }
             val field = Pattern::class.java.getDeclaredField("threadCache")
             field.setAccessible(true)
-            return List.of<SoftReference<*>?>(
+            return java.util.List.of<SoftReference<*>?>(
                 (field.get(DFA_PATTERN) as ThreadLocal<*>).get() as SoftReference<*>?,
                 (field.get(BITSTATE_PATTERN) as ThreadLocal<*>).get() as SoftReference<*>?,
                 (field.get(NFA_PATTERN) as ThreadLocal<*>).get() as SoftReference<*>?
@@ -975,16 +974,15 @@ internal class PatternInternalTest {
     }
 
     companion object {
-        private fun <T : RejectPlan?> findRejectPlan(
-            p: Pattern, clazz: Class<T?>
-        ): T? {
-            if (clazz.isInstance(p.rejectPlan())) {
-                return p.rejectPlan() as T
+        private fun <T : RejectPlan> findRejectPlan(p: Pattern, clazz: Class<T>): T? {
+            val rejectPlan = p.rejectPlan()
+            if (clazz.isInstance(rejectPlan)) {
+                return clazz.cast(rejectPlan)
             }
-            if (p.rejectPlan() is RejectPlan.Composite) {
-                for (plan in comp.plans) {
+            if (rejectPlan is RejectPlan.Composite) {
+                for (plan in rejectPlan.plans!!) {
                     if (clazz.isInstance(plan)) {
-                        return plan as T
+                        return clazz.cast(plan)
                     }
                 }
             }
@@ -993,19 +991,19 @@ internal class PatternInternalTest {
 
         private fun requiredCharClass(p: Pattern): CharClassScanInfo? {
             val cc: RequiredCharClass? =
-                Companion.findRejectPlan<RequiredCharClass?>(p, RequiredCharClass::class.java)
+                Companion.findRejectPlan<RequiredCharClass>(p, RequiredCharClass::class.java)
             return if (cc != null) cc.scanInfo else null
         }
 
         private fun endAnchoredSuffix(p: Pattern): SuffixInfo? {
             val s: RejectPlan.EndAnchoredSuffix? =
-                Companion.findRejectPlan<RejectPlan.EndAnchoredSuffix?>(p, RejectPlan.EndAnchoredSuffix::class.java)
+                Companion.findRejectPlan<RejectPlan.EndAnchoredSuffix>(p, RejectPlan.EndAnchoredSuffix::class.java)
             return if (s != null) s.suffix else null
         }
 
         private fun requiredLiteral(p: Pattern): String? {
             val lit: RequiredLiteral? =
-                Companion.findRejectPlan<RequiredLiteral?>(p, RequiredLiteral::class.java)
+                Companion.findRejectPlan<RequiredLiteral>(p, RequiredLiteral::class.java)
             return if (lit != null) lit.literal else null
         }
 
@@ -1022,7 +1020,7 @@ internal class PatternInternalTest {
             }
             val asciiClass = builder.build()
 
-            val info = CharClassScanInfo.fromAsciiBitmap(asciiClass)
+            val info = CharClassScanInfo.fromAsciiBitmap(asciiClass)!!
 
             Assertions.assertThat<CharClassScanInfo?>(info).isNotNull()
             Assertions.assertThat(info.ranges).containsExactly(*expectedRanges)
@@ -1129,16 +1127,19 @@ internal class PatternInternalTest {
             }.use { loader ->
                 val holderClass = loader.loadClass(ChildLoaderPatternHolder::class.java.getName())
                 Assertions.assertThat<ClassLoader?>(holderClass.getClassLoader()).isSameAs(loader)
+                // Nested Kotlin objects expose INSTANCE; @JvmStatic is not emitted for nested
+                // objects inside a class, so reflect through the singleton.
+                val holder = holderClass.getField("INSTANCE").get(null)
                 // populateThreadCaches() returns List<SoftReference<?>>.
-                val refs = holderClass.getMethod("populateThreadCaches").invoke(null) as MutableList<*>?
+                val refs = holderClass.getMethod("populateThreadCaches").invoke(holder) as MutableList<*>?
                 Assertions.assertThat(refs).hasSize(3)
                 for (value in refs!!) {
                     Assertions.assertThat<Any?>(value).isInstanceOf(SoftReference::class.java)
                     val ref = value as SoftReference<*>
                     Assertions.assertThat<ClassLoader?>(ref.javaClass.getClassLoader()).isNull()
-                    val cache: Any? = ref.get()
+                    val cache: Any = ref.get()!!
                     Assertions.assertThat<Any?>(cache).isNotNull()
-                    Assertions.assertThat<ClassLoader?>(cache!!.javaClass.getClassLoader()).isSameAs(loader)
+                    Assertions.assertThat<ClassLoader?>(cache.javaClass.getClassLoader()).isSameAs(loader)
                     ref.clear()
                 }
                 return WeakReference<ClassLoader?>(loader)

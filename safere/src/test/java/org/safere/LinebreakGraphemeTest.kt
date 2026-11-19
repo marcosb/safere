@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.util.function.IntFunction
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /**
@@ -187,7 +186,7 @@ internal class LinebreakGraphemeTest {
 
     @Nested
     @DisplayName("\\X (extended grapheme cluster)")
-    internal inner class GraphemeClusterTests {
+    internal class GraphemeClusterTests {
         @Test
         @DisplayName("\\X matches a single ASCII character")
         fun matchesSingleAscii() {
@@ -217,7 +216,7 @@ internal class LinebreakGraphemeTest {
             val m = p.matcher(grapheme)
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.group()).isEqualTo(grapheme)
-            Assertions.assertThat(m.group().length).isEqualTo(2)
+            Assertions.assertThat(m.group()!!.length).isEqualTo(2)
             Assertions.assertThat(m.find()).isFalse() // single grapheme, no more matches
         }
 
@@ -244,7 +243,7 @@ internal class LinebreakGraphemeTest {
             val p = Pattern.compile("\\X")
             val m = p.matcher("\u0301") // combining acute accent alone
             Assertions.assertThat(m.find()).isTrue()
-            Assertions.assertThat(m.group().length).isEqualTo(1)
+            Assertions.assertThat(m.group()!!.length).isEqualTo(1)
         }
 
         @Test
@@ -416,7 +415,7 @@ internal class LinebreakGraphemeTest {
             val m = p.matcher(cluster)
             Assertions.assertThat(m.find()).isTrue()
             Assertions.assertThat(m.group()).isEqualTo(cluster)
-            Assertions.assertThat(m.group().length).isEqualTo(3)
+            Assertions.assertThat(m.group()!!.length).isEqualTo(3)
             Assertions.assertThat(m.find()).isFalse()
         }
 
@@ -474,9 +473,9 @@ internal class LinebreakGraphemeTest {
         @DisabledForCrosscheck("SafeRE's region-local grapheme model intentionally diverges from selected JDK traces")
         @DisplayName("repeated find resumes after leading grapheme-boundary clusters")
         fun repeatedFindResumesAfterLeadingGraphemeBoundaryClusters() {
-            assertSafeReFindBounds("\\b{g}\\X", "ab", 0, 2, mutableListOf<String?>("0-1", "1-2"))
-            assertSafeReFindBounds("\\b{g}\\X", "a\u0301b", 0, 3, mutableListOf<String?>("0-2", "2-3"))
-            assertSafeReFindBounds("(\\b{g})(\\X)", "ab", 0, 2, mutableListOf<String?>("0-1", "1-2"))
+            assertSafeReFindBounds("\\b{g}\\X", "ab", 0, 2, mutableListOf<String>("0-1", "1-2"))
+            assertSafeReFindBounds("\\b{g}\\X", "a\u0301b", 0, 3, mutableListOf<String>("0-2", "2-3"))
+            assertSafeReFindBounds("(\\b{g})(\\X)", "ab", 0, 2, mutableListOf<String>("0-1", "1-2"))
         }
 
         @Test
@@ -523,7 +522,7 @@ internal class LinebreakGraphemeTest {
             val allocationTracker = allocationTracker()
             val threadId = Thread.currentThread().threadId()
 
-            for (regex in mutableListOf<String?>("\\X\\X", "\\X{2}", "(?:\\X)(?:\\X)")) {
+            for (regex in mutableListOf<String>("\\X\\X", "\\X{2}", "(?:\\X)(?:\\X)")) {
                 val pattern = Pattern.compile(regex)
 
                 assertImmediateTwoClusterMatch(pattern, "ab" + "c".repeat(1000))
@@ -714,10 +713,10 @@ internal class LinebreakGraphemeTest {
             // "He\u0301llo" = H + é (2 code points) + l + l + o → 4 grapheme clusters
             val text = "He\u0301llo"
             val p = Pattern.compile("\\X")
-            val clusters: MutableList<String?> = ArrayList<String?>()
+            val clusters: MutableList<String> = ArrayList<String>()
             val m = p.matcher(text)
             while (m.find()) {
-                clusters.add(m.group())
+                clusters.add(m.group()!!)
             }
             Assertions.assertThat<String?>(clusters).containsExactly("H", "e\u0301", "l", "l", "o")
         }
@@ -726,7 +725,7 @@ internal class LinebreakGraphemeTest {
         private data class AllocationTracker(val threadBean: Any?, val allocatedBytesMethod: Method?) {
             fun allocatedBytes(threadId: Long): Long {
                 try {
-                    return (allocatedBytesMethod.invoke(threadBean, threadId) as Long?)!!
+                    return (allocatedBytesMethod!!.invoke(threadBean, threadId) as Long?)!!
                 } catch (e: IllegalAccessException) {
                     throw AssertionError(e)
                 } catch (e: InvocationTargetException) {
@@ -749,7 +748,7 @@ internal class LinebreakGraphemeTest {
 
             private fun assertFindGroupsSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
-                    Pattern.compile(regex).matcher(input).region(start, end)
+                    java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.find()).`as`("SafeRE find() should match")
@@ -764,7 +763,7 @@ internal class LinebreakGraphemeTest {
 
             private fun assertTraceSameAsJdk(regex: String, input: String, start: Int, end: Int) {
                 val jdkMatcher =
-                    Pattern.compile(regex).matcher(input).region(start, end)
+                    java.util.regex.Pattern.compile(regex).matcher(input).region(start, end)
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
 
                 Assertions.assertThat(safeMatcher.matches())
@@ -795,10 +794,10 @@ internal class LinebreakGraphemeTest {
             }
 
             private fun assertSafeReFindBounds(
-                regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String?>?
+                regex: String?, input: String?, start: Int, end: Int, expected: MutableList<String>?
             ) {
                 val safeMatcher = org.safere.Pattern.compile(regex).matcher(input).region(start, end)
-                val safeMatches: MutableList<String?> = ArrayList<String?>()
+                val safeMatches: MutableList<String> = ArrayList<String>()
                 while (safeMatcher.find()) {
                     safeMatches.add(safeMatcher.start().toString() + "-" + safeMatcher.end())
                 }
@@ -811,7 +810,7 @@ internal class LinebreakGraphemeTest {
                 regex: String, input: String, start: Int, end: Int
             ) {
                 val jdkMatcher =
-                    Pattern.compile(regex)
+                    java.util.regex.Pattern.compile(regex)
                         .matcher(input)
                         .region(start, end)
                         .useTransparentBounds(true)
@@ -886,7 +885,7 @@ internal class LinebreakGraphemeTest {
                     }
                     return AllocationTracker(threadBean, allocatedBytesMethod)
                 } catch (e: ReflectiveOperationException) {
-                    Assumptions.abort<Any?>("thread allocation tracking is unavailable: " + e)
+                    Assumptions.abort<Any>("thread allocation tracking is unavailable: " + e)
                     throw AssertionError("unreachable")
                 }
             }

@@ -43,8 +43,8 @@ internal class WorkCounterTest {
     }
 
     private class ConstantPool(size: Int) {
-        private val refs: MutableList<Ref> = ArrayList<Ref>()
-        private val utf8s: Array<String>
+        val refs: MutableList<Ref> = ArrayList<Ref>()
+        private val utf8s: Array<String?>
         private val classNameIndexes: IntArray
         private val nameAndTypeNameIndexes: IntArray
 
@@ -55,18 +55,18 @@ internal class WorkCounterTest {
         }
 
         fun className(classIndex: Int): String {
-            return utf8s[classNameIndexes[classIndex]]
+            return utf8s[classNameIndexes[classIndex]]!!
         }
 
         fun name(ref: Ref): String {
-            return utf8s[nameAndTypeNameIndexes[ref.nameAndTypeIndex]]
+            return utf8s[nameAndTypeNameIndexes[ref.nameAndTypeIndex]]!!
         }
 
         @JvmRecord
-        private data class Ref(val classIndex: Int, val nameAndTypeIndex: Int)
+        data class Ref(val classIndex: Int, val nameAndTypeIndex: Int)
         companion object {
             @Throws(IOException::class)
-            private fun read(data: DataInputStream): ConstantPool {
+            fun read(data: DataInputStream): ConstantPool {
                 val constantPoolCount = data.readUnsignedShort()
                 val constantPool = ConstantPool(constantPoolCount)
                 var index = 1
@@ -106,7 +106,7 @@ internal class WorkCounterTest {
     companion object {
         @Throws(IOException::class)
         private fun assertNoWorkCounterReferences(classesRoot: Path) {
-            val references: MutableList<String?> = ArrayList<String?>()
+            val references: MutableList<String> = ArrayList<String>()
 
             Files.walk(classesRoot).use { classFiles ->
                 val compiledClasses =
@@ -123,7 +123,7 @@ internal class WorkCounterTest {
         }
 
         @Throws(IOException::class)
-        private fun workCounterMethodOrFieldReferences(classFile: Path): MutableList<String?> {
+        private fun workCounterMethodOrFieldReferences(classFile: Path): MutableList<String> {
             Files.newInputStream(classFile).use { input ->
                 DataInputStream(input).use { data ->
                     val magic = data.readInt()
@@ -132,7 +132,7 @@ internal class WorkCounterTest {
                     data.readUnsignedShort()
 
                     val constantPool: ConstantPool = ConstantPool.Companion.read(data)
-                    val references: MutableList<String?> = ArrayList<String?>()
+                    val references: MutableList<String> = ArrayList<String>()
                     for (ref in constantPool.refs) {
                         val owner = constantPool.className(ref.classIndex)
                         if (owner != "org/safere/WorkCounter" && owner != "org/safere/WorkCounterConfig") {

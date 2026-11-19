@@ -53,7 +53,8 @@ internal class MatcherUsePatternTest {
     fun usePatternNullThrows() {
         val p = Pattern.compile("a")
         val m = p.matcher("a")
-        Assertions.assertThatThrownBy(ThrowingCallable { m.usePattern(null) })
+        Assertions.assertThatThrownBy(
+                ThrowingCallable { m.usePattern(null) })
             .isInstanceOf(IllegalArgumentException::class.java)
     }
 

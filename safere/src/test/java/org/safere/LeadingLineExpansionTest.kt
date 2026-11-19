@@ -7,10 +7,7 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 /**
  * Behavioral tests for patterns that start with a repetition of a class excluding only a few code
@@ -22,7 +19,7 @@ import java.util.regex.Pattern
 internal class LeadingLineExpansionTest {
     @Test
     fun utf8ExistenceAgreesWithJdkAcrossLeadingRepeatConstraints() {
-        val regexes: MutableList<String> = mutableListOf<String?>(
+        val regexes: MutableList<String> = mutableListOf<String>(
             ".*error: \\w+",
             ".*?error: \\w+",
             "(.*)(error): (\\w+)",
@@ -40,7 +37,7 @@ internal class LeadingLineExpansionTest {
             "(?i).*ERROR: \\w+",
             ".*error\\X"
         )
-        val inputs = mutableListOf<String?>(
+        val inputs = mutableListOf<String>(
             "",
             "error: disk",
             "no marker",
@@ -56,16 +53,16 @@ internal class LeadingLineExpansionTest {
         for (regex in regexes) {
             for (flags in intArrayOf(0, Pattern.UNIX_LINES, Pattern.MULTILINE)) {
                 val pattern = Pattern.compile(regex, flags)
-                val jdk = Pattern.compile(regex, flags)
+                val jdk = java.util.regex.Pattern.compile(regex, flags)
                 for (tail in inputs) {
-                    for (prefix in List.of<String?>("", PAD, PAD + "\n")) {
+                    for (prefix in java.util.List.of<String?>("", PAD, PAD + "\n")) {
                         val input = prefix + tail
                         val expected = jdk.matcher(input).find()
                         // A nonzero byte window must retain assertion context relative to the window.
                         val bytes = input.toByteArray(StandardCharsets.UTF_8)
                         val wordPadded = ("before" + input + "after").toByteArray(StandardCharsets.UTF_8)
                         val linePadded = ("\n" + input + "\n").toByteArray(StandardCharsets.UTF_8)
-                        for (utf8 in List.of<Utf8Input?>(
+                        for (utf8 in java.util.List.of<Utf8Input?>(
                             Utf8Input.trusted(bytes),
                             Utf8Input.trusted(wordPadded, 6, bytes.size),
                             Utf8Input.trusted(linePadded, 1, bytes.size)
@@ -85,9 +82,9 @@ internal class LeadingLineExpansionTest {
         for (flags in intArrayOf(0, org.safere.Pattern.UNIX_LINES, org.safere.Pattern.MULTILINE)) {
             for (regex in REGEXES) {
                 val pattern = org.safere.Pattern.compile(regex, flags)
-                val jdk = Pattern.compile(regex, flags)
+                val jdk = java.util.regex.Pattern.compile(regex, flags)
                 for (input in paddedInputs()) {
-                    val what: String = "%s (flags %d) on %s".formatted(regex, flags, input)
+                    val what: String = "%s (flags %d) on %s".format(regex, flags, input)
                     Assertions.assertThat<String?>(findAll(pattern.matcher(input)))
                         .`as`(what)
                         .isEqualTo(findAll(jdk.matcher(input)))
@@ -159,7 +156,7 @@ internal class LeadingLineExpansionTest {
         Assertions.assertThat(matcher.start()).isEqualTo(PAD.length + 1)
         Assertions.assertThat(matcher.group(1)).isEqualTo("😀".repeat(150) + "b😀")
         // A search starting between the halves of a pair still sees a valid match, as in the JDK.
-        val jdk = Pattern.compile("(.*)error").matcher(input)
+        val jdk = java.util.regex.Pattern.compile("(.*)error").matcher(input)
         Assertions.assertThat(matcher.find(PAD.length + 2)).isEqualTo(jdk.find(PAD.length + 2))
         Assertions.assertThat(groups(matcher)).isEqualTo(groups(jdk))
     }
@@ -170,7 +167,7 @@ internal class LeadingLineExpansionTest {
         // either as a separate first line or joined to the first line.
         private val PAD = "p".repeat(300)
 
-        private val REGEXES: MutableList<String> = mutableListOf<String?>(
+        private val REGEXES: MutableList<String> = mutableListOf<String>(
             ".*error: \\w+",
             ".+error: \\w+",
             "[^\\n]*error: \\w+",
@@ -185,7 +182,7 @@ internal class LeadingLineExpansionTest {
             "(?i).*ERROR: \\w+"
         )
 
-        private val INPUTS = mutableListOf<String?>(
+        private val INPUTS = mutableListOf<String>(
             "",
             "error: x",
             "error: ",
@@ -214,7 +211,7 @@ internal class LeadingLineExpansionTest {
         private fun regionsAgreeWithJdk(input: String, startStep: Int, endStep: Int) {
             for (regex in REGEXES) {
                 val pattern = org.safere.Pattern.compile(regex)
-                val jdk = Pattern.compile(regex)
+                val jdk = java.util.regex.Pattern.compile(regex)
                 var start = 0
                 while (start <= input.length) {
                     var end = start
@@ -249,16 +246,16 @@ internal class LeadingLineExpansionTest {
             return if (input.startsWith(PAD)) PAD.length else 0
         }
 
-        private fun findAll(matcher: org.safere.Matcher): MutableList<String?> {
-            val out: MutableList<String?> = ArrayList<String?>()
+        private fun findAll(matcher: org.safere.Matcher): MutableList<String> {
+            val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 out.add(groups(matcher))
             }
             return out
         }
 
-        private fun findAll(matcher: Matcher): MutableList<String?> {
-            val out: MutableList<String?> = ArrayList<String?>()
+        private fun findAll(matcher: java.util.regex.Matcher): MutableList<String> {
+            val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 out.add(groups(matcher))
             }
@@ -273,9 +270,9 @@ internal class LeadingLineExpansionTest {
             return sb.toString()
         }
 
-        private fun findAllUtf8(pattern: org.safere.Pattern, input: String): MutableList<String?> {
+        private fun findAllUtf8(pattern: org.safere.Pattern, input: String): MutableList<String> {
             val matcher = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
-            val out: MutableList<String?> = ArrayList<String?>()
+            val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 val sb = StringBuilder()
                 for (group in 0..matcher.groupCount()) {
@@ -287,9 +284,9 @@ internal class LeadingLineExpansionTest {
         }
 
         /** Returns the JDK's matches with bounds converted to UTF-8 byte offsets.  */
-        private fun jdkUtf8(jdk: Pattern, input: String): MutableList<String?> {
+        private fun jdkUtf8(jdk: java.util.regex.Pattern, input: String): MutableList<String> {
             val matcher = jdk.matcher(input)
-            val out: MutableList<String?> = ArrayList<String?>()
+            val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 val sb = StringBuilder()
                 for (group in 0..matcher.groupCount()) {

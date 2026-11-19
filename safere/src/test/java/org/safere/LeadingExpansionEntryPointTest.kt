@@ -13,8 +13,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
-import java.util.regex.Pattern
 import kotlin.collections.find
 import kotlin.collections.mutableListOf
 import kotlin.sequences.find
@@ -38,7 +36,7 @@ internal class LeadingExpansionEntryPointTest {
     fun leadingRepetitionPreservesMatchesCapturesReplacementAndSplit(diagnostics: Boolean) {
         Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(\\s*)# noqa[0-9]",
             "(\\s*?)# noqa[0-9]",
             "(\\s+)# noqa[0-9]",
@@ -52,8 +50,8 @@ internal class LeadingExpansionEntryPointTest {
             "([ab]*)(?:a[0-9]|b[0-9])"
         )) {
             val pattern = Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
-            for (input in mutableListOf<String?>(
+            val jdk = java.util.regex.Pattern.compile(regex)
+            for (input in mutableListOf<String>(
                 "",
                 "# noqaX",
                 "    # noqaX",
@@ -93,7 +91,7 @@ internal class LeadingExpansionEntryPointTest {
                             )
                     }
                 }
-                for (replacement in mutableListOf<String?>("X", "<$0>", "<$1>")) {
+                for (replacement in mutableListOf<String>("X", "<$0>", "<$1>")) {
                     Assertions.assertThat(pattern.matcher(input).replaceAll(replacement))
                         .`as`("%s replaceAll on %s", regex, input)
                         .isEqualTo(jdk.matcher(input).replaceAll(replacement))
@@ -144,7 +142,7 @@ internal class LeadingExpansionEntryPointTest {
     fun replacementSearchDoesNotStartInsideAnIntactSurrogatePair(diagnostics: Boolean) {
         org.safere.Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "\\uDC00[bc]",
             "(\\uDC00)[bc]",
             "\\s*\\uDC00[bc]",
@@ -155,13 +153,13 @@ internal class LeadingExpansionEntryPointTest {
             "\\s*\\uDC00[bc]\\b{g}"
         )) {
             val pattern = org.safere.Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
-            for (input in mutableListOf<String?>(
+            val jdk = java.util.regex.Pattern.compile(regex)
+            for (input in mutableListOf<String>(
                 "\uDC00b;\uD800\uDC00b",
                 " \uDC00b; \uD800\uDC00b \uDC00c;",
                 " \uDC00b;\uD800\uDC00b;\uD800\uDC00c; \uDC00c"
             )) {
-                for (replacement in mutableListOf<String?>("X", "<$0>")) {
+                for (replacement in mutableListOf<String>("X", "<$0>")) {
                     Assertions.assertThat(pattern.matcher(input).replaceAll(replacement))
                         .`as`("%s on %s", regex, input)
                         .isEqualTo(jdk.matcher(input).replaceAll(replacement))
@@ -175,7 +173,7 @@ internal class LeadingExpansionEntryPointTest {
     fun repeatedLiteralPrefixReplacementPreservesMatches(diagnostics: Boolean) {
         org.safere.Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "tag[bc]",
             "(?i)tag[bc]",
             "(?iu)éx[bc]",
@@ -185,8 +183,8 @@ internal class LeadingExpansionEntryPointTest {
             "(?m)^tag[bc]"
         )) {
             val pattern = org.safere.Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
-            for (input in List.of<String?>(
+            val jdk = java.util.regex.Pattern.compile(regex)
+            for (input in java.util.List.of<String?>(
                 "",
                 "tagX",
                 "tagb TAGc tagX tagc;",
@@ -196,7 +194,7 @@ internal class LeadingExpansionEntryPointTest {
                 "😀b;😀c 😀X 😀b",
                 "x".repeat(1000) + "tagb;tagX;tagc"
             )) {
-                for (replacement in mutableListOf<String?>("X", "<$0>")) {
+                for (replacement in mutableListOf<String>("X", "<$0>")) {
                     Assertions.assertThat(pattern.matcher(input).replaceAll(replacement))
                         .`as`("%s replaceAll on %s", regex, input)
                         .isEqualTo(jdk.matcher(input).replaceAll(replacement))
@@ -214,8 +212,8 @@ internal class LeadingExpansionEntryPointTest {
         org.safere.Pattern.setDiagnostics(
             if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE)
         val input = "\uD800\uDC00b; \uDC00c;\uD800\uDC00b"
-        for (regex in mutableListOf<String?>("\\s*\\uDC00[bc]", "\\s{0,3}\\uDC00[bc]", "\\s*[\\uDC00-\\uDFFF][bc]")) {
-            val expected = Pattern.compile(regex).matcher(input)
+        for (regex in mutableListOf<String>("\\s*\\uDC00[bc]", "\\s{0,3}\\uDC00[bc]", "\\s*[\\uDC00-\\uDFFF][bc]")) {
+            val expected = java.util.regex.Pattern.compile(regex).matcher(input)
             val actual = org.safere.Pattern.compile(regex).matcher(input)
             Assertions.assertThat(actual.find(1)).isEqualTo(expected.find(1)).isTrue()
             Assertions.assertThat(actual.start()).isEqualTo(expected.start())

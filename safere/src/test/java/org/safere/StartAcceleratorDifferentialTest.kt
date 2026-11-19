@@ -11,8 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 
 /**
  * Adversarial differential tests for DFA-loop start acceleration under position-dependent
@@ -25,7 +23,7 @@ internal class StartAcceleratorDifferentialTest {
     fun wideExpansionsPreserveGraphemeProgramLowSurrogateStarts(excluded: String) {
         val padding = "p".repeat(300)
         val text = padding + excluded + "error!"
-        for (repetition in mutableListOf<String?>("+", "+?", "{1,3}")) {
+        for (repetition in mutableListOf<String>("+", "+?", "{1,3}")) {
             val regex = "([^" + excluded + "]" + repetition + ")error\\X"
             val accelerated = Pattern.compile(regex, 0, ACCELERATED)
             val control = Pattern.compile(regex, 0, UNACCELERATED)
@@ -33,7 +31,7 @@ internal class StartAcceleratorDifferentialTest {
             Assertions.assertThat(expected.find()).isTrue()
             Assertions.assertThat(expected.start()).isEqualTo(padding.length + 1)
             Assertions.assertThat(expected.group(1)).isEqualTo(excluded.substring(1))
-            for (input in List.of(text, CharBuffer.wrap(text))) {
+            for (input in java.util.List.of(text, CharBuffer.wrap(text))) {
                 val actual = accelerated.matcher(input)
                 Assertions.assertThat(actual.find()).`as`("%s on %s", regex, input.javaClass).isTrue()
                 Assertions.assertThat(actual.start()).isEqualTo(expected.start())
@@ -53,7 +51,7 @@ internal class StartAcceleratorDifferentialTest {
     @DisplayName("Ablation: accelerated DFA matches unaccelerated baseline on false candidates")
     fun acceleratedDfaMatchesBaselineOnFalseCandidates(regex: String) {
         val adversarialInputs =
-            List.of<String?>(
+            java.util.List.of<String?>(
                 "x".repeat(200) + "0cb\r1bacd19c1__19x y_",
                 "x".repeat(200) + "0cb1bacd19c1__19x y_",
                 "x".repeat(200) + "foo_acd19bar",
@@ -66,7 +64,7 @@ internal class StartAcceleratorDifferentialTest {
 
         val accelerated = Pattern.compile(regex, 0, ACCELERATED)
         val control = Pattern.compile(regex, 0, UNACCELERATED)
-        val jdk = Pattern.compile(regex)
+        val jdk = java.util.regex.Pattern.compile(regex)
 
         for (input in adversarialInputs) {
             val expected = control.matcher(input).find()
@@ -97,7 +95,7 @@ internal class StartAcceleratorDifferentialTest {
     @DisplayName("Ablation: accelerated DFA matches unaccelerated baseline on true candidates")
     fun acceleratedDfaMatchesBaselineOnTrueCandidates(regex: String?) {
         val matchingInputs =
-            List.of<String?>(
+            java.util.List.of<String?>(
                 "x".repeat(200) + "\nacd19c1__19x y_",
                 "x".repeat(200) + "\r\nfirsttoken rest",
                 "firsttoken at start of text",
@@ -133,7 +131,7 @@ internal class StartAcceleratorDifferentialTest {
 
         Assertions.assertThat(control.find(utf8)).isFalse()
         Assertions.assertThat(accelerated.find(utf8)).isFalse()
-        Assertions.assertThat(Pattern.compile(regex).matcher(input).find()).isFalse()
+        Assertions.assertThat(java.util.regex.Pattern.compile(regex).matcher(input).find()).isFalse()
     }
 
     companion object {

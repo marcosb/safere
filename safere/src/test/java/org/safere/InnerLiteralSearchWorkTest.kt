@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 /** Guarded gaps allow a sparse required literal to bypass irrelevant dense start candidates.  */
 @DisabledForCrosscheck("WorkCounter is an internal SafeRE API")
 @Tag("work-counter")
@@ -22,7 +20,7 @@ internal class InnerLiteralSearchWorkTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun forbiddenGapCharactersExcludeEarlierStartCandidates(utf8: Boolean) {
-        for (scenario in List.of<Scenario?>(
+        for (scenario in java.util.List.of<Scenario?>(
             Scenario("record:[^;\\r\\n]*val=200", "record:x;\n", "record:target_val=200"),
             Scenario("(record:)([^;]*?)(val=200)", "record:x;", "record:target_val=200"),
             Scenario("key=[a-z_]*done", "key=x;", "key=target_done"),
@@ -48,9 +46,9 @@ internal class InnerLiteralSearchWorkTest {
     @Test
     fun eligibleSearchesScanOnlyOneUnboundedLiteralRange() {
         val pattern = Pattern.compile("record:[^;]*val=200")
-        for (noise in mutableListOf<String?>("record:x;", "other:x;")) {
+        for (noise in mutableListOf<String>("record:x;", "other:x;")) {
             val input = noise!!.repeat(2048) + "record:target_val=200"
-            for (search in List.of<Runnable?>(
+            for (search in java.util.List.of<Runnable?>(
                 Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
                 Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).endsWith("X") },
                 Runnable { Assertions.assertThat<String?>(pattern.split(input, -1)).hasSize(2) })) {
@@ -64,9 +62,9 @@ internal class InnerLiteralSearchWorkTest {
     fun repeatedSuffixesAndBulkSearchesKeepWorkLinear() {
         val pattern = Pattern.compile("record:[^;]*val=200")
         for (count in intArrayOf(1024, 2048)) {
-            for (unit in mutableListOf<String?>("record:x;val=200;", "record:xval=200;")) {
+            for (unit in mutableListOf<String>("record:x;val=200;", "record:xval=200;")) {
                 val input = unit!!.repeat(count) + "record:target_val=200"
-                for (search in List.of<Runnable?>(
+                for (search in java.util.List.of<Runnable?>(
                     Runnable {
                         val matcher = pattern.matcher(input)
                         while (matcher.find()) {

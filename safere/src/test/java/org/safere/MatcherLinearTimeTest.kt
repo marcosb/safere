@@ -132,7 +132,7 @@ internal class MatcherLinearTimeTest {
                 input
                     .append("(SELECT *, PARSE_DATE('%Y-%m-%d', '2025-06-25') AS snapshot_date FROM ")
                     .append("`project-")
-                    .append("%02d".formatted(i))
+                    .append("%02d".format(i))
                     .append("`.`region2`.INFORMATION_SCHEMA.TABLE_OPTIONS)\n")
                     .append("UNION ALL\n")
             }
@@ -181,7 +181,7 @@ internal class MatcherLinearTimeTest {
         private fun countedWork(task: Runnable?): Long {
             return org.junit.jupiter.api.Assertions.assertTimeoutPreemptively<Long?>(
                 SCENARIO_TIMEOUT,
-                ThrowingSupplier { WorkCounter.countForTesting(task) })!!
+                ThrowingSupplier { WorkCounter.countForTesting(task!!) })!!
         }
     }
 }

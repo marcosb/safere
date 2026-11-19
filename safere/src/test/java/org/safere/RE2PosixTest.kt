@@ -16,8 +16,6 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 import kotlin.math.min
@@ -275,7 +273,7 @@ internal class RE2PosixTest {
                     } else {
                         expectMatch = true
                         val groups: MutableList<IntArray?> = parseGroups(expected)
-                        if (!groups.isEmpty) {
+                        if (!groups.isEmpty()) {
                             expectedStart = groups.get(0)!![0]
                             expectedEnd = groups.get(0)!![1]
                             if (groups.size > 1) {
@@ -307,12 +305,14 @@ internal class RE2PosixTest {
             return tests
         }
 
+        @JvmStatic
         @Throws(IOException::class)
         fun basicTests(): Stream<Arguments?>? {
             return parseFile("basic.dat").stream()
                 .filter { test: Arguments? -> !Companion.hasIntentionalEmptyCaptureDifference(test!!) }
         }
 
+        @JvmStatic
         @Throws(IOException::class)
         fun basicEmptyCapturePolicyTests(): Stream<Arguments?>? {
             return parseFile("basic.dat").stream()
@@ -324,11 +324,13 @@ internal class RE2PosixTest {
             return (test.get()[0] as PosixTestCase).pattern == "(^)*"
         }
 
+        @JvmStatic
         @Throws(IOException::class)
         fun nullsubexprTests(): Stream<Arguments?> {
             return parseFile("nullsubexpr.dat").stream()
         }
 
+        @JvmStatic
         @Throws(IOException::class)
         fun repetitionTests(): Stream<Arguments?> {
             return parseFile("repetition.dat").stream()
@@ -448,9 +450,9 @@ internal class RE2PosixTest {
             try {
                 var jdkFlags = 0
                 if ((flags and Pattern.CASE_INSENSITIVE) != 0) {
-                    jdkFlags = jdkFlags or Pattern.CASE_INSENSITIVE
+                    jdkFlags = jdkFlags or java.util.regex.Pattern.CASE_INSENSITIVE
                 }
-                val jp = Pattern.compile(tc.pattern, jdkFlags)
+                val jp = java.util.regex.Pattern.compile(tc.pattern, jdkFlags)
                 val jm = jp.matcher(tc.text)
                 if (!jm.find()) {
                     return false

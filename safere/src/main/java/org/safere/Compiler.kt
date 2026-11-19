@@ -495,12 +495,12 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             RegexpOp.ANY_CHAR -> anyCodePoint()
             RegexpOp.GRAPHEME_CLUSTER -> graphemeCluster()
             RegexpOp.CHAR_CLASS -> compileCharClass(re)
-            RegexpOp.CAPTURE -> {
+            RegexpOp.CAPTURE ->
                 if (re.cap < 0) {
                     kids.get(0)
+                } else {
+                    capture(kids.get(0), re.cap)
                 }
-                capture(kids.get(0), re.cap)
-            }
 
             RegexpOp.BEGIN_LINE -> emptyWidth(
                 if ((re.flags and ParseFlags.UNIX_LINES) != 0)
@@ -517,7 +517,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             )
 
             RegexpOp.BEGIN_TEXT -> emptyWidth(if (reversed) EmptyOp.END_TEXT else EmptyOp.BEGIN_TEXT)
-            RegexpOp.END_TEXT -> {
+            RegexpOp.END_TEXT ->
                 if ((re.flags and ParseFlags.WAS_DOLLAR) != 0) {
                     // Keep the assertion's line mode and position semantics in either scan direction.
                     emptyWidth(
@@ -526,23 +526,23 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
                         else
                             EmptyOp.DOLLAR_END
                     )
+                } else {
+                    emptyWidth(if (reversed) EmptyOp.BEGIN_TEXT else EmptyOp.END_TEXT)
                 }
-                emptyWidth(if (reversed) EmptyOp.BEGIN_TEXT else EmptyOp.END_TEXT)
-            }
 
-            RegexpOp.WORD_BOUNDARY -> {
+            RegexpOp.WORD_BOUNDARY ->
                 if ((re.flags and ParseFlags.UNICODE_CHAR_CLASS) != 0) {
                     emptyWidth(EmptyOp.UNICODE_WORD_BOUNDARY)
+                } else {
+                    emptyWidth(EmptyOp.WORD_BOUNDARY)
                 }
-                emptyWidth(EmptyOp.WORD_BOUNDARY)
-            }
 
-            RegexpOp.NO_WORD_BOUNDARY -> {
+            RegexpOp.NO_WORD_BOUNDARY ->
                 if ((re.flags and ParseFlags.UNICODE_CHAR_CLASS) != 0) {
                     emptyWidth(EmptyOp.UNICODE_NON_WORD_BOUNDARY)
+                } else {
+                    emptyWidth(EmptyOp.NON_WORD_BOUNDARY)
                 }
-                emptyWidth(EmptyOp.NON_WORD_BOUNDARY)
-            }
 
             RegexpOp.GRAPHEME_CLUSTER_BOUNDARY -> emptyWidth(EmptyOp.EXPLICIT_GRAPHEME_CLUSTER_BOUNDARY)
             else -> {
@@ -561,7 +561,7 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
     // Character class compilation
     // ---------------------------------------------------------------------------
     private fun compileCharClass(re: Regexp): Frag? {
-        val cc = re.charClass!!
+        val cc = re.charClass
         if (cc == null || cc.isEmpty()) {
             return Frag.Companion.NO_MATCH
         }
@@ -746,30 +746,30 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             }
             return when (re.op) {
                 RegexpOp.BEGIN_TEXT -> Regexp.Companion.emptyMatch(re.flags)
-                RegexpOp.CONCAT -> {
+                RegexpOp.CONCAT ->
                     if (re.nsub() > 0 && isAnchorStartImpl(re.subs!!.first(), depth + 1)) {
                         val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs!!)
                         newSubs.set(0, stripAnchorStartImpl(re.subs!!.first(), depth + 1))
                         Regexp.Companion.concat(newSubs, re.flags)
+                    } else {
+                        re
                     }
-                    re
-                }
 
-                RegexpOp.NON_CAPTURE -> {
+                RegexpOp.NON_CAPTURE ->
                     if (isAnchorStartImpl(re.sub(), depth + 1)) {
                         Regexp.Companion.nonCapture(stripAnchorStartImpl(re.sub(), depth + 1), re.flags)
+                    } else {
+                        re
                     }
-                    re
-                }
 
-                RegexpOp.CAPTURE -> {
+                RegexpOp.CAPTURE ->
                     if (isAnchorStartImpl(re.sub(), depth + 1)) {
                         Regexp.Companion.capture(
                             stripAnchorStartImpl(re.sub(), depth + 1), re.flags, re.cap, re.name
                         )
+                    } else {
+                        re
                     }
-                    re
-                }
 
                 else -> re
             }
@@ -842,29 +842,29 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
             }
             return when (re.op) {
                 RegexpOp.END_TEXT -> Regexp.Companion.emptyMatch(re.flags)
-                RegexpOp.CONCAT -> {
+                RegexpOp.CONCAT ->
                     if (re.nsub() > 0 && isAnchorEndImpl(re.subs!!.get(re.nsub() - 1), depth + 1)) {
                         val newSubs: MutableList<Regexp?> = ArrayList<Regexp?>(re.subs!!)
                         val last = re.nsub() - 1
                         newSubs.set(last, stripAnchorEndImpl(re.subs!!.get(last), depth + 1))
                         Regexp.Companion.concat(newSubs, re.flags)
+                    } else {
+                        re
                     }
-                    re
-                }
 
-                RegexpOp.NON_CAPTURE -> {
+                RegexpOp.NON_CAPTURE ->
                     if (isAnchorEndImpl(re.sub(), depth + 1)) {
                         Regexp.Companion.nonCapture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags)
+                    } else {
+                        re
                     }
-                    re
-                }
 
-                RegexpOp.CAPTURE -> {
+                RegexpOp.CAPTURE ->
                     if (isAnchorEndImpl(re.sub(), depth + 1)) {
                         Regexp.Companion.capture(stripAnchorEndImpl(re.sub(), depth + 1), re.flags, re.cap, re.name)
+                    } else {
+                        re
                     }
-                    re
-                }
 
                 else -> re
             }

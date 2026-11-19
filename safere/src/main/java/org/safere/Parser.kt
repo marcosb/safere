@@ -579,7 +579,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         // The stack should be: LeftParen regexp
         val r1 = stacktop
-        val r2: StackEntry = (if (r1 != null) r1.down else null)!!
+        val r2 = if (r1 != null) r1.down else null
         if (r1 == null || r2 == null || !isLeftParen(r2)) {
             throw lexer.error("unexpected )", tokenStart)
         }

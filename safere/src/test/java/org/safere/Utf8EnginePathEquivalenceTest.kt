@@ -15,8 +15,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.safere.Utf8EnginePathEquivalenceTest.Companion.trace
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Forced-path equivalence coverage for matching directly over UTF-8 storage.  */
@@ -33,13 +31,13 @@ internal class Utf8EnginePathEquivalenceTest {
             Pattern.compile(
                 regex, 0, EnginePathOptions.builder().charClassMatchFastPaths(false).build()
             )
-        for (source in mutableListOf<String?>("", "abc", "aaaa", "é😀aé", "Éé\na", "👩‍💻a")) {
+        for (source in mutableListOf<String>("", "abc", "aaaa", "é😀aé", "Éé\na", "👩‍💻a")) {
             val bytes = ("prefix" + source + "suffix").toByteArray(StandardCharsets.UTF_8)
             val input = Utf8Input.validated(bytes, 6, source!!.toByteArray(StandardCharsets.UTF_8).size)
             Assertions.assertThat<MatchTrace?>(trace(canonical, input))
                 .`as`("/%s/ on %s", regex, source)
                 .isEqualTo(trace(generic, input))
-            for (replacement in mutableListOf<String?>("x", "<$0>", "\\$", "前😀後", "")) {
+            for (replacement in mutableListOf<String>("x", "<$0>", "\\$", "前😀後", "")) {
                 for (all in booleanArrayOf(false, true)) {
                     Assertions.assertThat(Companion.replacement(canonical, input, replacement!!, all))
                         .`as`("/%s/ on %s replacing with %s, all=%s", regex, source, replacement, all)
@@ -76,14 +74,14 @@ internal class Utf8EnginePathEquivalenceTest {
 
         Assertions.assertThat<MatchTrace?>(trace(nfa, input)).isEqualTo(trace(canonical, input))
         Assertions.assertThat<MatchTrace?>(trace(canonical, input))
-            .extracting<Int?, RuntimeException?>(ThrowingExtractor { match: MatchTrace? -> match!!.groups.first().start })
+            .extracting<Int?, RuntimeException?>(ThrowingExtractor { match: MatchTrace? -> match!!.groups!!.first()!!.start })
             .containsExactly(0, 4, 6, 7)
     }
 
     @Test
     @DisplayName("UTF-8 convenience find supports discrete and non-ASCII fixed offsets")
     fun utf8ConvenienceFindSupportsGeneralizedFixedOffsets() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(^|a)bc",
             "(^|[^#])(#!customTag)",
             "[aé]bc",
@@ -110,8 +108,8 @@ internal class Utf8EnginePathEquivalenceTest {
     @DisplayName("UTF-8 convenience find works with the DFA disabled")
     fun utf8ConvenienceFindWorksWithDfaDisabled() {
         val noDfa = EnginePathOptions.builder().dfa(false).build()
-        for (regex in mutableListOf<String?>("a*[bc]d", "[a-z]+[0-9]", "(?:foo|fax)$", "é[ab]+c", "^[0-9]+ items")) {
-            for (input in mutableListOf<String?>("zzaabdzz", "xyz12", "a fax", "zzéabczz", "42 items", "none")) {
+        for (regex in mutableListOf<String>("a*[bc]d", "[a-z]+[0-9]", "(?:foo|fax)$", "é[ab]+c", "^[0-9]+ items")) {
+            for (input in mutableListOf<String>("zzaabdzz", "xyz12", "a fax", "zzéabczz", "42 items", "none")) {
                 val expected = Pattern.compile(regex).matcher(input).find()
                 Assertions.assertThat(
                     Pattern.compile(regex, 0, noDfa)
@@ -135,7 +133,7 @@ internal class Utf8EnginePathEquivalenceTest {
             0x9f.toByte(),
             'c'.code.toByte()
         )
-        val regexes = mutableListOf<String?>(".", ".*?", "[^a]", "(?:a|.)+", "^.*$", "\\X")
+        val regexes = mutableListOf<String>(".", ".*?", "[^a]", "(?:a|.)+", "^.*$", "\\X")
 
         for (regex in regexes) {
             val canonical = Pattern.compile(regex)
@@ -163,7 +161,7 @@ internal class Utf8EnginePathEquivalenceTest {
             )
         )
             .containsExactly(
-                MatchTrace(List.of<GroupTrace?>(group("élan42", 0, 7), group("élan", 0, 5), group("42", 5, 7)))
+                MatchTrace(java.util.List.of<GroupTrace?>(group("élan42", 0, 7), group("élan", 0, 5), group("42", 5, 7)))
             )
         Assertions.assertThat<MatchTrace?>(
             trace(
@@ -175,7 +173,7 @@ internal class Utf8EnginePathEquivalenceTest {
             )
         )
             .containsExactly(
-                MatchTrace(List.of<GroupTrace?>(group("β7", 0, 3), group("β", 0, 2), group("7", 2, 3)))
+                MatchTrace(java.util.List.of<GroupTrace?>(group("β7", 0, 3), group("β", 0, 2), group("7", 2, 3)))
             )
     }
 
@@ -198,7 +196,7 @@ internal class Utf8EnginePathEquivalenceTest {
         graphemeContext.setAccessible(true)
         Assertions.assertThat<Any?>(text.get(cached)).isNull()
         Assertions.assertThat<Any?>(graphemeContext.get(cached)).isNull()
-        pattern.returnBitState(cached)
+        pattern.returnBitState(cached!!)
     }
 
     @ParameterizedTest
@@ -208,10 +206,10 @@ internal class Utf8EnginePathEquivalenceTest {
     ) {
         val pattern =
             Pattern.compile(regex, 0, EnginePathOptions.builder().reverseDfa(reverseDfa).build())
-        val jdk = Pattern.compile(regex)
-        for (length in mutableListOf<Int?>(0, 1, 30, 31, 59, 61, 62, 63, 64, 65, 127)) {
+        val jdk = java.util.regex.Pattern.compile(regex)
+        for (length in mutableListOf<Int>(0, 1, 30, 31, 59, 61, 62, 63, 64, 65, 127)) {
             val body = repeated.repeat(length!!)
-            for (text in List.of<String?>(
+            for (text in java.util.List.of<String?>(
                 body + terminal,
                 body + "!" + repeated + terminal,
                 "!" + body + terminal,
@@ -226,7 +224,7 @@ internal class Utf8EnginePathEquivalenceTest {
                 Assertions.assertThat(pattern.asPredicate().test(text))
                     .`as`("String predicate /%s/ length %s", regex, length)
                     .isEqualTo(expected)
-                for (padding in mutableListOf<String?>("", "é😀padding")) {
+                for (padding in mutableListOf<String>("", "é😀padding")) {
                     val bytes = (padding + text + "outside").toByteArray(StandardCharsets.UTF_8)
                     val input =
                         Utf8Input.validated(
@@ -271,6 +269,7 @@ internal class Utf8EnginePathEquivalenceTest {
             return output.toString(StandardCharsets.UTF_8)
         }
 
+        @JvmStatic
         private fun forcedPaths(): Stream<Arguments?> {
             val longPrefix = "x".repeat(600)
             return Stream.of<Arguments?>(
@@ -373,13 +372,14 @@ internal class Utf8EnginePathEquivalenceTest {
             )
         }
 
+        @JvmStatic
         private fun booleanFindStartBoundaryCases(): Stream<Arguments?> {
             val cases: MutableList<Arguments?> = ArrayList<Arguments?>()
-            for (start in mutableListOf<String?>("^", "\\A", "(?m)^", "")) {
-                for (end in mutableListOf<String?>("$", "\\z", "\\Z", "")) {
-                    for (terminal in mutableListOf<String?>("b", "END", "[0-9]")) {
+            for (start in mutableListOf<String>("^", "\\A", "(?m)^", "")) {
+                for (end in mutableListOf<String>("$", "\\z", "\\Z", "")) {
+                    for (terminal in mutableListOf<String>("b", "END", "[0-9]")) {
                         val suffix: String = (if (terminal == "[0-9]") "5" else terminal)!!
-                        for (reverseDfa in mutableListOf<Boolean?>(true, false)) {
+                        for (reverseDfa in mutableListOf<Boolean>(true, false)) {
                             cases.add(Arguments.of(start + "(a)*" + terminal + end, "a", suffix, reverseDfa))
                             cases.add(Arguments.of(start + "([a-z]+)" + terminal + end, "a", suffix, reverseDfa))
                             cases.add(

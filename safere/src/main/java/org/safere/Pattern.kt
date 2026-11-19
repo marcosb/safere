@@ -380,7 +380,7 @@ class Pattern private constructor(
         return (scanner.indexOf(
             literalMatchUtf8!!,
             literalMatchFailure!!,
-            literalMatchShifts!!,
+            literalMatchShifts,
             0,
             literalMatchRareByteOffset
         )
@@ -1968,9 +1968,9 @@ class Pattern private constructor(
     }
 
     private fun buildPatternAnalysis(): PatternAnalysis {
-        val features = EnumSet.noneOf<PatternFeature?>(PatternFeature::class.java)
-        val capabilities = EnumSet.noneOf<PatternCapability?>(PatternCapability::class.java)
-        val limitations = EnumSet.noneOf<PatternLimitation?>(PatternLimitation::class.java)
+        val features = EnumSet.noneOf(PatternFeature::class.java)
+        val capabilities = EnumSet.noneOf(PatternCapability::class.java)
+        val limitations = EnumSet.noneOf(PatternLimitation::class.java)
 
         if (literalMatch() != null) {
             features.add(PatternFeature.LITERAL)
@@ -2057,7 +2057,11 @@ class Pattern private constructor(
         }
 
         return PatternAnalysis(
-            features, capabilities, limitations, prog.size, prog.numCaptures() - 1
+            java.util.Set.copyOf(features),
+            java.util.Set.copyOf(capabilities),
+            java.util.Set.copyOf(limitations),
+            prog.size,
+            prog.numCaptures() - 1
         )
     }
 
@@ -2795,8 +2799,9 @@ class Pattern private constructor(
          * @return the compiled pattern
          * @throws PatternSyntaxException if the expression's syntax is invalid
          */
+        @JvmStatic
         @JvmOverloads
-        internal fun compile(regex: String?, flags: Int = 0): Pattern {
+        fun compile(regex: String?, flags: Int = 0): Pattern {
             return compile(regex, flags, EnginePathOptions.allEnabled())
         }
 
@@ -2807,7 +2812,7 @@ class Pattern private constructor(
             val parseFlags: Int = toParseFlags(effectiveFlags)
             val re: Regexp = Parser.parse(regex, parseFlags)!!
             val prepared: Compiler.Prepared? = Compiler.prepare(re)
-            val compiled: Prog = Compiler.compile(prepared, false)!!
+            val compiled: Prog? = Compiler.compile(prepared, false)
             if (compiled == null) {
                 throw PatternSyntaxException("compiled program too large", regex, -1)
             }

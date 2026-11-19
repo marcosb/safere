@@ -10,7 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.safere.WorkCounter.StartAccelerationWork
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 /** Deterministic accounting of useful skips and recovery in DFA start acceleration.  */
 @DisabledForCrosscheck("WorkCounter and acceleration policies are SafeRE implementation details")
@@ -153,7 +152,7 @@ internal class DfaStartAccelerationWorkTest {
         val regex = "[ab][^\\r\\n;]*val=200"
         val pattern = Pattern.compile(regex)
         val policy =
-            if (utf8) pattern.utf8StartAccelerator().policy() else pattern.stringStartAccelerator().policy()
+            if (utf8) pattern.utf8StartAccelerator()!!.policy() else pattern.stringStartAccelerator()!!.policy()
         Assertions.assertThat<AcceleratorPolicy?>(policy).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
 
         val dense = "a;\n".repeat(DENSE_RECORD_COUNT) + "atarget_val=200"
@@ -181,7 +180,7 @@ internal class DfaStartAccelerationWorkTest {
             // Exercise DFA backoff independently of literal-guided narrowing before the engine search.
             val pattern =
                 Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             Assertions.assertThat(jdk.find()).isTrue()
             Assertions.assertThat(jdk.group()).isEqualTo(match)
             if (utf8) {

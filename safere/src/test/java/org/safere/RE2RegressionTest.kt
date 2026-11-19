@@ -27,7 +27,7 @@ internal class RE2RegressionTest {
     // ---------------------------------------------------------------------------
     @Nested
     @DisplayName("Replace operations")
-    internal inner class ReplaceTests {
+    internal class ReplaceTests {
         @JvmRecord
         internal data class ReplaceCase(
             val pattern: String?,
@@ -79,6 +79,7 @@ internal class RE2RegressionTest {
         }
 
         companion object {
+            @JvmStatic
             fun replaceCases(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of(

@@ -19,11 +19,11 @@ internal data class EngineContext(
     val anchorEndPos: Int,
     val emptyAnchorStartPos: Int,
     val emptyAnchorEndPos: Int,
-    val graphemeContext: GraphemeSupport.Context?
+    val graphemeContext: GraphemeSupport.Context
 ) {
     init {
-        Objects.requireNonNull<InputScanner?>(text, "text")
-        Objects.requireNonNull<GraphemeSupport.Context?>(graphemeContext, "graphemeContext")
+        Objects.requireNonNull(text, "text")
+        Objects.requireNonNull(graphemeContext, "graphemeContext")
     }
 
     companion object {
@@ -41,11 +41,9 @@ internal data class EngineContext(
             emptyAnchorEndPos: Int,
             graphemeContext: GraphemeSupport.Context?
         ): EngineContext {
-            val context: GraphemeSupport.Context? =
-                if (graphemeContext != null)
-                    graphemeContext
-                else
-                    GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics())
+            val context =
+                graphemeContext
+                    ?: GraphemeSupport.Context.create(text, prog.hasGraphemeSemantics())
             return EngineContext(
                 text,
                 searchStart,

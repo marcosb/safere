@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 /**
  * Tests for leftmost-match semantics when bounded repeats create multiple paths ending at the same
@@ -64,7 +62,7 @@ internal class BoundedRepeatLeftmostPositionTest {
 
     companion object {
         private fun assertFindSameAsJdk(pattern: String, input: String) {
-            val jdkMatcher = Pattern.compile(pattern).matcher(input)
+            val jdkMatcher = java.util.regex.Pattern.compile(pattern).matcher(input)
             val safereMatcher = org.safere.Pattern.compile(pattern).matcher(input)
 
             Assertions.assertThat(jdkMatcher.find()).isTrue()

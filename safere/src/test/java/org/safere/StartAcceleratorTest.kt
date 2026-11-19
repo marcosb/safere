@@ -11,7 +11,6 @@ import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.Utf8StartAccelerator.Teddy
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
 internal class StartAcceleratorTest {
@@ -63,7 +62,7 @@ internal class StartAcceleratorTest {
     fun literalPrefixAcceleratesStringAndUtf8() {
         val plan: StartPlan = plan("needle", false, null, null)
 
-        val strAcc = StringStartAccelerator.create(plan, false)
+        val strAcc = StringStartAccelerator.create(plan, false)!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc).isInstanceOf(StringStartAccelerator.Literal::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(strAcc.policy()).isEqualTo(AcceleratorPolicy.LITERAL)
         Assertions.assertThat(
@@ -77,7 +76,7 @@ internal class StartAcceleratorTest {
         )
             .isEqualTo(-1)
 
-        val utf8Acc = Utf8StartAccelerator.create(plan, false)
+        val utf8Acc = Utf8StartAccelerator.create(plan, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc).isInstanceOf(Utf8StartAccelerator.Literal::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(utf8Acc.policy()).isEqualTo(AcceleratorPolicy.LITERAL)
         Assertions.assertThat(
@@ -117,7 +116,7 @@ internal class StartAcceleratorTest {
     fun caseInsensitiveLiteralAcceleratesStringAndUtf8() {
         val plan: StartPlan = plan("needle", true, null, null)
 
-        val strAcc = StringStartAccelerator.create(plan, false)
+        val strAcc = StringStartAccelerator.create(plan, false)!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CaseInsensitiveLiteral::class.java)
         Assertions.assertThat(
@@ -125,7 +124,7 @@ internal class StartAcceleratorTest {
         )
             .isEqualTo(14)
 
-        val utf8Acc = Utf8StartAccelerator.create(plan, false)
+        val utf8Acc = Utf8StartAccelerator.create(plan, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc)
             .isInstanceOf(Utf8StartAccelerator.CaseInsensitiveLiteral::class.java)
         Assertions.assertThat<MatchStrategy?>(utf8Acc.policy().strategy).isEqualTo(MatchStrategy.LITERAL)
@@ -151,7 +150,7 @@ internal class StartAcceleratorTest {
 
         // Single character case-insensitive prefix
         val singleDesc: StartPlan = plan("a", true, null, null)
-        val singleUtf8 = Utf8StartAccelerator.create(singleDesc, false)
+        val singleUtf8 = Utf8StartAccelerator.create(singleDesc, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(singleUtf8)
             .isInstanceOf(Utf8StartAccelerator.CaseInsensitiveLiteral::class.java)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(singleUtf8, utf8Scanner("xxxA"), 0))
@@ -161,7 +160,7 @@ internal class StartAcceleratorTest {
 
         // Non-ASCII case-insensitive prefixes use Unicode-aware accelerators for both inputs.
         val nonAsciiDesc: StartPlan = plan("café", true, null, null)
-        val unicodeStr = StringStartAccelerator.create(nonAsciiDesc, false)
+        val unicodeStr = StringStartAccelerator.create(nonAsciiDesc, false)!!
         Assertions.assertThat<StringStartAccelerator?>(unicodeStr)
             .isInstanceOf(StringStartAccelerator.UnicodeCaseInsensitiveLiteral::class.java)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(unicodeStr, "prefix cafE CAFÉ", 0, false))
@@ -169,7 +168,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(unicodeStr, "prefix CAFÉ", 0, false))
             .isEqualTo(7)
 
-        val unicodeUtf8 = Utf8StartAccelerator.create(nonAsciiDesc, false)
+        val unicodeUtf8 = Utf8StartAccelerator.create(nonAsciiDesc, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(unicodeUtf8)
             .isInstanceOf(Utf8StartAccelerator.UnicodeCaseInsensitiveLiteral::class.java)
         Assertions.assertThat(
@@ -183,7 +182,7 @@ internal class StartAcceleratorTest {
     @Test
     fun unicodeCaseInsensitiveUtf8LiteralFindsOnlyFoldEquivalentPrefixCandidates() {
         val accelerator: Utf8StartAccelerator =
-            Utf8StartAccelerator.create(plan("Шерлок Холмс", true, null, null), false)
+            Utf8StartAccelerator.create(plan("Шерлок Холмс", true, null, null), false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(accelerator)
             .isInstanceOf(Utf8StartAccelerator.UnicodeCaseInsensitiveLiteral::class.java)
 
@@ -200,7 +199,7 @@ internal class StartAcceleratorTest {
     @Test
     fun unicodeCaseInsensitiveUtf8LiteralHandlesVariableWidthFoldBeforeLaterAnchor() {
         val accelerator: Utf8StartAccelerator =
-            Utf8StartAccelerator.create(plan("Ké", true, null, null), false)
+            Utf8StartAccelerator.create(plan("Ké", true, null, null), false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(accelerator)
             .isInstanceOf(Utf8StartAccelerator.UnicodeCaseInsensitiveLiteral::class.java)
         val scanner: Utf8InputScanner = utf8Scanner("x ké y KÉ z Ké")
@@ -212,7 +211,7 @@ internal class StartAcceleratorTest {
     @Test
     fun unicodeCaseInsensitiveUtf8LiteralFindsCandidatesAcrossScanWindows() {
         val accelerator: Utf8StartAccelerator =
-            Utf8StartAccelerator.create(plan("Шx", true, null, null), false)
+            Utf8StartAccelerator.create(plan("Шx", true, null, null), false)!!
         val first = "x".repeat(255)
         val middle = "x".repeat(255)
         val scanner: Utf8InputScanner = utf8Scanner(first + "шx" + middle + "Шx")
@@ -261,7 +260,7 @@ internal class StartAcceleratorTest {
         val noAcceleration = EnginePathOptions.builder().startAcceleration(false).build()
         for (i in literals.indices) {
             val regex = "(?iu)" + literals[i]
-            Assertions.assertThat(Pattern.compile(regex).matcher(inputs[i]).find())
+            Assertions.assertThat(java.util.regex.Pattern.compile(regex).matcher(inputs[i]).find())
                 .`as`("JDK find for %s against %s", regex, inputs[i])
                 .isTrue()
             val utf8 = Utf8Input.validated(inputs[i]!!.toByteArray(StandardCharsets.UTF_8))
@@ -279,14 +278,14 @@ internal class StartAcceleratorTest {
         val fixed = org.safere.Pattern.FixedOffsetLiteral("token", 2, 2, intArrayOf(2))
         val plan: StartPlan = plan(null, false, fixed, null)
 
-        val strAcc = StringStartAccelerator.create(plan, false)
+        val strAcc = StringStartAccelerator.create(plan, false)!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.FixedOffset::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(strAcc.policy()).isEqualTo(AcceleratorPolicy.LITERAL)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "abtoken cd", 0, false))
             .isEqualTo(0)
 
-        val utf8Acc = Utf8StartAccelerator.create(plan, false)
+        val utf8Acc = Utf8StartAccelerator.create(plan, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc).isInstanceOf(Utf8StartAccelerator.FixedOffset::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(utf8Acc.policy()).isEqualTo(AcceleratorPolicy.LITERAL)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner("abtoken cd"), 0))
@@ -298,13 +297,13 @@ internal class StartAcceleratorTest {
         val pairScanInfo = org.safere.Pattern.compile("[ab]").charClassPrefix()
         val descPair: StartPlan = plan(null, false, null, pairScanInfo)
 
-        val strAcc = StringStartAccelerator.create(descPair, false)
+        val strAcc = StringStartAccelerator.create(descPair, false)!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(strAcc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "xxxa", 0, false)).isEqualTo(3)
 
-        val utf8PairAcc = Utf8StartAccelerator.create(descPair, false)
+        val utf8PairAcc = Utf8StartAccelerator.create(descPair, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8PairAcc)
             .isInstanceOf(Utf8StartAccelerator.CharClass::class.java)
         Assertions.assertThat<CharClassScanInfo?>((utf8PairAcc as Utf8StartAccelerator.CharClass).scanInfo)
@@ -315,7 +314,7 @@ internal class StartAcceleratorTest {
 
         val tripleScanInfo = org.safere.Pattern.compile("[abc]").charClassPrefix()
         val planTriple: StartPlan = plan(null, false, null, tripleScanInfo)
-        val utf8TripleAcc = Utf8StartAccelerator.create(planTriple, false)
+        val utf8TripleAcc = Utf8StartAccelerator.create(planTriple, false)!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8TripleAcc)
             .isInstanceOf(Utf8StartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(utf8TripleAcc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
@@ -346,14 +345,14 @@ internal class StartAcceleratorTest {
     @Test
     fun unicodeCharClassPrefixAcceleratesStringAndUtf8() {
         val pattern = org.safere.Pattern.compile("[aéĀ]+")
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(strAcc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "123\u00e945", 0, false))
             .isEqualTo(3)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc).isInstanceOf(Utf8StartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(utf8Acc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner("123\u00e945"), 0))
@@ -363,14 +362,14 @@ internal class StartAcceleratorTest {
     @Test
     fun supplementaryUnicodeCharClassPrefixAcceleratesStringAndUtf8() {
         val pattern = org.safere.Pattern.compile("[(é)|(😀)]")
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(strAcc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "x\uD83D\uDE00y", 0, false))
             .isEqualTo(1)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc).isInstanceOf(Utf8StartAccelerator.CharClass::class.java)
         Assertions.assertThat<AcceleratorPolicy?>(utf8Acc.policy()).isEqualTo(AcceleratorPolicy.CHAR_CLASS)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner("x😀y"), 0))
@@ -379,7 +378,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun unicodeCharClassPrefixResumesAsciiScanningAfterNonAsciiCodePoints() {
-        val accelerator = org.safere.Pattern.compile("[aéĀ]+").stringStartAccelerator()
+        val accelerator = org.safere.Pattern.compile("[aéĀ]+").stringStartAccelerator()!!
 
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(accelerator, "000©000", 0, false))
             .isEqualTo(-1)
@@ -431,14 +430,15 @@ internal class StartAcceleratorTest {
                         patStr
                     )
                     .isNotNull()
-                Assertions.assertThat<MatchStrategy?>(utf8Acc.policy().strategy)
+                val presentUtf8Acc = utf8Acc!!
+                Assertions.assertThat<MatchStrategy?>(presentUtf8Acc.policy().strategy)
                     .`as`("Strategies should match for pattern: %s", patStr)
                     .isEqualTo(strAcc.policy().strategy)
 
                 for (input in testInputs) {
                     val strCandidate = StringStartAccelerator.findNextCandidate(strAcc, input, 0, false)
                     val utf8Candidate =
-                        Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(input!!), 0)
+                        Utf8StartAccelerator.findNextCandidate(presentUtf8Acc, utf8Scanner(input!!), 0)
                     Assertions.assertThat(utf8Candidate)
                         .`as`("Candidate indices should match for pattern '%s' on input '%s'", patStr, input)
                         .isEqualTo(strCandidate)
@@ -460,7 +460,7 @@ internal class StartAcceleratorTest {
             StringStartAccelerator.CharClass.create(
                 CharClassScanInfo.fromCharClass(
                     CharClassBuilder().addRune('['.code).addRune(0xFF3B).build()
-                )
+                )!!
             )
         Assertions.assertThat<CharClassScanInfo?>(accelerator.scanInfo)
             .isInstanceOf(CharClassScanInfo.SmallSet::class.java)
@@ -494,23 +494,23 @@ internal class StartAcceleratorTest {
         val literalPat = org.safere.Pattern.compile("abc")
         Assertions.assertThat<StringStartAccelerator?>(literalPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(literalPat.utf8StartAccelerator()).isNotNull()
-        Assertions.assertThat<AcceleratorPolicy?>(literalPat.stringStartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(literalPat.stringStartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
-        Assertions.assertThat<AcceleratorPolicy?>(literalPat.utf8StartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(literalPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
 
         val caseInsensitivePat = org.safere.Pattern.compile("(?i)abc")
         Assertions.assertThat<StringStartAccelerator?>(caseInsensitivePat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(caseInsensitivePat.utf8StartAccelerator()).isNotNull()
-        Assertions.assertThat<MatchStrategy?>(caseInsensitivePat.utf8StartAccelerator().policy().strategy)
+        Assertions.assertThat<MatchStrategy?>(caseInsensitivePat.utf8StartAccelerator()!!.policy().strategy)
             .isEqualTo(MatchStrategy.LITERAL)
 
         val charClassPat = org.safere.Pattern.compile("[0-2][a-z]+")
         Assertions.assertThat<StringStartAccelerator?>(charClassPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(charClassPat.utf8StartAccelerator()).isNotNull()
-        Assertions.assertThat<AcceleratorPolicy?>(charClassPat.stringStartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(charClassPat.stringStartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.CHAR_CLASS)
-        Assertions.assertThat<AcceleratorPolicy?>(charClassPat.utf8StartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(charClassPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.CHAR_CLASS)
 
         val broadCharClassPat = org.safere.Pattern.compile("[0-9][a-z]+")
@@ -520,9 +520,9 @@ internal class StartAcceleratorTest {
         val fixedOffsetPat = org.safere.Pattern.compile("..needle")
         Assertions.assertThat<StringStartAccelerator?>(fixedOffsetPat.stringStartAccelerator()).isNotNull()
         Assertions.assertThat<Utf8StartAccelerator?>(fixedOffsetPat.utf8StartAccelerator()).isNotNull()
-        Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.stringStartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.stringStartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
-        Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.utf8StartAccelerator().policy())
+        Assertions.assertThat<AcceleratorPolicy?>(fixedOffsetPat.utf8StartAccelerator()!!.policy())
             .isEqualTo(AcceleratorPolicy.LITERAL)
 
         val unacceleratedPat = org.safere.Pattern.compile(".*")
@@ -532,13 +532,13 @@ internal class StartAcceleratorTest {
 
     @Test
     fun multiLiteralWithSharedPrefixReturnsNullAndFallsBackToTeddyOrNone() {
-        val info = MultiLiteralInfo.create(arrayOf<String>("cat", "car"))
+        val info = MultiLiteralInfo.create(arrayOf<String?>("cat", "car"))
         Assertions.assertThat<MultiLiteralInfo?>(info)
             .`as`("MultiLiteralInfo must reject colliding initial anchor chars").isNull()
 
-        val distinctInfo = MultiLiteralInfo.create(arrayOf<String>("cat", "dog", "fox"))
+        val distinctInfo = MultiLiteralInfo.create(arrayOf<String?>("cat", "dog", "fox"))!!
         Assertions.assertThat<MultiLiteralInfo?>(distinctInfo).isNotNull()
-        Assertions.assertThat<String?>(distinctInfo!!.literals).containsExactly("cat", "dog", "fox")
+        Assertions.assertThat<String?>(distinctInfo.literals).containsExactly("cat", "dog", "fox")
     }
 
     @Test
@@ -556,8 +556,8 @@ internal class StartAcceleratorTest {
         if (!isVectorApiAvailable) {
             return
         }
-        val literals: Array<String?> = arrayOf<String>("APPLE", "BANANA", "CHERRY")
-        val info = MultiLiteralInfo.create(literals)
+        val literals: Array<String?> = arrayOf<String?>("APPLE", "BANANA", "CHERRY")
+        val info = MultiLiteralInfo.create(literals)!!
         Assertions.assertThat<MultiLiteralInfo?>(info).isNotNull()
 
         val denseNoise = "A B C A B C ".repeat(1000).toByteArray(StandardCharsets.UTF_8)
@@ -567,10 +567,10 @@ internal class StartAcceleratorTest {
                 denseNoise,
                 0,
                 denseNoise.size,
-                info!!.literals,
-                info.anchorChars,
-                info.anchorOffsets,
-                info.anchorRanges,
+                info.literals!!.requireNoNulls(),
+                info.anchorChars!!,
+                info.anchorOffsets!!,
+                info.anchorRanges!!,
                 info.minLength,
                 0
             )
@@ -595,8 +595,8 @@ internal class StartAcceleratorTest {
         if (!isVectorApiAvailable) {
             return
         }
-        val literals: Array<String?> = arrayOf<String>("blossom", "sparkling", "twilight")
-        val info = MultiLiteralInfo.create(literals)
+        val literals: Array<String?> = arrayOf<String?>("blossom", "sparkling", "twilight")
+        val info = MultiLiteralInfo.create(literals)!!
         val teddyModel = TeddyModel.compile(literals, 64)
         Assertions.assertThat<MultiLiteralInfo?>(info).isNotNull()
         Assertions.assertThat<TeddyModel?>(teddyModel).isNotNull()
@@ -608,10 +608,10 @@ internal class StartAcceleratorTest {
                 input,
                 0,
                 input.size,
-                info!!.literals,
-                info.anchorChars,
-                info.anchorOffsets,
-                info.anchorRanges,
+                info.literals!!.requireNoNulls(),
+                info.anchorChars!!,
+                info.anchorOffsets!!,
+                info.anchorRanges!!,
                 info.minLength,
                 teddyModel,
                 0
@@ -630,11 +630,11 @@ internal class StartAcceleratorTest {
         // the leading class already excludes.
         val text = "see http://a and https://b"
 
-        val strAcc = StringStartAccelerator.create(plan, false)
+        val strAcc = StringStartAccelerator.create(plan, false)!!
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, text, 0, false)).isEqualTo(4)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, text, 5, false)).isEqualTo(17)
 
-        val utf8Acc = Utf8StartAccelerator.create(plan, false)
+        val utf8Acc = Utf8StartAccelerator.create(plan, false)!!
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(text), 0)).isEqualTo(4)
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(text), 5)).isEqualTo(17)
     }
@@ -649,10 +649,10 @@ internal class StartAcceleratorTest {
         // 10 starts the match at 0. The caller treats the result as a floor, so it has to report 0.
         val text = "bxxaxzxxxxz"
 
-        val strAcc = StringStartAccelerator.create(plan, false)
+        val strAcc = StringStartAccelerator.create(plan, false)!!
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, text, 0, false)).isZero()
 
-        val utf8Acc = Utf8StartAccelerator.create(plan, false)
+        val utf8Acc = Utf8StartAccelerator.create(plan, false)!!
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(text), 0)).isZero()
 
         // Past that start nothing can match, and the leading class is enough to prove it without
@@ -667,7 +667,7 @@ internal class StartAcceleratorTest {
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
 
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.LeadingExpansion::class.java)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "hello   [123] world", 0, false))
@@ -681,7 +681,7 @@ internal class StartAcceleratorTest {
         )
             .isEqualTo(-1)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc)
             .isInstanceOf(Utf8StartAccelerator.LeadingExpansion::class.java)
         Assertions.assertThat(
@@ -706,7 +706,7 @@ internal class StartAcceleratorTest {
         val plan = pattern.startPlan()
         Assertions.assertThat<StartPlan?>(plan).isInstanceOf(StartPlan.LeadingExpansion::class.java)
 
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.LeadingExpansion::class.java)
         // Requires at least 1 leading whitespace
@@ -719,7 +719,7 @@ internal class StartAcceleratorTest {
         )
             .isEqualTo(-1)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc)
             .isInstanceOf(Utf8StartAccelerator.LeadingExpansion::class.java)
         Assertions.assertThat(
@@ -746,7 +746,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(le.minRepetition).isEqualTo(1)
         Assertions.assertThat(le.maxRepetition).isEqualTo(Int.MAX_VALUE)
 
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         Assertions.assertThat<StringStartAccelerator?>(strAcc)
             .isInstanceOf(StringStartAccelerator.LeadingExpansion::class.java)
         // 5 \u00e9 chars before :target
@@ -763,7 +763,7 @@ internal class StartAcceleratorTest {
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, "prefix:target", 0, false))
             .isEqualTo(-1)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         Assertions.assertThat<Utf8StartAccelerator?>(utf8Acc)
             .isInstanceOf(Utf8StartAccelerator.LeadingExpansion::class.java)
         // In UTF-8, "prefix" is 6 bytes. Each \u00e9 is 2 bytes (0xC3 0xA9).
@@ -802,14 +802,14 @@ internal class StartAcceleratorTest {
                 .toString()
         val noEmoji = "abc:target"
 
-        val strAcc = pattern.stringStartAccelerator()
+        val strAcc = pattern.stringStartAccelerator()!!
         // In UTF-16, "abc" is 3 chars. Each emoji is 2 chars (surrogate pair).
         // "abc...:target" -> Leftmost emoji is at index 3.
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, emoji4, 0, false)).isEqualTo(3)
         // 0 emoji -> fails minRepetition (1)
         Assertions.assertThat(StringStartAccelerator.findNextCandidate(strAcc, noEmoji, 0, false)).isEqualTo(-1)
 
-        val utf8Acc = pattern.utf8StartAccelerator()
+        val utf8Acc = pattern.utf8StartAccelerator()!!
         // In UTF-8, "abc" is 3 bytes. Each emoji is 4 bytes.
         // Leftmost emoji is at byte 3.
         Assertions.assertThat(Utf8StartAccelerator.findNextCandidate(utf8Acc, utf8Scanner(emoji4), 0))

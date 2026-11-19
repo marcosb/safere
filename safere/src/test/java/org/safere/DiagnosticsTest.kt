@@ -21,7 +21,6 @@ import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.lang.reflect.RecordComponent
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.Map
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -32,7 +31,6 @@ import java.util.function.Function
 import java.util.function.IntConsumer
 import java.util.function.Predicate
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import java.util.stream.IntStream
 import java.util.stream.Stream
 
@@ -51,7 +49,7 @@ internal class DiagnosticsTest {
     fun anchoredOnePassUsesTerminalRejectionBeforeScanning() {
         Pattern.setDiagnostics(diagnostics)
         val input = "a".repeat(4096) + "c"
-        for (regex in mutableListOf<String?>("^(a)*b$", "^([a-z]+)[0-9]$", "^([a-z]+)END\\z")) {
+        for (regex in mutableListOf<String>("^(a)*b$", "^([a-z]+)[0-9]$", "^([a-z]+)END\\z")) {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.canOnePassPrimary()).`as`("/%s/", regex).isTrue()
             Assertions.assertThat(pattern.matcher(input).matches()).isFalse()
@@ -96,9 +94,9 @@ internal class DiagnosticsTest {
         ObjectOutputStream(bytes).use { output ->
             output.writeObject(original)
         }
-        val restored: Pattern
+        val restored: org.safere.Pattern
         ObjectInputStream(ByteArrayInputStream(bytes.toByteArray())).use { input ->
-            restored = input.readObject() as Pattern
+            restored = input.readObject() as org.safere.Pattern
         }
         Assertions.assertThat(restored.patternId()).isPositive().isNotEqualTo(original.patternId())
         Assertions.assertThat(restored.pattern()).isEqualTo(original.pattern())
@@ -109,7 +107,7 @@ internal class DiagnosticsTest {
             .singleElement()
             .satisfies(
                 ThrowingConsumer { event: OperationDiagnostics? ->
-                    Assertions.assertThat(event!!.pattern.patternId).isEqualTo(restored.patternId())
+                    Assertions.assertThat(event!!.pattern!!.patternId).isEqualTo(restored.patternId())
                 })
     }
 
@@ -138,7 +136,8 @@ internal class DiagnosticsTest {
                 PatternLimitation.CAPTURE_PRIORITY_REQUIRES_EXACT_ENGINE
             )
         Assertions.assertThat(analysis.captureCount).isEqualTo(1)
-        Assertions.assertThatThrownBy(ThrowingCallable { analysis.features.clear() })
+        Assertions.assertThatThrownBy(
+                ThrowingCallable { (analysis.features as MutableSet<PatternFeature>).clear() })
             .isInstanceOf(UnsupportedOperationException::class.java)
     }
 
@@ -155,8 +154,8 @@ internal class DiagnosticsTest {
             .singleElement()
             .satisfies(
                 ThrowingConsumer { event: OperationDiagnostics? ->
-                    Assertions.assertThat<PatternAnalysis?>(event!!.pattern.analysis).isSameAs(pattern.analysis())
-                    Assertions.assertThat(event.pattern.patternId).isEqualTo(patternId)
+                    Assertions.assertThat<PatternAnalysis?>(event!!.pattern!!.analysis).isSameAs(pattern.analysis())
+                    Assertions.assertThat(event.pattern!!.patternId).isEqualTo(patternId)
                     Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).isEqualTo(MatchStrategy.LITERAL)
                     Assertions.assertThat(event.forwardDfaSearchCount).isZero()
                     Assertions.assertThat(event.reverseDfaSearchCount).isZero()
@@ -185,9 +184,9 @@ internal class DiagnosticsTest {
     @Test
     fun literalAlternationSearchesReportADistinctStrategy() {
         Pattern.setDiagnostics(diagnostics)
-        for (regex in mutableListOf<String?>("apple|banana|cherry", "foo|barfoo")) {
+        for (regex in mutableListOf<String>("apple|banana|cherry", "foo|barfoo")) {
             val pattern = Pattern.compile(regex)
-            for (input in mutableListOf<String?>("barfoo apple", "xxxxx")) {
+            for (input in mutableListOf<String>("barfoo apple", "xxxxx")) {
                 Assertions.assertThat(pattern.matcher(input).find()).isEqualTo(input == "barfoo apple")
                 val event: OperationDiagnostics = operationsFor(pattern).last()
                 Assertions.assertThat<MatchStrategy?>(event.boundaryStrategy).`as`(regex)
@@ -207,7 +206,7 @@ internal class DiagnosticsTest {
 
         val compilation =
             diagnostics.compilations.stream()
-                .filter { event: PatternCompiledEvent? -> event!!.pattern.patternId == pattern.patternId() }
+                .filter { event: PatternCompiledEvent? -> event!!.pattern!!.patternId == pattern.patternId() }
                 .findFirst()
                 .orElseThrow()
         Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
@@ -372,7 +371,7 @@ internal class DiagnosticsTest {
     fun compositeRejectPrefilterReportsTheChildThatRejected() {
         Pattern.setDiagnostics(diagnostics)
 
-        for (operation in List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.MATCHES)) {
+        for (operation in java.util.List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.MATCHES)) {
             // Reach the composite prefilter rather than the earlier minimum-length rejection.
             assertCompositeRejection(operation, "needle ", MatchStrategy.CHARACTER_CLASS)
             assertCompositeRejection(operation, "xxxxxxx", MatchStrategy.LITERAL)
@@ -383,7 +382,7 @@ internal class DiagnosticsTest {
     fun compositeRejectPrefilterReplacementReportsTheChildThatRejected() {
         Pattern.setDiagnostics(diagnostics)
 
-        for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+        for (operation in java.util.List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
             val pattern = Pattern.compile("foo.*bar.*[0-9]$")
             val matcher = pattern.matcher("foo---7")
 
@@ -417,8 +416,8 @@ internal class DiagnosticsTest {
         val regex = " ?[\\[\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\uFF3D]"
         val pattern = Pattern.compile(regex)
 
-        for (input in mutableListOf<String?>("digits 1.2.3.4 and dots but no brackets", "letters and spaces only")) {
-            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+        for (input in mutableListOf<String>("digits 1.2.3.4 and dots but no brackets", "letters and spaces only")) {
+            for (operation in java.util.List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
                 diagnostics.operations.clear()
                 val matcher = pattern.matcher(input)
                 val result =
@@ -447,12 +446,12 @@ internal class DiagnosticsTest {
 
         // Brackets present with no matching digits return the right result without false-positive
         // match.
-        for (input in mutableListOf<String?>(
+        for (input in mutableListOf<String>(
             "[brackets without digits]",
             "prefix [1.2 incomplete] suffix",
             "［full width brackets without digits］"
         )) {
-            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+            for (operation in java.util.List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
                 diagnostics.operations.clear()
                 val matcher = pattern.matcher(input)
                 val result =
@@ -478,11 +477,11 @@ internal class DiagnosticsTest {
         Pattern.setDiagnostics(diagnostics)
 
         // Start-anchored scrubbers with a literal anchored prefix of "(" and "[" respectively.
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "^\\([Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\)\\s*",
             "^\\[[Ss]ource:\\s*\\d+(?:\\s*,\\s*(?:[Ss]ource:\\s*)?\\d+)*\\s*\\]\\s*"
         )) {
-            for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+            for (operation in java.util.List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
                 val pattern = Pattern.compile(regex)
                 val input = "No citation marker begins this paragraph."
                 val matcher = pattern.matcher(input)
@@ -516,7 +515,7 @@ internal class DiagnosticsTest {
     fun startAnchoredReplacementRejectsOnTheAnchoredCharacterClass() {
         Pattern.setDiagnostics(diagnostics)
 
-        for (operation in List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
+        for (operation in java.util.List.of<MatchOperation?>(MatchOperation.REPLACE_FIRST, MatchOperation.REPLACE_ALL)) {
             val pattern = Pattern.compile("^[0-9]+ items")
             val input = "no leading digit here"
             val matcher = pattern.matcher(input)
@@ -649,12 +648,12 @@ internal class DiagnosticsTest {
     fun nullableDfaReplacementCountsTerminalEmptyMatch() {
         Pattern.setDiagnostics(diagnostics)
 
-        for (input in mutableListOf<String?>("", "b", "bbb")) {
+        for (input in mutableListOf<String>("", "b", "bbb")) {
             val pattern = Pattern.compile("a?")
             val expectedMatches = input!!.length + 1L
 
             Assertions.assertThat(pattern.matcher(input).replaceAll("x"))
-                .isEqualTo(Pattern.compile("a?").matcher(input).replaceAll("x"))
+                .isEqualTo(java.util.regex.Pattern.compile("a?").matcher(input).replaceAll("x"))
 
             Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
                 .singleElement()
@@ -980,7 +979,7 @@ internal class DiagnosticsTest {
             .forEach(IntConsumer { ignored: Int -> Assertions.assertThat(pattern.matcher("abc").matches()).isTrue() })
 
         Assertions.assertThat<OperationDiagnostics?>(events)
-            .filteredOn(Predicate { event: OperationDiagnostics? -> event!!.pattern.patternId == pattern.descriptor().patternId })
+            .filteredOn(Predicate { event: OperationDiagnostics? -> event!!.pattern!!.patternId == pattern.descriptor().patternId })
             .hasSize(32)
     }
 
@@ -1104,14 +1103,14 @@ internal class DiagnosticsTest {
     fun dfaBudgetExhaustionReportsFallbackToAnExactEngine() {
         val regex = "[ab]*a" + "[ab]".repeat(14) + "X"
         val pattern = org.safere.Pattern.compile(regex)
-        val oracle = Pattern.compile(regex)
+        val oracle = java.util.regex.Pattern.compile(regex)
         val observedBudgetFallback = AtomicBoolean()
         val observedForwardSearchCount = AtomicInteger()
         org.safere.Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
-                override fun onOperationCompleted(event: OperationDiagnostics) {
-                    if (event
-                            .strategyDecisions
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
+                    if (event!!
+                            .strategyDecisions!!
                             .contains(
                                 StrategyDecision(
                                     MatchStrategy.DFA,
@@ -1204,9 +1203,9 @@ internal class DiagnosticsTest {
         val counts: MutableMap<MatchStrategy?, LongAdder?> = ConcurrentHashMap<MatchStrategy?, LongAdder?>()
         org.safere.Pattern.setDiagnostics(
             object : SafeReMatchDiagnostics() {
-                override fun onOperationCompleted(event: OperationDiagnostics) {
+                override fun onOperationCompleted(event: OperationDiagnostics?) {
                     counts
-                        .computeIfAbsent(event.boundaryStrategy) { ignored: MatchStrategy? -> LongAdder() }!!
+                        .computeIfAbsent(event!!.boundaryStrategy) { ignored: MatchStrategy? -> LongAdder() }!!
                         .increment()
                 }
             })
@@ -1468,7 +1467,7 @@ internal class DiagnosticsTest {
         val unanchoredKeywordPattern = org.safere.Pattern.compile("(?i)\\b(you|your)\\b")
         Assertions.assertThat(unanchoredKeywordPattern.matcher("nothing matching here").find()).isFalse()
 
-        for (pattern in List.of<org.safere.Pattern>(anchoredKeywordPattern, unanchoredKeywordPattern)) {
+        for (pattern in java.util.List.of<org.safere.Pattern>(anchoredKeywordPattern, unanchoredKeywordPattern)) {
             Assertions.assertThat<OperationDiagnostics?>(operationsFor(pattern))
                 .singleElement()
                 .satisfies(
@@ -1563,7 +1562,7 @@ internal class DiagnosticsTest {
         val pattern = org.safere.Pattern.compile(regex)
         val hasCaptures = pattern.analysis().captureCount > 0
 
-        for (input in List.of<String?>(matchingInput, nonMatchingInput)) {
+        for (input in java.util.List.of<String?>(matchingInput, nonMatchingInput)) {
             diagnostics.operations.clear()
             val mMatches = pattern.matcher(input)
             val matched = mMatches.matches()
@@ -1595,7 +1594,7 @@ internal class DiagnosticsTest {
             }
 
             val captureReplacement = if (hasCaptures) "$1" else "x"
-            for (replacement in List.of<String?>("x", captureReplacement)) {
+            for (replacement in java.util.List.of<String?>("x", captureReplacement)) {
                 diagnostics.operations.clear()
                 Assertions.assertThat(pattern.matcher(input).replaceFirst(replacement)).isNotNull()
                 assertCaptureStrategyMatchesMode(operationsFor(pattern))
@@ -1620,9 +1619,9 @@ internal class DiagnosticsTest {
         val pattern = org.safere.Pattern.compile(regex, 0, options)
         val analysis = pattern.analysis()
 
-        if (analysis.limitations.contains(PatternLimitation.LAZY_SEMANTICS_LIMIT_ONE_PASS)
-            || analysis.limitations.contains(PatternLimitation.NULLABLE_ALTERNATION_LIMITS_ONE_PASS)
-            || analysis.limitations.contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
+        if (analysis.limitations!!.contains(PatternLimitation.LAZY_SEMANTICS_LIMIT_ONE_PASS)
+            || analysis.limitations!!.contains(PatternLimitation.NULLABLE_ALTERNATION_LIMITS_ONE_PASS)
+            || analysis.limitations!!.contains(PatternLimitation.GRAPHEME_REQUIRES_EXACT_ENGINE)
             || analysis.captureCount > OnePass.MAX_CAPTURE_GROUPS - 1 || !options.onePass
         ) {
             Assertions.assertThat<PatternCapability?>(analysis.capabilities)
@@ -1634,9 +1633,9 @@ internal class DiagnosticsTest {
             Assertions.assertThat<PatternCapability?>(analysis.capabilities)
                 .doesNotContain(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION)
         }
-        Assertions.assertThat(analysis.capabilities.contains(PatternCapability.ONE_PASS_PRIMARY))
+        Assertions.assertThat(analysis.capabilities!!.contains(PatternCapability.ONE_PASS_PRIMARY))
             .isEqualTo(expectPrimary)
-        Assertions.assertThat(analysis.capabilities.contains(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION))
+        Assertions.assertThat(analysis.capabilities!!.contains(PatternCapability.ONE_PASS_CAPTURE_EXTRACTION))
             .isEqualTo(expectCaptureExtraction)
 
         Assertions.assertThat(pattern.matcher(matchingInput).matches()).isTrue()
@@ -1672,7 +1671,7 @@ internal class DiagnosticsTest {
                 .anyMatch { event: OperationDiagnostics? -> event!!.captureStrategy == MatchStrategy.ONE_PASS }
         val ranOnePassAuxiliary =
             events.stream()
-                .flatMap<StrategyParticipation?> { event: OperationDiagnostics? -> event!!.auxiliaryStrategies.stream() }
+                .flatMap<StrategyParticipation?> { event: OperationDiagnostics? -> event!!.auxiliaryStrategies!!.stream() }
                 .anyMatch { participation: StrategyParticipation? -> participation!!.strategy == MatchStrategy.ONE_PASS }
 
         Assertions.assertThat(ranOnePassPrimary).isEqualTo(expectPrimary)
@@ -1685,7 +1684,7 @@ internal class DiagnosticsTest {
     private fun operationsFor(pattern: org.safere.Pattern): MutableList<OperationDiagnostics> {
         val patternId = pattern.patternId()
         return diagnostics.operations.stream()
-            .filter { event: OperationDiagnostics? -> event!!.pattern.patternId == patternId }
+            .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }
             .toList()
     }
 
@@ -1729,10 +1728,11 @@ internal class DiagnosticsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun lazyShiftDfaSearchCases(): Stream<Arguments?> {
             val cases = Stream.builder<Arguments?>()
-            for (utf8 in mutableListOf<Boolean?>(false, true)) {
-                for (operation in List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.LOOKING_AT)) {
+            for (utf8 in mutableListOf<Boolean>(false, true)) {
+                for (operation in java.util.List.of<MatchOperation?>(MatchOperation.FIND, MatchOperation.LOOKING_AT)) {
                     cases.add(Arguments.of("^a[é]*", "aéé", operation, utf8))
                     cases.add(Arguments.of("^a{9}b?c?", "aaaaaaaaabc", operation, utf8))
                     cases.add(Arguments.of("^a[bc]*", "abcbc", operation, utf8))
@@ -1741,6 +1741,7 @@ internal class DiagnosticsTest {
             return cases.build()
         }
 
+        @JvmStatic
         private fun reverseCandidateVerificationCases(): Stream<Arguments?>? {
             return Stream.of<Boolean?>(false, true)
                 .flatMap<Arguments?> { bitState: Boolean? ->
@@ -1753,6 +1754,7 @@ internal class DiagnosticsTest {
                 }
         }
 
+        @JvmStatic
         private fun captureHistoryFindCases(): Stream<Arguments?>? {
             return Stream.of<Boolean?>(false, true)
                 .flatMap<Arguments?> { utf8: Boolean? ->
@@ -1776,6 +1778,7 @@ internal class DiagnosticsTest {
             return pattern
         }
 
+        @JvmStatic
         private fun captureAttributionAlignmentCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("^([a-z]+):(\\d+)$", "abc:123", "abc:nope"),
@@ -1818,7 +1821,7 @@ internal class DiagnosticsTest {
                         Assertions.assertThat(event!!.captureStrategy != MatchStrategy.NONE)
                             .isEqualTo(event.captureMode == CaptureMode.EAGER)
                         if (event.outcome == MatchOutcome.NO_MATCH
-                            || event.pattern.analysis.captureCount == 0
+                            || event.pattern!!.analysis!!.captureCount == 0
                         ) {
                             Assertions.assertThat<CaptureMode?>(event.captureMode).isEqualTo(CaptureMode.NONE)
                             Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
@@ -1826,6 +1829,7 @@ internal class DiagnosticsTest {
                     })
         }
 
+        @JvmStatic
         private fun onePassCapabilityAlignmentCases(): Stream<Arguments?> {
             val defaults = EnginePathOptions.allEnabled()
             val onePassDisabled = EnginePathOptions.builder().onePass(false).build()

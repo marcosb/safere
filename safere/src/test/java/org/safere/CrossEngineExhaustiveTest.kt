@@ -9,7 +9,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.safere.ExhaustiveUtils.TestResult
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.math.min
 
@@ -44,10 +43,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "b", "(?:^)", "(?:$)", "."),  /* ops= */
+                        mutableListOf<String>("a", "b", "(?:^)", "(?:$)", "."),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.MULTILINE,  /* testLongText= */
                         true
@@ -65,10 +64,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", "(?:^)", "(?:$)", "."),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "(?:^)", "(?:$)", "."),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.MULTILINE,  /* testLongText= */
                         true
@@ -108,7 +107,7 @@ internal class CrossEngineExhaustiveTest {
                     "prefix\n" + "x".repeat(300) + "\nsuffix",
                 )
                 for (text in texts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, Pattern.MULTILINE, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, Pattern.MULTILINE, failures)
                 }
             }
 
@@ -137,10 +136,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "b", "c", "[a-c]", "[b-d]", "."),  /* ops= */
+                        mutableListOf<String>("a", "b", "c", "[a-c]", "[b-d]", "."),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "A", "b", "B", "c", "C", "d", "D"),  /* wrapper= */
+                        mutableListOf<String>("a", "A", "b", "B", "c", "C", "d", "D"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.CASE_INSENSITIVE,  /* testLongText= */
                         true
@@ -157,10 +156,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", "b", "(?:^)", "(?:$)", "[a-c]"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+", "%s?"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "b", "(?:^)", "(?:$)", "[a-c]"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+", "%s?"),  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "A", "b", "B", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "A", "b", "B", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.CASE_INSENSITIVE or Pattern.MULTILINE,  /* testLongText= */
                         true
@@ -196,7 +195,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 for (text in texts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, Pattern.CASE_INSENSITIVE, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, Pattern.CASE_INSENSITIVE, failures)
                 }
             }
 
@@ -224,10 +223,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", ".", "[^a]"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+", "%s?"),  /* maxStrLen= */
+                        mutableListOf<String>("a", ".", "[^a]"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+", "%s?"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.DOTALL,  /* testLongText= */
                         true
@@ -244,10 +243,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", ".", "(?:^)", "(?:$)"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("a", ".", "(?:^)", "(?:$)"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.DOTALL or Pattern.MULTILINE,  /* testLongText= */
                         true
@@ -264,10 +263,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("a", ".", "(?:^)", "(?:$)"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("a", ".", "(?:^)", "(?:$)"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "A", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "A", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         Pattern.DOTALL or Pattern.MULTILINE or Pattern.CASE_INSENSITIVE,  /* testLongText= */
                         true
@@ -289,10 +288,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "(?:\\b)", "(?:\\B)", "\\w", "\\W"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s|%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("a", "(?:\\b)", "(?:\\B)", "\\w", "\\W"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s|%s", "%s*", "%s+"),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", " ", "_"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", " ", "_"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -342,12 +341,12 @@ internal class CrossEngineExhaustiveTest {
             for (pat in patterns) {
                 for (text in texts) {
                     // Test without MULTILINE (anchor stripping applies)
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, 0, failures)
 
                     // Also compare replaceAll
                     tests++
                     try {
-                        val jdkPat = Pattern.compile(pat)
+                        val jdkPat = java.util.regex.Pattern.compile(pat)
                         val saferePat = org.safere.Pattern.compile(pat)
 
                         val jdkResult = jdkPat.matcher(text).replaceAll("X")
@@ -400,8 +399,8 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 for (text in texts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
-                    tests += ExhaustiveUtils.testPair(pat, text, org.safere.Pattern.MULTILINE, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, org.safere.Pattern.MULTILINE, failures)
                 }
             }
 
@@ -433,13 +432,13 @@ internal class CrossEngineExhaustiveTest {
             )
 
             for (ch in specialChars) {
-                val quoted = org.safere.Pattern.quote(ch)
+                val quoted = org.safere.Pattern.quote(ch!!)
                 val pat = "[" + quoted + "]+"
 
                 val texts = arrayOf<String?>(ch, ch + ch, "a" + ch + "b", "abc", ch!!.repeat(5), "#".repeat(260) + ch)
 
                 for (text in texts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat, text!!, 0, failures)
                 }
             }
 
@@ -455,7 +454,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in compoundPatterns) {
                 for (text in compoundTexts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, 0, failures)
                 }
             }
 
@@ -492,10 +491,10 @@ internal class CrossEngineExhaustiveTest {
             )
 
             for (config in configs) {
-                val pat = config!![0]
+                val pat = config!![0]!!
                 // Test against all the example texts
                 for (i in 1..<config.size) {
-                    tests += ExhaustiveUtils.testPair(pat, config[i], 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat, config[i]!!, 0, failures)
                     // Also long text
                     tests += ExhaustiveUtils.testPair(pat, "#".repeat(260) + config[i], 0, failures)
                 }
@@ -551,7 +550,7 @@ internal class CrossEngineExhaustiveTest {
                     var jdkRejects = false
                     var safereRejects = false
                     try {
-                        Pattern.compile(pat)
+                        java.util.regex.Pattern.compile(pat)
                     } catch (e: PatternSyntaxException) {
                         jdkRejects = true
                     }
@@ -563,8 +562,8 @@ internal class CrossEngineExhaustiveTest {
                     if (jdkRejects || safereRejects) {
                         continue
                     }
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
-                    tests += ExhaustiveUtils.testPair(pat, text, org.safere.Pattern.CASE_INSENSITIVE, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, org.safere.Pattern.CASE_INSENSITIVE, failures)
                 }
             }
 
@@ -593,10 +592,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", ".", "(?:^)", "(?:$)", "(?:\\b)", "\\d", "\\w"),  /* ops= */
+                        mutableListOf<String>("a", ".", "(?:^)", "(?:$)", "(?:\\b)", "\\d", "\\w"),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "1", " "),  /* wrapper= */
+                        mutableListOf<String>("a", "1", " "),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -628,15 +627,15 @@ internal class CrossEngineExhaustiveTest {
             for (pat in patterns) {
                 for (shortText in shortTexts) {
                     // Short text (OnePass/BitState path)
-                    tests += ExhaustiveUtils.testPair(pat, shortText, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, shortText!!, 0, failures)
 
                     // Long text (DFA path) — same content, padded
                     val longText = "x".repeat(260) + shortText
-                    tests += ExhaustiveUtils.testPair(pat, longText, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, longText, 0, failures)
 
                     // Long text with content in the middle
                     val midText = "x".repeat(130) + shortText + "x".repeat(130)
-                    tests += ExhaustiveUtils.testPair(pat, midText, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, midText, 0, failures)
                 }
             }
 
@@ -659,14 +658,14 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         3,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "b", "(a)"),  /* ops= */
-                        mutableListOf<String?>(
+                        mutableListOf<String>("a", "b", "(a)"),  /* ops= */
+                        mutableListOf<String>(
                             "%s{0}",
                             "%s{0,}", "%s{1}", "%s{1,}", "%s{0,1}", "%s{0,2}", "%s{1,2}", "%s{2}",
                             "%s{2,}", "%s*", "%s+", "%s?", "%s*?", "%s+?", "%s??"
                         ),  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b"),  /* wrapper= */
+                        mutableListOf<String>("a", "b"),  /* wrapper= */
                         "(?:%s)",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -687,7 +686,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat = org.safere.Pattern.compile(pat)
-                val jdkPat = Pattern.compile(pat)
+                val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val sb = StringBuilder()
                 val safereM = saferePat.matcher(sb)
@@ -725,7 +724,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat = org.safere.Pattern.compile(pat)
-                val jdkPat = Pattern.compile(pat)
+                val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")
                 val jdkM = jdkPat.matcher("")
@@ -751,7 +750,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat = org.safere.Pattern.compile(pat)
-                val jdkPat = Pattern.compile(pat)
+                val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")
                 val jdkM = jdkPat.matcher("")
@@ -762,8 +761,8 @@ internal class CrossEngineExhaustiveTest {
                     safereM.reset(input)
                     jdkM.reset(input)
 
-                    val safereMatches: MutableList<String?> = ArrayList<String?>()
-                    val jdkMatches: MutableList<String?> = ArrayList<String?>()
+                    val safereMatches: MutableList<String> = ArrayList<String>()
+                    val jdkMatches: MutableList<String> = ArrayList<String>()
 
                     while (safereM.find()) {
                         safereMatches.add(
@@ -794,17 +793,16 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat = org.safere.Pattern.compile(pat)
-                val jdkPat = Pattern.compile(pat)
+                val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 for (text in texts) {
                     // Create a CharSequence that does NOT override toString()
                     val cs: CharSequence =
                         object : CharSequence {
-                            override fun length(): Int {
-                                return text!!.length
-                            }
+                            override val length: Int
+                                get() = text!!.length
 
-                            override fun charAt(index: Int): Char {
+                            override fun get(index: Int): Char {
                                 return text!!.get(index)
                             }
 
@@ -843,10 +841,10 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat: org.safere.Pattern?
-                val jdkPat: Pattern?
+                val jdkPat: java.util.regex.Pattern?
                 try {
                     saferePat = org.safere.Pattern.compile(pat)
-                    jdkPat = Pattern.compile(pat)
+                    jdkPat = java.util.regex.Pattern.compile(pat)
                 } catch (e: PatternSyntaxException) {
                     continue
                 }
@@ -854,11 +852,10 @@ internal class CrossEngineExhaustiveTest {
                 for (bytes in byteArrays) {
                     val cs: CharSequence =
                         object : CharSequence {
-                            override fun length(): Int {
-                                return bytes.size
-                            }
+                            override val length: Int
+                                get() = bytes.size
 
-                            override fun charAt(index: Int): Char {
+                            override fun get(index: Int): Char {
                                 return (bytes[index].toInt() and 0xFF).toChar()
                             }
 
@@ -897,7 +894,7 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 val saferePat = org.safere.Pattern.compile(pat)
-                val jdkPat = Pattern.compile(pat)
+                val jdkPat = java.util.regex.Pattern.compile(pat)
 
                 val safereM = saferePat.matcher("")
                 val jdkM = jdkPat.matcher("")
@@ -933,10 +930,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("(?:^)", "(?:$)", ".", "a", "\\n", "(?:\\A)", "(?:\\z)"),  /* ops= */
+                        mutableListOf<String>("(?:^)", "(?:$)", ".", "a", "\\n", "(?:\\A)", "(?:\\z)"),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "\n"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "\n"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -970,8 +967,8 @@ internal class CrossEngineExhaustiveTest {
 
             for (pat in patterns) {
                 for (text in texts) {
-                    tests += ExhaustiveUtils.testPair(pat, text, 0, failures)
-                    tests += ExhaustiveUtils.testPair(pat, text, org.safere.Pattern.MULTILINE, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, 0, failures)
+                    tests += ExhaustiveUtils.testPair(pat!!, text!!, org.safere.Pattern.MULTILINE, failures)
                 }
             }
 
@@ -999,12 +996,12 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>(
+                        mutableListOf<String>(
                             "[a]", "[b]", "[ab]", "[^bc]", "[b-d]", "[^b-d]", "a", "b", "."
                         ),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         4,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "b", "c"),  /* wrapper= */
+                        mutableListOf<String>("a", "b", "c"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -1021,10 +1018,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         1,  /* atoms= */
-                        mutableListOf<String?>("\\d", "\\D", "\\w", "\\W", "\\s", "\\S", ".", "a"),  /* ops= */
-                        mutableListOf<String?>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
+                        mutableListOf<String>("\\d", "\\D", "\\w", "\\W", "\\s", "\\S", ".", "a"),  /* ops= */
+                        mutableListOf<String>("%s%s", "%s*", "%s+"),  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "1", " ", "!"),  /* wrapper= */
+                        mutableListOf<String>("a", "1", " ", "!"),  /* wrapper= */
                         "",  /* flags= */
                         0,  /* testLongText= */
                         true
@@ -1048,10 +1045,10 @@ internal class CrossEngineExhaustiveTest {
                     ExhaustiveUtils.Config( /* maxAtoms= */
                         2,  /* maxOps= */
                         2,  /* atoms= */
-                        mutableListOf<String?>("a", "b", "A", "B", "."),  /* ops= */
+                        mutableListOf<String>("a", "b", "A", "B", "."),  /* ops= */
                         ExhaustiveUtils.EGREP_OPS,  /* maxStrLen= */
                         3,  /* strAlphabet= */
-                        mutableListOf<String?>("a", "B", "c", "@", "_", "~"),  /* wrapper= */
+                        mutableListOf<String>("a", "B", "c", "@", "_", "~"),  /* wrapper= */
                         "(?i:%s)",  /* flags= */
                         0,  /* testLongText= */
                         true

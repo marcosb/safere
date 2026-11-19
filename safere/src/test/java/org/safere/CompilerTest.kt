@@ -11,18 +11,18 @@ import org.junit.jupiter.api.Test
 
 /** Tests for [Compiler].  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-internal object CompilerTest {
+internal class CompilerTest {
     private val DEFAULT_FLAGS =
         ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
 
     private fun compile(pattern: String?, flags: Int = DEFAULT_FLAGS): Prog? {
-        val re = Parser.parse(pattern, flags)
+        val re = Parser.parse(pattern, flags)!!
         return Compiler.compile(re)
     }
 
     private fun fullMatch(prog: Prog, text: String?): Boolean {
         val result =
-            Nfa.search(prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures())
+            Nfa.search(prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures())
         return result != null
     }
 
@@ -76,9 +76,9 @@ internal object CompilerTest {
     internal inner class Literals {
         @Test
         fun compileSingleLiteral() {
-            val prog: Prog? = compile("a")
+            val prog: Prog = compile("a")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size).isGreaterThan(1)
+            Assertions.assertThat(prog.size).isGreaterThan(1)
             assertHasInstOp(prog, InstOp.CHAR_RANGE)
             assertHasInstOp(prog, InstOp.MATCH)
         }
@@ -254,7 +254,7 @@ internal object CompilerTest {
     internal inner class Captures {
         @Test
         fun compileSingleCapture() {
-            val prog: Prog? = compile("(a)")
+            val prog: Prog = compile("(a)")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
             assertHasInstOp(prog!!, InstOp.CAPTURE)
             val captureCount = countInstOp(prog, InstOp.CAPTURE)
@@ -264,7 +264,7 @@ internal object CompilerTest {
 
         @Test
         fun compileMultiCapture() {
-            val prog: Prog? = compile("(a)(b)")
+            val prog: Prog = compile("(a)(b)")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
             val captureCount = countInstOp(prog!!, InstOp.CAPTURE)
             Assertions.assertThat(captureCount).isEqualTo(4)
@@ -281,9 +281,9 @@ internal object CompilerTest {
 
         @Test
         fun compileNestedGroups() {
-            val prog: Prog? = compile("((a)(b))")
+            val prog: Prog = compile("((a)(b))")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.numCaptures()).isEqualTo(4)
+            Assertions.assertThat(prog.numCaptures()).isEqualTo(4)
         }
     }
 
@@ -336,32 +336,32 @@ internal object CompilerTest {
 
         @Test
         fun anchoredStartPattern() {
-            val prog: Prog? = compile("\\Aabc")
+            val prog: Prog = compile("\\Aabc")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.anchorStart()).isTrue()
+            Assertions.assertThat(prog.anchorStart()).isTrue()
             Assertions.assertThat(prog.start()).isEqualTo(prog.startUnanchored())
         }
 
         @Test
         fun anchoredEndPattern() {
-            val prog: Prog? = compile("abc\\z")
+            val prog: Prog = compile("abc\\z")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.anchorEnd()).isTrue()
+            Assertions.assertThat(prog.anchorEnd()).isTrue()
         }
 
         @Test
         fun fullyAnchoredPattern() {
-            val prog: Prog? = compile("\\Aabc\\z")
+            val prog: Prog = compile("\\Aabc\\z")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.anchorStart()).isTrue()
+            Assertions.assertThat(prog.anchorStart()).isTrue()
             Assertions.assertThat(prog.anchorEnd()).isTrue()
         }
 
         @Test
         fun unanchoredPatternHasDotStar() {
-            val prog: Prog? = compile("abc")
+            val prog: Prog = compile("abc")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.anchorStart()).isFalse()
+            Assertions.assertThat(prog.anchorStart()).isFalse()
             Assertions.assertThat(prog.startUnanchored()).isNotEqualTo(prog.start())
         }
     }
@@ -409,38 +409,38 @@ internal object CompilerTest {
 
         @Test
         fun compileReversed() {
-            val re = Parser.parse("ab", DEFAULT_FLAGS)
-            val prog = Compiler.compile(re, true)
+            val re = Parser.parse("ab", DEFAULT_FLAGS)!!
+            val prog = Compiler.compile(re, true)!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.reversed()).isTrue()
+            Assertions.assertThat(prog.reversed()).isTrue()
         }
 
         @Test
         fun reasonableInstructionCount() {
-            val prog: Prog? = compile("a")
+            val prog: Prog = compile("a")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size).isLessThan(20)
+            Assertions.assertThat(prog.size).isLessThan(20)
         }
 
         @Test
         fun largerPatternReasonableSize() {
-            val prog: Prog? = compile("[a-zA-Z_][a-zA-Z0-9_]*")
+            val prog: Prog = compile("[a-zA-Z_][a-zA-Z0-9_]*")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            Assertions.assertThat(prog!!.size).isLessThan(100)
+            Assertions.assertThat(prog.size).isLessThan(100)
         }
 
         @Test
         fun dumpContainsMeaningfulOutput() {
-            val prog: Prog? = compile("a")
+            val prog: Prog = compile("a")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
-            val dump = prog!!.dump()
+            val dump = prog.dump()
             Assertions.assertThat(dump).isNotEmpty()
             Assertions.assertThat(dump).contains("match")
         }
 
         @Test
         fun progToStringNotNull() {
-            val prog: Prog? = compile("a+")
+            val prog: Prog = compile("a+")!!
             Assertions.assertThat<Prog?>(prog).isNotNull()
             Assertions.assertThat(prog.toString()).isNotNull()
         }

@@ -16,10 +16,8 @@ import org.junit.jupiter.api.condition.JRE
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.util.*
-import java.util.List
 import java.util.Map
 import java.util.function.IntPredicate
-import java.util.regex.Pattern
 import java.util.stream.Stream
 import kotlin.collections.ArrayList
 import kotlin.collections.HashSet
@@ -75,7 +73,7 @@ internal class UnicodeJdkConsistencyTest {
         scripts.remove(UScript.UNKNOWN)
         for (script in scripts) {
             val name = UScript.getName(script!!)
-            Assertions.assertThat<String?, Array<IntArray?>?>(UnicodeTables.UNICODE_GROUPS)
+            Assertions.assertThat<String, Array<IntArray>>(UnicodeTables.UNICODE_GROUPS)
                 .`as`("Pinned Unicode script %s", name)
                 .containsKey(name)
         }
@@ -90,7 +88,7 @@ internal class UnicodeJdkConsistencyTest {
         data class Sample(val cp: Int, val expectedCategory: String?)
 
         val samples =
-            List.of<Sample?>(
+            java.util.List.of<Sample?>(
                 Sample('A'.code, "Lu"),
                 Sample('a'.code, "Ll"),
                 Sample('\u01C5'.code, "Lt"),  // Dz with caron
@@ -144,7 +142,7 @@ internal class UnicodeJdkConsistencyTest {
         // This excludes asymmetric mappings like Turkish İ (U+0130) where
         // toLower(İ) = i but toUpper(i) = I ≠ İ. RE2 intentionally excludes these
         // from its fold orbits because they don't form a clean cycle.
-        val missing: MutableList<String?> = ArrayList<String?>()
+        val missing: MutableList<String> = ArrayList<String>()
 
         for (cp in 0..Character.MAX_CODE_POINT) {
             val lower = UCharacter.toLowerCase(cp)
@@ -171,7 +169,7 @@ internal class UnicodeJdkConsistencyTest {
         assertPinnedUnicodeVersion()
         assertTableMatches(
             "White_Space",
-            UnicodeTables.unicodeSpace(),
+            UnicodeTables.unicodeSpace()!!,
             IntPredicate { cp: Int -> UCharacter.hasBinaryProperty(cp, UProperty.WHITE_SPACE) })
     }
 
@@ -180,7 +178,7 @@ internal class UnicodeJdkConsistencyTest {
     @MethodSource("binaryPropertyNames")
     @EnabledForJreRange(min = JRE.JAVA_26)
     fun binaryPropertiesMatchJdkExceptUnicodeHexDigit(name: String) {
-        val ranges = Objects.requireNonNull<Array<IntArray?>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get(name))
+        val ranges = Objects.requireNonNull<Array<IntArray>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get(name))
         if (name == "Extended_Pictographic" || name == "White_Space") {
             assertPinnedUnicodeVersion()
             val property = UCharacter.getPropertyEnum(name)
@@ -196,9 +194,9 @@ internal class UnicodeJdkConsistencyTest {
             )
         }
         val jdk =
-            Pattern.compile("\\p{Is" + name + "}").matcher("")
-        val differences: MutableList<String?> = ArrayList<String?>()
-        val jdkHexDifferences: MutableList<String?> = ArrayList<String?>()
+            java.util.regex.Pattern.compile("\\p{Is" + name + "}").matcher("")
+        val differences: MutableList<String> = ArrayList<String>()
+        val jdkHexDifferences: MutableList<String> = ArrayList<String>()
         var rangeIndex = 0
         for (cp in 0..Character.MAX_CODE_POINT) {
             while (rangeIndex < ranges.size && ranges[rangeIndex]!![1] < cp) {
@@ -258,7 +256,7 @@ internal class UnicodeJdkConsistencyTest {
             "Runtime JDK Unicode repertoire differs from the generator JDK"
         )
         val m = org.safere.Pattern.compile("(?i)\\p{IsLowercase}").matcher("")
-        val differences: MutableList<String?> = ArrayList<String?>()
+        val differences: MutableList<String> = ArrayList<String>()
         for (cp in 0..Character.MAX_CODE_POINT) {
             val expected =
                 Character.isUpperCase(cp) || Character.isLowerCase(cp) || Character.isTitleCase(cp)
@@ -279,7 +277,7 @@ internal class UnicodeJdkConsistencyTest {
         )
         assertTableMatches(
             name,
-            Objects.requireNonNull<Array<IntArray?>?>(JavaCharacterClasses.lookup(name)),
+            Objects.requireNonNull<Array<IntArray>?>(JavaCharacterClasses.lookup(name)),
             Objects.requireNonNull<IntPredicate?>(JAVA_CLASS_PREDICATES.get(name))
         )
     }
@@ -342,6 +340,7 @@ internal class UnicodeJdkConsistencyTest {
                 IntPredicate { codePoint: Int -> Character.isJavaIdentifierPart(codePoint) })
         )
 
+        @JvmStatic
         private fun javaClassNames(): Stream<String?>? {
             return JAVA_CLASS_PREDICATES.keys.stream().sorted()
         }
@@ -354,8 +353,8 @@ internal class UnicodeJdkConsistencyTest {
             )
         }
 
-        private fun assertTableMatches(name: String?, ranges: Array<IntArray?>, expected: IntPredicate) {
-            val differences: MutableList<String?> = ArrayList<String?>()
+        private fun assertTableMatches(name: String?, ranges: Array<IntArray>, expected: IntPredicate) {
+            val differences: MutableList<String> = ArrayList<String>()
             var rangeIndex = 0
             for (cp in 0..Character.MAX_CODE_POINT) {
                 while (rangeIndex < ranges.size && ranges[rangeIndex]!![1] < cp) {
@@ -378,7 +377,7 @@ internal class UnicodeJdkConsistencyTest {
 
         private fun runtimeJdkUnicodeMatchesGeneratedTables(): Boolean {
             val assigned =
-                Objects.requireNonNull<Array<IntArray?>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get("Assigned"))
+                Objects.requireNonNull<Array<IntArray>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get("Assigned"))
             var rangeIndex = 0
             for (cp in 0..Character.MAX_CODE_POINT) {
                 while (rangeIndex < assigned.size && assigned[rangeIndex]!![1] < cp) {
@@ -392,6 +391,7 @@ internal class UnicodeJdkConsistencyTest {
             return true
         }
 
+        @JvmStatic
         private fun binaryPropertyNames(): Stream<String?>? {
             return UnicodeGeneratedTables.BINARY_PROPERTIES.keys.stream().sorted()
         }

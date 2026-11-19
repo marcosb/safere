@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Capture differences from Java under the minimum-respecting empty-stop policy.  */
@@ -22,7 +21,7 @@ internal class NullableCountedCaptureDivergenceTest {
             val input = prefix + "y"
             for (operation in 0..2) {
                 val actual = Pattern.compile(regex).matcher(input)
-                val oracle = Pattern.compile(regex).matcher(input)
+                val oracle = java.util.regex.Pattern.compile(regex).matcher(input)
                 val actualMatched =
                     when (operation) {
                         0 -> actual.find()
@@ -38,14 +37,14 @@ internal class NullableCountedCaptureDivergenceTest {
                 Assertions.assertThat(actualMatched).`as`("/%s/ on %s", regex, input).isTrue()
                 Assertions.assertThat(oracleMatched).isTrue()
                 Assertions.assertThat(actual.start()).isZero()
-                Assertions.assertThat(actual.end()).isEqualTo(input.size)
+                Assertions.assertThat(actual.end()).isEqualTo(input.length)
                 Assertions.assertThat(oracle.start()).isEqualTo(actual.start())
                 Assertions.assertThat(oracle.end()).isEqualTo(actual.end())
                 Assertions.assertThat(actual.group(1)).isEmpty()
                 Assertions.assertThat(oracle.group(1)).isEmpty()
-                Assertions.assertThat(actual.start(1)).isEqualTo(if (diverges) 0 else prefix.size)
+                Assertions.assertThat(actual.start(1)).isEqualTo(if (diverges) 0 else prefix.length)
                 Assertions.assertThat(actual.end(1)).isEqualTo(actual.start(1))
-                Assertions.assertThat(oracle.start(1)).isEqualTo(prefix.size)
+                Assertions.assertThat(oracle.start(1)).isEqualTo(prefix.length)
                 Assertions.assertThat(oracle.end(1)).isEqualTo(oracle.start(1))
             }
         }
@@ -94,6 +93,7 @@ internal class NullableCountedCaptureDivergenceTest {
     }
 
     companion object {
+        @JvmStatic
         private fun captureCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("(?:()|\\W+){0,2}y", false),

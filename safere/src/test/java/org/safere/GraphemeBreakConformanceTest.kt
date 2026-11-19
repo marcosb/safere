@@ -15,8 +15,6 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.function.IntFunction
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 
 /**
  * Conformance tests for Unicode Extended Grapheme Cluster segmentation (`\X` and `\b{g}`) against UAX #29's `GraphemeBreakTest.txt`, plus an exhaustive per-code-point
@@ -47,7 +45,7 @@ internal class GraphemeBreakConformanceTest {
                     val commentStart = line.indexOf('#')
                     val data = (if (commentStart >= 0) line.substring(0, commentStart) else line).trim { it <= ' ' }
                     val stringInput = StringBuilder()
-                    val expectedClusters: MutableList<String?> = ArrayList<String?>()
+                    val expectedClusters: MutableList<String> = ArrayList<String>()
                     val currentCluster = StringBuilder()
                     for (token in data.split("\\s+".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()) {
                         if (token == "÷") {
@@ -63,10 +61,10 @@ internal class GraphemeBreakConformanceTest {
                     }
                     val text = stringInput.toString()
 
-                    val stringClusters: MutableList<String?> = ArrayList<String?>()
-                    val matcher: Matcher = SAFERE_GRAPHEME.matcher(text)
+                    val stringClusters: MutableList<String> = ArrayList<String>()
+                    val matcher: org.safere.Matcher = SAFERE_GRAPHEME.matcher(text)
                     while (matcher.find()) {
-                        stringClusters.add(matcher.group())
+                        stringClusters.add(matcher.group()!!)
                     }
                     Assertions.assertThat<String?>(stringClusters).`as`(line).isEqualTo(expectedClusters)
 
@@ -75,7 +73,7 @@ internal class GraphemeBreakConformanceTest {
                         .containsExactlyElementsOf(expectedClusters)
 
                     val utf8Bytes = text.toByteArray(StandardCharsets.UTF_8)
-                    val utf8Clusters: MutableList<String?> = ArrayList<String?>()
+                    val utf8Clusters: MutableList<String> = ArrayList<String>()
                     val utf8Matcher: Utf8Matcher = SAFERE_GRAPHEME.matcher(Utf8Input.validated(utf8Bytes))
                     while (utf8Matcher.find()) {
                         utf8Clusters.add(
@@ -145,7 +143,7 @@ internal class GraphemeBreakConformanceTest {
         for (cp in intArrayOf(0x11720, 0x11721)) {
             val sign = Character.toString(cp)
             val text = "a" + sign
-            val matcher: Matcher = SAFERE_GRAPHEME.matcher(text)
+            val matcher: org.safere.Matcher = SAFERE_GRAPHEME.matcher(text)
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.group()).isEqualTo("a")
             Assertions.assertThat(matcher.find()).isTrue()
@@ -156,13 +154,13 @@ internal class GraphemeBreakConformanceTest {
     }
 
     companion object {
-        private val SAFERE_GRAPHEME: Pattern = Pattern.compile("\\X")
-        private val SAFERE_BOUNDARY: Pattern = Pattern.compile("\\b{g}")
-        private val JDK_GRAPHEME: Pattern = Pattern.compile("\\X")
+        private val SAFERE_GRAPHEME: org.safere.Pattern = Pattern.compile("\\X")
+        private val SAFERE_BOUNDARY: org.safere.Pattern = Pattern.compile("\\b{g}")
+        private val JDK_GRAPHEME: java.util.regex.Pattern = java.util.regex.Pattern.compile("\\X")
 
         private fun runtimeJdkUnicodeMatchesGeneratedTables(): Boolean {
             val assigned =
-                Objects.requireNonNull<Array<IntArray?>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get("Assigned"))
+                Objects.requireNonNull<Array<IntArray>>(UnicodeGeneratedTables.BINARY_PROPERTIES.get("Assigned"))
             var rangeIndex = 0
             for (cp in 0..Character.MAX_CODE_POINT) {
                 while (rangeIndex < assigned.size && assigned[rangeIndex]!![1] < cp) {
@@ -176,7 +174,7 @@ internal class GraphemeBreakConformanceTest {
             return true
         }
 
-        private fun collectEnds(matcher: Matcher, out: IntArray): Int {
+        private fun collectEnds(matcher: org.safere.Matcher, out: IntArray): Int {
             var n = 0
             while (matcher.find()) {
                 out[n++] = matcher.end()
@@ -184,7 +182,7 @@ internal class GraphemeBreakConformanceTest {
             return n
         }
 
-        private fun collectEnds(matcher: Matcher, out: IntArray): Int {
+        private fun collectEnds(matcher: java.util.regex.Matcher, out: IntArray): Int {
             var n = 0
             while (matcher.find()) {
                 out[n++] = matcher.end()

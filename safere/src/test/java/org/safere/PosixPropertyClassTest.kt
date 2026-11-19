@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /**
@@ -23,9 +22,9 @@ internal class PosixPropertyClassTest {
     internal data class TestCase(val className: String, val input: String?, val expectedMatch: Boolean)      {
         override fun toString(): String {
             val displayInput =
-                (if (input.length == 1 && input.get(0).code < 0x20) String.format(
+                (if (input!!.length == 1 && input!!.get(0).code < 0x20) String.format(
                     "\\x%02X",
-                    input.get(0).code
+                    input!!.get(0).code
                 ) else
                     input)!!
             return "\\p{" + className + "} on \"" + displayInput + "\" → " + expectedMatch
@@ -36,7 +35,7 @@ internal class PosixPropertyClassTest {
     @MethodSource("crossCheckCases")
     fun matchesJdkBehavior(tc: TestCase) {
         // Verify JDK expectation first
-        val jdkPattern = Pattern.compile("\\p{" + tc.className + "}")
+        val jdkPattern = java.util.regex.Pattern.compile("\\p{" + tc.className + "}")
         Assertions.assertThat(jdkPattern.matcher(tc.input).matches())
             .`as`("JDK baseline for \\p{%s} on \"%s\"", tc.className, tc.input)
             .isEqualTo(tc.expectedMatch)
@@ -154,7 +153,7 @@ internal class PosixPropertyClassTest {
         )
         @DisplayName("Exhaustive ASCII scan matches JDK for all 128 code points")
         fun exhaustiveAsciiScan(className: String?) {
-            val jdkPattern = Pattern.compile("\\p{" + className + "}")
+            val jdkPattern = java.util.regex.Pattern.compile("\\p{" + className + "}")
             val safePattern = org.safere.Pattern.compile("\\p{" + className + "}")
 
             for (cp in 0..127) {
@@ -180,6 +179,7 @@ internal class PosixPropertyClassTest {
          * POSIX classes. Each class is tested with positive matches, negative matches, and boundary
          * cases.
          */
+        @JvmStatic
         fun crossCheckCases(): Stream<TestCase?> {
             return Stream.of<TestCase?>( // Lower: [a-z]
                 TestCase("Lower", "a", true),

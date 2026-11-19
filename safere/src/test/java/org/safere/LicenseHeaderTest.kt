@@ -34,7 +34,7 @@ internal class LicenseHeaderTest {
         Assertions.assertThat(violations!!.isEmpty())
             .withFailMessage(
                 "The following files are missing the license header:\n"
-                        + String.join(
+                        + java.lang.String.join(
                     "\n",
                     violations.stream().map<String?> { obj: Path? -> obj.toString() }.toList()
                 )
@@ -65,7 +65,7 @@ internal class LicenseHeaderTest {
         }
 
         /** Standard 4-line header for files derived from C++ RE2 only.  */
-        private fun hasStandardHeader(lines: MutableList<String?>): Boolean {
+        private fun hasStandardHeader(lines: MutableList<String>): Boolean {
             return lines.size >= 4 && lines.get(0) == LINE_1
                     && lines.get(1) == LINE_2
                     && lines.get(2) == LINE_3
@@ -73,7 +73,7 @@ internal class LicenseHeaderTest {
         }
 
         /** Extended 6-line header for files that also incorporate code from RE2/J.  */
-        private fun hasRe2jHeader(lines: MutableList<String?>): Boolean {
+        private fun hasRe2jHeader(lines: MutableList<String>): Boolean {
             return lines.size >= 6 && lines.get(0) == LINE_1
                     && lines.get(1) == LINE_2
                     && lines.get(2) == RE2J_LINE_3

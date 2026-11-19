@@ -15,42 +15,42 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Tests for [Nfa]. End-to-end tests: parse → compile → match.  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-internal object NfaTest {
+internal class NfaTest {
     private val FLAGS = ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
 
     /** Search with default first-match, unanchored semantics.  */
     private fun search(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
+        val re = Parser.parse(pattern, FLAGS)!!
+        val prog = Compiler.compile(re)!!
         return Nfa.search(
-            prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FIRST_MATCH, prog.numCaptures()
+            prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FIRST_MATCH, prog.numCaptures()
         )
     }
 
     /** Search with full-match semantics.  */
     private fun fullMatch(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
+        val re = Parser.parse(pattern, FLAGS)!!
+        val prog = Compiler.compile(re)!!
         return Nfa.search(
-            prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures()
+            prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures()
         )
     }
 
     /** Search with longest-match semantics.  */
     private fun longestMatch(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
+        val re = Parser.parse(pattern, FLAGS)!!
+        val prog = Compiler.compile(re)!!
         return Nfa.search(
-            prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.LONGEST_MATCH, prog.numCaptures()
+            prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.LONGEST_MATCH, prog.numCaptures()
         )
     }
 
     /** Search with anchored semantics.  */
     private fun anchoredSearch(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
+        val re = Parser.parse(pattern, FLAGS)!!
+        val prog = Compiler.compile(re)!!
         return Nfa.search(
-            prog, text, Nfa.Anchor.ANCHORED, Nfa.MatchKind.FIRST_MATCH, prog.numCaptures()
+            prog, text!!, Nfa.Anchor.ANCHORED, Nfa.MatchKind.FIRST_MATCH, prog.numCaptures()
         )
     }
 

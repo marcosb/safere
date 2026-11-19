@@ -205,7 +205,7 @@ internal class SearchScalingRegressionTest {
         for (template in arrayOf<String>("(?:\\b?){%d}a", "(?:(?:|b)?){%d}a")) {
             val work = LongArray(2)
             for (index in work.indices) {
-                val pattern = Pattern.compile(template.formatted(8 * (index + 1)))
+                val pattern = Pattern.compile(template.format(8 * (index + 1)))
                 val matcher = pattern.matcher("a!").region(0, 1).useTransparentBounds(true)
                 work[index] =
                     WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.lookingAt()).isTrue() })
@@ -307,15 +307,15 @@ internal class SearchScalingRegressionTest {
                     )
                 )
             )) {
-                val reverse = Pattern.compile("needle.*$").reverseDfa()
+                val reverse = Pattern.compile("needle.*$").reverseDfa()!!
                 for (pass in 0..1) {
                     val work =
                         WorkCounter.countForTesting(
                             Runnable {
                                 val result =
-                                    reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)
+                                    reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)!!
                                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                                Assertions.assertThat(result!!.scanLimitReached).isTrue()
+                                Assertions.assertThat(result.scanLimitReached).isTrue()
                             })
                     Assertions.assertThat(work).isBetween(64L, 256L)
                 }
@@ -642,7 +642,7 @@ internal class SearchScalingRegressionTest {
             WorkCounter.countForTesting(
                 Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue() })
 
-        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.length.toLong())
+        Assertions.assertThat(work).isGreaterThanOrEqualTo(input.size.toLong())
     }
 
     @Test
@@ -1429,7 +1429,7 @@ internal class SearchScalingRegressionTest {
         val bytes = ("123/456/7890" + "x".repeat(100)).toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(bytes, 0, bytes.size)
         val candidate =
-            Utf8StartAccelerator.findNextCandidate(pattern.utf8StartAccelerator(), scanner, 0)
+            Utf8StartAccelerator.findNextCandidate(pattern.utf8StartAccelerator()!!, scanner, 0)
         val dfa = pattern.forwardFirstMatchDfa()
 
         Assertions.assertThat(candidate).isZero()
@@ -1437,13 +1437,13 @@ internal class SearchScalingRegressionTest {
         val ordinaryWork =
             WorkCounter.countForTesting(
                 Runnable {
-                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, false).matched)
+                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, false)!!.matched)
                         .isTrue()
                 })
         val preselectedWork =
             WorkCounter.countForTesting(
                 Runnable {
-                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, true).matched)
+                    Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, true)!!.matched)
                         .isTrue()
                 })
 
@@ -1536,7 +1536,7 @@ internal class SearchScalingRegressionTest {
             WorkCounter.countForTesting(
                 Runnable {
                     Assertions.assertThat(
-                        dfa.doSearch(StringInputScanner(input2000), 0, false, false).matched
+                        dfa.doSearch(StringInputScanner(input2000), 0, false, false)!!.matched
                     )
                         .isTrue()
                 })
@@ -1544,7 +1544,7 @@ internal class SearchScalingRegressionTest {
             WorkCounter.countForTesting(
                 Runnable {
                     Assertions.assertThat(
-                        dfa.doSearch(StringInputScanner(input10000), 0, false, false).matched
+                        dfa.doSearch(StringInputScanner(input10000), 0, false, false)!!.matched
                     )
                         .isTrue()
                 })
@@ -1781,7 +1781,7 @@ internal class SearchScalingRegressionTest {
 
     @Test
     fun classHashChainAchievesSublinearWorkOnCaseInsensitiveLiteralForStringInput() {
-        val chc = ClassHashChain.compileCaseInsensitive("content_length_header")
+        val chc = ClassHashChain.compileCaseInsensitive("content_length_header")!!
         val text = "The quick brown fox jumps over the lazy dog. ".repeat(5) // 225 chars
         val work =
             WorkCounter.countForTesting(
@@ -1801,7 +1801,7 @@ internal class SearchScalingRegressionTest {
 
     @Test
     fun classHashChainAchievesSublinearWorkOnNonAsciiCaseInsensitiveLiteralForStringInput() {
-        val chc = ClassHashChain.compileCaseInsensitive("конфигурация_сервера") // M = 20
+        val chc = ClassHashChain.compileCaseInsensitive("конфигурация_сервера")!! // M = 20
         val text = "текст_без_совпадений_для_проверки_производительности_".repeat(5) // 270 chars
         val work =
             WorkCounter.countForTesting(
@@ -1922,15 +1922,15 @@ internal class SearchScalingRegressionTest {
 
     @Test
     fun directDfaStartStateAcceleratesUnanchoredAlternationOnString() {
-        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL))
+        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL)!!)!!
         val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
         val input = "x".repeat(10000) + "cherry"
         val work =
             WorkCounter.countForTesting(
                 Runnable {
-                    val res = dfa.doSearch(input, false, false)
+                    val res = dfa.doSearch(input, false, false)!!
                     Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
-                    Assertions.assertThat(res!!.matched).isTrue()
+                    Assertions.assertThat(res.matched).isTrue()
                 })
         Assertions.assertThat(work)
             .`as`("Direct DFA start state acceleration must scan input linearly")
@@ -1991,20 +1991,20 @@ internal class SearchScalingRegressionTest {
 
     @Test
     fun directDfaStartStateAcceleratesUnanchoredAlternationOnUtf8() {
-        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL))
+        val prog = Compiler.compile(Parser.parse("apple|banana|cherry", ParseFlags.MATCH_NL)!!)!!
         val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
         val input = ("x".repeat(10000) + "cherry").toByteArray(StandardCharsets.UTF_8)
         val work =
             WorkCounter.countForTesting(
                 Runnable {
                     val res =
-                        dfa.doSearch(Utf8InputScanner(input, 0, input.length), 0, false, false)
+                        dfa.doSearch(Utf8InputScanner(input, 0, input.size), 0, false, false)!!
                     Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
-                    Assertions.assertThat(res!!.matched).isTrue()
+                    Assertions.assertThat(res.matched).isTrue()
                 })
         Assertions.assertThat(work)
             .`as`("Direct DFA start state acceleration on UTF-8 must scan input linearly")
-            .isLessThanOrEqualTo((input.length + 20).toLong())
+            .isLessThanOrEqualTo((input.size + 20).toLong())
     }
 
     @Test
@@ -2181,8 +2181,8 @@ internal class SearchScalingRegressionTest {
         }
 
         private fun assertBoundedEndSearchWork(small: Runnable?, large: Runnable?, label: String?) {
-            val smallWork = WorkCounter.countForTesting(small)
-            val largeWork = WorkCounter.countForTesting(large)
+            val smallWork = WorkCounter.countForTesting(small!!)
+            val largeWork = WorkCounter.countForTesting(large!!)
             Assertions.assertThat(smallWork).`as`("%s work must be observed", label).isPositive()
             Assertions.assertThat(largeWork)
                 .`as`("%s should inspect only the matching suffix", label)

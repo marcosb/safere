@@ -8,8 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 @DisabledForCrosscheck("Uses SafeRE's internal work instrumentation")
 @Tag("work-counter")
 internal class InnerLiteralActivationWorkTest {
@@ -39,7 +37,7 @@ internal class InnerLiteralActivationWorkTest {
             val pattern = Pattern.compile(regexes[i])
             val input = units[i]!!.repeat(64)
             for (operation in operations(pattern, input)) {
-                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation))
+                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!))
                     .`as`("successful /%s/", regexes[i])
                     .isZero()
             }
@@ -65,10 +63,10 @@ internal class InnerLiteralActivationWorkTest {
             for (gap in intArrayOf(1, 128, 2048)) {
                 val input = (prefixes[i] + "x".repeat(gap) + failures[i]).repeat(128) + tails[i]
                 for (operation in operations(pattern, input)) {
-                    Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation))
+                    Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!))
                         .`as`("failed /%s/, gap=%d", regexes[i], gap)
                         .isEqualTo(1)
-                    Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation))
+                    Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation!!))
                         .`as`("failed /%s/, gap=%d must avoid scanning later candidates", regexes[i], gap)
                         .isLessThan(input.length / 8L)
                 }
@@ -79,12 +77,12 @@ internal class InnerLiteralActivationWorkTest {
     @Test
     fun isolatedShortFailuresDoNotActivateTheProbe() {
         val pattern = Pattern.compile("record:[^;]*val=200")
-        for (input in List.of<String?>(
+        for (input in java.util.List.of<String?>(
             "record:x;record:ok_val=200;".repeat(256),
             ("record:x;" + "noise;".repeat(1024)).repeat(4) + "record:ok_val=200;"
         )) {
             for (operation in operations(pattern, input)) {
-                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation)).isZero()
+                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!)).isZero()
             }
         }
     }
@@ -106,9 +104,9 @@ internal class InnerLiteralActivationWorkTest {
                 accelerated.get(operation)!!.run()
                 control.get(operation)!!.run()
                 val expected =
-                    WorkCounter.countStartAccelerationForTesting(control.get(operation)).calls
+                    WorkCounter.countStartAccelerationForTesting(control.get(operation)!!).calls
                 val actual =
-                    WorkCounter.countStartAccelerationForTesting(accelerated.get(operation)).calls
+                    WorkCounter.countStartAccelerationForTesting(accelerated.get(operation)!!).calls
                 Assertions.assertThat(actual)
                     .`as`("/%s/, operation=%d", regexes[i], operation)
                     .isLessThanOrEqualTo(expected + 2)
@@ -127,7 +125,7 @@ internal class InnerLiteralActivationWorkTest {
         }
         Assertions.assertThat(AdaptiveBackoff.resumePos(backoff)).isGreaterThan(1024)
         val initialBackoff = backoff
-        for (scanner in List.of<InputScanner?>(
+        for (scanner in java.util.List.of<InputScanner?>(
             StringInputScanner(input), Utf8InputScanner(
                 input.toByteArray(
                     StandardCharsets.UTF_8
@@ -139,9 +137,9 @@ internal class InnerLiteralActivationWorkTest {
                     val result =
                         pattern
                             .forwardFirstMatchDfa()
-                            .doSearch(scanner, 0, false, false, true, initialBackoff)
+                            .doSearch(scanner, 0, false, false, true, initialBackoff)!!
                     Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                    Assertions.assertThat(result!!.matched).isTrue()
+                    Assertions.assertThat(result.matched).isTrue()
                 }
             Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation)).isEqualTo(1)
             Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation))
@@ -165,7 +163,7 @@ internal class InnerLiteralActivationWorkTest {
         }
         val initialBackoff = backoff
         for (pass in 0..7) {
-            for (scanner in List.of<InputScanner?>(
+            for (scanner in java.util.List.of<InputScanner?>(
                 StringInputScanner(input), Utf8InputScanner(
                     input.toByteArray(
                         StandardCharsets.UTF_8
@@ -177,9 +175,9 @@ internal class InnerLiteralActivationWorkTest {
                         val result =
                             pattern
                                 .forwardFirstMatchDfa()
-                                .doSearch(scanner, 0, false, false, true, initialBackoff)
+                                .doSearch(scanner, 0, false, false, true, initialBackoff)!!
                         Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                        Assertions.assertThat(result!!.matched).isTrue()
+                        Assertions.assertThat(result.matched).isTrue()
                     }
                 Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation)).isEqualTo(1)
                 Assertions.assertThat(WorkCounter.countWithForwardDfaStepsForTesting(operation))
@@ -193,7 +191,7 @@ internal class InnerLiteralActivationWorkTest {
         val pattern = Pattern.compile("record:[^;]*val=200")
         val input = "record:x;".repeat(1024)
         val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-        for (operation in List.of<Runnable?>(
+        for (operation in java.util.List.of<Runnable?>(
             Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
             Runnable { Assertions.assertThat(pattern.matcher(bytes).find()).isFalse() },
             Runnable { Assertions.assertThat(pattern.find(bytes)).isFalse() })) {
@@ -212,7 +210,7 @@ internal class InnerLiteralActivationWorkTest {
             val input =
                 ("record:x;".repeat(16) + "record:" + "x".repeat(512) + "val=200;").repeat(size)
             val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-            for (operation in List.of<Runnable?>(
+            for (operation in java.util.List.of<Runnable?>(
                 Runnable { findAll(pattern, input) },
                 Runnable {
                     val matcher = pattern.matcher(bytes)
@@ -230,7 +228,7 @@ internal class InnerLiteralActivationWorkTest {
     companion object {
         private fun operations(pattern: Pattern, input: String): MutableList<Runnable?> {
             val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-            return List.of<Runnable?>(
+            return java.util.List.of<Runnable?>(
                 Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
                 Runnable { Assertions.assertThat(pattern.matcher(bytes).find()).isTrue() },
                 Runnable { Assertions.assertThat(pattern.find(bytes)).isTrue() },

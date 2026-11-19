@@ -6,15 +6,13 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import java.util.List
-
 /** Checks scalar regions against the corresponding bounded text, including capture traces.  */
 @DisabledForCrosscheck("Intentional region-local surrogate decoding, see #867")
 internal class ScalarRegionModelTest {
     @Test
     fun consumingAtomsIgnoreHiddenPrefixAndSuffix() {
         checkRegions(
-            mutableListOf<String?>(
+            mutableListOf<String>(
                 ".",
                 ".*",
                 ".+?",
@@ -35,13 +33,13 @@ internal class ScalarRegionModelTest {
 
     @Test
     fun opaqueWordAssertionsUseTheBoundedCharacterCategories() {
-        checkRegions(mutableListOf<String?>("\\b.", "\\B.", "(?U)\\b.", "(?U)\\B.", "(?U).\\b", "(?U).\\B"), false)
+        checkRegions(mutableListOf<String>("\\b.", "\\B.", "(?U)\\b.", "(?U)\\B.", "(?U).\\b", "(?U).\\B"), false)
     }
 
     @Test
     fun unreachableGraphemeAlternativeDoesNotChangeOrdinaryWordAssertions() {
-        for (prefix in mutableListOf<String?>("", "a", " ", "aa")) {
-            for (boundary in mutableListOf<String?>("\\b", "\\B", "(?U:\\b)", "(?U:\\B)")) {
+        for (prefix in mutableListOf<String>("", "a", " ", "aa")) {
+            for (boundary in mutableListOf<String>("\\b", "\\B", "(?U:\\b)", "(?U:\\B)")) {
                 val regex = Pattern.quote(prefix) + boundary + "."
                 val ordinary = Pattern.compile(regex)
                 val mixed = Pattern.compile("(?:" + regex + ")|(?:\\Xz)")
@@ -67,14 +65,14 @@ internal class ScalarRegionModelTest {
 
     @Test
     fun unreachableGraphemeAlternativeDoesNotChangeScalarGraphemeAssertions() {
-        for (prefix in mutableListOf<String?>("", "a", "a\u0301", "\uD83C\uDDE6\uD83C\uDDE7")) {
-            for (scalar in mutableListOf<String?>("(.)\\b{g}", "(.)\\b{g}$", "\\b{g}(.)\\b{g}")) {
+        for (prefix in mutableListOf<String>("", "a", "a\u0301", "\uD83C\uDDE6\uD83C\uDDE7")) {
+            for (scalar in mutableListOf<String>("(.)\\b{g}", "(.)\\b{g}$", "\\b{g}(.)\\b{g}")) {
                 val regex = Pattern.quote(prefix) + scalar
                 val ordinary = Pattern.compile(regex)
-                for (pair in mutableListOf<String?>("\uD83D\uDC4D", "\uD801\uDC00", "\uD83C\uDDE6")) {
+                for (pair in mutableListOf<String>("\uD83D\uDC4D", "\uD801\uDC00", "\uD83C\uDDE6")) {
                     val input = "q" + prefix + pair + "x"
                     val end = 1 + prefix!!.length + 1
-                    for (mixedRegex in List.of<String?>("(?:" + regex + ")|(?:\\Xz)", "(?:\\Xz)|(?:" + regex + ")")) {
+                    for (mixedRegex in java.util.List.of<String?>("(?:" + regex + ")|(?:\\Xz)", "(?:\\Xz)|(?:" + regex + ")")) {
                         val mixed = Pattern.compile(mixedRegex)
                         for (transparent in booleanArrayOf(false, true)) {
                             for (anchoring in booleanArrayOf(false, true)) {
@@ -100,11 +98,11 @@ internal class ScalarRegionModelTest {
 
     @Test
     fun unreachableGraphemeAlternativeDoesNotChangeInteriorAssertions() {
-        for (pair in mutableListOf<String?>("\uD83C\uDDE6", "\uD83D\uDC4D", "\uD801\uDC00")) {
+        for (pair in mutableListOf<String>("\uD83C\uDDE6", "\uD83D\uDC4D", "\uD801\uDC00")) {
             val input = pair!!.repeat(3)
-            for (regex in mutableListOf<String?>(".\\b{g}", ".\\b{g}.", "(.)\\b{g}(.)", "[^a]\\b{g}[\\s\\S]")) {
+            for (regex in mutableListOf<String>(".\\b{g}", ".\\b{g}.", "(.)\\b{g}(.)", "[^a]\\b{g}[\\s\\S]")) {
                 val ordinary = Pattern.compile(regex)
-                for (mixedRegex in List.of<String?>("(?:" + regex + ")|(?:\\Xz)", "(?:\\Xz)|(?:" + regex + ")")) {
+                for (mixedRegex in java.util.List.of<String?>("(?:" + regex + ")|(?:\\Xz)", "(?:\\Xz)|(?:" + regex + ")")) {
                     val mixed = Pattern.compile(mixedRegex)
                     for (transparent in booleanArrayOf(false, true)) {
                         for (anchoring in booleanArrayOf(false, true)) {
@@ -130,7 +128,7 @@ internal class ScalarRegionModelTest {
     @Test
     fun interiorRegionalIndicatorAssertionUsesVisibleCharacterContext() {
         val input = "\uD83C\uDDE6".repeat(2)
-        for (regex in mutableListOf<String?>(".\\b{g}", ".\\b{g}.", "\\X\\b{g}")) {
+        for (regex in mutableListOf<String>(".\\b{g}", ".\\b{g}.", "\\X\\b{g}")) {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat(pattern.matcher(input).region(1, 3).lookingAt()).isTrue()
             Assertions.assertThat(pattern.matcher(input.substring(1, 3)).lookingAt()).isTrue()
@@ -149,10 +147,10 @@ internal class ScalarRegionModelTest {
     }
 
     companion object {
-        private fun checkRegions(patterns: MutableList<String?>, includeTransparent: Boolean) {
+        private fun checkRegions(patterns: MutableList<String>, includeTransparent: Boolean) {
             for (regex in patterns) {
                 val pattern = Pattern.compile(regex)
-                for (input in mutableListOf<String?>(
+                for (input in mutableListOf<String>(
                     "a\uD83D\uDC4Db",
                     "x\uD801\uDC00a",
                     "\uD83Dx\uDC4D",
@@ -203,6 +201,7 @@ internal class ScalarRegionModelTest {
                         val start = matcher.start(group)
                         val end = matcher.end(group)
                         result.add((if (start < 0) start else start - offset).toString() + ":" + (if (end < 0) end else end - offset))
+                        // Unmatched optional groups are null, matching java.util.regex.
                         result.add(matcher.group(group))
                     }
                 }

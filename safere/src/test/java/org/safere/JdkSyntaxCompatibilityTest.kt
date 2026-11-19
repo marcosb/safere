@@ -13,8 +13,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.List
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 
@@ -39,8 +37,8 @@ internal class JdkSyntaxCompatibilityTest {
     fun scopedUnixLinesControlsEndAnchorTerminators() {
         // JDK 26 Pattern specifies scoped flag restoration and the standard line terminator set.
         // Refs #708.
-        for (anchor in mutableListOf<String?>("$", "\\Z")) {
-            for (terminator in mutableListOf<String?>("\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
+        for (anchor in mutableListOf<String>("$", "\\Z")) {
+            for (terminator in mutableListOf<String>("\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
                 val input = "foo" + terminator
                 Assertions.assertThat(
                     Pattern.compile("foo(?-d:" + anchor + ")", Pattern.UNIX_LINES)
@@ -62,7 +60,7 @@ internal class JdkSyntaxCompatibilityTest {
     @Test
     fun scopedLineEndsDoNotReuseCrLfContextForStandaloneLf() {
         val pattern = Pattern.compile("(?-d:(?m:$))(?dm:$)", Pattern.UNIX_LINES)
-        for (input in mutableListOf<String?>("\r\na\na", "\na\r\na", "\r\na\na")) {
+        for (input in mutableListOf<String>("\r\na\na", "\na\r\na", "\r\na\na")) {
             val matcher = pattern.matcher(input)
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.start()).isEqualTo(if (input!!.get(0) == '\r') 3 else 0)
@@ -75,7 +73,7 @@ internal class JdkSyntaxCompatibilityTest {
     }
 
     @JvmRecord
-    private data class SyntaxFamilyCase(
+    internal data class SyntaxFamilyCase(
         val family: String?,
         val acceptedRegex: String?,
         val matchingInput: String?,
@@ -83,23 +81,23 @@ internal class JdkSyntaxCompatibilityTest {
     )
 
     @JvmRecord
-    private data class DialectRejection(val family: String?, val regex: String?)
+    internal data class DialectRejection(val family: String?, val regex: String?)
 
     @JvmRecord
-    private data class DialectLiteralCase(val family: String?, val regex: String?, val input: String?)
+    internal data class DialectLiteralCase(val family: String?, val regex: String?, val input: String?)
 
     @JvmRecord
-    private data class CharacterClassMembershipCase(val regex: String?, val inputs: MutableList<String>?)
+    internal data class CharacterClassMembershipCase(val regex: String?, val inputs: MutableList<String>?)
 
     @JvmRecord
-    private data class EscapeMembershipCase(val regex: String?, val inputs: MutableList<String>?)
+    internal data class EscapeMembershipCase(val regex: String?, val inputs: MutableList<String>?)
 
     @JvmRecord
     private data class CharacterClassMatrixOutcome(val accepted: Boolean, val matches: String?)
 
     @Nested
     @DisplayName("Syntax-family compatibility matrix")
-    internal inner class SyntaxFamilyCompatibilityMatrix {
+    internal class SyntaxFamilyCompatibilityMatrix {
         @ParameterizedTest(name = "/{0}/")
         @MethodSource("quantifiedBareQuestionGroups")
         @DisplayName("bare question groups reject following quantifiers like JDK")
@@ -121,7 +119,7 @@ internal class JdkSyntaxCompatibilityTest {
         @MethodSource("leadingCountedRepeats")
         @DisplayName("leading counted repeats apply to the empty expression like JDK")
         fun leadingCountedRepeatsApplyToEmptyExpressionLikeJdk(regex: String, flags: Int, input: String) {
-            val jdkPattern = Pattern.compile(regex, flags)
+            val jdkPattern = java.util.regex.Pattern.compile(regex, flags)
             val safeRePattern = org.safere.Pattern.compile(regex, flags)
 
             Assertions.assertThat(safeRePattern.matcher(input).find())
@@ -136,7 +134,7 @@ internal class JdkSyntaxCompatibilityTest {
         @MethodSource("possessiveCountedRepeatsWithoutOperand")
         @DisplayName("possessive counted repeats without an operand apply to the empty expression")
         fun possessiveCountedRepeatsWithoutOperandMatchLikeJdk(regex: String, flags: Int, input: String) {
-            val jdkPattern = Pattern.compile(regex, flags)
+            val jdkPattern = java.util.regex.Pattern.compile(regex, flags)
             val safeRePattern = org.safere.Pattern.compile(regex, flags)
 
             Assertions.assertThat(safeRePattern.matcher(input).matches())
@@ -207,13 +205,14 @@ internal class JdkSyntaxCompatibilityTest {
         fun unsupportedNonRegularJdkSyntaxIsRejected(rejection: DialectRejection) {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", rejection.regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(rejection.regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(rejection.regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(rejection.regex) })
                 .`as`("SafeRE should reject unsupported syntax: %s", rejection.regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
         }
 
         companion object {
+            @JvmStatic
             fun quantifiedBareQuestionGroups(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("(?)?"),
@@ -229,6 +228,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun countedBareQuestionGroups(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("(?){2}", "", true),
@@ -240,6 +240,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun leadingCountedRepeats(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("{1}", 0, ""),
@@ -266,6 +267,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun possessiveCountedRepeatsWithoutOperand(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("{1}+a", 0, "a"),
@@ -284,6 +286,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun acceptedSyntaxFamilies(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of(SyntaxFamilyCase("literal characters", "abc", "abc", "ab")),
@@ -324,6 +327,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun nonJdkDialectSpellings(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of(DialectRejection("PCRE single-quoted named capture", "(?'word'a)")),
@@ -346,9 +350,10 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun generatedNonJdkDialectSpellings(): Stream<Arguments?> {
                 val groupSpellings: MutableList<DialectRejection?> =
-                    List.of<DialectRejection?>(
+                    java.util.List.of<DialectRejection?>(
                         DialectRejection("PCRE single-quoted named capture", "(?'name'a)"),
                         DialectRejection("Python named backreference", "(?P=name)"),
                         DialectRejection("PCRE subroutine call", "(?&name)"),
@@ -357,13 +362,13 @@ internal class JdkSyntaxCompatibilityTest {
                         DialectRejection("PCRE inline comment", "(?#comment)a")
                     )
                 val escapeSpellings: MutableList<DialectRejection?> =
-                    List.of<DialectRejection?>(
+                    java.util.List.of<DialectRejection?>(
                         DialectRejection("PCRE keep-out escape", "\\K"),
                         DialectRejection("PCRE byte escape", "\\C"),
                         DialectRejection("PCRE g-name backreference", "\\g{name}"),
                         DialectRejection("PCRE g-number backreference", "\\g1")
                     )
-                val wrappers = mutableListOf<String?>("%s", "(?:%s)", "%s|z", "z%s")
+                val wrappers = mutableListOf<String>("%s", "(?:%s)", "%s|z", "z%s")
 
                 val groups =
                     groupSpellings.stream()
@@ -394,6 +399,7 @@ internal class JdkSyntaxCompatibilityTest {
                 return Stream.concat<Arguments?>(groups, escapes)
             }
 
+            @JvmStatic
             fun dialectLookingLiteralSpellings(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of(DialectLiteralCase("POSIX collating element spelling", "[.ch.]", ".")),
@@ -405,6 +411,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun malformedJdkSyntax(): Stream<Arguments?> {
                 // Trailing hyphens across COMMENTS trivia intentionally differ from the JDK (#1070).
                 // CharacterClassRangeTriviaTest covers their acceptance and membership separately.
@@ -653,22 +660,24 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun commentTerminatorCases(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
-                    Arguments.of("a#\u0000|(", Pattern.COMMENTS),
-                    Arguments.of("#\u0000(", Pattern.COMMENTS),
-                    Arguments.of("a#\u0000b|(", Pattern.COMMENTS),
-                    Arguments.of("a#\u0000(?:b)|(", Pattern.COMMENTS),
-                    Arguments.of("a#\r(", Pattern.COMMENTS),
-                    Arguments.of("a#\u0085(", Pattern.COMMENTS),
-                    Arguments.of("a#\u2028(", Pattern.COMMENTS),
-                    Arguments.of("a#\u2029(", Pattern.COMMENTS),
+                    Arguments.of("a#\u0000|(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("#\u0000(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\u0000b|(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\u0000(?:b)|(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\r(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\u0085(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\u2028(", java.util.regex.Pattern.COMMENTS),
+                    Arguments.of("a#\u2029(", java.util.regex.Pattern.COMMENTS),
                     Arguments.of(
-                        "a#\u0000|(", Pattern.COMMENTS or Pattern.UNIX_LINES
+                        "a#\u0000|(", java.util.regex.Pattern.COMMENTS or java.util.regex.Pattern.UNIX_LINES
                     )
                 )
             }
 
+            @JvmStatic
             fun unsupportedNonRegularJdkSyntax(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of(DialectRejection("backreference", "(a)\\1")),
@@ -695,7 +704,7 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("Characters and escapes")
-    internal inner class CharactersAndEscapes {
+    internal class CharactersAndEscapes {
         @Test
         @DisplayName("literal character")
         fun literalCharacter() {
@@ -755,7 +764,7 @@ internal class JdkSyntaxCompatibilityTest {
         @ValueSource(strings = ["\\0", "\\08"])
         @DisplayName("malformed leading-zero octal escape is rejected")
         fun malformedLeadingZeroOctalEscapeRejected(regex: String) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .`as`("JDK should reject malformed octal escape: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
@@ -772,7 +781,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun nonZeroNumericEscapesAreUnsupportedBackreferenceSyntax(regex: String) {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept numeric back reference syntax: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject numeric back reference syntax: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -782,7 +791,7 @@ internal class JdkSyntaxCompatibilityTest {
         @ValueSource(strings = ["[\\123]", "[\\400]"])
         @DisplayName("non-zero numeric escapes in character classes are rejected")
         fun nonZeroNumericEscapesInCharacterClassesRejected(regex: String) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .`as`("JDK should reject non-zero numeric escape in class: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
@@ -946,7 +955,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun controlEscapeCharacterClassesHandleLoneSurrogatesLikeJdk(
             regex: String, input: String, expected: Boolean
         ) {
-            val jdkM = Pattern.compile(regex).matcher(input)
+            val jdkM = java.util.regex.Pattern.compile(regex).matcher(input)
             Assertions.assertThat(jdkM.matches()).`as`("JDK sanity for /%s/", regex).isEqualTo(expected)
 
             val safeM = org.safere.Pattern.compile(regex).matcher(input)
@@ -954,8 +963,9 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun generatedNumericAndOctalEscapeCases(): Stream<Arguments?> {
-                val inputs: MutableList<String> = mutableListOf<String?>(
+                val inputs: MutableList<String> = mutableListOf<String>(
                     "", "\u0000", "\u0001", "\u0007", "\b", "\t", "\n", " ", "!", "A", "S", "\u007f",
                     "\u00ff", "\u0100", "00", " 0", "?7", "123"
                 )
@@ -980,6 +990,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun generatedMalformedEscapeCases(): Stream<Arguments?>? {
                 return Stream.of<String?>(
                     "\\0",
@@ -1011,6 +1022,7 @@ internal class JdkSyntaxCompatibilityTest {
                     .map<Arguments?> { regex: String? -> Arguments.of(DialectRejection("malformed escape", regex)) }
             }
 
+            @JvmStatic
             fun nonAsciiControlEscapes(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\c!", "a"),
@@ -1023,6 +1035,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun commentsModeControlEscapesSkipTriviaBeforeTarget(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("(?x)\\c\ta", "!"),
@@ -1032,6 +1045,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun controlEscapeNegatedClassesIncludeLoneSurrogates(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("[^\\c\uD800]", "\uD840", false),
@@ -1124,7 +1138,7 @@ internal class JdkSyntaxCompatibilityTest {
             // than silently matching something different. See INTENTIONAL_DIVERGENCES.md.
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
                 .hasMessageContaining("\\x0B")
@@ -1140,7 +1154,7 @@ internal class JdkSyntaxCompatibilityTest {
         @DisplayName("\\\\v away from a class range hyphen matches like JDK")
         fun verticalTabAwayFromClassRangeHyphenMatchesLikeJdk(regex: String) {
             Companion.assertFullMatchesSameForAll(
-                regex, mutableListOf<String?>("a", "z", "-", "\t", "\n", "\u000B", "\u000c", "\u0085", "\u2028", "\n-z")
+                regex, mutableListOf<String>("a", "z", "-", "\t", "\n", "\u000B", "\u000c", "\u0085", "\u2028", "\n-z")
             )
         }
 
@@ -1202,7 +1216,7 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("Character classes")
-    internal inner class CharacterClasses {
+    internal class CharacterClasses {
         @Test
         @DisplayName("simple class [abc]")
         fun simpleClass() {
@@ -1247,7 +1261,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun commentsModeTriviaBetweenIntersectionAmpersandsIsIgnored(regex: String) {
             JdkSyntaxCompatibilityTest.Companion.assertFullMatchesSameForAll(
                 regex,
-                mutableListOf<String?>("", "&", "a", "b", "d", "z")
+                mutableListOf<String>("", "&", "a", "b", "d", "z")
             )
         }
 
@@ -1260,7 +1274,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun commentsModeTriviaAndEmptyQuotesBeforeRangeEndpointAreIgnored(regex: String) {
             JdkSyntaxCompatibilityTest.Companion.assertFullMatchesSameForAll(
                 regex,
-                mutableListOf<String?>("`", "a", "b", "c", " ")
+                mutableListOf<String>("`", "a", "b", "c", " ")
             )
         }
 
@@ -1375,8 +1389,9 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun generatedCharacterClassMembershipCases(): Stream<Arguments?> {
-                val inputs: MutableList<String> = mutableListOf<String?>(
+                val inputs: MutableList<String> = mutableListOf<String>(
                     "", "&", "[", "]", ":", "^", "-", "a", "b", "c", "d", "e", "f", "m", "p", "z", "`",
                     "+"
                 )
@@ -1402,9 +1417,10 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun generatedRepresentativeCharacterClassOperationCases(): Stream<Arguments?> {
                 val inputs: MutableList<String> = characterClassMatrixInputs()
-                val operands = mutableListOf<String?>(
+                val operands = mutableListOf<String>(
                     "a-c",
                     "\\d",
                     "\\w",
@@ -1416,9 +1432,9 @@ internal class JdkSyntaxCompatibilityTest {
                     "[[.ch.]]",
                     "[[=a=]]"
                 )
-                val operators = mutableListOf<String?>("", "&&")
+                val operators = mutableListOf<String>("", "&&")
                 val cases = Stream.builder<Arguments?>()
-                for (negated in mutableListOf<Boolean?>(false, true)) {
+                for (negated in mutableListOf<Boolean>(false, true)) {
                     for (left in operands) {
                         cases.add(
                             Arguments.of(
@@ -1443,9 +1459,10 @@ internal class JdkSyntaxCompatibilityTest {
                 return cases.build()
             }
 
+            @JvmStatic
             fun deferredCharacterClassExpressionParserCases(): Stream<Arguments?> {
                 val inputs: MutableList<String> =
-                    mutableListOf<String?>("", "&", "[", "]", "-", "a", "b", "x", "z", "0", "1", " ", "\t", "Ā")
+                    mutableListOf<String>("", "&", "[", "]", "-", "a", "b", "x", "z", "0", "1", " ", "\t", "Ā")
                 return Stream.of<Arguments?>(
                     Arguments.of(CharacterClassMembershipCase("[\\Qab\\E&&[b]]", inputs)),
                     Arguments.of(CharacterClassMembershipCase("[[ab]&&[^b]]", inputs)),
@@ -1456,7 +1473,7 @@ internal class JdkSyntaxCompatibilityTest {
             private fun jdkCharacterClassOutcome(regex: String): CharacterClassMatrixOutcome {
                 try {
                     return CharacterClassMatrixOutcome(
-                        true, characterClassMatrixMatches(Pattern.compile(regex))
+                        true, characterClassMatrixMatches(java.util.regex.Pattern.compile(regex))
                     )
                 } catch (e: PatternSyntaxException) {
                     return CharacterClassMatrixOutcome(false, "")
@@ -1473,7 +1490,7 @@ internal class JdkSyntaxCompatibilityTest {
                 }
             }
 
-            private fun characterClassMatrixMatches(pattern: Pattern): String {
+            private fun characterClassMatrixMatches(pattern: java.util.regex.Pattern): String {
                 val result = StringBuilder()
                 for (input in characterClassMatrixInputs()) {
                     if (pattern.matcher(input).matches()) {
@@ -1500,7 +1517,7 @@ internal class JdkSyntaxCompatibilityTest {
             }
 
             private fun characterClassMatrixInputs(): MutableList<String> {
-                return mutableListOf<String?>(
+                return mutableListOf<String>(
                     "",
                     "a",
                     "b",
@@ -1526,7 +1543,7 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("POSIX character classes")
-    internal inner class PosixCharacterClasses {
+    internal class PosixCharacterClasses {
         @ParameterizedTest(name = "{0}")
         @MethodSource("posixClasses")
         @DisplayName("POSIX class")
@@ -1539,7 +1556,7 @@ internal class JdkSyntaxCompatibilityTest {
         @MethodSource("posixBracketClassSyntax")
         @DisplayName("POSIX bracket class spelling is ordinary character-class text")
         fun posixBracketClassSyntaxIsOrdinaryText(regex: String, input: String, expectedMatch: Boolean) {
-            val jdkMatches = Pattern.compile(regex).matcher(input).matches()
+            val jdkMatches = java.util.regex.Pattern.compile(regex).matcher(input).matches()
             val safeMatches = org.safere.Pattern.compile(regex).matcher(input).matches()
 
             Assertions.assertThat(jdkMatches)
@@ -1551,6 +1568,7 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun posixClasses(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\p{Lower}", "a", "5"),
@@ -1569,6 +1587,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun posixBracketClassSyntax(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("[[:lower:]]", "l", true),
@@ -1611,7 +1630,7 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("java.lang.Character classes")
-    internal inner class JavaCharacterClasses {
+    internal class JavaCharacterClasses {
         @ParameterizedTest(name = "{0}")
         @MethodSource("javaClasses")
         @DisplayName("java.lang.Character class")
@@ -1621,6 +1640,7 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun javaClasses(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\p{javaLowerCase}", "a", "A"),
@@ -1801,7 +1821,7 @@ internal class JdkSyntaxCompatibilityTest {
 
     @Nested
     @DisplayName("Unicode binary properties")
-    internal inner class UnicodeBinaryProperties {
+    internal class UnicodeBinaryProperties {
         @ParameterizedTest(name = "{0}")
         @MethodSource("binaryProperties")
         @DisplayName("binary property")
@@ -1861,6 +1881,7 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun binaryProperties(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\p{IsAlphabetic}", "a", "5"),
@@ -1943,7 +1964,7 @@ internal class JdkSyntaxCompatibilityTest {
             // But JDK accepts it.
             Assertions.assertThatNoException()
                 .`as`("JDK should accept \\G")
-                .isThrownBy(ThrowingCallable { Pattern.compile("\\G") })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile("\\G") })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("\\G") })
                 .`as`("SafeRE should reject \\G")
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -1955,7 +1976,7 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("Quantifiers")
-    internal inner class Quantifiers {
+    internal class Quantifiers {
         // -- Greedy --
         @Test
         @DisplayName("greedy ? (zero or one)")
@@ -2019,7 +2040,7 @@ internal class JdkSyntaxCompatibilityTest {
             val regex = "a{0000000000000000000000000000001001}"
             Assertions.assertThatNoException()
                 .`as`("JDK should accept repeat counts above SafeRE's expansion limit: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should still enforce its repeat limit after parsing leading zeros: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2029,7 +2050,7 @@ internal class JdkSyntaxCompatibilityTest {
         @ValueSource(strings = ["{", "{?", "a{?", "a{,2}", "a{x}", "\\\\Q{?\\\\E"])
         @DisplayName("malformed unescaped counted repetition")
         fun malformedUnescapedCountedRepetition(regex: String) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .`as`("JDK should reject malformed counted repetition: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
@@ -2076,7 +2097,7 @@ internal class JdkSyntaxCompatibilityTest {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
                 .isThrownBy(
-                    ThrowingCallable { Pattern.compile(regex, Pattern.COMMENTS) })
+                    ThrowingCallable { java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.COMMENTS) })
             Assertions.assertThatNoException()
                 .`as`("SafeRE should accept: %s", regex)
                 .isThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
@@ -2096,7 +2117,7 @@ internal class JdkSyntaxCompatibilityTest {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
                 .isThrownBy(
-                    ThrowingCallable { Pattern.compile(regex, Pattern.COMMENTS) })
+                    ThrowingCallable { java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.COMMENTS) })
             Assertions.assertThatNoException()
                 .`as`("SafeRE should accept: %s", regex)
                 .isThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
@@ -2110,7 +2131,7 @@ internal class JdkSyntaxCompatibilityTest {
             // JDK accepts these.
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             // SafeRE should reject — possessive quantifiers violate linear-time guarantees.
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject possessive quantifier: %s", regex)
@@ -2127,7 +2148,7 @@ internal class JdkSyntaxCompatibilityTest {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
                 .isThrownBy(
-                    ThrowingCallable { Pattern.compile(regex, Pattern.COMMENTS) })
+                    ThrowingCallable { java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.COMMENTS) })
             Assertions.assertThatThrownBy(ThrowingCallable {
                 org.safere.Pattern.compile(
                     regex,
@@ -2194,13 +2215,14 @@ internal class JdkSyntaxCompatibilityTest {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept possessive anchor quantifier: %s", regex)
                 .isThrownBy(
-                    ThrowingCallable { Pattern.compile(regex, Pattern.COMMENTS) })
+                    ThrowingCallable { java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.COMMENTS) })
             Assertions.assertThatNoException()
                 .`as`("SafeRE should accept zero-width possessive anchor quantifier: %s", regex)
                 .isThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
         }
 
         companion object {
+            @JvmStatic
             fun countedRepetitionBoundsWithLeadingZeros(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("a{05}", "aaaaa"),
@@ -2220,6 +2242,7 @@ internal class JdkSyntaxCompatibilityTest {
                 )
             }
 
+            @JvmStatic
             fun boundedRepeatsOfQuantifiedAtoms(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\S??{1,3}", ""),
@@ -2272,7 +2295,7 @@ internal class JdkSyntaxCompatibilityTest {
             // JDK accepts these.
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             // SafeRE should reject — back references require backtracking.
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject back reference: %s", regex)
@@ -2285,7 +2308,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun numericBackReferenceSyntaxWithoutGroupsRejected(regex: String) {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept unresolved numeric back reference syntax: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject unresolved numeric back reference syntax: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2297,7 +2320,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun numericBackReferenceShortenedToExistingPrecedingGroup(regex: String) {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept shortened numeric back reference: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject numeric back reference: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2310,7 +2333,7 @@ internal class JdkSyntaxCompatibilityTest {
 
             Assertions.assertThatNoException()
                 .`as`("JDK should accept numeric back reference to group 12")
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject numeric back reference to group 12")
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2365,7 +2388,7 @@ internal class JdkSyntaxCompatibilityTest {
         @DisabledForCrosscheck("SafeRE supports Python-style named capturing groups")
         fun pythonStyleNamedCapturingGroupAccepted() {
             val regex = "(?" + "P<word>\\w+)"
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
             val unused = org.safere.Pattern.compile(regex)
         }
@@ -2389,7 +2412,7 @@ internal class JdkSyntaxCompatibilityTest {
         fun lookaround(regex: String) {
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject lookaround: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2401,7 +2424,7 @@ internal class JdkSyntaxCompatibilityTest {
             val regex = "(?>a+)"
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .`as`("SafeRE should reject atomic group: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
@@ -2565,7 +2588,7 @@ internal class JdkSyntaxCompatibilityTest {
         @DisplayName("\\\\R prefers \\\\r\\\\n over bare \\\\r")
         fun linebreakCrLfPreference() {
             // \R should match \r\n as a single unit, not just \r
-            val jdkM = Pattern.compile("\\R").matcher("\r\n")
+            val jdkM = java.util.regex.Pattern.compile("\\R").matcher("\r\n")
             Assertions.assertThat(jdkM.find()).isTrue()
             val jdkGroup = jdkM.group()
 
@@ -2598,13 +2621,13 @@ internal class JdkSyntaxCompatibilityTest {
     // ===========================================================================
     @Nested
     @DisplayName("Line terminators")
-    internal inner class LineTerminators {
+    internal class LineTerminators {
         @ParameterizedTest(name = "{0}")
         @MethodSource("lineTerminators")
         @DisplayName("dot does not match line terminator")
         fun dotDoesNotMatch(desc: String?, terminator: String) {
             // dot should NOT match line terminators (without DOTALL)
-            val jdkM = Pattern.compile(".").matcher(terminator)
+            val jdkM = java.util.regex.Pattern.compile(".").matcher(terminator)
             val safeM = org.safere.Pattern.compile(".").matcher(terminator)
             Assertions.assertThat(safeM.find()).`as`("dot on %s", desc).isEqualTo(jdkM.find())
         }
@@ -2618,6 +2641,7 @@ internal class JdkSyntaxCompatibilityTest {
         }
 
         companion object {
+            @JvmStatic
             fun lineTerminators(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("\\n (newline)", "\n"),
@@ -2755,7 +2779,7 @@ internal class JdkSyntaxCompatibilityTest {
             // Sanity: JDK must accept it too.
             Assertions.assertThatNoException()
                 .`as`("JDK should accept: %s", regex)
-                .isThrownBy(ThrowingCallable { Pattern.compile(regex) })
+                .isThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             Assertions.assertThatNoException()
                 .`as`("SafeRE should accept: %s", regex)
                 .isThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
@@ -2763,7 +2787,7 @@ internal class JdkSyntaxCompatibilityTest {
 
         /** Asserts JDK and SafeRE both reject the pattern.  */
         private fun assertRejectedByJdkAndSafeRe(regex: String) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .`as`("JDK should reject: %s", regex)
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
@@ -2780,7 +2804,7 @@ internal class JdkSyntaxCompatibilityTest {
 
         /** Asserts JDK and SafeRE both reject the pattern with the given flags.  */
         private fun assertRejectedByJdkAndSafeRe(regex: String, flags: Int) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex, flags) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex, flags) })
                 .`as`("JDK should reject: %s flags=%d", regex, flags)
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, flags) })
@@ -2791,7 +2815,7 @@ internal class JdkSyntaxCompatibilityTest {
         /** Asserts SafeRE compiles and matches identically to JDK on the given input.  */
         private fun assertMatchesSame(regex: String, input: String) {
             // Sanity: JDK must accept it.
-            val jdkM = Pattern.compile(regex).matcher(input)
+            val jdkM = java.util.regex.Pattern.compile(regex).matcher(input)
             val jdkFound = jdkM.find()
 
             val safeM = org.safere.Pattern.compile(regex).matcher(input)
@@ -2808,7 +2832,7 @@ internal class JdkSyntaxCompatibilityTest {
 
         /** Asserts SafeRE compiles and full-matches identically to JDK on the given input.  */
         private fun assertMatchesFull(regex: String, input: String) {
-            val jdkM = Pattern.compile(regex).matcher(input)
+            val jdkM = java.util.regex.Pattern.compile(regex).matcher(input)
             val jdkMatches = jdkM.matches()
 
             val safeM = org.safere.Pattern.compile(regex).matcher(input)
@@ -2828,7 +2852,7 @@ internal class JdkSyntaxCompatibilityTest {
          * Asserts SafeRE compiles with the given flags and matches identically to JDK on the given input.
          */
         private fun assertMatchesSameWithFlags(regex: String, jdkFlags: Int, input: String) {
-            val jdkM = Pattern.compile(regex, jdkFlags).matcher(input)
+            val jdkM = java.util.regex.Pattern.compile(regex, jdkFlags).matcher(input)
             val jdkFound = jdkM.find()
 
             // Map JDK flags to SafeRE flags (same values by design).

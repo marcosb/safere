@@ -49,13 +49,13 @@ internal class GraphemeRegionModelTest {
     }
 
     @JvmRecord
-    private data class Case(
+    internal data class Case(
         val name: String,
         val regex: String?,
         val input: String?,
         val start: Int,
         val end: Int,
-        val expectedFinds: MutableList<String?>?
+        val expectedFinds: MutableList<String>?
     ) {
         override fun toString(): String {
             return name
@@ -63,6 +63,7 @@ internal class GraphemeRegionModelTest {
     }
 
     companion object {
+        @JvmStatic
         private fun regionLocalCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(
@@ -72,7 +73,7 @@ internal class GraphemeRegionModelTest {
                         "ab",
                         0,
                         2,
-                        mutableListOf<String?>("0-1;g0=U+0061", "1-2;g0=U+0062")
+                        mutableListOf<String>("0-1;g0=U+0061", "1-2;g0=U+0062")
                     )
                 ),
                 Arguments.of(
@@ -82,7 +83,7 @@ internal class GraphemeRegionModelTest {
                         "\uD83D\uDC69\u200D\uD83D\uDC69",
                         2,
                         5,
-                        mutableListOf<String?>("2-3;g0=U+200D", "3-5;g0=U+1F469")
+                        mutableListOf<String>("2-3;g0=U+200D", "3-5;g0=U+1F469")
                     )
                 ),
                 Arguments.of(
@@ -92,7 +93,7 @@ internal class GraphemeRegionModelTest {
                         "\uD83D\uDC4D\uD83C\uDFFB",
                         1,
                         3,
-                        mutableListOf<String?>("1-2;g0=U+DC4D", "2-3;g0=U+D83C")
+                        mutableListOf<String>("1-2;g0=U+DC4D", "2-3;g0=U+D83C")
                     )
                 ),
                 Arguments.of(
@@ -102,7 +103,7 @@ internal class GraphemeRegionModelTest {
                         "\uD83D\uDC69\u200D\uD83D\uDC69",
                         2,
                         5,
-                        mutableListOf<String?>("2-3;g0=U+200D", "3-5;g0=U+1F469")
+                        mutableListOf<String>("2-3;g0=U+200D", "3-5;g0=U+1F469")
                     )
                 ),
                 Arguments.of(
@@ -112,7 +113,7 @@ internal class GraphemeRegionModelTest {
                         "\uD83D\uDC69\u200D\uD83D\uDC69",
                         2,
                         5,
-                        mutableListOf<String?>("2-3;g0=U+200D", "3-5;g0=U+1F469")
+                        mutableListOf<String>("2-3;g0=U+200D", "3-5;g0=U+1F469")
                     )
                 ),
                 Arguments.of(
@@ -122,7 +123,7 @@ internal class GraphemeRegionModelTest {
                         "a\u0000\u0301",
                         1,
                         3,
-                        mutableListOf<String?>("1-2;g0=U+0000", "2-3;g0=U+0301")
+                        mutableListOf<String>("1-2;g0=U+0000", "2-3;g0=U+0301")
                     )
                 ),
                 Arguments.of(
@@ -132,7 +133,7 @@ internal class GraphemeRegionModelTest {
                         "\u0915\u094D\u0937",
                         1,
                         3,
-                        mutableListOf<String?>("1-2;g0=U+094D", "2-3;g0=U+0937")
+                        mutableListOf<String>("1-2;g0=U+094D", "2-3;g0=U+0937")
                     )
                 ),
                 Arguments.of(
@@ -142,7 +143,7 @@ internal class GraphemeRegionModelTest {
                         "\u0915\u094D\u0937",
                         0,
                         3,
-                        mutableListOf<String?>("1-3;g0=U+094D U+0937")
+                        mutableListOf<String>("1-3;g0=U+094D U+0937")
                     )
                 ),
                 Arguments.of(
@@ -152,7 +153,7 @@ internal class GraphemeRegionModelTest {
                         "\u0915\u094D\u0937",
                         0,
                         3,
-                        mutableListOf<String?>("1-3;g0=U+094D U+0937")
+                        mutableListOf<String>("1-3;g0=U+094D U+0937")
                     )
                 ),
                 Arguments.of(
@@ -162,14 +163,14 @@ internal class GraphemeRegionModelTest {
                         "\u0915\u094D\u0937",
                         0,
                         3,
-                        mutableListOf<String?>("1-3;g0=U+094D U+0937;g1=U+094D;g2=U+0937")
+                        mutableListOf<String>("1-3;g0=U+094D U+0937;g1=U+094D;g2=U+0937")
                     )
                 )
             )
         }
 
-        private fun findTrace(matcher: Matcher): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: Matcher): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 val builder = StringBuilder()
                 builder.append(matcher.start()).append('-').append(matcher.end())

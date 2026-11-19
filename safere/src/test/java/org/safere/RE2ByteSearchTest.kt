@@ -96,7 +96,7 @@ internal class RE2ByteSearchTest {
         val p = Pattern.compile("(?:(?:(?:\\b).)*)")
         val bytes = "aa ".toByteArray(StandardCharsets.UTF_8)
         val m = p.matcher(Utf8Input.validated(bytes))
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         while (m.find()) {
             matches.add(String.format("[%d,%d)", m.start(), m.end()))
         }
@@ -107,7 +107,7 @@ internal class RE2ByteSearchTest {
     fun testWordBoundaryDiscrepancyString() {
         val p = Pattern.compile("(?:(?:(?:\\b).)*)")
         val m = p.matcher("aa ")
-        val matches: MutableList<String?> = ArrayList<String?>()
+        val matches: MutableList<String> = ArrayList<String>()
         while (m.find()) {
             matches.add(String.format("[%d,%d)", m.start(), m.end()))
         }
@@ -175,22 +175,22 @@ internal class RE2ByteSearchTest {
                 return text.length
             }
             val prefix = String(utf8, 0, byteOffset, StandardCharsets.UTF_8)
-            return prefix.size
+            return prefix.length
         }
 
-        private fun parseResultField(field: String): Array<IntArray?>? {
+        private fun parseResultField(field: String): Array<IntArray>? {
             var field = field
             field = field.trim { it <= ' ' }
             if (field == "-") {
                 return null
             }
             val pairs: Array<String?> = field.split("\\s+".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            val result = Array<IntArray?>(pairs.size) { IntArray(2) }
+            val result = Array<IntArray>(pairs.size) { IntArray(2) }
             for (i in pairs.indices) {
                 val parts: Array<String?> =
                     pairs[i]!!.split("-".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                result[i]!![0] = parts[0]!!.toInt()
-                result[i]!![1] = parts[1]!!.toInt()
+                result[i][0] = parts[0]!!.toInt()
+                result[i][1] = parts[1]!!.toInt()
             }
             return result
         }
@@ -253,12 +253,12 @@ internal class RE2ByteSearchTest {
             return sb.toString()
         }
 
-        private fun extractMatchedText(text: String, matchResult: Array<IntArray?>?): String? {
+        private fun extractMatchedText(text: String, matchResult: Array<IntArray>?): String? {
             if (matchResult == null || matchResult.size == 0) {
                 return null
             }
-            val startByte = matchResult[0]!![0]
-            val endByte = matchResult[0]!![1]
+            val startByte = matchResult[0][0]
+            val endByte = matchResult[0][1]
             val startChar: Int = utf8ByteToCharOffset(text, startByte)
             val endChar: Int = utf8ByteToCharOffset(text, endByte)
             if (startChar < 0 || endChar < 0 || startChar > text.length || endChar > text.length) {
@@ -284,6 +284,7 @@ internal class RE2ByteSearchTest {
         }
 
         @Throws(IOException::class)
+        @JvmStatic
         fun searchTests(): Stream<Arguments?> {
             val tests: MutableList<Arguments?> = ArrayList<Arguments?>()
             val `is` = RE2ByteSearchTest::class.java.getResourceAsStream("/re2-search.txt")
@@ -340,8 +341,8 @@ internal class RE2ByteSearchTest {
                             }
 
                             val text = strings.get(si)
-                            val fullMatch: Array<IntArray?>? = parseResultField(fields[0]!!)
-                            val findMatch: Array<IntArray?>? = parseResultField(fields[1]!!)
+                            val fullMatch: Array<IntArray>? = parseResultField(fields[0]!!)
+                            val findMatch: Array<IntArray>? = parseResultField(fields[1]!!)
 
                             val expectedFindText: String? = extractMatchedText(text, findMatch)
 

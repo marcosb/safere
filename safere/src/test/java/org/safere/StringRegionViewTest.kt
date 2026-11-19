@@ -10,13 +10,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.lang.reflect.Method
-import java.util.List
-
 internal class StringRegionViewTest {
     @Test
     @DisabledForCrosscheck("Checks SafeRE bounded acceleration against independent text")
     fun boundedSearchPlansPreserveFindHistoriesAndCaptureOffsets() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "q[a-z]+k\\s+b",
             "[a-z]*q[a-z]+k\\s+b",
             "(q[a-z]+)(k\\s+b)",
@@ -32,13 +30,13 @@ internal class StringRegionViewTest {
             "\\p{Cs}[a-z]+"
         )) {
             val pattern = Pattern.compile(regex)
-            for (visible in List.of<String?>(
+            for (visible in java.util.List.of<String?>(
                 "",
                 "qabck b QABCK B aaxQ bcqab Kabck b 𐐨abck b\nqabck b",
                 "x ".repeat(2048) + "qabck b qabck b",
                 "\uDE00qabck b\uD83D"
             )) {
-                for (prefix in mutableListOf<String?>("!", "\uD83D", "\r")) {
+                for (prefix in mutableListOf<String>("!", "\uD83D", "\r")) {
                     val input = prefix + visible + "qabck b\uDE00"
                     val actual =
                         pattern.matcher(input).region(prefix!!.length, prefix.length + visible.length)
@@ -109,7 +107,7 @@ internal class StringRegionViewTest {
     @DisabledForCrosscheck("Opaque substring semantics intentionally differ from JDK region behavior")
     fun changingRegionsAgreeWithIndependentSubstrings(regex: String?) {
         val pattern = Pattern.compile(regex)
-        for (input in mutableListOf<String?>(
+        for (input in mutableListOf<String>(
             "!aaabb!",
             "!aaaab!",
             "!aaaab\n!",
@@ -226,7 +224,7 @@ internal class StringRegionViewTest {
                 }
                 return AllocationTracker(threadBean, allocated)
             } catch (e: ReflectiveOperationException) {
-                Assumptions.abort<Any?>("thread allocation tracking is unavailable: " + e)
+                Assumptions.abort<Any>("thread allocation tracking is unavailable: " + e)
                 throw LinkageError(e.message, e)
             }
         }

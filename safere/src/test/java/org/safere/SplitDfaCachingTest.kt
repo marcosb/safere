@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Splitting must preserve matches when anchored and unanchored searches share cached states.  */
@@ -25,7 +24,7 @@ internal class SplitDfaCachingTest {
     @MethodSource("splitCases")
     fun splitApisPreserveDelimitersAcrossCacheReuse(regex: String, input: String, limit: Int) {
         val pattern = Pattern.compile(regex)
-        val expected = Pattern.compile(regex)
+        val expected = java.util.regex.Pattern.compile(regex)
         for (reuse in 0..2) {
             Assertions.assertThat<String?>(pattern.split(input, limit)).containsExactly(*expected.split(input, limit))
             Assertions.assertThat<String?>(pattern.splitWithDelimiters(input, limit))
@@ -47,12 +46,13 @@ internal class SplitDfaCachingTest {
     }
 
     companion object {
+        @JvmStatic
         private fun splitCases(): Stream<Arguments?>? {
             return Stream.of<Array<String?>?>(
-                arrayOf<String>("[0-9]", "0", "1"),
-                arrayOf<String>("[a-z]", "a", "b"),
-                arrayOf<String>("[\\x00-y]", "\u0000", "1"),
-                arrayOf<String>("[😀😁]", "😀", "😁")
+                arrayOf<String?>("[0-9]", "0", "1"),
+                arrayOf<String?>("[a-z]", "a", "b"),
+                arrayOf<String?>("[\\x00-y]", "\u0000", "1"),
+                arrayOf<String?>("[😀😁]", "😀", "😁")
             )
                 .flatMap<Arguments?> { alphabet: Array<String?>? ->
                     Stream.of<String>("*", "+", "*?", "{0,3}")
@@ -60,7 +60,7 @@ internal class SplitDfaCachingTest {
                             Stream.of<Boolean?>(false, true)
                                 .flatMap<Arguments?> { capture: Boolean? ->
                                     val body = alphabet!![0] + quantifier + alphabet[1]
-                                    val regex = if (capture) "(" + body + ")" else body
+                                    val regex = if (capture == true) "(" + body + ")" else body
                                     Stream.of<Int?>(16, 512)
                                         .flatMap<Arguments?> { gap: Int? ->
                                             val input =

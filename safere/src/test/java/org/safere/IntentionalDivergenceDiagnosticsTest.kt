@@ -118,7 +118,7 @@ internal class IntentionalDivergenceDiagnosticsTest {
                     if (failure is RuntimeException) {
                         throw failure
                     }
-                    throw failure as Error?
+                    throw failure as Error
                 })
         )
 
@@ -149,6 +149,7 @@ internal class IntentionalDivergenceDiagnosticsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun replacementCases(): Stream<Arguments?> {
             val defaults = EnginePathOptions.builder().build()
             val dfa =
@@ -167,6 +168,7 @@ internal class IntentionalDivergenceDiagnosticsTest {
             )
         }
 
+        @JvmStatic
         private fun syntaxFailures(): Stream<Arguments?>? {
             return Stream.of<String?>("[a&&&b]", "(?x)#\\Q\n[", "(?x)#\\Q\n[a&&&b]")
                 .flatMap<Arguments?> { regex: String? ->

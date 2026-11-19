@@ -14,8 +14,6 @@ import org.safere.Matcher.LiteralAlternationPreparedRunner
 import org.safere.Matcher.PreparedMatchRunner
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
@@ -43,14 +41,14 @@ internal class LiteralAlternationUtf8Test {
                 .isInstanceOf(LiteralAlternationPreparedRunner::class.java)
             for (filler in FILLERS) {
                 for (repeat in intArrayOf(0, 1, 7, 128, 1000, 3000)) {
-                    for (text in List.of<String?>(
+                    for (text in java.util.List.of<String?>(
                         filler.repeat(repeat),
                         filler.repeat(repeat) + "barfoo banana gardens abc red 😀éclair apple",
                         filler.repeat(repeat) + "APPLE Banana cherrY abd",
                         "cherry" + filler.repeat(repeat) + "abc",
                         filler.repeat(repeat) + "ab" + filler.repeat(repeat) + "cherry"
                     )) {
-                        val expected: MutableList<String?> = jdkFinds(regex, text)
+                        val expected: MutableList<String> = jdkFinds(regex, text)
                         Assertions.assertThat<String?>(utf8Finds(pattern, text)).`as`("/%s/ %s", regex, filler)
                             .isEqualTo(expected)
                         Assertions.assertThat<String?>(utf8Finds(fallback, text)).isEqualTo(expected)
@@ -66,7 +64,7 @@ internal class LiteralAlternationUtf8Test {
 
     @Test
     fun windowBoundariesPreserveLeftmostMatchAndAlternativePriority() {
-        for (regex in mutableListOf<String?>("ab|cherry|abc", "abc|cherry|ab", "abc|bcd|cde", "cherry|banana|apple")) {
+        for (regex in mutableListOf<String>("ab|cherry|abc", "abc|cherry|ab", "abc|bcd|cde", "cherry|banana|apple")) {
             val pattern = Pattern.compile(regex)
             for (boundary in intArrayOf(1024, 3072, 4096, 5120, 7168, 15360, 31744)) {
                 for (delta in -14..2) {
@@ -90,7 +88,7 @@ internal class LiteralAlternationUtf8Test {
     @Test
     fun firstFindOnDenseInputReportsLiteralAlternation() {
         Pattern.setDiagnostics(recorder)
-        for (regex in mutableListOf<String?>("apple|banana|cherry", "blossom|sparkling|gardens")) {
+        for (regex in mutableListOf<String>("apple|banana|cherry", "blossom|sparkling|gardens")) {
             val pattern = Pattern.compile(regex)
             val text = "a bright sunlit cobbled street ".repeat(64) + "cherry gardens"
             operations.clear()
@@ -145,9 +143,9 @@ internal class LiteralAlternationUtf8Test {
 
     @Test
     fun regionsUseByteBounds() {
-        for (regex in mutableListOf<String?>("apple|banana|cherry", "foo|barfoo", "ab|cherry|abc", "abc|cherry|ab")) {
+        for (regex in mutableListOf<String>("apple|banana|cherry", "foo|barfoo", "ab|cherry|abc", "abc|cherry|ab")) {
             val pattern = Pattern.compile(regex)
-            for (padding in mutableListOf<String?>("abc ", "x", "é", "😀")) {
+            for (padding in mutableListOf<String>("abc ", "x", "é", "😀")) {
                 val text = padding!!.repeat(300) + "barfoo banana apple abc cherry" + padding
                 val bytes = text.toByteArray(StandardCharsets.UTF_8)
                 val middle = padding.repeat(300).length + 3
@@ -159,7 +157,7 @@ internal class LiteralAlternationUtf8Test {
                         val startByte: Int = byteOffset(text, startChar)
                         val endByte: Int = byteOffset(text, endChar)
                         val expected =
-                            Pattern.compile(regex).matcher(text).region(startChar, endChar)
+                            java.util.regex.Pattern.compile(regex).matcher(text).region(startChar, endChar)
                         val actual =
                             pattern.matcher(Utf8Input.validated(bytes)).region(startByte, endByte)
                         while (expected.find()) {
@@ -185,10 +183,10 @@ internal class LiteralAlternationUtf8Test {
             0xC3.toByte(),
             'b'.code.toByte()
         )
-        for (regex in mutableListOf<String?>("apple|banana|cherry", "ab|cherry|abc", "abc|cherry|ab")) {
+        for (regex in mutableListOf<String>("apple|banana|cherry", "ab|cherry|abc", "abc|cherry|ab")) {
             val pattern = org.safere.Pattern.compile(regex)
             val fallback = org.safere.Pattern.compile(regex, 0, NO_LITERAL_FAST_PATHS)
-            for (literal in mutableListOf<String?>("", "apple", "abc", "cherry")) {
+            for (literal in mutableListOf<String>("", "apple", "abc", "cherry")) {
                 val out = ByteArrayOutputStream()
                 for (i in 0..63) {
                     out.writeBytes(garbage)
@@ -208,8 +206,8 @@ internal class LiteralAlternationUtf8Test {
     fun fullAndPrefixMatchesAgreeWithJdk() {
         for (regex in PATTERNS) {
             val pattern = org.safere.Pattern.compile(regex)
-            for (text in mutableListOf<String?>("", "apple", "APPLE", "Apple", "banana", "abc", "ab", "abcé")) {
-                val expected = Pattern.compile(regex).matcher(text)
+            for (text in mutableListOf<String>("", "apple", "APPLE", "Apple", "banana", "abc", "ab", "abcé")) {
+                val expected = java.util.regex.Pattern.compile(regex).matcher(text)
                 val actual = pattern.matcher(Utf8Input.validated(text!!.toByteArray(StandardCharsets.UTF_8)))
                 Assertions.assertThat(actual.matches()).`as`("/%s/ %s", regex, text).isEqualTo(expected.matches())
                 Assertions.assertThat(actual.lookingAt()).isEqualTo(expected.lookingAt())
@@ -221,7 +219,7 @@ internal class LiteralAlternationUtf8Test {
         private val NO_LITERAL_FAST_PATHS: EnginePathOptions =
             EnginePathOptions.builder().literalFastPaths(false).build()
 
-        private val PATTERNS: MutableList<String> = mutableListOf<String?>(
+        private val PATTERNS: MutableList<String> = mutableListOf<String>(
             "apple|banana|cherry",
             "APPLE|BANANA|CHERRY",
             "blossom|sparkling|gardens",
@@ -235,23 +233,23 @@ internal class LiteralAlternationUtf8Test {
         // Dense fillers switch the UTF-8 search to per-literal scans; sparse ones keep the first-byte
         // hops.
         private val FILLERS: MutableList<String> =
-            mutableListOf<String?>("abc rgb Abc ", "x", "é", "日本", "😀", "the quick brown fox ")
+            mutableListOf<String>("abc rgb Abc ", "x", "é", "日本", "😀", "the quick brown fox ")
 
-        private fun jdkFinds(regex: String, text: String): MutableList<String?> {
-            val finds: MutableList<String?> = ArrayList<String?>()
-            val matcher = Pattern.compile(regex).matcher(text)
+        private fun jdkFinds(regex: String, text: String): MutableList<String> {
+            val finds: MutableList<String> = ArrayList<String>()
+            val matcher = java.util.regex.Pattern.compile(regex).matcher(text)
             while (matcher.find()) {
                 finds.add(byteOffset(text, matcher.start()).toString() + "-" + byteOffset(text, matcher.end()))
             }
             return finds
         }
 
-        private fun utf8Finds(pattern: org.safere.Pattern, text: String): MutableList<String?> {
+        private fun utf8Finds(pattern: org.safere.Pattern, text: String): MutableList<String> {
             return bytesFinds(pattern, text.toByteArray(StandardCharsets.UTF_8))
         }
 
-        private fun bytesFinds(pattern: org.safere.Pattern, bytes: ByteArray?): MutableList<String?> {
-            val finds: MutableList<String?> = ArrayList<String?>()
+        private fun bytesFinds(pattern: org.safere.Pattern, bytes: ByteArray?): MutableList<String> {
+            val finds: MutableList<String> = ArrayList<String>()
             val matcher = pattern.matcher(Utf8Input.trusted(bytes))
             while (matcher.find()) {
                 finds.add(matcher.start().toString() + "-" + matcher.end())
@@ -259,8 +257,8 @@ internal class LiteralAlternationUtf8Test {
             return finds
         }
 
-        private fun stringFinds(pattern: org.safere.Pattern, text: String): MutableList<String?> {
-            val finds: MutableList<String?> = ArrayList<String?>()
+        private fun stringFinds(pattern: org.safere.Pattern, text: String): MutableList<String> {
+            val finds: MutableList<String> = ArrayList<String>()
             val matcher = pattern.matcher(text)
             while (matcher.find()) {
                 finds.add(byteOffset(text, matcher.start()).toString() + "-" + byteOffset(text, matcher.end()))

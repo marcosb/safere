@@ -168,7 +168,7 @@ internal class PatternSetTest {
         @Test
         fun graphemeFallbackDoesNotRecompileMembersPerMatch() {
             val b = PatternSet.Builder(PatternSet.Anchor.UNANCHORED)
-            val patterns: MutableList<String?> = ArrayList<String?>()
+            val patterns: MutableList<String> = ArrayList<String>()
             patterns.add("\\X")
             b.add(patterns.first())
             for (i in 0..63) {
@@ -297,7 +297,7 @@ internal class PatternSetTest {
             b.add("c")
             val set = b.compile()
 
-            Assertions.assertThat(set.size).isEqualTo(3)
+            Assertions.assertThat(set.size()).isEqualTo(3)
         }
 
         @Test
@@ -462,7 +462,7 @@ internal class PatternSetTest {
             b.add("beta")
             val set = b.compile()
 
-            Assertions.assertThat(set.size).isEqualTo(2)
+            Assertions.assertThat(set.size()).isEqualTo(2)
             Assertions.assertThat(set.pattern(0)).isEqualTo("alpha")
             Assertions.assertThat(set.pattern(1)).isEqualTo("beta")
         }
@@ -608,7 +608,7 @@ internal class PatternSetTest {
     private data class AllocationTracker(val threadBean: Any?, val allocatedBytesMethod: Method?) {
         fun allocatedBytes(threadId: Long): Long {
             try {
-                return (allocatedBytesMethod.invoke(threadBean, threadId) as Long?)!!
+                return (allocatedBytesMethod!!.invoke(threadBean, threadId) as Long?)!!
             } catch (e: IllegalAccessException) {
                 throw AssertionError(e)
             } catch (e: InvocationTargetException) {
@@ -640,7 +640,7 @@ internal class PatternSetTest {
             return allocationTracker.allocatedBytes(threadId) - before
         }
 
-        private fun compileAndMatchEachPattern(patterns: MutableList<String?>, text: String?) {
+        private fun compileAndMatchEachPattern(patterns: MutableList<String>, text: String?) {
             for (pattern in patterns) {
                 Pattern.compile(pattern).matcher(text).find()
             }
@@ -666,7 +666,7 @@ internal class PatternSetTest {
                 }
                 return AllocationTracker(threadBean, allocatedBytesMethod)
             } catch (e: ReflectiveOperationException) {
-                Assumptions.abort<Any?>("thread allocation tracking is unavailable: " + e)
+                Assumptions.abort<Any>("thread allocation tracking is unavailable: " + e)
                 throw AssertionError("unreachable")
             }
         }

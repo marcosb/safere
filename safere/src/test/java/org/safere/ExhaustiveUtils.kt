@@ -9,8 +9,6 @@ import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.math.min
 
@@ -28,7 +26,7 @@ import kotlin.math.min
  */
 internal object ExhaustiveUtils {
     // Standard egrep operators (like RE2's EgrepOps, minus \C*)
-    val EGREP_OPS: MutableList<String?> = mutableListOf<String?>("%s%s", "%s|%s", "%s*", "%s+", "%s?")
+    val EGREP_OPS: MutableList<String> = mutableListOf<String>("%s%s", "%s|%s", "%s*", "%s+", "%s?")
 
     /**
      * Run an exhaustive test with the given configuration. Generates all regexps from atoms+ops, all
@@ -38,14 +36,14 @@ internal object ExhaustiveUtils {
      * @return the number of test cases executed
      */
     fun run(config: Config): Int {
-        val allRegexps: MutableList<String?> = ArrayList<String?>()
+        val allRegexps: MutableList<String> = ArrayList<String>()
         generateRegexps(
             config.maxAtoms,
             config.maxOps,
             config.atoms!!,
             config.ops!!,
             config.wrapper!!,
-            Consumer { e: String? -> allRegexps.add(e) })
+            Consumer { e: String? -> allRegexps.add(e!!) })
 
         val strings = generateStrings(config.maxStrLen, config.strAlphabet!!)
         val failures: MutableList<TestResult?> = Collections.synchronizedList<TestResult?>(ArrayList<TestResult?>())
@@ -108,9 +106,9 @@ internal object ExhaustiveUtils {
         }
 
         // Try to compile with JDK first — if JDK rejects it, skip
-        val jdkPat: Pattern?
+        val jdkPat: java.util.regex.Pattern?
         try {
-            jdkPat = Pattern.compile(regexp, flags)
+            jdkPat = java.util.regex.Pattern.compile(regexp, flags)
         } catch (e: PatternSyntaxException) {
             return 0
         }
@@ -249,15 +247,15 @@ internal object ExhaustiveUtils {
             val safereM = saferePat.matcher(text)
             val safereByteM = saferePat.matcher(Utf8Input.validated(utf8))
 
-            val jdkAll: MutableList<String?> = ArrayList<String?>()
+            val jdkAll: MutableList<String> = ArrayList<String>()
             while (jdkM.find()) {
                 jdkAll.add(String.format("[%d,%d)", jdkM.start(), jdkM.end()))
             }
-            val safereAll: MutableList<String?> = ArrayList<String?>()
+            val safereAll: MutableList<String> = ArrayList<String>()
             while (safereM.find()) {
                 safereAll.add(String.format("[%d,%d)", safereM.start(), safereM.end()))
             }
-            val safereByteAll: MutableList<String?> = ArrayList<String?>()
+            val safereByteAll: MutableList<String> = ArrayList<String>()
             while (safereByteM.find()) {
                 val byteStart = safereByteM.start()
                 val byteEnd = safereByteM.end()
@@ -298,7 +296,7 @@ internal object ExhaustiveUtils {
     }
 
     /** Extract group positions from a matcher as a string like "g0=[0,5) g1=[1,3) g2=[-1,-1)".  */
-    private fun extractGroups(m: Matcher, maxGroups: Int): String {
+    private fun extractGroups(m: java.util.regex.Matcher, maxGroups: Int): String {
         val count = min(m.groupCount(), maxGroups)
         val sb = StringBuilder()
         for (i in 0..count) {
@@ -348,7 +346,7 @@ internal object ExhaustiveUtils {
     fun generateRegexps(
         maxAtoms: Int,
         maxOps: Int,
-        atoms: MutableList<String?>,
+        atoms: MutableList<String>,
         ops: MutableList<String>,
         wrapper: String,
         handler: Consumer<String?>
@@ -372,7 +370,7 @@ internal object ExhaustiveUtils {
         atomsUsed: Int,
         maxAtoms: Int,
         maxOps: Int,
-        atoms: MutableList<String?>,
+        atoms: MutableList<String>,
         ops: MutableList<String>,
         wrapper: String,
         handler: Consumer<String?>
@@ -494,7 +492,7 @@ internal object ExhaustiveUtils {
         for (ch in alphabet) {
             current.append(ch)
             generateStringsRecursive(result, current, maxLen, alphabet)
-            current.delete(current.length - ch.size, current.length)
+            current.delete(current.length - ch.length, current.length)
         }
     }
 
@@ -508,7 +506,7 @@ internal object ExhaustiveUtils {
      * 
      * See [issue #42](https://github.com/safere/safere/issues/42) (bug 2) and [issue #52](https://github.com/safere/safere/issues/52) for detailed analysis.
      */
-    private val NESTED_REP_CAPTURE: Pattern = Pattern.compile(
+    private val NESTED_REP_CAPTURE: java.util.regex.Pattern = java.util.regex.Pattern.compile(
         "\\([^)]*\\)[^)]*(?:\\{\\d+[,}]|[*+?]).*(?:\\{\\d+[,}]|[*+?])|"
                 + "\\([^)]*\\)[^)]*(?:[*+?]|\\{\\d+[,}]).*\\$"
     )
@@ -556,7 +554,7 @@ internal object ExhaustiveUtils {
     internal data class Config(
         val maxAtoms: Int,
         val maxOps: Int,
-        val atoms: MutableList<String?>?,
+        val atoms: MutableList<String>?,
         val ops: MutableList<String>?,
         val maxStrLen: Int,
         val strAlphabet: MutableList<String>?,

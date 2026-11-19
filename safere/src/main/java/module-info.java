@@ -9,7 +9,9 @@
  */
 module org.safere {
     requires kotlin.stdlib;
-    requires jdk.incubator.vector;
+    // Compile-time only: Kotlin cannot resolve Vector API symbols via --add-reads alone the way
+    // javac could. STATIC keeps the incubating module off consumers' required set at runtime.
+    requires static jdk.incubator.vector;
 
     exports org.safere;
 }

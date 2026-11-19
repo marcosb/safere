@@ -23,7 +23,7 @@ internal class ClassHashChainTest {
         val chc = ClassHashChain.compileCaseInsensitive(pattern)
         Assertions.assertThat<ClassHashChain?>(chc).isNotNull()
 
-        val variants = mutableListOf<String?>(
+        val variants = mutableListOf<String>(
             "content-length",
             "CONTENT-LENGTH",
             "Content-Length",
@@ -58,7 +58,7 @@ internal class ClassHashChainTest {
         val chc = ClassHashChain.compileCaseInsensitive(pattern)
         Assertions.assertThat<ClassHashChain?>(chc).isNotNull()
 
-        val variants = mutableListOf<String?>("привет_мир", "ПРИВЕТ_МИР", "Привет_Мир", "пРиВеТ_мИр")
+        val variants = mutableListOf<String>("привет_мир", "ПРИВЕТ_МИР", "Привет_Мир", "пРиВеТ_мИр")
         for (variant in variants) {
             for (prefixLen in 0..16) {
                 for (suffixLen in 0..16) {
@@ -76,7 +76,7 @@ internal class ClassHashChainTest {
         val germanChc = ClassHashChain.compileCaseInsensitive(germanPattern)
         Assertions.assertThat<ClassHashChain?>(germanChc).isNotNull()
 
-        val germanVariants = mutableListOf<String?>("über_spitzen", "ÜBER_SPITZEN", "Über_Spitzen")
+        val germanVariants = mutableListOf<String>("über_spitzen", "ÜBER_SPITZEN", "Über_Spitzen")
         for (variant in germanVariants) {
             val text = "Vor dem Text " + variant + " nach dem Text"
             val found = germanChc!!.search(text, 0, WorkLimit.forRemaining(text.length))

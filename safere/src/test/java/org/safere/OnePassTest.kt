@@ -10,13 +10,51 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
+
+private val ONE_PASS_FLAGS = ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
+
+/** Helper: build a OnePass automaton, or null if not one-pass.  */
+private fun buildOnePass(pattern: String?): OnePass? {
+    val re = Parser.parse(pattern, ONE_PASS_FLAGS)!!
+    val prog = Compiler.compile(re)!!
+    return OnePass.build(prog)
+}
+
+/** Asserts that OnePass and NFA agree on an anchored search.  */
+private fun assertConsistentWithNfa(pattern: String?, text: String?, endMatch: Boolean) {
+    val re = Parser.parse(pattern, ONE_PASS_FLAGS)!!
+    val prog = Compiler.compile(re)!!
+    val op = OnePass.build(prog)
+    if (op == null) {
+        return  // not one-pass; skip
+    }
+    val opResult = op.search(text!!, endMatch, prog.numCaptures())
+    val kind = if (endMatch) Nfa.MatchKind.FULL_MATCH else Nfa.MatchKind.FIRST_MATCH
+    val nfaResult = Nfa.search(prog, text!!, Nfa.Anchor.ANCHORED, kind, prog.numCaptures())
+
+    if (nfaResult == null) {
+        Assertions.assertThat(opResult)
+            .`as`("/%s/ on \"%s\": NFA=null, OnePass should too", pattern, text)
+            .isNull()
+    } else {
+        Assertions.assertThat(opResult)
+            .`as`("/%s/ on \"%s\": NFA matched, OnePass should too", pattern, text)
+            .isNotNull()
+        // Compare capture groups.
+        val len = min(opResult!!.size, nfaResult.size)
+        for (i in 0..<len) {
+            Assertions.assertThat(opResult[i])
+                .`as`("/%s/ on \"%s\": cap[%d]", pattern, text, i)
+                .isEqualTo(nfaResult[i])
+        }
+    }
+}
 
 /**
  * Tests for [OnePass].
@@ -26,16 +64,7 @@ import kotlin.math.sqrt
  * capture groups are correctly extracted.
  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
-internal object OnePassTest {
-    private val FLAGS = ParseFlags.PERL_X or ParseFlags.PERL_CLASSES or ParseFlags.PERL_B or ParseFlags.UNICODE_GROUPS
-
-    /** Helper: build a OnePass automaton, or null if not one-pass.  */
-    private fun build(pattern: String?): OnePass? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
-        return OnePass.build(prog)
-    }
-
+internal class OnePassTest {
     private fun distinctLiteralRun(count: Int): String {
         val pattern = StringBuilder(count)
         for (i in 0..<count) {
@@ -46,50 +75,20 @@ internal object OnePassTest {
 
     /** Helper: run one-pass search (anchored, endMatch=false).  */
     private fun search(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
-        val op = OnePass.build(prog)
+        val re = Parser.parse(pattern, ONE_PASS_FLAGS)!!
+        val prog = Compiler.compile(re)!!
+        val op = OnePass.build(prog)!!
         Assertions.assertThat<OnePass?>(op).`as`("Pattern '%s' should be one-pass", pattern).isNotNull()
-        return op!!.search(text, false, prog.numCaptures())
+        return op.search(text!!, false, prog.numCaptures())
     }
 
     /** Helper: run one-pass search (anchored, endMatch=true, full match).  */
     private fun fullMatch(pattern: String?, text: String?): IntArray? {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
-        val op = OnePass.build(prog)
+        val re = Parser.parse(pattern, ONE_PASS_FLAGS)!!
+        val prog = Compiler.compile(re)!!
+        val op = OnePass.build(prog)!!
         Assertions.assertThat<OnePass?>(op).`as`("Pattern '%s' should be one-pass", pattern).isNotNull()
-        return op!!.search(text, true, prog.numCaptures())
-    }
-
-    /** Asserts that OnePass and NFA agree on an anchored search.  */
-    private fun assertConsistentWithNfa(pattern: String?, text: String?, endMatch: Boolean) {
-        val re = Parser.parse(pattern, FLAGS)
-        val prog = Compiler.compile(re)
-        val op = OnePass.build(prog)
-        if (op == null) {
-            return  // not one-pass; skip
-        }
-        val opResult = op.search(text, endMatch, prog.numCaptures())
-        val kind = if (endMatch) Nfa.MatchKind.FULL_MATCH else Nfa.MatchKind.FIRST_MATCH
-        val nfaResult = Nfa.search(prog, text, Nfa.Anchor.ANCHORED, kind, prog.numCaptures())
-
-        if (nfaResult == null) {
-            Assertions.assertThat(opResult)
-                .`as`("/%s/ on \"%s\": NFA=null, OnePass should too", pattern, text)
-                .isNull()
-        } else {
-            Assertions.assertThat(opResult)
-                .`as`("/%s/ on \"%s\": NFA matched, OnePass should too", pattern, text)
-                .isNotNull()
-            // Compare capture groups.
-            val len = min(opResult!!.size, nfaResult.size)
-            for (i in 0..<len) {
-                Assertions.assertThat(opResult[i])
-                    .`as`("/%s/ on \"%s\": cap[%d]", pattern, text, i)
-                    .isEqualTo(nfaResult[i])
-            }
-        }
+        return op.search(text!!, true, prog.numCaptures())
     }
 
     // ---------------------------------------------------------------------------
@@ -101,22 +100,22 @@ internal object OnePassTest {
         @Test
         fun simpleOnePassPatterns() {
             // These should all be one-pass.
-            Assertions.assertThat<OnePass?>(build("abc")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("a")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("[a-z]")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("a.c")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("x(y|z)")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("\\d+-\\d+")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("[^ ]+ .*")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("(?i)abc")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("(?i)[a-z]+")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("(?i)id:([0-9]+)")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("abc")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("a")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("[a-z]")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("a.c")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("x(y|z)")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("\\d+-\\d+")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("[^ ]+ .*")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(?i)abc")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(?i)[a-z]+")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(?i)id:([0-9]+)")).isNotNull()
         }
 
         @Test
         fun caseInsensitiveOnePass() {
-            Assertions.assertThat<OnePass?>(build("(?i)apple")).isNotNull()
-            Assertions.assertThat<OnePass?>(build("(?i)key:([a-z]+)")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(?i)apple")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(?i)key:([a-z]+)")).isNotNull()
             val r = search("(?i)abc", "ABCdef")
             Assertions.assertThat(r).isNotNull()
             Assertions.assertThat(r!![0]).isEqualTo(0)
@@ -126,7 +125,7 @@ internal object OnePassTest {
         @Test
         @Throws(InterruptedException::class)
         fun unicodeClassLookupIsSafeAcrossConcurrentMatchers() {
-            val onePass = build("(?iu)\u0100")
+            val onePass = buildOnePass("(?iu)\u0100")
             Assertions.assertThat<OnePass?>(onePass).isNotNull()
 
             val threadCount = 8
@@ -180,26 +179,26 @@ internal object OnePassTest {
         @Test
         fun notOnePassPatterns() {
             // These should NOT be one-pass.
-            Assertions.assertThat<OnePass?>(build("(xy|xz)")).isNull() // both start with x
-            Assertions.assertThat<OnePass?>(build("(.*)(.*)")).isNull() // two greedy .* compete
+            Assertions.assertThat<OnePass?>(buildOnePass("(xy|xz)")).isNull() // both start with x
+            Assertions.assertThat<OnePass?>(buildOnePass("(.*)(.*)")).isNull() // two greedy .* compete
         }
 
         @Test
         fun tooManyCaptures() {
             // More than 16 capture groups (including group 0) -> not one-pass.
             // 16 user groups = 17 total -> exceeds MAX_CAPTURE_GROUPS.
-            Assertions.assertThat<OnePass?>(build("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)(m)(n)(o)(p)")).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)(m)(n)(o)(p)")).isNull()
         }
 
         @Test
         fun maxCaptures() {
             // Exactly 16 total captures (15 user groups + group 0) -> still one-pass.
-            Assertions.assertThat<OnePass?>(build("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)(m)(n)(o)")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)(m)(n)(o)")).isNotNull()
         }
 
         @Test
         fun emptyPattern() {
-            Assertions.assertThat<OnePass?>(build("")).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("")).isNotNull()
         }
 
         @Test
@@ -207,14 +206,14 @@ internal object OnePassTest {
         fun oversizedTransitionTablesAreRejectedBeforeAllocation() {
             val literalCount = ceil(sqrt(OnePass.MAX_ACTION_CELLS / 2.0)).toInt() + 64
 
-            Assertions.assertThat<OnePass?>(build(distinctLiteralRun(literalCount))).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass(distinctLiteralRun(literalCount))).isNull()
         }
 
         @Test
         @DisplayName("action offsets must fit alongside assertion and capture bits")
         fun oversizedActionOffsetsUseFallback() {
             // These tables fit the memory budget, but their offsets exceed the packed action field.
-            Assertions.assertThat<OnePass?>(build("(" + distinctLiteralRun(300) + ")")).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("(" + distinctLiteralRun(300) + ")")).isNull()
         }
 
         @Test
@@ -224,7 +223,7 @@ internal object OnePassTest {
             // dense table fits the budget independently, but the two tables exceed it together.
             val literalCount = ceil(sqrt(OnePass.MAX_ACTION_CELLS / 4.0)).toInt() + 4
 
-            Assertions.assertThat<OnePass?>(build(distinctLiteralRun(literalCount))).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass(distinctLiteralRun(literalCount))).isNull()
         }
     }
 
@@ -406,7 +405,7 @@ internal object OnePassTest {
     // ---------------------------------------------------------------------------
     @Nested
     @DisplayName("OnePass vs NFA consistency")
-    internal inner class Consistency {
+    internal class Consistency {
         @Test
         fun characterClassTransitionsPreserveRangeEndpointsAndGaps() {
             val cases = arrayOf<Array<String?>?>(
@@ -421,8 +420,8 @@ internal object OnePassTest {
                 arrayOf<String?>("^([\\p{L}&&[^\\p{Lu}]])([\\p{Nd}\\p{Lu}_])!$", "a", "A")
             )
             for (testCase in cases) {
-                val prog = Compiler.compile(Parser.parse(testCase!![0], FLAGS))
-                val onePass = OnePass.build(prog)
+                val prog = Compiler.compile(Parser.parse(testCase!![0], ONE_PASS_FLAGS)!!)!!
+                val onePass = OnePass.build(prog)!!
                 Assertions.assertThat<OnePass?>(onePass).`as`("/%s/ should be one-pass", testCase[0]).isNotNull()
 
                 // Probe both sides of every endpoint, including boundaries introduced by other
@@ -443,8 +442,8 @@ internal object OnePassTest {
                 }
                 for (cp in probes) {
                     val codePoint = String(Character.toChars(cp!!))
-                    for (text in List.of<String?>(codePoint + testCase[2] + "!", testCase[1] + codePoint + "!")) {
-                        for (scanner in List.of<InputScanner?>(
+                    for (text in java.util.List.of<String?>(codePoint + testCase[2] + "!", testCase[1] + codePoint + "!")) {
+                        for (scanner in java.util.List.of<InputScanner?>(
                             StringInputScanner(text), Utf8InputScanner(
                                 text.toByteArray(
                                     StandardCharsets.UTF_8
@@ -465,7 +464,7 @@ internal object OnePassTest {
                                         prog.numCaptures(),
                                         null
                                     )
-                                Assertions.assertThat(onePass!!.search(scanner, endMatch, prog.numCaptures()))
+                                Assertions.assertThat(onePass.search(scanner, endMatch, prog.numCaptures()))
                                     .`as`(
                                         "/%s/ at U+%X (%s, endMatch=%s)",
                                         testCase[0], cp, scanner.javaClass.getSimpleName(), endMatch
@@ -481,7 +480,7 @@ internal object OnePassTest {
         @Test
         fun disjointCharacterClassAlternativesPreserveCaptures() {
             val pattern = "([a-cx-z])|([d-fu-w])"
-            Assertions.assertThat<OnePass?>(build(pattern)).isNotNull()
+            Assertions.assertThat<OnePass?>(buildOnePass(pattern)).isNotNull()
             var ch = 'a'
             while (ch <= 'z') {
                 assertConsistentWithNfa(pattern, ch.toString(), true)
@@ -491,9 +490,9 @@ internal object OnePassTest {
 
         @Test
         fun overlappingCharacterClassesWithDifferentActionsAreNotOnePass() {
-            Assertions.assertThat<OnePass?>(build("([a-fx-z])|([d-mz])")).isNull()
-            Assertions.assertThat<OnePass?>(build("()[a-fx-z]|[d-mz]")).isNull()
-            Assertions.assertThat<OnePass?>(build("\\b[a-fx-z]|[d-mz]")).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("([a-fx-z])|([d-mz])")).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("()[a-fx-z]|[d-mz]")).isNull()
+            Assertions.assertThat<OnePass?>(buildOnePass("\\b[a-fx-z]|[d-mz]")).isNull()
         }
 
         @Test
@@ -563,4 +562,5 @@ internal object OnePassTest {
             }
         }
     }
+
 }

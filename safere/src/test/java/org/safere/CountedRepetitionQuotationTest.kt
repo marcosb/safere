@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.List
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
 
@@ -21,8 +19,8 @@ internal class CountedRepetitionQuotationTest {
     fun emptyQuotesDisappearThroughoutCountedRepeatTokens(count: String) {
         // JDK 26 documents quotes and repetition separately; its lexical interaction is unspecified.
         // Match observed JDK behavior, including gaps within numbers and before delimiters. Refs #1060.
-        for (operand in mutableListOf<String?>("a", "(a)", "[a]", "\\Qa\\E", "😀", "")) {
-            for (modifier in List.of<String?>("", "?", EMPTY_QUOTE + "?")) {
+        for (operand in mutableListOf<String>("a", "(a)", "[a]", "\\Qa\\E", "😀", "")) {
+            for (modifier in java.util.List.of<String?>("", "?", EMPTY_QUOTE + "?")) {
                 val regex = operand + count + modifier
                 assertSameMatches(regex, 0)
                 assertSameMatches(regex, Pattern.COMMENTS)
@@ -37,7 +35,7 @@ internal class CountedRepetitionQuotationTest {
         val unquotedCount: String = count.replace(EMPTY_QUOTE, "")
         val comma = unquotedCount.indexOf(',')
         val minimum = unquotedCount.substring(1, if (comma < 0) unquotedCount.length - 1 else comma).toInt()
-        for (modifier in List.of<String?>("", "?", EMPTY_QUOTE + "?")) {
+        for (modifier in java.util.List.of<String?>("", "?", EMPTY_QUOTE + "?")) {
             val participates = minimum > 0 || !modifier.endsWith("?")
             for (flags in intArrayOf(0, Pattern.COMMENTS)) {
                 // Both spellings must satisfy the independent capture policy. Comparing only with the
@@ -66,7 +64,7 @@ internal class CountedRepetitionQuotationTest {
         ]
     )
     fun emptyQuotesDoNotMakeMalformedCountsOrNonemptyQuotesValid(regex: String) {
-        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+        Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
         Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
@@ -75,7 +73,7 @@ internal class CountedRepetitionQuotationTest {
     @ParameterizedTest
     @ValueSource(strings = ["a{ \\Q\\E1}", "a{\\Q\\E 1}", "a{\\Q\\E#c\n1}"])
     fun commentsTriviaBeforeTheFirstCountDigitIsStillRejected(regex: String) {
-        Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
+        Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex, org.safere.Pattern.COMMENTS) })
             .isInstanceOf(PatternSyntaxException::class.java)
         Assertions.assertThatThrownBy(ThrowingCallable {
             org.safere.Pattern.compile(
@@ -89,8 +87,8 @@ internal class CountedRepetitionQuotationTest {
     @Test
     @DisabledForCrosscheck("SafeRE rejects consuming possessive quantifiers")
     fun emptyQuotesDoNotBypassConsumingPossessiveRejection() {
-        for (regex in mutableListOf<String?>("a{1\\Q\\E,3}+", "a{1,3\\Q\\E}\\Q\\E+")) {
-            Pattern.compile(regex)
+        for (regex in mutableListOf<String>("a{1\\Q\\E,3}+", "a{1,3\\Q\\E}\\Q\\E+")) {
+            java.util.regex.Pattern.compile(regex)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
                 .hasMessageContaining("possessive")
@@ -100,8 +98,8 @@ internal class CountedRepetitionQuotationTest {
     @Test
     @DisabledForCrosscheck("SafeRE rejects bounds over its repeat budget")
     fun emptyQuotesDoNotBypassRepeatBudgets() {
-        for (regex in mutableListOf<String?>("a{1\\Q\\E001}", "a{0,1\\Q\\E001}", "(?:a{1\\Q\\E,100}){1\\Q\\E,100}")) {
-            Pattern.compile(regex)
+        for (regex in mutableListOf<String>("a{1\\Q\\E001}", "a{0,1\\Q\\E001}", "(?:a{1\\Q\\E,100}){1\\Q\\E,100}")) {
+            java.util.regex.Pattern.compile(regex)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
                 .hasMessageContaining("invalid repeat count")
@@ -110,7 +108,7 @@ internal class CountedRepetitionQuotationTest {
 
     @Test
     fun zeroWidthPossessiveAndClassLiteralsKeepTheirMeaning() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(){1\\Q\\E,3}\\Q\\E+",
             "{1\\Q\\E,3}+",
             "[a{1\\Q\\E,3}]",
@@ -136,8 +134,9 @@ internal class CountedRepetitionQuotationTest {
     companion object {
         private const val EMPTY_QUOTE = "\\Q\\E"
         private val INPUTS: MutableList<String> =
-            List.of<String?>("", "a", "aa", "aaa", "aaaa", "baaaabaaa", "😀😀😀", "a".repeat(13), "{1,3}")
+            java.util.List.of<String>("", "a", "aa", "aaa", "aaaa", "baaaabaaa", "😀😀😀", "a".repeat(13), "{1,3}")
 
+        @JvmStatic
         fun countsWithEmptyQuotes(): Stream<String?>? {
             return Stream.of<String?>("{02}", "{12}", "{1,2}", "{01,03}", "{01,}", "{00,02}")
                 .flatMap<String?> { count: String? ->
@@ -156,7 +155,7 @@ internal class CountedRepetitionQuotationTest {
         }
 
         private fun assertSameMatches(regex: String, flags: Int) {
-            val expectedPattern = Pattern.compile(regex, flags)
+            val expectedPattern = java.util.regex.Pattern.compile(regex, flags)
             val actualPattern = org.safere.Pattern.compile(regex, flags)
             for (input in INPUTS) {
                 val expected = expectedPattern.matcher(input)
@@ -193,7 +192,7 @@ internal class CountedRepetitionQuotationTest {
                 Assertions.assertThat(matcher.lookingAt()).isTrue()
                 assertEmptyCapture(matcher, 0, participates)
                 matcher.reset()
-                for (position in 0..input.size) {
+                for (position in 0..input.length) {
                     Assertions.assertThat(matcher.find()).`as`("find /%s/ at %d on %s", pattern, position, input)
                         .isTrue()
                     assertEmptyCapture(matcher, position, participates)

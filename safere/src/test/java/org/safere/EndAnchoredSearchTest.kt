@@ -7,15 +7,13 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 
 /** End-first search must preserve exact matching priority and capture boundaries.  */
 @DisabledForCrosscheck("compares the JDK and forced SafeRE engine paths directly")
 internal class EndAnchoredSearchTest {
     @Test
     fun anchoredOnePassTerminalFiltersPreserveLineEndingsAndRegions() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "^(a)*b$",
             "(?d)^(a)*b$",
             "^(a)*b\\z",
@@ -24,8 +22,8 @@ internal class EndAnchoredSearchTest {
             "^([a-z]+)END\\z"
         )) {
             val pattern = Pattern.compile(regex)
-            val jdk = Pattern.compile(regex)
-            for (input in mutableListOf<String?>(
+            val jdk = java.util.regex.Pattern.compile(regex)
+            for (input in mutableListOf<String>(
                 "",
                 "aaab",
                 "aaac",
@@ -47,8 +45,8 @@ internal class EndAnchoredSearchTest {
                 Companion.assertFindSequence(pattern, jdk, input, utf8)
                 Assertions.assertThat(pattern.matcher(input).replaceAll("<$1>"))
                     .isEqualTo(jdk.matcher(input).replaceAll("<$1>"))
-                for (anchoring in mutableListOf<Boolean?>(false, true)) {
-                    for (transparent in mutableListOf<Boolean?>(false, true)) {
+                for (anchoring in mutableListOf<Boolean>(false, true)) {
+                    for (transparent in mutableListOf<Boolean>(false, true)) {
                         val surrounded = "x" + input + "y"
                         val actual =
                             pattern
@@ -84,7 +82,7 @@ internal class EndAnchoredSearchTest {
 
     @Test
     fun endAnchoredSearchPreservesFindSequenceAndCaptures() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "abc$",
             "(a)(b)(c)$",
             "(?:abc|bc)$",
@@ -111,15 +109,15 @@ internal class EndAnchoredSearchTest {
             "((a)?b)*$",
             "\\X$"
         )) {
-            val jdkPattern = Pattern.compile(regex)
-            for (options in List.of<EnginePathOptions?>(
+            val jdkPattern = java.util.regex.Pattern.compile(regex)
+            for (options in java.util.List.of<EnginePathOptions?>(
                 EnginePathOptions.allEnabled(),
                 EnginePathOptions.builder().startAcceleration(false).build(),
                 EnginePathOptions.builder().reverseDfa(false).build()
             )) {
                 val pattern = org.safere.Pattern.compile(regex, 0, options)
-                for (prefix in List.of<String?>("", "x".repeat(1024), "é😀".repeat(400))) {
-                    for (tail in mutableListOf<String?>(
+                for (prefix in java.util.List.of<String?>("", "x".repeat(1024), "é😀".repeat(400))) {
+                    for (tail in mutableListOf<String>(
                         "",
                         "abc",
                         "abc\n",
@@ -142,7 +140,7 @@ internal class EndAnchoredSearchTest {
                         Assertions.assertThat(pattern.find(utf8))
                             .`as`(
                                 "existence /%s/ with prefix length %s and tail %s",
-                                regex, prefix.size, tail
+                                regex, prefix.length, tail
                             )
                             .isEqualTo(jdkPattern.matcher(input).find())
                         assertFindSequence(pattern, jdkPattern, input, utf8)
@@ -154,7 +152,7 @@ internal class EndAnchoredSearchTest {
 
     @Test
     fun unboundedEndAnchoredSearchPreservesResultsAcrossProbeBoundaries() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "needle.*$",
             "(needle)([a-z]*)\\z",
             "(?:needle.*|x+)$",
@@ -164,22 +162,22 @@ internal class EndAnchoredSearchTest {
             "(?m:^needle)[a-z]*\\z",
             "(?s:.*)needle$"
         )) {
-            val jdkPattern = Pattern.compile(regex)
-            for (options in List.of<EnginePathOptions?>(
+            val jdkPattern = java.util.regex.Pattern.compile(regex)
+            for (options in java.util.List.of<EnginePathOptions?>(
                 EnginePathOptions.allEnabled(),
                 EnginePathOptions.builder().reverseDfa(false).build(),
                 EnginePathOptions.builder().literalFastPaths(false).build()
             )) {
                 val pattern = org.safere.Pattern.compile(regex, 0, options)
-                for (gap in mutableListOf<Int?>(0, 1, 7, 63, 64, 65, 127, 511, 1023)) {
-                    for (prefix in List.of<String?>("x".repeat(1024), "é😀".repeat(400))) {
-                        for (body in List.of<String?>(
+                for (gap in mutableListOf<Int>(0, 1, 7, 63, 64, 65, 127, 511, 1023)) {
+                    for (prefix in java.util.List.of<String?>("x".repeat(1024), "é😀".repeat(400))) {
+                        for (body in java.util.List.of<String?>(
                             "x".repeat(gap!!),
                             "needle" + "x".repeat(gap),
                             "needle" + "x".repeat(gap) + "needle",
                             "\nneedle" + "x".repeat(gap)
                         )) {
-                            for (terminator in mutableListOf<String?>("", "\n", "\r\n")) {
+                            for (terminator in mutableListOf<String>("", "\n", "\r\n")) {
                                 val input = prefix + body + terminator
                                 val bytes = input.toByteArray(StandardCharsets.UTF_8)
                                 val storage = ByteArray(bytes.size + 7)
@@ -188,7 +186,7 @@ internal class EndAnchoredSearchTest {
                                 Assertions.assertThat(pattern.find(utf8))
                                     .`as`(
                                         "existence /%s/ with gap %s and prefix length %s",
-                                        regex, gap, prefix.size
+                                        regex, gap, prefix.length
                                     )
                                     .isEqualTo(jdkPattern.matcher(input).find())
                                 assertFindSequence(pattern, jdkPattern, input, utf8)
@@ -202,7 +200,7 @@ internal class EndAnchoredSearchTest {
 
     companion object {
         private fun assertFindSequence(
-            pattern: org.safere.Pattern, jdkPattern: Pattern, input: String, utf8: Utf8Input?
+            pattern: org.safere.Pattern, jdkPattern: java.util.regex.Pattern, input: String, utf8: Utf8Input?
         ) {
             val matcher = pattern.matcher(input)
             val utf8Matcher = pattern.matcher(utf8)

@@ -10,7 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
 import java.util.stream.Stream
@@ -25,7 +24,7 @@ internal class AcceptedPathCaptureTest {
         for (region in booleanArrayOf(false, true)) {
             val prefix = if (region) "😀#" else ""
             val input = prefix + testCase.input + (if (region) "!" else "")
-            val offset = prefix.size
+            val offset = prefix.length
             for (operation in 0..2) {
                 if (testCase.fullMatchOnly && operation != 1) {
                     continue
@@ -93,7 +92,7 @@ internal class AcceptedPathCaptureTest {
 
     @Test
     fun emptyAndConsumingFindsKeepTheirOwnNamedCapturesAndSnapshots() {
-        for (operand in mutableListOf<String?>("(?<word>a)", "(?:(?<word>a))")) {
+        for (operand in mutableListOf<String>("(?<word>a)", "(?:(?<word>a))")) {
             val matcher = Pattern.compile("(?:" + operand + "{0,2})*").matcher("yy" + "a".repeat(26))
             for (position in 0..1) {
                 Assertions.assertThat(matcher.find()).isTrue()
@@ -120,9 +119,9 @@ internal class AcceptedPathCaptureTest {
     fun failedMinimumIterationCannotOverwriteTheAcceptedCapture() {
         // A final one-character attempt cannot satisfy the inner minimum of two. Its writes must
         // neither create a capture on an empty match nor replace an earlier accepted capture.
-        for (operand in mutableListOf<String?>("(a)", "(?:(a))")) {
+        for (operand in mutableListOf<String>("(a)", "(?:(a))")) {
             val pattern = Pattern.compile("(?:" + operand + "{2,3})*")
-            for (length in mutableListOf<Int?>(1, 4, 7)) {
+            for (length in mutableListOf<Int>(1, 4, 7)) {
                 val matcher = pattern.matcher("a".repeat(length!!))
                 Assertions.assertThat(matcher.find()).isTrue()
                 val end = length - 1
@@ -154,10 +153,10 @@ internal class AcceptedPathCaptureTest {
     }
 
     @JvmRecord
-    private data class Bounds(val start: Int, val end: Int)
+    internal data class Bounds(val start: Int, val end: Int)
 
     @JvmRecord
-    private data class CaptureCase(
+    internal data class CaptureCase(
         val regex: String?,
         val input: String,
         val groups: MutableList<Bounds>?,
@@ -167,10 +166,11 @@ internal class AcceptedPathCaptureTest {
     companion object {
         private val UNMATCHED = Bounds(-1, -1)
 
+        @JvmStatic
         private fun acceptedPaths(): Stream<Arguments?>? {
             // Expected results are independent of the JDK's wrapper-dependent nested-repeat captures.
             val cases: MutableList<CaptureCase?> =
-                List.of<CaptureCase?>(
+                java.util.List.of<CaptureCase?>(
                     capture("(?:(a) {0,2})*", "aaaa", Bounds(3, 4)),
                     capture("(?:(?:(a)){0,2})*", "aaaa", Bounds(3, 4)),
                     capture("(?:(a){1,2}b)*", "aabab", Bounds(3, 4)),
@@ -202,7 +202,7 @@ internal class AcceptedPathCaptureTest {
                     capture("(a)b|ac", "ac", UNMATCHED)
                 )
             val engines =
-                List.of<EnginePathOptions?>(
+                java.util.List.of<EnginePathOptions?>(
                     EnginePathOptions.allEnabled(),
                     EnginePathOptions.builder().lazyCaptureExtraction(false).build(),
                     EnginePathOptions.builder()
@@ -267,14 +267,14 @@ internal class AcceptedPathCaptureTest {
             return input.substring(0, offset).toByteArray(StandardCharsets.UTF_8).size
         }
 
-        private fun capture(regex: String?, input: String, vararg captures: Bounds?): CaptureCase {
-            val groups: ArrayList<Bounds?> = ArrayList<Bounds?>()
+        private fun capture(regex: String?, input: String, vararg captures: Bounds): CaptureCase {
+            val groups: ArrayList<Bounds> = ArrayList<Bounds>()
             groups.add(Bounds(0, input.length))
-            groups.addAll(List.of<Bounds?>(*captures))
-            return CaptureCase(regex, input, List.copyOf<Bounds?>(groups), false)
+            groups.addAll(java.util.List.of<Bounds>(*captures))
+            return CaptureCase(regex, input, groups.toList().toMutableList(), false)
         }
 
-        private fun fullMatch(regex: String?, input: String, vararg captures: Bounds?): CaptureCase {
+        private fun fullMatch(regex: String?, input: String, vararg captures: Bounds): CaptureCase {
             val testCase: CaptureCase = capture(regex, input, *captures)
             return CaptureCase(regex, input, testCase.groups, true)
         }

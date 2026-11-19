@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.regex.Pattern
 
 /**
  * Tests for predefined character classes `\h`, `\H`, `\v`, `\V`.
@@ -18,7 +17,7 @@ import java.util.regex.Pattern
  * documented in [Pattern].
  */
 @DisplayName("Predefined character classes: \\h, \\H, \\v, \\V")
-internal object PredefinedCharClassTest {
+internal class PredefinedCharClassTest {
     // --- Horizontal whitespace code points (JDK definition of \h) ---
     private val HORIZ_SPACE_CODEPOINTS = intArrayOf(
         0x09,  // CHARACTER TABULATION (tab)
@@ -99,9 +98,9 @@ internal object PredefinedCharClassTest {
         fun findsInMixedString() {
             val p = Pattern.compile("\\h+")
             val m = p.matcher("hello\t world\u00A0!")
-            val matches: MutableList<String?> = ArrayList<String?>()
+            val matches: MutableList<String> = ArrayList<String>()
             while (m.find()) {
-                matches.add(m.group())
+                matches.add(m.group()!!)
             }
             Assertions.assertThat<String?>(matches).containsExactly("\t ", "\u00A0")
         }
@@ -157,9 +156,9 @@ internal object PredefinedCharClassTest {
         fun findsInMixedString() {
             val p = Pattern.compile("\\H+")
             val m = p.matcher("hi\tthere")
-            val matches: MutableList<String?> = ArrayList<String?>()
+            val matches: MutableList<String> = ArrayList<String>()
             while (m.find()) {
-                matches.add(m.group())
+                matches.add(m.group()!!)
             }
             Assertions.assertThat<String?>(matches).containsExactly("hi", "there")
         }
@@ -206,9 +205,9 @@ internal object PredefinedCharClassTest {
         fun findsInMixedString() {
             val p = Pattern.compile("\\v")
             val m = p.matcher("line1\nline2\rline3")
-            val matches: MutableList<String?> = ArrayList<String?>()
+            val matches: MutableList<String> = ArrayList<String>()
             while (m.find()) {
-                matches.add(String.format("U+%04X", m.group().get(0).code))
+                matches.add(String.format("U+%04X", m.group()!!.get(0).code))
             }
             Assertions.assertThat<String?>(matches).containsExactly("U+000A", "U+000D")
         }
@@ -273,9 +272,9 @@ internal object PredefinedCharClassTest {
         fun findsInMixedString() {
             val p = Pattern.compile("\\V+")
             val m = p.matcher("abc\ndef\rghi")
-            val matches: MutableList<String?> = ArrayList<String?>()
+            val matches: MutableList<String> = ArrayList<String>()
             while (m.find()) {
-                matches.add(m.group())
+                matches.add(m.group()!!)
             }
             Assertions.assertThat<String?>(matches).containsExactly("abc", "def", "ghi")
         }
@@ -472,7 +471,7 @@ internal object PredefinedCharClassTest {
         @DisplayName("\\h matches same characters as JDK")
         fun hMatchesSameAsJdk() {
             val safeP = Pattern.compile("\\h")
-            val jdkP = Pattern.compile("\\h")
+            val jdkP = java.util.regex.Pattern.compile("\\h")
             // Test BMP code points up to 0x3100 (covers all \h members plus surroundings)
             for (cp in 0..0x3100) {
                 val s = String(Character.toChars(cp))
@@ -488,7 +487,7 @@ internal object PredefinedCharClassTest {
         @DisplayName("\\v matches same characters as JDK")
         fun vMatchesSameAsJdk() {
             val safeP = org.safere.Pattern.compile("\\v")
-            val jdkP = Pattern.compile("\\v")
+            val jdkP = java.util.regex.Pattern.compile("\\v")
             // Test BMP code points up to 0x3000 (covers all \v members plus surroundings)
             for (cp in 0..0x3000) {
                 val s = String(Character.toChars(cp))
@@ -504,7 +503,7 @@ internal object PredefinedCharClassTest {
         @DisplayName("\\H matches same characters as JDK")
         fun bigHMatchesSameAsJdk() {
             val safeP = org.safere.Pattern.compile("\\H")
-            val jdkP = Pattern.compile("\\H")
+            val jdkP = java.util.regex.Pattern.compile("\\H")
             for (cp in 0..0x3100) {
                 val s = String(Character.toChars(cp))
                 val safeMatch = safeP.matcher(s).matches()
@@ -519,7 +518,7 @@ internal object PredefinedCharClassTest {
         @DisplayName("\\V matches same characters as JDK")
         fun bigVMatchesSameAsJdk() {
             val safeP = org.safere.Pattern.compile("\\V")
-            val jdkP = Pattern.compile("\\V")
+            val jdkP = java.util.regex.Pattern.compile("\\V")
             for (cp in 0..0x3000) {
                 val s = String(Character.toChars(cp))
                 val safeMatch = safeP.matcher(s).matches()

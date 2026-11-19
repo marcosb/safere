@@ -262,7 +262,7 @@ internal class CharClassTest {
 
     @Test
     fun addTable() {
-        val table = arrayOf<IntArray?>(intArrayOf(0x30, 0x39), intArrayOf(0x41, 0x5A), intArrayOf(0x61, 0x7A))
+        val table = arrayOf<IntArray>(intArrayOf(0x30, 0x39), intArrayOf(0x41, 0x5A), intArrayOf(0x61, 0x7A))
         val cc = CharClassBuilder().addTable(table).build()
         Assertions.assertThat(cc.numRanges()).isEqualTo(3)
         Assertions.assertThat(cc.contains('5'.code)).isTrue()
@@ -465,11 +465,11 @@ internal class CharClassTest {
     @Test
     fun scanInfoRetainsPrecomputedRanges() {
         val smallSet =
-            CharClassScanInfo.fromCharClass(CharClassBuilder().addRune('a'.code).addRune('z'.code).build())
+            CharClassScanInfo.fromCharClass(CharClassBuilder().addRune('a'.code).addRune('z'.code).build())!!
         val bitmap =
             CharClassScanInfo.fromCharClass(
                 CharClassBuilder().addRune('a'.code).addRune('c'.code).addRune('e'.code).addRune('g'.code).build()
-            )
+            )!!
 
         Assertions.assertThat(smallSet.ranges).isSameAs(smallSet.ranges)
         Assertions.assertThat(bitmap.ranges).isSameAs(bitmap.ranges)
@@ -478,7 +478,7 @@ internal class CharClassTest {
     @Test
     fun unicodeSmallSetHoldsAtMostTwoNonSurrogateBmpChars() {
         Assertions.assertThat<CharClassScanInfo?>(scanInfo('['.code, 0xFF3B)).isInstanceOf(UnicodeSmallSet::class.java)
-        Assertions.assertThat((scanInfo('['.code, 0xFF3B) as CharClassScanInfo.SmallSet).chars())
+        Assertions.assertThat((scanInfo('['.code, 0xFF3B) as CharClassScanInfo.SmallSet).chars)
             .containsExactly('[', '\uFF3B')
         Assertions.assertThat<CharClassScanInfo?>(scanInfo(0xFF3B)).isInstanceOf(UnicodeSmallSet::class.java)
 
@@ -498,7 +498,7 @@ internal class CharClassTest {
             for (rune in runes) {
                 builder.addRune(rune)
             }
-            return CharClassScanInfo.fromCharClass(builder.build())
+            return CharClassScanInfo.fromCharClass(builder.build())!!
         }
 
         private fun assertRanges(cc: CharClass, vararg endpoints: Int) {

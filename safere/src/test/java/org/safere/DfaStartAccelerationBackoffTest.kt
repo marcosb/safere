@@ -26,8 +26,8 @@ internal class DfaStartAccelerationBackoffTest {
     @Test
     fun patternUsesACharacterClassAccelerator() {
         val pattern = Pattern.compile(REGEX)
-        Assertions.assertThat<AcceleratorPolicy?>(pattern.stringStartAccelerator().policy()).isEqualTo(POLICY)
-        Assertions.assertThat<AcceleratorPolicy?>(pattern.utf8StartAccelerator().policy()).isEqualTo(POLICY)
+        Assertions.assertThat<AcceleratorPolicy?>(pattern.stringStartAccelerator()!!.policy()).isEqualTo(POLICY)
+        Assertions.assertThat<AcceleratorPolicy?>(pattern.utf8StartAccelerator()!!.policy()).isEqualTo(POLICY)
     }
 
     @ParameterizedTest
@@ -109,7 +109,7 @@ internal class DfaStartAccelerationBackoffTest {
         // the whole gap.
         Assertions.assertThat(sparseWork.skippedUnits)
             .`as`("%s", sparseWork)
-            .isGreaterThan((sparse.size - POLICY.maxQuarantineWindow - sparseUnit.length).toLong())
+            .isGreaterThan((sparse.length - POLICY.maxQuarantineWindow - sparseUnit.length).toLong())
         Assertions.assertThat(sparseWork.quarantines).isZero()
     }
 

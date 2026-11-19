@@ -18,7 +18,6 @@ import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.function.IntConsumer
 import java.util.function.Predicate
@@ -279,9 +278,9 @@ internal class Utf8DiagnosticsTest {
     fun quantifiedSingleCharClassUtf8MatchesUsesCharacterClassFastPath() {
         val noCharClassFastPath =
             EnginePathOptions.builder().charClassMatchFastPaths(false).build()
-        val regexes = mutableListOf<String?>("[a-zA-Z0-9]+", "\\d*", "\\p{L}+", "[^a]+")
+        val regexes = mutableListOf<String>("[a-zA-Z0-9]+", "\\d*", "\\p{L}+", "[^a]+")
         val inputs: MutableList<String> =
-            mutableListOf<String?>("", "abcXYZ123", "12345", "12a45", "élanβ", "élan42", "😀", "é😀b", "éab")
+            mutableListOf<String>("", "abcXYZ123", "12345", "12a45", "élanβ", "élan42", "😀", "é😀b", "éab")
 
         for (regex in regexes) {
             val utf8Fast = Pattern.compile(regex)
@@ -327,7 +326,7 @@ internal class Utf8DiagnosticsTest {
         // Malformed trusted UTF-8 bytes decode as U+FFFD, matching the fallback engine on both
         // ASCII-only classes (rejected) and negated classes (accepted when U+FFFD is in the class).
         val malformed = byteArrayOf(0x80.toByte(), 'b'.code.toByte(), 0xED.toByte(), 0xA0.toByte(), 0x80.toByte())
-        for (regex in mutableListOf<String?>("[a-z]+", "[^a]+", "[^\\uFFFD]+")) {
+        for (regex in mutableListOf<String>("[a-z]+", "[^a]+", "[^\\uFFFD]+")) {
             val fast = Pattern.compile(regex)
             val fallback = Pattern.compile(regex, 0, noCharClassFastPath)
             val expected = fallback.matcher(Utf8Input.trusted(malformed)).matches()
@@ -394,8 +393,8 @@ internal class Utf8DiagnosticsTest {
     @ValueSource(booleans = [true, false])
     fun fullyAnchoredBooleanFindUsesKnownStart(bitState: Boolean) {
         Pattern.setDiagnostics(diagnostics)
-        for (terminal in mutableListOf<String?>("END", "[0-9]")) {
-            for (valid in mutableListOf<Boolean?>(true, false)) {
+        for (terminal in mutableListOf<String>("END", "[0-9]")) {
+            for (valid in mutableListOf<Boolean>(true, false)) {
                 val pattern =
                     Pattern.compile(
                         "^([a-z]+)" + terminal + "\\z",
@@ -480,8 +479,8 @@ internal class Utf8DiagnosticsTest {
     fun absentRequiredLiteralRejectsBeforeUnboundedReverseWalk() {
         Pattern.setDiagnostics(diagnostics)
         val input: Utf8Input = input("x".repeat(20000))
-        for (regex in mutableListOf<String?>("needle.*$", "needle[a-z]*\\z")) {
-            for (existenceOnly in mutableListOf<Boolean?>(false, true)) {
+        for (regex in mutableListOf<String>("needle.*$", "needle[a-z]*\\z")) {
+            for (existenceOnly in mutableListOf<Boolean>(false, true)) {
                 val pattern = Pattern.compile(regex)
                 Assertions.assertThat(if (existenceOnly) pattern.find(input) else pattern.matcher(input).find())
                     .isFalse()
@@ -717,7 +716,7 @@ internal class Utf8DiagnosticsTest {
             .forEach(IntConsumer { ignored: Int -> Assertions.assertThat(matcher(pattern, "é").matches()).isTrue() })
 
         Assertions.assertThat<OperationDiagnostics?>(events)
-            .filteredOn(Predicate { event: OperationDiagnostics? -> event!!.pattern.patternId == pattern.descriptor().patternId })
+            .filteredOn(Predicate { event: OperationDiagnostics? -> event!!.pattern!!.patternId == pattern.descriptor().patternId })
             .hasSize(32)
     }
 
@@ -808,7 +807,7 @@ internal class Utf8DiagnosticsTest {
         )
 
         val cases =
-            List.of<RejectCase?>(
+            java.util.List.of<RejectCase?>(
                 RejectCase(
                     "(?:foo|bar).*needle.*",
                     "foo xx needle yy",
@@ -891,7 +890,7 @@ internal class Utf8DiagnosticsTest {
         Assertions.assertThat(matcherPattern.matcher(miss).find()).isFalse()
         Assertions.assertThat(booleanPattern.find(miss)).isFalse()
 
-        for (p in List.of<Pattern>(matcherPattern, booleanPattern)) {
+        for (p in java.util.List.of<Pattern>(matcherPattern, booleanPattern)) {
             Assertions.assertThat<OperationDiagnostics?>(operationsFor(p))
                 .singleElement()
                 .satisfies(
@@ -915,8 +914,10 @@ internal class Utf8DiagnosticsTest {
     private fun operationsFor(pattern: Pattern): MutableList<OperationDiagnostics> {
         val patternId = pattern.descriptor().patternId
         return diagnostics.operations.stream()
-            .filter { event: OperationDiagnostics? -> event!!.pattern.patternId == patternId }
+            .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }
             .toList()
+            .requireNoNulls()
+            .toMutableList()
     }
 
     private class RecordingDiagnostics : SafeReMatchDiagnostics() {
@@ -928,6 +929,7 @@ internal class Utf8DiagnosticsTest {
     }
 
     companion object {
+        @JvmStatic
         private fun literalFindOptions(): Stream<Arguments?>? {
             return Stream.of<String?>("hello", "é", "😀", "café😀")
                 .flatMap<Arguments?> { literal: String? ->
@@ -945,6 +947,7 @@ internal class Utf8DiagnosticsTest {
                 }
         }
 
+        @JvmStatic
         private fun patternBooleanFindScenarios(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of("é", "xéy", true),

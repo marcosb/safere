@@ -103,6 +103,7 @@ internal class SurrogateRegionConsumptionTest {
     }
 
     companion object {
+        @JvmStatic
         fun ordinaryAtomsDecodeWithinTheRegion(): Stream<Case?> {
             val pair = "\uD83D\uDC4D"
             val loneSurrogatePatterns = arrayOf<String?>(

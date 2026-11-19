@@ -9,10 +9,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
-import java.util.regex.Pattern
 import kotlin.AssertionError
 import kotlin.Boolean
 import kotlin.Int
@@ -41,7 +39,7 @@ internal class EnginePathEquivalenceTest {
     @DisplayName("every forced engine path has a machine-readable contract")
     fun everyForcedEnginePathHasContract() {
         val contracted: MutableSet<EnginePath?> = EnumSet.noneOf<EnginePath?>(EnginePath::class.java)
-        for (contract in EnginePathContract.all()) {
+        for (contract in EnginePathContract.all().filterNotNull()) {
             contracted.add(contract.path)
             Assertions.assertThat<ResultAuthority?>(contract.authorities).`as`("authorities for %s", contract.path)
                 .isNotEmpty()
@@ -59,7 +57,7 @@ internal class EnginePathEquivalenceTest {
     @Test
     @DisplayName("engine path roles constrain declared result authority")
     fun enginePathRolesConstrainDeclaredResultAuthority() {
-        for (contract in EnginePathContract.all()) {
+        for (contract in EnginePathContract.all().filterNotNull()) {
             if (contract.role == EnginePathRole.FILTER) {
                 Assertions.assertThat<ResultAuthority?>(contract.authorities)
                     .`as`("filter authorities for %s", contract.path)
@@ -135,8 +133,8 @@ internal class EnginePathEquivalenceTest {
     @Test
     @DisplayName("literal fast paths match the canonical engine trace")
     fun literalFastPathsMatchCanonicalTrace() {
-        for (regex in mutableListOf<String?>("abc", "", "\\Qabc\\E", "(?:abc)")) {
-            for (input in mutableListOf<String?>("", "abc", "ab", "zzabcabc", "éabc😀")) {
+        for (regex in mutableListOf<String>("abc", "", "\\Qabc\\E", "(?:abc)")) {
+            for (input in mutableListOf<String>("", "abc", "ab", "zzabcabc", "éabc😀")) {
                 assertEquivalent(regex, input, EnginePathOptions.builder().literalFastPaths(false).build())
             }
         }
@@ -178,7 +176,7 @@ internal class EnginePathEquivalenceTest {
     @Test
     fun accelerationPreservesScalarAndBoundaryTracesAcrossRegions() {
         val unaccelerated = EnginePathOptions.builder().startAcceleration(false).build()
-        for (scalar in mutableListOf<String?>(
+        for (scalar in mutableListOf<String>(
             "\\p{Cs}",
             "[\\uDC00-\\uDFFF]",
             "\\uDC4D",
@@ -190,7 +188,7 @@ internal class EnginePathEquivalenceTest {
             "\\x{1F44D}",
             "a"
         )) {
-            for (regex in List.of<String?>(
+            for (regex in java.util.List.of<String?>(
                 scalar + "\\b{g}",
                 "(" + scalar + ")(\\b{g})",
                 "\\b{g}(" + scalar + ")",
@@ -202,7 +200,7 @@ internal class EnginePathEquivalenceTest {
             )) {
                 val accelerated = Pattern.compile(regex)
                 val control = Pattern.compile(regex, 0, unaccelerated)
-                for (input in mutableListOf<String?>(
+                for (input in mutableListOf<String>(
                     "\uD83D\uDC4D",
                     "a\uD83D\uDC4D\uD83D\uDC4Da",
                     "\uD83D\uDC4D\u0301\uD83D\uDC4D",
@@ -248,16 +246,16 @@ internal class EnginePathEquivalenceTest {
     @Test
     fun leadingExpansionPreservesExplicitStartsAndRegionTraces() {
         val unaccelerated = EnginePathOptions.builder().startAcceleration(false).build()
-        for (scalar in mutableListOf<String?>("\\uDC4D", "[\\uDC00-\\uDFFF]", "\\p{Cs}", ".")) {
-            for (quantifier in mutableListOf<String?>("*", "*?", "+", "+?", "?", "??", "{0,2}", "{1,2}?")) {
-                for (regex in List.of<String?>(
+        for (scalar in mutableListOf<String>("\\uDC4D", "[\\uDC00-\\uDFFF]", "\\p{Cs}", ".")) {
+            for (quantifier in mutableListOf<String>("*", "*?", "+", "+?", "?", "??", "{0,2}", "{1,2}?")) {
+                for (regex in java.util.List.of<String?>(
                     scalar + quantifier + "[ab]\\b{g}",
                     "(" + scalar + ")" + quantifier + "([ab])\\b{g}",
                     "(" + scalar + quantifier + ")([ab])(\\b{g})"
                 )) {
                     val accelerated = Pattern.compile(regex)
                     val control = Pattern.compile(regex, 0, unaccelerated)
-                    for (input in mutableListOf<String?>(
+                    for (input in mutableListOf<String>(
                         "\uD83D\uDC4Da",
                         "\uD83D\uDC4D\uDC4D\uDC4Da",
                         "\uDC4Da\uD83D\uDC4Db\uDC4Da\uD83D",
@@ -323,12 +321,12 @@ internal class EnginePathEquivalenceTest {
     @DisplayName("DFA-loop start acceleration preserves position-dependent state across inputs")
     fun dfaLoopStartAccelerationPreservesPositionDependentStateAcrossInputs() {
         val regex = "(b|(?m:^a))c[0-9]"
-        for (lineTerminator in mutableListOf<String?>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
+        for (lineTerminator in mutableListOf<String>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
             val accelerated = Pattern.compile(regex)
             val control =
                 Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
-            for (input in List.of<String?>(lineTerminator + "acz9y", " ycby ", "y0c\n1bac19c1__19x y_")) {
-                val expected = Pattern.compile(regex).matcher(input).find()
+            for (input in java.util.List.of<String?>(lineTerminator + "acz9y", " ycby ", "y0c\n1bac19c1__19x y_")) {
+                val expected = java.util.regex.Pattern.compile(regex).matcher(input).find()
                 val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
 
                 Assertions.assertThat(control.find(utf8)).`as`("control for %s", printable(input)).isEqualTo(expected)
@@ -342,7 +340,7 @@ internal class EnginePathEquivalenceTest {
         val accelerated = org.safere.Pattern.compile(regex)
         val control =
             org.safere.Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())
-        val expected = Pattern.compile(regex).matcher(nonAsciiInput).find()
+        val expected = java.util.regex.Pattern.compile(regex).matcher(nonAsciiInput).find()
         Assertions.assertThat(control.matcher(nonAsciiInput).find()).isEqualTo(expected)
         Assertions.assertThat(accelerated.matcher(nonAsciiInput).find()).isEqualTo(expected)
     }
@@ -351,7 +349,7 @@ internal class EnginePathEquivalenceTest {
     @DisplayName("start-anchored fixed-offset plans preserve UTF-8 anchoring")
     fun startAnchoredFixedOffsetPlansPreserveUtf8Anchoring() {
         val lateCandidate = "x".repeat(300) + "1c"
-        for (regex in mutableListOf<String?>("\\A\\dc", "(?m:\\A\\d(?m:c))", "(\\A)[0-9]c")) {
+        for (regex in mutableListOf<String>("\\A\\dc", "(?m:\\A\\d(?m:c))", "(\\A)[0-9]c")) {
             val accelerated = org.safere.Pattern.compile(regex)
             val control =
                 org.safere.Pattern.compile(regex, 0, EnginePathOptions.builder().startAcceleration(false).build())

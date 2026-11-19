@@ -13,8 +13,6 @@ import org.junit.jupiter.api.parallel.Isolated
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 /** Priority, context, and work bounds for speculative BitState searches.  */
 @DisabledForCrosscheck("uses package-private engine paths and search windows")
 @Isolated
@@ -22,7 +20,7 @@ import java.util.List
 internal class BitStateWindowTest {
     @Test
     fun higherPriorityPathAtWindowEdgePreventsReturningShorterAlternative() {
-        for (regex in mutableListOf<String?>("a+|a", "a+z|a", "(a?)*z|a")) {
+        for (regex in mutableListOf<String>("a+|a", "a+z|a", "(a?)*z|a")) {
             val prog = Pattern.compile(regex).prog()
             val bs: BitState = window(prog, StringInputScanner("a".repeat(1000)), 4)
             Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).`as`(regex).isNull()
@@ -42,7 +40,7 @@ internal class BitStateWindowTest {
     @Test
     fun assertionsAtWindowEdgeStillObserveFullInput() {
         val text = "abcd"
-        for (regex in mutableListOf<String?>("ab\\b", "(?:ab$|x)", "(?:ab\\z|x)")) {
+        for (regex in mutableListOf<String>("ab\\b", "(?:ab$|x)", "(?:ab\\z|x)")) {
             val prog = Pattern.compile(regex).prog()
             val bs: BitState = window(prog, StringInputScanner(text), 2)
             Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).`as`(regex).isNull()
@@ -126,7 +124,7 @@ internal class BitStateWindowTest {
 
     @Test
     fun successfulWindowsPreserveExactCapturesAcrossPatternsAndInputRepresentations() {
-        val patterns = mutableListOf<String?>(
+        val patterns = mutableListOf<String>(
             "a|a+",
             "a+|a",
             "a+?",
@@ -146,12 +144,12 @@ internal class BitStateWindowTest {
             "((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)"
         )
         val texts: MutableList<String> =
-            mutableListOf<String?>("", "a", "aaa", "aaabx", "ababx", "a😀b", "(ab)x", "<a>(b))x")
+            mutableListOf<String>("", "a", "aaa", "aaabx", "ababx", "a😀b", "(ab)x", "<a>(b))x")
         for (regex in patterns) {
             val prog = Pattern.compile(regex).prog()
             for (text in texts) {
                 for (input in scanners(text)) {
-                    for (anchored in mutableListOf<Boolean?>(false, true)) {
+                    for (anchored in mutableListOf<Boolean>(false, true)) {
                         val expected =
                             Nfa.search(
                                 prog,
@@ -186,9 +184,9 @@ internal class BitStateWindowTest {
         val regex = "\\[(.*?)]\\(customProtocol://((?:<[^>]*>|[^()]*|\\([^()]*\\))*)\\)"
         val fast = Pattern.compile(regex)
         val exact = Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
-        for (label in List.of<String?>("short", "α😀", "a".repeat(300))) {
+        for (label in java.util.List.of<String?>("short", "α😀", "a".repeat(300))) {
             val text = ("[" + label + "](customProtocol://<doc_1>) ").repeat(400)
-            for (replacement in mutableListOf<String?>("X", "$1:$2", "$0")) {
+            for (replacement in mutableListOf<String>("X", "$1:$2", "$0")) {
                 Assertions.assertThat(fast.matcher(text).replaceAll(replacement))
                     .isEqualTo(exact.matcher(text).replaceAll(replacement))
             }
@@ -244,11 +242,11 @@ internal class BitStateWindowTest {
     @Test
     @Tag("work-counter")
     fun repeatedShortMatchesUseLinearWorkAcrossInputSizes() {
-        for (atom in mutableListOf<String?>("a", "α", "😀")) {
+        for (atom in mutableListOf<String>("a", "α", "😀")) {
             val pattern = Pattern.compile("S((?:" + atom + "?)*)E")
-            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+            for (utf8 in mutableListOf<Boolean>(false, true)) {
                 var previous: Long = -1
-                for (size in mutableListOf<Int?>(4000, 8000, 16000)) {
+                for (size in mutableListOf<Int>(4000, 8000, 16000)) {
                     val text = ("S" + atom + atom + "E ").repeat(size!!)
                     val stringMatcher = pattern.matcher(text)
                     val utf8Matcher = pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))
@@ -275,7 +273,7 @@ internal class BitStateWindowTest {
     fun speculationWorkIsIndependentOfUnvisitedInputLength() {
         val prog = Pattern.compile("(a?)*z|a").prog()
         var previous: Long = -1
-        for (size in mutableListOf<Int?>(10000, 100000, 1000000)) {
+        for (size in mutableListOf<Int>(10000, 100000, 1000000)) {
             val bs: BitState =
                 window(prog, StringInputScanner("a".repeat(size!!)), BitState.SPECULATIVE_WINDOW_SIZE)
             val work =
@@ -300,7 +298,7 @@ internal class BitStateWindowTest {
         val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
         Pattern.setDiagnostics(recordOperations(operations))
         try {
-            for (label in mutableListOf<String?>("Click here", "α😀")) {
+            for (label in mutableListOf<String>("Click here", "α😀")) {
                 val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
                 val text =
                     longMatch.repeat(2) + ("[" + label + "](customProtocol://<doc_1>) ").repeat(3000)
@@ -314,7 +312,7 @@ internal class BitStateWindowTest {
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
                         if (i >= 2 && i < 66) {
-                            recovered = recovered or (operations.first().boundaryStrategy == MatchStrategy.BIT_STATE)
+                            recovered = recovered or (operations.first()!!.boundaryStrategy == MatchStrategy.BIT_STATE)
                         }
                         Assertions.assertThat(oracle.find()).isTrue()
                         for (group in 0..matcher.groupCount()) {
@@ -353,10 +351,10 @@ internal class BitStateWindowTest {
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
                     Assertions.assertThat(matcher.end(1) - matcher.start(1)).isEqualTo(400)
-                    if (operations.first().strategyDecisions.contains(windowFailure())) {
+                    if (operations.first()!!.strategyDecisions!!.contains(windowFailure())) {
                         failures.add(i)
                     } else {
-                        Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
+                        Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).contains(
                             windowBackoff()
                         )
                     }
@@ -375,12 +373,12 @@ internal class BitStateWindowTest {
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
                     Assertions.assertThat(matcher.end(1) - matcher.start(1)).isIn(3, 6)
-                    if (operations.first().boundaryStrategy == MatchStrategy.BIT_STATE) {
+                    if (operations.first()!!.boundaryStrategy == MatchStrategy.BIT_STATE) {
                         recovered = true
                         // A successful retry restores consecutive speculation, without another delay.
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
-                        Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
+                        Assertions.assertThat<MatchStrategy?>(operations.first()!!.boundaryStrategy)
                             .isEqualTo(MatchStrategy.BIT_STATE)
                         break
                     }
@@ -399,9 +397,9 @@ internal class BitStateWindowTest {
         val longMatch = "[" + "a".repeat(400) + "](customProtocol://<doc_1>) "
         val shortMatch = "[α😀](customProtocol://<doc_1>) "
         val block = longMatch.repeat(2) + shortMatch.repeat(32)
-        for (utf8 in mutableListOf<Boolean?>(false, true)) {
+        for (utf8 in mutableListOf<Boolean>(false, true)) {
             var previous: Long = -1
-            for (size in mutableListOf<Int?>(64, 128, 256)) {
+            for (size in mutableListOf<Int>(64, 128, 256)) {
                 val matcher: Matcher = matchers(pattern, block.repeat(size!!)).get(if (utf8) 1 else 0)
                 val work =
                     WorkCounter.countForTesting(
@@ -428,13 +426,13 @@ internal class BitStateWindowTest {
         val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
         Pattern.setDiagnostics(recordOperations(operations))
         try {
-            for (change in mutableListOf<String?>("reset", "region", "pattern")) {
+            for (change in mutableListOf<String>("reset", "region", "pattern")) {
                 for (matcher in matchers(pattern, text)) {
                     for (i in 0..2) {
                         operations.clear()
                         Assertions.assertThat(matcher.find()).isTrue()
                     }
-                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).contains(
                         windowBackoff()
                     )
                     when (change) {
@@ -445,10 +443,10 @@ internal class BitStateWindowTest {
                     }
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
-                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).contains(
                         windowFailure()
                     )
-                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).doesNotContain(
+                    Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).doesNotContain(
                         windowBackoff()
                     )
                 }
@@ -486,7 +484,7 @@ internal class BitStateWindowTest {
 
                 operations.clear()
                 Assertions.assertThat(matcher.reset().find()).isTrue()
-                Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions)
+                Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions)
                     .contains(windowFailure())
             }
         } finally {
@@ -537,7 +535,7 @@ internal class BitStateWindowTest {
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.reset(shortText).find()).isTrue()
-            Assertions.assertThat<MatchStrategy?>(operations.last().boundaryStrategy)
+            Assertions.assertThat<MatchStrategy?>(operations.last()!!.boundaryStrategy)
                 .isEqualTo(MatchStrategy.BIT_STATE)
 
             matcher.reset(longText)
@@ -546,7 +544,7 @@ internal class BitStateWindowTest {
             operations.clear()
             matcher.usePattern(unhintedPattern(PROTOCOL_LINK_REGEX + "|Z"))
             Assertions.assertThat(matcher.find()).isTrue()
-            Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(windowFailure())
+            Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).contains(windowFailure())
         } finally {
             Pattern.setDiagnostics(previous)
         }
@@ -558,7 +556,7 @@ internal class BitStateWindowTest {
         val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
         Pattern.setDiagnostics(recordOperations(operations))
         try {
-            for (atom in mutableListOf<String?>("a", "α", "😀")) {
+            for (atom in mutableListOf<String>("a", "α", "😀")) {
                 val regex = "(" + atom + "?)*b"
                 val text = atom!!.repeat(400) + "b" + "q".repeat(40000)
                 val pattern = Pattern.compile(regex)
@@ -569,7 +567,7 @@ internal class BitStateWindowTest {
                 for (i in actual.indices) {
                     operations.clear()
                     Assertions.assertThat(actual.get(i).find()).isTrue()
-                    Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
+                    Assertions.assertThat<MatchStrategy?>(operations.first()!!.boundaryStrategy)
                         .isEqualTo(MatchStrategy.BIT_STATE)
                     Assertions.assertThat(expected.get(i).find()).isTrue()
                     Assertions.assertThat(actual.get(i).start()).isEqualTo(expected.get(i).start())
@@ -586,7 +584,7 @@ internal class BitStateWindowTest {
     fun lazyRuneLoopsChargeOnlyRequestedCaptureRestoresAndCountDecodes() {
         val prog = Pattern.compile("x(.*?)z").prog()
         for (ncap in intArrayOf(2, 4)) {
-            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+            for (utf8 in mutableListOf<Boolean>(false, true)) {
                 val shortWork: Long = lazyRuneLoopWork(prog, 100, ncap, utf8!!)
                 val longWork: Long = lazyRuneLoopWork(prog, 300, ncap, utf8)
                 // Each extra ASCII rune tries ALT, capture, literal and body. Captures add a restore
@@ -612,9 +610,9 @@ internal class BitStateWindowTest {
                 operations.clear()
                 Assertions.assertThat(matcher.find()).isTrue()
                 Assertions.assertThat(matcher.end()).isEqualTo(4097)
-                Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions)
+                Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions)
                     .contains(windowFailure())
-                Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
+                Assertions.assertThat<MatchStrategy?>(operations.first()!!.boundaryStrategy)
                     .isEqualTo(MatchStrategy.NFA)
             }
         } finally {
@@ -630,14 +628,14 @@ internal class BitStateWindowTest {
         val operations: MutableList<OperationDiagnostics?> = ArrayList<OperationDiagnostics?>()
         Pattern.setDiagnostics(recordOperations(operations))
         try {
-            for (tailLength in mutableListOf<Int?>(20000, 40000)) {
+            for (tailLength in mutableListOf<Int>(20000, 40000)) {
                 val text = prefix + "q".repeat(tailLength!!)
                 for (scanner in scanners(text)) {
                     val pattern = Pattern.compile("(?:(b?)*?(c|)+)*c")
                     // The hint fits the bitmap, including when it exceeds the separate hint limit.
                     Assertions.assertThat(BitState.maxTextSize(pattern.prog()))
                         .isBetween(prefix.length, scanner.length - 1)
-                    val cache = pattern.getOrCreateThreadCache()
+                    val cache = pattern.orCreateThreadCache
                     val matcher =
                         if (scanner is Utf8InputScanner)
                             Matcher(pattern, scanner)
@@ -645,10 +643,10 @@ internal class BitStateWindowTest {
                             pattern.matcher(text)
                     operations.clear()
                     Assertions.assertThat(matcher.find()).isTrue()
-                    Assertions.assertThat<StrategyDecision?>(operations.first().strategyDecisions).contains(
+                    Assertions.assertThat<StrategyDecision?>(operations.first()!!.strategyDecisions).contains(
                         windowFailure()
                     )
-                    Assertions.assertThat<MatchStrategy?>(operations.first().boundaryStrategy)
+                    Assertions.assertThat<MatchStrategy?>(operations.first()!!.boundaryStrategy)
                         .isEqualTo(MatchStrategy.NFA)
 
                     // The NFA restart leaves the failed attempt in the cache with its own step count.
@@ -668,11 +666,11 @@ internal class BitStateWindowTest {
 
     @Test
     fun hintedWindowsPreservePriorityCapturesAndReplacement() {
-        for (regex in mutableListOf<String?>("(a?)*b", "(a?|ab)*b", "([ab]?)*z|b", "((a?)*b)+", "(a?)*b\\B")) {
+        for (regex in mutableListOf<String>("(a?)*b", "(a?|ab)*b", "([ab]?)*z|b", "((a?)*b)+", "(a?)*b\\B")) {
             val pattern = Pattern.compile(regex)
             val exact =
                 Pattern.compile(regex, 0, EnginePathOptions.builder().bitState(false).build())
-            for (length in mutableListOf<Int?>(255, 256, 257, 400, 30000)) {
+            for (length in mutableListOf<Int>(255, 256, 257, 400, 30000)) {
                 val text = "a".repeat(length!!) + "bz " + "q".repeat(40000)
                 val actual: MutableList<Matcher> = matchers(pattern, text)
                 val expected: MutableList<Matcher> = matchers(exact, text)
@@ -702,7 +700,7 @@ internal class BitStateWindowTest {
         private fun lazyRuneLoopWork(prog: Prog?, repeat: Int, ncap: Int, utf8: Boolean): Long {
             val scanner: InputScanner = scanners("x" + "a".repeat(repeat) + "z").get(if (utf8) 1 else 0)
             val engine =
-                BitState.getOrCreate(null, prog, scanner, 0, scanner.length, ncap, false, false)
+                BitState.getOrCreate(null, prog!!, scanner, 0, scanner.length, ncap, false, false)
             return WorkCounter.countForTesting(
                 Runnable { Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length) })
         }
@@ -735,7 +733,7 @@ internal class BitStateWindowTest {
         }
 
         private fun matchers(pattern: Pattern, text: String): MutableList<Matcher> {
-            return List.of<Matcher?>(
+            return java.util.List.of<Matcher?>(
                 pattern.matcher(text),
                 Matcher(
                     pattern,
@@ -745,11 +743,11 @@ internal class BitStateWindowTest {
         }
 
         private fun window(prog: Prog, input: InputScanner?, end: Int): BitState {
-            return BitState.getOrCreate(null, prog, input, 0, end, 2 * prog.numCaptures(), false, false)
+            return BitState.getOrCreate(null, prog, input!!, 0, end, 2 * prog.numCaptures(), false, false)
         }
 
         private fun scanners(text: String): MutableList<InputScanner> {
-            return List.of<InputScanner?>(
+            return java.util.List.of<InputScanner?>(
                 StringInputScanner(text),
                 (Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)) as ArrayUtf8Input).scanner()
             )

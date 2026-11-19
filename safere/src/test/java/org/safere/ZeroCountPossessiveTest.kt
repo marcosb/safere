@@ -9,9 +9,6 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.List
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /** Possessive repetition of operands whose consuming descendants execute zero times.  */
@@ -25,11 +22,11 @@ internal class ZeroCountPossessiveTest {
     fun zeroCountOperandsMatchLikeJdk(operand: String) {
         // JDK 26 Pattern defines {0} as exactly zero executions. Refs #1130.
         // The outer quantifier's immediate operand is therefore statically zero-width.
-        for (quantifier in mutableListOf<String?>("*+", "?+", "++", "{0}+", "{1}+", "{2}+", "{0,2}+", "{1,}+")) {
+        for (quantifier in mutableListOf<String>("*+", "?+", "++", "{0}+", "{1}+", "{2}+", "{0,2}+", "{1,}+")) {
             val repeated = "(?:" + operand + ")" + quantifier
-            for (regex in List.of<String>(repeated, "x(" + repeated + ")(y)", "(" + repeated + ")|a")) {
-                for (flags in List.of<Int?>(0, Pattern.COMMENTS)) {
-                    for (input in mutableListOf<String?>("", "a", "xy", "xay", "\uD83D\uDE00")) {
+            for (regex in java.util.List.of<String>(repeated, "x(" + repeated + ")(y)", "(" + repeated + ")|a")) {
+                for (flags in java.util.List.of<Int?>(0, Pattern.COMMENTS)) {
+                    for (input in mutableListOf<String>("", "a", "xy", "xay", "\uD83D\uDE00")) {
                         assertOperationsSame(regex, flags, input!!)
                     }
                 }
@@ -43,7 +40,7 @@ internal class ZeroCountPossessiveTest {
         ]
     )
     fun archivedZeroCountShapesMatchLikeJdk(regex: String) {
-        for (input in mutableListOf<String?>("", "x", "xy", "xc", "xaa", "xx")) {
+        for (input in mutableListOf<String>("", "x", "xy", "xc", "xaa", "xx")) {
             assertOperationsSame(regex, 0, input!!)
         }
     }
@@ -66,7 +63,7 @@ internal class ZeroCountPossessiveTest {
         ]
     )
     fun consumingImmediateOperandsStayUnsupported(regex: String) {
-        Pattern.compile(regex)
+        java.util.regex.Pattern.compile(regex)
         Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) })
             .isInstanceOf(PatternSyntaxException::class.java)
             .hasMessageContaining("possessive quantifiers are not supported")
@@ -75,7 +72,7 @@ internal class ZeroCountPossessiveTest {
     companion object {
         private fun assertOperationsSame(regex: String, flags: Int, input: String) {
             val safe = org.safere.Pattern.compile(regex, flags)
-            val jdk = Pattern.compile(regex, flags)
+            val jdk = java.util.regex.Pattern.compile(regex, flags)
             val actual = safe.matcher(input)
             val expected = jdk.matcher(input)
             var matched = expected.matches()
@@ -99,7 +96,7 @@ internal class ZeroCountPossessiveTest {
             Assertions.assertThat(actual.find()).isFalse()
         }
 
-        private fun assertGroupsSame(actual: org.safere.Matcher, expected: Matcher) {
+        private fun assertGroupsSame(actual: org.safere.Matcher, expected: java.util.regex.Matcher) {
             Assertions.assertThat(actual.groupCount()).isEqualTo(expected.groupCount())
             for (group in 0..expected.groupCount()) {
                 Assertions.assertThat(actual.group(group)).`as`("group %s", group).isEqualTo(expected.group(group))

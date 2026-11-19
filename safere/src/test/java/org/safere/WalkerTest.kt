@@ -6,20 +6,18 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import java.util.List
-
 /** Tests for [Walker].  */
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
 internal class WalkerTest {
     /** A simple walker that counts nodes in the tree.  */
-    private class CountWalker : Walker<Int?>() {
-        override fun preVisit(re: Regexp?, parentArg: Int?, stop: BooleanArray?): Int {
+    private class CountWalker : Walker<Int>() {
+        override fun preVisit(re: Regexp, parentArg: Int?, stop: BooleanArray): Int? {
             return 0
         }
 
         override fun postVisit(
-            re: Regexp?, parentArg: Int?, preArg: Int?, childArgs: MutableList<Int?>
-        ): Int {
+            re: Regexp, parentArg: Int?, preArg: Int?, childArgs: MutableList<Int>
+        ): Int? {
             var count = 1
             for (i in childArgs.indices) {
                 count += childArgs.get(i)!!
@@ -27,7 +25,7 @@ internal class WalkerTest {
             return count
         }
 
-        override fun shortVisit(re: Regexp?, parentArg: Int?): Int {
+        override fun shortVisit(re: Regexp, parentArg: Int?): Int? {
             return 1
         }
     }
@@ -77,9 +75,9 @@ internal class WalkerTest {
     @Test
     fun preVisitStop() {
         // A walker that stops at the first LITERAL it sees.
-        val w: Walker<String?> =
-            object : Walker<String?>() {
-                override fun preVisit(re: Regexp, parentArg: String?, stop: BooleanArray): String {
+        val w: Walker<String> =
+            object : Walker<String>() {
+                override fun preVisit(re: Regexp, parentArg: String?, stop: BooleanArray): String? {
                     if (re.op == RegexpOp.LITERAL) {
                         stop[0] = true
                         return "found:" + re.rune.toChar()
@@ -88,8 +86,8 @@ internal class WalkerTest {
                 }
 
                 override fun postVisit(
-                    re: Regexp?, parentArg: String?, preArg: String?, childArgs: MutableList<String?>
-                ): String {
+                    re: Regexp, parentArg: String?, preArg: String?, childArgs: MutableList<String>
+                ): String? {
                     // Concatenate child results.
                     val sb = StringBuilder()
                     for (childArg in childArgs) {
@@ -98,7 +96,7 @@ internal class WalkerTest {
                     return sb.toString()
                 }
 
-                override fun shortVisit(re: Regexp?, parentArg: String?): String {
+                override fun shortVisit(re: Regexp, parentArg: String?): String? {
                     return ""
                 }
             }
@@ -129,7 +127,7 @@ internal class WalkerTest {
     fun walkCopyPathWithSharedChildren() {
         // Create a concat with identical (same object) children.
         val shared = Regexp.literal('a'.code, 0)
-        val re = Regexp.concat(List.of<Regexp?>(shared, shared), 0)
+        val re = Regexp.concat(java.util.List.of<Regexp?>(shared, shared), 0)
         val w = CountWalker()
         val result = w.walk(re, 0)!!
         // CONCAT(1) + LITERAL(1) + copied LITERAL(1) = 3

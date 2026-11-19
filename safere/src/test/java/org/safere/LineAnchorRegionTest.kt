@@ -10,23 +10,20 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.regex.MatchResult
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Line assertions must use the same region context in scalar and full-text execution.  */
 @DisabledForCrosscheck("checks engine equivalence and the approved opaque CRLF context divergence")
 internal class LineAnchorRegionTest {
-    private enum class Operation {
+    internal enum class Operation {
         MATCHES,
         LOOKING_AT,
         FIND
     }
 
     @JvmRecord
-    private data class InputRegion(val input: String?, val start: Int, val end: Int)
+    internal data class InputRegion(val input: String?, val start: Int, val end: Int)
 
     @JvmRecord
     private data class Capture(val start: Int, val end: Int, val text: String?)
@@ -34,8 +31,8 @@ internal class LineAnchorRegionTest {
     @Test
     fun opaqueEndAnchorsTreatTheVisibleLfAsAStandaloneTerminator() {
         // The hidden CR is intentionally ignored, even though the JDK consults it (issue #1031).
-        for (anchor in mutableListOf<String?>("$", "\\Z", "(?m:$)", "(?d:$)", "(?dm:$)", "(?d:\\Z)")) {
-            for (regex in List.of<String?>("(.)?" + anchor, "(?:(.)?" + anchor + ")|(?:\\Xz)")) {
+        for (anchor in mutableListOf<String>("$", "\\Z", "(?m:$)", "(?d:$)", "(?dm:$)", "(?d:\\Z)")) {
+            for (regex in java.util.List.of<String?>("(.)?" + anchor, "(?:(.)?" + anchor + ")|(?:\\Xz)")) {
                 val matcher = Pattern.compile(regex).matcher("\r\na").region(1, 2)
                 Assertions.assertThat(matcher.lookingAt()).`as`(regex).isTrue()
                 Assertions.assertThat<Capture?>(captures(matcher.toMatchResult()))
@@ -50,11 +47,11 @@ internal class LineAnchorRegionTest {
     fun unreachableGraphemeAlternativePreservesLineAssertions(
         region: InputRegion, regex: String?, operation: Operation
     ) {
-        for (anchoring in mutableListOf<Boolean?>(false, true)) {
-            for (transparent in mutableListOf<Boolean?>(false, true)) {
-                val scalar: Matcher = Companion.configure(Pattern.compile(regex), region, anchoring!!, transparent!!)
+        for (anchoring in mutableListOf<Boolean>(false, true)) {
+            for (transparent in mutableListOf<Boolean>(false, true)) {
+                val scalar: org.safere.Matcher = Companion.configure(Pattern.compile(regex), region, anchoring!!, transparent!!)
                 val mixedPattern = Pattern.compile("(?:" + regex + ")|(?:\\Xz)")
-                val mixed: Matcher = Companion.configure(mixedPattern, region, anchoring, transparent)
+                val mixed: org.safere.Matcher = Companion.configure(mixedPattern, region, anchoring, transparent)
                 val expected: MutableList<MutableList<Capture?>?> = trace(scalar, operation)
                 Assertions.assertThat<MutableList<Capture?>?>(trace(mixed, operation))
                     .`as`(
@@ -74,8 +71,8 @@ internal class LineAnchorRegionTest {
     ) {
         val mixedRegex = "(?:" + regex + ")|(?:\\Xz)"
         val pattern = Pattern.compile(mixedRegex)
-        for (anchoring in mutableListOf<Boolean?>(false, true)) {
-            for (transparent in mutableListOf<Boolean?>(false, true)) {
+        for (anchoring in mutableListOf<Boolean>(false, true)) {
+            for (transparent in mutableListOf<Boolean>(false, true)) {
                 // Opaque anchoring contexts starting inside CRLF have an explicit SafeRE oracle above.
                 if (anchoring
                     && !transparent!! && region.start > 0 && region.input!!.get(region.start - 1) == '\r' && region.input.get(
@@ -84,9 +81,9 @@ internal class LineAnchorRegionTest {
                 ) {
                     continue
                 }
-                val actual: Matcher = Companion.configure(pattern, region, anchoring!!, transparent!!)
+                val actual: org.safere.Matcher = Companion.configure(pattern, region, anchoring!!, transparent!!)
                 val expected =
-                    Pattern.compile(mixedRegex)
+                    java.util.regex.Pattern.compile(mixedRegex)
                         .matcher(region.input)
                         .region(region.start, region.end)
                         .useAnchoringBounds(anchoring)
@@ -104,19 +101,21 @@ internal class LineAnchorRegionTest {
     }
 
     companion object {
+        @JvmStatic
         private fun lineAnchorSearchCases(): Stream<Arguments?>? {
-            return cases(List.of<Operation?>(Operation.LOOKING_AT, Operation.FIND))
+            return cases(java.util.List.of<Operation?>(Operation.LOOKING_AT, Operation.FIND))
         }
 
+        @JvmStatic
         private fun lineAnchorCases(): Stream<Arguments?>? {
-            return cases(List.of<Operation?>(*Operation.entries.toTypedArray()))
+            return cases(java.util.List.of<Operation?>(*Operation.entries.toTypedArray()))
         }
 
         private fun cases(operations: MutableList<Operation?>): Stream<Arguments?>? {
             val regions: MutableList<InputRegion?> = ArrayList<InputRegion?>()
             regions.add(InputRegion("\r\na", 1, 2))
             regions.add(InputRegion("\r\n", 1, 2))
-            for (terminator in mutableListOf<String?>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
+            for (terminator in mutableListOf<String>("\n", "\r", "\r\n", "\u0085", "\u2028", "\u2029")) {
                 regions.add(InputRegion(terminator + "a", 0, terminator!!.length))
                 regions.add(InputRegion("é" + terminator + "b", 1, 1 + terminator.length))
                 regions.add(InputRegion("a" + terminator, 0, 1 + terminator.length))
@@ -177,7 +176,7 @@ internal class LineAnchorRegionTest {
             return result
         }
 
-        private fun trace(matcher: Matcher, operation: Operation): MutableList<MutableList<Capture?>?> {
+        private fun trace(matcher: java.util.regex.Matcher, operation: Operation): MutableList<MutableList<Capture?>?> {
             val result: MutableList<MutableList<Capture?>?> = ArrayList<MutableList<Capture?>?>()
             var matched: Boolean
             do {

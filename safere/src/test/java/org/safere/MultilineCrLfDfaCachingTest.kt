@@ -11,7 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Compatibility coverage for CRLF-sensitive multiline anchors in cached DFA transitions.  */
@@ -48,7 +47,7 @@ internal class MultilineCrLfDfaCachingTest {
         pattern.matcher(Utf8Input.validated((" " + warmTerminator + "a").toByteArray(StandardCharsets.UTF_8))).find()
         val input = "xb" + targetTerminator + "a".repeat(suffixLength)
         val actual = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
-        val expected = Pattern.compile(regex).matcher(input)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input)
         while (expected.find()) {
             Assertions.assertThat(actual.find()).isTrue()
             Assertions.assertThat(actual.start())
@@ -71,7 +70,7 @@ internal class MultilineCrLfDfaCachingTest {
     fun multilineBeginningAnchorDistinguishesCrLfFromStandaloneCarriageReturns(
         description: String?, regex: String, input: String, expected: Boolean
     ) {
-        val jdkResult = Pattern.compile(regex).matcher(input).find()
+        val jdkResult = java.util.regex.Pattern.compile(regex).matcher(input).find()
         Assertions.assertThat(jdkResult).`as`("JDK result for %s", description).isEqualTo(expected)
 
         val pattern = org.safere.Pattern.compile(regex)
@@ -87,7 +86,7 @@ internal class MultilineCrLfDfaCachingTest {
         private val LONG_PREFIX = "a".repeat(500)
 
         private fun assertFindSequence(actual: org.safere.Matcher, regex: String, input: String) {
-            val expected = Pattern.compile(regex).matcher(input)
+            val expected = java.util.regex.Pattern.compile(regex).matcher(input)
             while (expected.find()) {
                 Assertions.assertThat(actual.find()).isTrue()
                 Assertions.assertThat(actual.start()).isEqualTo(expected.start())
@@ -99,6 +98,7 @@ internal class MultilineCrLfDfaCachingTest {
             Assertions.assertThat(actual.find()).isFalse()
         }
 
+        @JvmStatic
         private fun reusedDollarCases(): Stream<Arguments?>? {
             return Stream.of<String?>("\\W*(?m:$)", "\\s*(?m:$)", "(\\W*)(?m:$)", "\\W*?(?m:$)")
                 .flatMap<Arguments?> { regex: String? ->
@@ -113,6 +113,7 @@ internal class MultilineCrLfDfaCachingTest {
                 }
         }
 
+        @JvmStatic
         private fun mixedCarriageReturnCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(

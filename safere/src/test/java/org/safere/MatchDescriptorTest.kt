@@ -35,7 +35,7 @@ internal class MatchDescriptorTest {
         val desc = p.matchDescriptor()
         Assertions.assertThat(desc.hasFastPath()).isTrue()
         Assertions.assertThat<CharClassScanInfo?>(desc.singleCharClass).isNotNull()
-        Assertions.assertThat(desc.singleCharClass.isAscii).isTrue()
+        Assertions.assertThat(desc.singleCharClass!!.isAscii).isTrue()
     }
 
     @Test
@@ -44,7 +44,7 @@ internal class MatchDescriptorTest {
         val desc = p.matchDescriptor()
         Assertions.assertThat(desc.hasFastPath()).isTrue()
         Assertions.assertThat<CharClassMatchInfo?>(desc.charClassMatch).isNotNull()
-        Assertions.assertThat(desc.charClassMatch.ranges).isNotNull()
+        Assertions.assertThat(desc.charClassMatch!!.ranges).isNotNull()
     }
 
     @Test

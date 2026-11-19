@@ -26,14 +26,14 @@ internal class AnchoredDfaCachingTest {
 
     @Test
     fun utf8AnchorsKeepOrdinaryDfaTransitionsCached() {
-        val prog = Compiler.compile(Parser.parse(FRUIT_MARKUP_PATTERN, FLAGS))
+        val prog = Compiler.compile(Parser.parse(FRUIT_MARKUP_PATTERN, FLAGS)!!)!!
         val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
         assertCachedTransitionWork(
             IntConsumer { size: Int ->
                 val input = nonMatchingInput(size).toByteArray(StandardCharsets.UTF_8)
-                val result = dfa.doSearch(Utf8InputScanner(input), true, false)
+                val result = dfa.doSearch(Utf8InputScanner(input), true, false)!!
                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                Assertions.assertThat(result!!.matched).isFalse()
+                Assertions.assertThat(result.matched).isFalse()
             })
     }
 
@@ -48,14 +48,14 @@ internal class AnchoredDfaCachingTest {
 
     @Test
     fun multilineBeginningAnchorKeepsUtf8TransitionsCached() {
-        val prog = Compiler.compile(Parser.parse(MULTILINE_LINE_PATTERN, FLAGS))
+        val prog = Compiler.compile(Parser.parse(MULTILINE_LINE_PATTERN, FLAGS)!!)!!
         val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
         assertCachedTransitionWork(
             IntConsumer { size: Int ->
                 val input = multilineNonMatchingInput(size).toByteArray(StandardCharsets.UTF_8)
-                val result = dfa.doSearch(Utf8InputScanner(input), false, false)
+                val result = dfa.doSearch(Utf8InputScanner(input), false, false)!!
                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                Assertions.assertThat(result!!.matched).isFalse()
+                Assertions.assertThat(result.matched).isFalse()
             })
     }
 
@@ -72,14 +72,14 @@ internal class AnchoredDfaCachingTest {
 
     @Test
     fun multilineEndingAnchorKeepsUtf8LineFeedTransitionsCached() {
-        val prog = Compiler.compile(Parser.parse("(?m)(?:x+$)y", FLAGS))
+        val prog = Compiler.compile(Parser.parse("(?m)(?:x+$)y", FLAGS)!!)!!
         val dfa = Dfa(prog, 10000, Dfa.buildSetup(prog), false)
         assertCachedTransitionWork(
             IntConsumer { size: Int ->
                 val input = "xxx\n".repeat(size).toByteArray(StandardCharsets.UTF_8)
-                val result = dfa.doSearch(Utf8InputScanner(input), false, false)
+                val result = dfa.doSearch(Utf8InputScanner(input), false, false)!!
                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
-                Assertions.assertThat(result!!.matched).isFalse()
+                Assertions.assertThat(result.matched).isFalse()
             })
     }
 

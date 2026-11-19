@@ -14,7 +14,6 @@ import org.safere.MatcherTransitionInventory.Transition
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.*
-import java.util.List
 import java.util.function.Predicate
 import java.util.stream.Collectors
 
@@ -29,12 +28,14 @@ internal class MatcherTransitionInventoryTest {
                 .filter { method: Method? -> Modifier.isPublic(method!!.modifiers) }
                 .filter { method: Method? -> !method!!.isBridge }
                 .filter { method: Method? -> !method!!.isSynthetic }
+                // Kotlin mangles module-internal methods as public JVM members with `$…` names.
+                .filter { method: Method? -> !method!!.name.contains('$') }
                 .map<MatcherTransitionInventory.Signature?> { method: Method? -> signature(method!!) }
                 .collect(Collectors.toSet())
 
         val inventoriedMethods =
             MatcherTransitionInventory.transitions().stream()
-                .map<MatcherTransitionInventory.Signature?>(Transition::signature)
+                .map<MatcherTransitionInventory.Signature?> { transition: Transition? -> transition!!.signature }
                 .collect(Collectors.toSet())
 
         Assertions.assertThat<String?>(formatMissing(actualPublicMethods, inventoriedMethods))
@@ -53,12 +54,13 @@ internal class MatcherTransitionInventoryTest {
                 .filter { method: Method? -> Modifier.isPublic(method!!.modifiers) }
                 .filter { method: Method? -> !method!!.isBridge }
                 .filter { method: Method? -> !method!!.isSynthetic }
+                .filter { method: Method? -> !method!!.name.contains('$') }
                 .map<MatcherTransitionInventory.Signature?> { method: Method? -> signature(method!!) }
                 .collect(Collectors.toSet())
 
         val inventoriedMethods =
             MatcherTransitionInventory.utf8Transitions().stream()
-                .map<MatcherTransitionInventory.Signature?>(Transition::signature)
+                .map<MatcherTransitionInventory.Signature?> { transition: Transition? -> transition!!.signature }
                 .collect(Collectors.toSet())
 
         Assertions.assertThat<String?>(formatMissing(actualPublicMethods, inventoriedMethods))
@@ -73,11 +75,11 @@ internal class MatcherTransitionInventoryTest {
     @DisplayName("public instance transitions declare deferred capture behavior")
     fun publicInstanceTransitionsDeclareDeferredCaptureBehavior() {
         Assertions.assertThat<Transition?>(MatcherTransitionInventory.transitions())
-            .filteredOn(Predicate { transition: Transition? -> !transition!!.signature.isStatic })
+            .filteredOn(Predicate { transition: Transition? -> !transition!!.signature!!.isStatic })
             .allSatisfy(
                 ThrowingConsumer { transition: Transition? ->
                     Assertions.assertThat<DeferredCaptureEffect?>(transition!!.deferredCaptureEffect)
-                        .`as`("%s", format(transition.signature))
+                        .`as`("%s", format(transition.signature!!))
                         .isNotNull()
                         .isNotEqualTo(DeferredCaptureEffect.NONE)
                 })
@@ -89,7 +91,7 @@ internal class MatcherTransitionInventoryTest {
         val quoteReplacement =
             MatcherTransitionInventory.transitionFor(
                 MatcherTransitionInventory.Signature(
-                    "quoteReplacement", List.of<Class<*>?>(String::class.java), true
+                    "quoteReplacement", java.util.List.of<Class<*>?>(String::class.java), true
                 )
             )
                 .orElseThrow()
@@ -104,7 +106,7 @@ internal class MatcherTransitionInventoryTest {
         private fun signature(method: Method): MatcherTransitionInventory.Signature {
             return MatcherTransitionInventory.Signature(
                 method.name,
-                List.of<Class<*>?>(*method.parameterTypes),
+                java.util.List.of<Class<*>?>(*method.parameterTypes),
                 Modifier.isStatic(method.modifiers)
             )
         }
@@ -112,7 +114,7 @@ internal class MatcherTransitionInventoryTest {
         private fun formatMissing(
             expected: MutableSet<MatcherTransitionInventory.Signature?>,
             actual: MutableSet<MatcherTransitionInventory.Signature?>
-        ): MutableList<String?> {
+        ): MutableList<String> {
             return expected.stream()
                 .filter { signature: MatcherTransitionInventory.Signature? -> !actual.contains(signature) }
                 .map<String?> { signature: MatcherTransitionInventory.Signature? -> format(signature!!) }
@@ -122,7 +124,7 @@ internal class MatcherTransitionInventoryTest {
 
         private fun format(signature: MatcherTransitionInventory.Signature): String {
             val params =
-                signature.parameterTypes.stream()
+                signature.parameterTypes!!.stream()
                     .map<String?> { obj: Class<*>? -> obj!!.getSimpleName() }
                     .collect(Collectors.joining(", "))
             val prefix = if (signature.isStatic) "static " else ""

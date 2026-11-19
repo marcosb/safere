@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /**
@@ -23,7 +22,7 @@ import java.util.regex.PatternSyntaxException
  * (blocks), and keyword forms (`script=`, `block=`, `general_category=` and their
  * short forms).
  */
-internal object UnicodePropertySyntaxTest {
+internal class UnicodePropertySyntaxTest {
     // ---- Helper methods ----
     /** Returns true if the regex matches anywhere in the input.  */
     private fun find(regex: String?, input: String?): Boolean {
@@ -33,7 +32,7 @@ internal object UnicodePropertySyntaxTest {
     /** Cross-validates against JDK: asserts SafeRE and JDK agree on find().  */
     private fun assertMatchesJdk(regex: String, input: String) {
         val safere = find(regex, input)
-        val jdk = Pattern.compile(regex).matcher(input).find()
+        val jdk = java.util.regex.Pattern.compile(regex).matcher(input).find()
         Assertions.assertThat(safere)
             .`as`("SafeRE and JDK should agree for %s on \"%s\"", regex, input)
             .isEqualTo(jdk)
@@ -291,7 +290,7 @@ internal object UnicodePropertySyntaxTest {
         fun unicodeWhiteSpaceFormsAgreeAtPropertyBoundaries(cp: Int) {
             val input = Character.toString(cp)
             val expected =
-                Pattern.compile("\\p{IsWhite_Space}").matcher(input).matches()
+                java.util.regex.Pattern.compile("\\p{IsWhite_Space}").matcher(input).matches()
             for (regex in arrayOf<String>(
                 "\\p{IsWhite_Space}",
                 "[\\p{IsWhite_Space}]",
@@ -872,7 +871,7 @@ internal object UnicodePropertySyntaxTest {
         @ValueSource(strings = ["\\p{Latin}", "\\p{Braille}", "\\p{Any}"])
         @DisplayName("RE2-style bare Unicode property names are rejected")
         fun re2StyleBareUnicodePropertyNamesAreRejected(regex: String) {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile(regex) })
+            Assertions.assertThatThrownBy(ThrowingCallable { java.util.regex.Pattern.compile(regex) })
                 .isInstanceOf(PatternSyntaxException::class.java)
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex) }).isInstanceOf(
                 PatternSyntaxException::class.java

@@ -10,15 +10,13 @@ import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.List
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
 /** Compatibility at boundaries within lexical constructs, rather than only between atoms.  */
 internal class LexicalCompatibilityTest {
     @Test
     fun literalRunsKeepAtomQuantifiersAndGroupBoundaries() {
-        val inputs: MutableList<String> = mutableListOf<String?>(
+        val inputs: MutableList<String> = mutableListOf<String>(
             "",
             "a",
             "ab",
@@ -41,7 +39,7 @@ internal class LexicalCompatibilityTest {
             "a\uD83D\uD800\uDE00",
             "a\uD83D\uD800\uDE00\uD800\uDE00"
         )
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "abc+",
             "abc{0,2}",
             "abc*?",
@@ -66,7 +64,7 @@ internal class LexicalCompatibilityTest {
             "(ab){0}c+",
             "^abc+$"
         )) {
-            for (flags in List.of<Int?>(
+            for (flags in java.util.List.of<Int?>(
                 0,
                 Pattern.COMMENTS,
                 Pattern.CASE_INSENSITIVE,
@@ -79,11 +77,11 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun propertyComponentsCrossTriviaAndQuoteBoundaries() {
-        for (introducer in mutableListOf<String?>("\\p", "\\P")) {
-            for (gap in mutableListOf<String?>("", "\\Q\\E", "\\Q\\E\\Q\\E", " ", "#c\n", " \\Q\\E#c\n")) {
-                for (payload in mutableListOf<String?>("L", "{L}", "{ L}", "{L }", "\\QL\\E", "\\Q{L}\\E")) {
+        for (introducer in mutableListOf<String>("\\p", "\\P")) {
+            for (gap in mutableListOf<String>("", "\\Q\\E", "\\Q\\E\\Q\\E", " ", "#c\n", " \\Q\\E#c\n")) {
+                for (payload in mutableListOf<String>("L", "{L}", "{ L}", "{L }", "\\QL\\E", "\\Q{L}\\E")) {
                     val escape = introducer + gap + payload
-                    for (expression in List.of<String>(escape, "[" + escape + "]", "(" + escape + ")+")) {
+                    for (expression in java.util.List.of<String>(escape, "[" + escape + "]", "(" + escape + ")+")) {
                         assertSame(expression, 0)
                         assertSame(expression, Pattern.COMMENTS)
                         assertSame("(?x)" + expression, 0)
@@ -96,7 +94,7 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun controlAndNumericEscapesRespectTheirComponentBoundaries() {
-        for (expression in mutableListOf<String?>(
+        for (expression in mutableListOf<String>(
             "\\c\\Q\\Ea",
             "\\c\\Q\\E\\Q\\Ea",
             "\\c\\Qa\\E",
@@ -112,7 +110,7 @@ internal class LexicalCompatibilityTest {
             "\\u00\\Q41\\E",
             "\\p\\Q{L}\\E"
         )) {
-            for (wrapped in List.of<String>(expression, "[" + expression + "]")) {
+            for (wrapped in java.util.List.of<String>(expression, "[" + expression + "]")) {
                 assertSame(wrapped, 0)
                 assertSame(wrapped, Pattern.COMMENTS)
             }
@@ -121,9 +119,9 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun quantifierModifiersCrossEmptyQuotesWithoutChangingMatchPriority() {
-        for (operand in mutableListOf<String?>("a", "(a)", "(a?)", "()")) {
-            for (repeat in mutableListOf<String?>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
-                for (gap in mutableListOf<String?>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
+        for (operand in mutableListOf<String>("a", "(a)", "(a?)", "()")) {
+            for (repeat in mutableListOf<String>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
+                for (gap in mutableListOf<String>("\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
                     assertSame(operand + repeat + gap + "?", Pattern.COMMENTS)
                     assertSame(operand + repeat + "?" + gap + "?", Pattern.COMMENTS)
                     assertSame(operand + repeat + "?" + gap + "+", Pattern.COMMENTS)
@@ -135,9 +133,9 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun operandFreeCountedRepeatsRemainTransparentToEmptyQuotes() {
-        for (prefix in mutableListOf<String?>("", "(?i)", "a+", "|", "(?:")) {
-            for (repeat in mutableListOf<String?>("{0}", "{1}", "{01,03}")) {
-                for (modifier in mutableListOf<String?>("?", "+")) {
+        for (prefix in mutableListOf<String>("", "(?i)", "a+", "|", "(?:")) {
+            for (repeat in mutableListOf<String>("{0}", "{1}", "{01,03}")) {
+                for (modifier in mutableListOf<String>("?", "+")) {
                     var regex = prefix + repeat + "\\Q\\E" + modifier
                     if (prefix == "(?:") regex += ")"
                     assertSame(regex, 0)
@@ -149,9 +147,9 @@ internal class LexicalCompatibilityTest {
     @Test
     @DisabledForCrosscheck("SafeRE rejects possessive repetition over consuming operands")
     fun consumingPossessiveRejectionHasOnePathForEquivalentSpellings() {
-        for (operand in mutableListOf<String?>("a", "(a)", "(?:a?)", "\\p{Lower}", "^\\p{Lower}")) {
-            for (repeat in mutableListOf<String?>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
-                for (gap in mutableListOf<String?>("", "\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
+        for (operand in mutableListOf<String>("a", "(a)", "(?:a?)", "\\p{Lower}", "^\\p{Lower}")) {
+            for (repeat in mutableListOf<String>("?", "*", "+", "{1}", "{0,2}", "{1,3}")) {
+                for (gap in mutableListOf<String>("", "\\Q\\E", "\\Q\\E\\Q\\E", " \\Q\\E#c\n")) {
                     Assertions.assertThatThrownBy(ThrowingCallable {
                         Pattern.compile(
                             operand + repeat + gap + "+",
@@ -167,7 +165,7 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun zeroWidthPossessivesAndQuotedClassRangesKeepTheirSemantics() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "()*\\Q\\E+",
             "(){2}\\Q\\E+",
             "(){0,2}\\Q\\E+",
@@ -184,11 +182,11 @@ internal class LexicalCompatibilityTest {
     @Test
     fun quotedClassSpansKeepCodePointsAndRangeEndpointsAcrossLengths() {
         val inputs: MutableList<String> =
-            mutableListOf<String?>("", "a", "b", "z", "Z", "A", "~", "😀", "𠀀", "#", " ", "&", "-", "]")
-        for (length in mutableListOf<Int?>(3, 4, 5, 7, 8, 9, 15, 16, 17, 64, 65, 257)) {
-            for (unit in mutableListOf<String?>("a", "😀", "# &-]")) {
+            mutableListOf<String>("", "a", "b", "z", "Z", "A", "~", "😀", "𠀀", "#", " ", "&", "-", "]")
+        for (length in mutableListOf<Int>(3, 4, 5, 7, 8, 9, 15, 16, 17, 64, 65, 257)) {
+            for (unit in mutableListOf<String>("a", "😀", "# &-]")) {
                 val quote = "\\QZ" + unit!!.repeat(length!!) + "z\\E"
-                for (regex in List.of<String?>(
+                for (regex in java.util.List.of<String?>(
                     "[" + quote + "]",
                     "[^" + quote + "]",
                     "[" + quote + "-~]",
@@ -205,8 +203,8 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun rangeEndpointsConsumeOneAmpersandBeforeRecognizingIntersections() {
-        for (lower in mutableListOf<String?>("!", "%", "&", "\\Q&\\E")) {
-            for (upperAndTail in mutableListOf<String?>("&&", "\\Q&\\E&")) {
+        for (lower in mutableListOf<String>("!", "%", "&", "\\Q&\\E")) {
+            for (upperAndTail in mutableListOf<String>("&&", "\\Q&\\E&")) {
                 val regex = "[" + lower + "-" + upperAndTail + "]"
                 assertSame(regex, 0)
                 assertSame(regex, Pattern.COMMENTS)
@@ -216,8 +214,8 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun rangeEndpointControlsKeepDelimiterRolesAndValidation() {
-        val inputs: MutableList<String> = mutableListOf<String?>("!", "-", "A", "]", "a", "!]", "-]", "A]", "]]")
-        for (regex in mutableListOf<String?>("[!-]]", "[!-\\Q\\E]]", "[!-\\]]", "[!-\\Q]\\E]")) {
+        val inputs: MutableList<String> = mutableListOf<String>("!", "-", "A", "]", "a", "!]", "-]", "A]", "]]")
+        for (regex in mutableListOf<String>("[!-]]", "[!-\\Q\\E]]", "[!-\\]]", "[!-\\Q]\\E]")) {
             assertSame(regex!!, 0, inputs)
             assertSame(regex, Pattern.COMMENTS, inputs)
         }
@@ -225,7 +223,7 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun leadingClassTriviaKeepsCaretsLiteralWhileEmptyQuotesAreTransparent() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "[ ^a]", "[#c\n^a]", "[[ ^a]]", "[ ^]", "[\\Q\\E^a]", "[ \\Q\\E^a]", "[a&&[ ^a]]"
         )) {
             assertSame(regex!!, Pattern.COMMENTS)
@@ -234,12 +232,12 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun surrogateEscapePairsUseTheSameComponentRulesAsIndividualEscapes() {
-        for (high in mutableListOf<String?>("\\uD83D", "\\uD840")) {
-            for (low in mutableListOf<String?>("DE00", "DC00", "D800", "0041")) {
-                for (gap in mutableListOf<String?>("", " ", "#c\n", "\\Q\\E")) {
-                    for (between in mutableListOf<String?>("", " ", "\\Q\\E")) {
+        for (high in mutableListOf<String>("\\uD83D", "\\uD840")) {
+            for (low in mutableListOf<String>("DE00", "DC00", "D800", "0041")) {
+                for (gap in mutableListOf<String>("", " ", "#c\n", "\\Q\\E")) {
+                    for (between in mutableListOf<String>("", " ", "\\Q\\E")) {
                         val regex = high + between + "\\u" + low!!.substring(0, 2) + gap + low.substring(2)
-                        for (expression in List.of<String>(regex, "[" + regex + "]", regex + "\\uDE00")) {
+                        for (expression in java.util.List.of<String>(regex, "[" + regex + "]", regex + "\\uDE00")) {
                             assertSame(expression, 0)
                             assertSame(expression, Pattern.COMMENTS)
                         }
@@ -251,7 +249,7 @@ internal class LexicalCompatibilityTest {
 
     @Test
     fun flagChangesDoNotReuseLookaheadFromThePreviousMode() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(?x:a b) c",
             "(?x)( ?:a)",
             "(?x)(? x:a)",
@@ -318,9 +316,11 @@ internal class LexicalCompatibilityTest {
         )
         type.getMethod("setThreadAllocatedMemoryEnabled", Boolean::class.javaPrimitiveType).invoke(bean, true)
         val allocated = type.getMethod("getThreadAllocatedBytes", Long::class.javaPrimitiveType)
-        val patterns: Array<String> = arrayOfNulls<String>(3)
-        for (i in patterns.indices) {
-            patterns[i] = "[" + ("\\Q" + span + "\\E").repeat(128 shl (2 * i)) + "]"
+        val patterns: Array<String> = arrayOfNulls<String>(3).let { raw ->
+            for (i in raw.indices) {
+                raw[i] = "[" + ("\\Q" + span + "\\E").repeat(128 shl (2 * i)) + "]"
+            }
+            raw.requireNoNulls()
         }
         for (i in 0..11) {
             for (regex in patterns) {
@@ -344,7 +344,7 @@ internal class LexicalCompatibilityTest {
     }
 
     companion object {
-        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+        private val INPUTS: MutableList<String> = mutableListOf<String>(
             "",
             "a",
             "aa",
@@ -370,9 +370,9 @@ internal class LexicalCompatibilityTest {
         )
 
         private fun assertSame(regex: String, flags: Int, inputs: MutableList<String> = INPUTS) {
-            val expected: Pattern?
+            val expected: java.util.regex.Pattern?
             try {
-                expected = Pattern.compile(regex, flags)
+                expected = java.util.regex.Pattern.compile(regex, flags)
             } catch (e: PatternSyntaxException) {
                 Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile(regex, flags) })
                     .`as`("rejection of %s with flags %s", regex, flags)

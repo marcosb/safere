@@ -140,10 +140,10 @@ internal class OnePassThresholdTest {
         val patternId = pattern.descriptor().patternId
         val ops =
             diagnostics.operations.stream()
-                .filter { event: OperationDiagnostics -> event.pattern.patternId == patternId }
+                .filter { event: OperationDiagnostics? -> event!!.pattern!!.patternId == patternId }
                 .toList()
         Assertions.assertThat<OperationDiagnostics?>(ops).isNotEmpty()
-        return ops.get(ops.size - 1)
+        return ops[ops.size - 1]!!
     }
 
     private class RecordingDiagnostics : SafeReMatchDiagnostics() {

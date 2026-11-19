@@ -12,7 +12,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.util.*
-import java.util.List
 import java.util.function.IntConsumer
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
@@ -49,7 +48,7 @@ internal class PatternPredicateTest {
     @DisabledForCrosscheck("Randomized internal parity includes intentional scalar-boundary differences")
     fun asPredicateAgreesWithMatcherFindOnRandomPatterns() {
         val random = Random(1062)
-        val failures: MutableList<String?> = ArrayList<String?>()
+        val failures: MutableList<String> = ArrayList<String>()
         var i = 0
         while (i < 3000 && failures.size < 10) {
             val regex = StringBuilder()
@@ -86,7 +85,7 @@ internal class PatternPredicateTest {
     }
 
     companion object {
-        val INPUTS: MutableList<String> = List.of<String?>(
+        val INPUTS: MutableList<String> = java.util.List.of<String>(
             "",
             "a",
             "hello",
@@ -118,6 +117,7 @@ internal class PatternPredicateTest {
         )
 
         /** Patterns chosen to reach each step of the matcher-free path and its matcher fallbacks.  */
+        @JvmStatic
         fun patterns(): Stream<Arguments?> {
             return Stream.of<Arguments?>( // Literal fast path, unanchored and anchored.
                 Arguments.of("hello", 0),

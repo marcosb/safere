@@ -7,7 +7,6 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.util.regex.Pattern
 
 /**
  * Start-acceleration backoff for a leading-expansion accelerator over a two-member small set.
@@ -80,7 +79,7 @@ internal class LeadingExpansionBackoffTest {
 
         private fun jdkStarts(input: String): MutableList<Int?> {
             val starts: MutableList<Int?> = ArrayList<Int?>()
-            val matcher = Pattern.compile(REGEX).matcher(input)
+            val matcher = java.util.regex.Pattern.compile(REGEX).matcher(input)
             while (matcher.find()) {
                 starts.add(matcher.start())
             }

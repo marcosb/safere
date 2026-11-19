@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.List
 import java.util.Map
 import java.util.function.IntFunction
 import java.util.function.IntPredicate
@@ -19,7 +18,7 @@ import java.util.stream.Stream
 @DisabledForCrosscheck("Includes approved region-local surrogate and grapheme search semantics")
 internal class RegionAssertionCompositionTest {
     @JvmRecord
-    private data class Rule(
+    internal data class Rule(
         val name: String,
         val regex: String?,
         val input: String?,
@@ -57,8 +56,8 @@ internal class RegionAssertionCompositionTest {
 
     @Test
     fun lineAssertionCompositionIncludesSlicedRegions() {
-        Companion.checkGeneratedComposition(mutableListOf<String?>("\n", "a\n", "\u0085a", "a\u0085"), true)
-        Companion.checkGeneratedComposition(mutableListOf<String?>("\r\na"), true)
+        Companion.checkGeneratedComposition(mutableListOf<String>("\n", "a\n", "\u0085a", "a\u0085"), true)
+        Companion.checkGeneratedComposition(mutableListOf<String>("\r\na"), true)
     }
 
     @Test
@@ -83,7 +82,7 @@ internal class RegionAssertionCompositionTest {
             val boundary: Matcher = Pattern.compile("\\b{g}").matcher(EMOJI).region(0, 1)
             boundary.useTransparentBounds(transparent)
             val expected =
-                if (transparent) mutableListOf<String?>("0:0", "false") else mutableListOf<String?>(
+                if (transparent) mutableListOf<String>("0:0", "false") else mutableListOf<String>(
                     "0:0",
                     "1:1",
                     "false"
@@ -109,7 +108,7 @@ internal class RegionAssertionCompositionTest {
 
     @Test
     fun unreachableGraphemeBranchPreservesOpaqueSplitCrlfAnchorContext() {
-        for (regex in mutableListOf<String?>("(.)?$", "(?:(.)?$)|(?:\\Xz)", "(?:\\Xz)|(?:(.)?$)")) {
+        for (regex in mutableListOf<String>("(.)?$", "(?:(.)?$)|(?:\\Xz)", "(?:\\Xz)|(?:(.)?$)")) {
             val matcher = Pattern.compile(regex).matcher("\r\na").region(1, 2)
             Assertions.assertThat(matcher.lookingAt()).`as`(regex).isTrue()
             Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -119,7 +118,7 @@ internal class RegionAssertionCompositionTest {
 
     @Test
     fun unreachableGraphemeBranchPreservesMultilineAnchorAtTheRegionEnd() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "[\\s\\S](?m:^)",
             "(?:[\\s\\S](?m:^))|(?:\\Xz)",
             "(?:\\Xz)|(?:[\\s\\S](?m:^))"
@@ -131,7 +130,7 @@ internal class RegionAssertionCompositionTest {
 
     @Test
     fun unreachableGraphemeBranchPreservesSplitCrlfGraphemeAndLineAssertions() {
-        for (regex in mutableListOf<String?>("(.)?\\b{g}$", "(?:(.)?\\b{g}$)|(?:\\Xz)", "(?:\\Xz)|(?:(.)?\\b{g}$)")) {
+        for (regex in mutableListOf<String>("(.)?\\b{g}$", "(?:(.)?\\b{g}$)|(?:\\Xz)", "(?:\\Xz)|(?:(.)?\\b{g}$)")) {
             val matcher = Pattern.compile(regex).matcher("\r\na").region(1, 2)
             Assertions.assertThat(matcher.lookingAt()).`as`(regex).isTrue()
             Assertions.assertThat(matcher.start()).isEqualTo(1)
@@ -145,8 +144,8 @@ internal class RegionAssertionCompositionTest {
         private const val RI = "\uD83C\uDDE6"
 
         // The fuzzer uses the same atom/assertion/atom grammar, with generated inputs and regions.
-        private val LEFT = mutableListOf<String?>(".", "(.)?", "(.)*", "(.)+?", "[\\s\\S]", "\\p{Cs}", "\\P{Cs}")
-        private val ASSERTIONS = mutableListOf<String?>(
+        private val LEFT = mutableListOf<String>(".", "(.)?", "(.)*", "(.)+?", "[\\s\\S]", "\\p{Cs}", "\\P{Cs}")
+        private val ASSERTIONS = mutableListOf<String>(
             "\\b",
             "\\B",
             "(?U:\\b)",
@@ -164,8 +163,8 @@ internal class RegionAssertionCompositionTest {
             "(?U:\\b)\\b{g}",
             "\\b{g}\\b{g}"
         )
-        private val RIGHT = mutableListOf<String?>("", ".", "(.)?")
-        private val INPUTS: MutableList<String> = List.of<String?>(
+        private val RIGHT = mutableListOf<String>("", ".", "(.)?")
+        private val INPUTS: MutableList<String> = java.util.List.of<String>(
             "",
             "a",
             EMOJI,
@@ -179,11 +178,12 @@ internal class RegionAssertionCompositionTest {
             " a "
         )
 
+        @JvmStatic
         fun boundaryRules(): Stream<Arguments?>? {
             // These rows have a single possible prefix endpoint, so full matching additionally requires
             // that endpoint to equal the logical region end. -1 means no prefix match.
             val rules =
-                List.of<Rule?>(
+                java.util.List.of<Rule?>(
                     Rule("ordinary split high", ".", EMOJI, 0, 1, true, 1, 1),
                     Rule("ordinary complete pair", ".", EMOJI, 0, 2, true, 2, 2),
                     Rule("ordinary exposed low", ".", EMOJI, 1, 2, true, 2, 2),
@@ -235,7 +235,7 @@ internal class RegionAssertionCompositionTest {
                             val after = appended.matcher(input)
                             val before = prepended.matcher(input)
                             for (start in 0..(if (everyRegion) input.length else 0)) {
-                                for (end in if (everyRegion) start else input.length..input.length) {
+                                for (end in (if (everyRegion) start else input.length)..input.length) {
                                     for (transparent in booleanArrayOf(false, true)) {
                                         for (anchoring in booleanArrayOf(false, true)) {
                                             for (full in booleanArrayOf(false, true)) {
@@ -267,7 +267,7 @@ internal class RegionAssertionCompositionTest {
                                                 configure(expected, start, end, transparent, anchoring)
                                                 configure(after, start, end, transparent, anchoring)
                                                 configure(before, start, end, transparent, anchoring)
-                                                val trace: MutableList<String?> = findTrace(expected, input.length)
+                                                val trace: MutableList<String> = findTrace(expected, input.length)
                                                 Assertions.assertThat<String?>(findTrace(after, input.length))
                                                     .`as`(label(after))
                                                     .isEqualTo(trace)
@@ -329,14 +329,15 @@ internal class RegionAssertionCompositionTest {
             if (matched) {
                 for (group in 0..matcher.groupCount()) {
                     result.add(matcher.start(group).toString() + ":" + matcher.end(group))
+                    // Unmatched optional groups are null, matching java.util.regex.
                     result.add(matcher.group(group))
                 }
             }
             return result
         }
 
-        private fun findTrace(matcher: Matcher, inputLength: Int): MutableList<String?> {
-            val trace: MutableList<String?> = ArrayList<String?>()
+        private fun findTrace(matcher: Matcher, inputLength: Int): MutableList<String> {
+            val trace: MutableList<String> = ArrayList<String>()
             for (step in 0..inputLength + 1) {
                 if (!matcher.find()) {
                     trace.add("false")

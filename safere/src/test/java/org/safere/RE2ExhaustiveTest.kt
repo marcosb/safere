@@ -12,7 +12,6 @@ import java.io.InputStreamReader
 import java.io.Reader
 import java.lang.AutoCloseable
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.zip.GZIPInputStream
 import kotlin.math.min
@@ -43,38 +42,38 @@ internal class RE2ExhaustiveTest {
     @DisabledForCrosscheck("checks raw engines and the approved earlier-capture oracle boundary")
     fun earlierCaptureAllowanceRequiresIndependentReferenceAgreement() {
         val pattern = "(?:(?:(a){1,}){2})"
-        val jdk = Pattern.compile(pattern).matcher("aaa")
+        val jdk = java.util.regex.Pattern.compile(pattern).matcher("aaa")
         Assertions.assertThat(jdk.matches()).isTrue()
         val jdkRetainsEarlierCapture = jdk.start(1) == 1 && jdk.end(1) == 2
         Assertions.assertThat(
             hasKnownJdkEarlierCaptureDivergence(
-                pattern, "aaa", "matches", arrayOf<IntArray?>(intArrayOf(0, 3), intArrayOf(2, 3))
+                pattern, "aaa", "matches", arrayOf<IntArray>(intArrayOf(0, 3), intArrayOf(2, 3))
             )
         )
             .isEqualTo(jdkRetainsEarlierCapture)
         // Neither an incorrect reference capture nor an incorrect whole-match span can be exempted.
         Assertions.assertThat(
             hasKnownJdkEarlierCaptureDivergence(
-                pattern, "aaa", "matches", arrayOf<IntArray?>(intArrayOf(0, 3), intArrayOf(1, 2))
+                pattern, "aaa", "matches", arrayOf<IntArray>(intArrayOf(0, 3), intArrayOf(1, 2))
             )
         )
             .isFalse()
         Assertions.assertThat(
             hasKnownJdkEarlierCaptureDivergence(
-                pattern, "aaa", "matches", arrayOf<IntArray?>(intArrayOf(0, 2), intArrayOf(2, 3))
+                pattern, "aaa", "matches", arrayOf<IntArray>(intArrayOf(0, 2), intArrayOf(2, 3))
             )
         )
             .isFalse()
         Assertions.assertThat(hasKnownJdkEarlierCaptureDivergence(pattern, "aaa", "matches", null)).isFalse()
         Assertions.assertThat(
             hasKnownJdkEarlierCaptureDivergence(
-                "(a){2}", "aa", "matches", arrayOf<IntArray?>(intArrayOf(0, 2), intArrayOf(1, 2))
+                "(a){2}", "aa", "matches", arrayOf<IntArray>(intArrayOf(0, 2), intArrayOf(1, 2))
             )
         )
             .isFalse()
         Assertions.assertThat(
             hasKnownJdkEarlierCaptureDivergence(
-                "(a?){2}", "", "matches", arrayOf<IntArray?>(intArrayOf(0, 0), intArrayOf(0, 0))
+                "(a?){2}", "", "matches", arrayOf<IntArray>(intArrayOf(0, 0), intArrayOf(0, 0))
             )
         )
             .isFalse()
@@ -88,7 +87,7 @@ internal class RE2ExhaustiveTest {
 
         var totalTests = 0
         var skipped = 0
-        val failures: MutableList<String?> = ArrayList<String?>()
+        val failures: MutableList<String> = ArrayList<String>()
 
         UnixLineReader(
             InputStreamReader(GZIPInputStream(`is`), StandardCharsets.UTF_8)
@@ -180,8 +179,8 @@ internal class RE2ExhaustiveTest {
                             continue
                         }
 
-                        val fullExpected: Array<IntArray?>? = parseResult(fields[0]!!)
-                        val findExpected: Array<IntArray?>? = parseResult(fields[1]!!)
+                        val fullExpected: Array<IntArray>? = parseResult(fields[0]!!)
+                        val findExpected: Array<IntArray>? = parseResult(fields[1]!!)
 
                         // Test matches() against field 0 (full match, first-match semantics)
                         totalTests++
@@ -337,7 +336,7 @@ internal class RE2ExhaustiveTest {
             pattern: String, text: String, method: String, safeReResult: Boolean, safeReMatcher: Matcher
         ): Boolean {
             try {
-                val jdkPat = Pattern.compile(pattern)
+                val jdkPat = java.util.regex.Pattern.compile(pattern)
                 val jdkMatcher = jdkPat.matcher(text)
                 val jdkResult = if (method == "matches") jdkMatcher.matches() else jdkMatcher.find()
                 if (jdkResult != safeReResult) {
@@ -361,22 +360,22 @@ internal class RE2ExhaustiveTest {
          */
         private fun checkGroupsOrJdk(
             m: Matcher,
-            expected: Array<IntArray?>,
+            expected: Array<IntArray>,
             text: String,
             pattern: String,
             method: String,
-            failures: MutableList<String?>
+            failures: MutableList<String>
         ) {
             val numGroups = min(expected.size, m.groupCount() + 1)
             for (g in 0..<numGroups) {
                 val expectStart: Int
                 val expectEnd: Int
-                if (expected[g]!![0] == -1 && expected[g]!![1] == -1) {
+                if (expected[g][0] == -1 && expected[g][1] == -1) {
                     expectStart = -1
                     expectEnd = -1
                 } else {
-                    expectStart = utf8ByteToCharOffset(text, expected[g]!![0])
-                    expectEnd = utf8ByteToCharOffset(text, expected[g]!![1])
+                    expectStart = utf8ByteToCharOffset(text, expected[g][0])
+                    expectEnd = utf8ByteToCharOffset(text, expected[g][1])
                 }
 
                 val actualStart = m.start(g)
@@ -410,7 +409,7 @@ internal class RE2ExhaustiveTest {
             pattern: String, text: String, method: String, safeReMatcher: Matcher
         ): Boolean {
             try {
-                val jdkPat = Pattern.compile(pattern)
+                val jdkPat = java.util.regex.Pattern.compile(pattern)
                 val jdkMatcher = jdkPat.matcher(text)
                 val jdkResult = if (method == "matches") jdkMatcher.matches() else jdkMatcher.find()
                 if (!jdkResult) {
@@ -434,7 +433,7 @@ internal class RE2ExhaustiveTest {
             get() = java.lang.Boolean.getBoolean("org.safere.crosscheck.generatedTests")
 
         private fun isGeneratedEarlierCaptureDivergence(
-            exception: Exception, pattern: String, text: String, method: String, expected: Array<IntArray?>?
+            exception: Exception, pattern: String, text: String, method: String, expected: Array<IntArray>?
         ): Boolean {
             // This source also compiles in the library module, which cannot depend on the facade module.
             return isGeneratedCrosscheckRun
@@ -449,19 +448,19 @@ internal class RE2ExhaustiveTest {
          * other capture differences remain failures.
          */
         private fun hasKnownJdkEarlierCaptureDivergence(
-            pattern: String, text: String, method: String, expected: Array<IntArray?>?
+            pattern: String, text: String, method: String, expected: Array<IntArray>?
         ): Boolean {
             if (expected == null) {
                 return false
             }
             try {
                 val safeRePattern = org.safere.Pattern.compile(pattern)
-                val features = safeRePattern.analysis().features
+                val features = safeRePattern.analysis().features!!
                 if (!features.contains(PatternFeature.BOUNDED_REPEAT) || !features.contains(PatternFeature.CAPTURES_IN_QUANTIFIER)) {
                     return false
                 }
                 val safeReMatcher = safeRePattern.matcher(text)
-                val jdkMatcher = Pattern.compile(pattern).matcher(text)
+                val jdkMatcher = java.util.regex.Pattern.compile(pattern).matcher(text)
                 val safeReMatched =
                     if (method == "matches") safeReMatcher.matches() else safeReMatcher.find()
                 val jdkMatched = if (method == "matches") jdkMatcher.matches() else jdkMatcher.find()
@@ -472,8 +471,8 @@ internal class RE2ExhaustiveTest {
                 for (g in expected.indices) {
                     val start = safeReMatcher.start(g)
                     val end = safeReMatcher.end(g)
-                    if (start != utf8ByteToCharOffset(text, expected[g]!![0])
-                        || end != utf8ByteToCharOffset(text, expected[g]!![1])
+                    if (start != utf8ByteToCharOffset(text, expected[g][0])
+                        || end != utf8ByteToCharOffset(text, expected[g][1])
                     ) {
                         return false
                     }
@@ -505,7 +504,7 @@ internal class RE2ExhaustiveTest {
 
             try {
                 val safeReMatcher = org.safere.Pattern.compile(pattern).matcher(text)
-                val jdkMatcher = Pattern.compile(pattern).matcher(text)
+                val jdkMatcher = java.util.regex.Pattern.compile(pattern).matcher(text)
                 val safeReFound = safeReMatcher.find()
                 val jdkFound = jdkMatcher.find()
                 if (safeReFound != jdkFound || !safeReFound) {
@@ -550,22 +549,22 @@ internal class RE2ExhaustiveTest {
          * 
          * Returns `null` for `"-"` (no match). Each `int[2]` pair is `[start, end]` as UTF-8 byte offsets. Unmatched subgroups appear as `[-1, -1]`.
          */
-        fun parseResult(field: String): Array<IntArray?>? {
+        fun parseResult(field: String): Array<IntArray>? {
             var field = field
             field = field.trim { it <= ' ' }
             if (field == "-") {
                 return null
             }
             val tokens: Array<String?> = field.split("\\s+".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            val result = Array<IntArray?>(tokens.size) { IntArray(2) }
+            val result = Array<IntArray>(tokens.size) { IntArray(2) }
             for (i in tokens.indices) {
                 if (tokens[i] == "-") {
-                    result[i]!![0] = -1
-                    result[i]!![1] = -1
+                    result[i][0] = -1
+                    result[i][1] = -1
                 } else {
                     val hyphen = tokens[i]!!.indexOf('-')
-                    result[i]!![0] = tokens[i]!!.substring(0, hyphen).toInt()
-                    result[i]!![1] = tokens[i]!!.substring(hyphen + 1).toInt()
+                    result[i][0] = tokens[i]!!.substring(0, hyphen).toInt()
+                    result[i][1] = tokens[i]!!.substring(hyphen + 1).toInt()
                 }
             }
             return result
@@ -610,7 +609,7 @@ internal class RE2ExhaustiveTest {
                 when (val next = s.get(++i)) {
                     'a' -> sb.append('\u0007')
                     'b' -> sb.append('\b')
-                    'f' -> sb.append('\f')
+                    'f' -> sb.append('\u000C')
                     'n' -> sb.append('\n')
                     'r' -> sb.append('\r')
                     't' -> sb.append('\t')

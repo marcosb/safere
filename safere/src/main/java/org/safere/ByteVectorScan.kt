@@ -19,6 +19,7 @@ internal object ByteVectorScan {
         return indexOfAsciiClass(SPECIES, bytes, offset, length, ranges, start)
     }
 
+    @JvmStatic
     fun indexOfAsciiClass(
         species: VectorSpecies<Byte?>, bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int
     ): Int {
@@ -175,6 +176,7 @@ internal object ByteVectorScan {
         )
     }
 
+    @JvmStatic
     fun indexOfIgnoreCase(
         species: VectorSpecies<Byte?>,
         bytes: ByteArray,

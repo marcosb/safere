@@ -16,14 +16,9 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import java.util.stream.Stream
-
-()
 import kotlin.collections.mutableListOf
-()
 import kotlin.text.repeat
 import kotlin.text.toByteArray
 import kotlin.text.trim
@@ -31,11 +26,10 @@ import kotlin.text.trim
 /** Tests for [Pattern].  */
 internal class PatternTest {
     private class LiteralCharSequence(private val value: String) : CharSequence {
-        override fun length(): Int {
-            return value.length
-        }
+        override val length: Int
+            get() = value.length
 
-        override fun charAt(index: Int): Char {
+        override fun get(index: Int): Char {
             return value.get(index)
         }
 
@@ -251,14 +245,14 @@ internal class PatternTest {
 
         @Test
         fun canonEqAloneThrows() {
-            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("abc", Pattern.CANON_EQ) })
+            Assertions.assertThatThrownBy(ThrowingCallable { Pattern.compile("abc", java.util.regex.Pattern.CANON_EQ) })
                 .isInstanceOf(IllegalArgumentException::class.java)
                 .hasMessageContaining("CANON_EQ")
         }
 
         @Test
         fun canonEqCombinedWithSupportedFlagsThrows() {
-            val flags = Pattern.CANON_EQ or org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.DOTALL
+            val flags = java.util.regex.Pattern.CANON_EQ or org.safere.Pattern.CASE_INSENSITIVE or org.safere.Pattern.DOTALL
             Assertions.assertThatThrownBy(ThrowingCallable { org.safere.Pattern.compile("abc", flags) })
                 .isInstanceOf(IllegalArgumentException::class.java)
                 .hasMessageContaining("CANON_EQ")
@@ -578,7 +572,8 @@ internal class PatternTest {
         @DisplayName("namedGroups() returns an unmodifiable map")
         fun namedGroupsUnmodifiable() {
             val p = org.safere.Pattern.compile("(?<user>\\w+)@(?<host>\\w+)")
-            Assertions.assertThatThrownBy(ThrowingCallable { p.namedGroups().put("foo", 99) })
+            Assertions.assertThatThrownBy(
+                    ThrowingCallable { (p.namedGroups() as MutableMap<String, Int>).put("foo", 99) })
                 .isInstanceOf(UnsupportedOperationException::class.java)
         }
 
@@ -639,7 +634,7 @@ internal class PatternTest {
             val p = org.safere.Pattern.compile("-")
             val parts = p.split("2025-03-17")
             Assertions.assertThat<String?>(parts).containsExactly("2025", "03", "17")
-            Assertions.assertThat(String.join("/", *parts)).isEqualTo("2025/03/17")
+            Assertions.assertThat(java.lang.String.join("/", *parts)).isEqualTo("2025/03/17")
         }
 
         @Test
@@ -722,17 +717,17 @@ internal class PatternTest {
             val text = "\na\n"
             val safePattern = org.safere.Pattern.compile("^.*$", org.safere.Pattern.MULTILINE)
             val jdkPattern =
-                Pattern.compile("^.*$", org.safere.Pattern.MULTILINE)
+                java.util.regex.Pattern.compile("^.*$", org.safere.Pattern.MULTILINE)
 
             val safeMatcher = safePattern.matcher(text)
             val jdkMatcher = jdkPattern.matcher(text)
 
-            val safeMatches: MutableList<String?> = ArrayList<String?>()
+            val safeMatches: MutableList<String> = ArrayList<String>()
             while (safeMatcher.find()) {
                 safeMatches.add("[" + safeMatcher.start() + "," + safeMatcher.end() + ")")
             }
 
-            val jdkMatches: MutableList<String?> = ArrayList<String?>()
+            val jdkMatches: MutableList<String> = ArrayList<String>()
             while (jdkMatcher.find()) {
                 jdkMatches.add("[" + jdkMatcher.start() + "," + jdkMatcher.end() + ")")
             }
@@ -786,7 +781,7 @@ internal class PatternTest {
             val m = p.matcher(header)
             Assertions.assertThat(m.find()).isTrue()
             // . now excludes all line terminators including \r (matching JDK behavior).
-            Assertions.assertThat(m.group(1).trim { it <= ' ' }).isEqualTo("abc123")
+            Assertions.assertThat(m.group(1)!!.trim { it <= ' ' }).isEqualTo("abc123")
         }
 
         @Test
@@ -929,7 +924,7 @@ internal class PatternTest {
 
     @Nested
     @DisplayName("quote() round-trip (ported from RE2/J RE2QuoteMetaTest)")
-    internal inner class QuoteRoundTrip {
+    internal class QuoteRoundTrip {
         @ParameterizedTest(name = "quote(\"{0}\") replaceAll round-trip")
         @MethodSource("quoteMetaCases")
         fun quoteAndReplace(metachar: String, source: String?, expected: String?) {
@@ -940,6 +935,7 @@ internal class PatternTest {
         }
 
         companion object {
+            @JvmStatic
             fun quoteMetaCases(): Stream<Arguments?> {
                 return Stream.of<Arguments?>(
                     Arguments.of("foo", "abcfoodef", "abcxyzdef"),
@@ -1062,7 +1058,7 @@ internal class PatternTest {
         fun largeCountedNullableSubexpressionsCompileLikeJdk() {
             val regex = "(?:" + "a?".repeat(120) + "){900}"
 
-            Assertions.assertThatCode(ThrowingCallable { Pattern.compile(regex) }).doesNotThrowAnyException()
+            Assertions.assertThatCode(ThrowingCallable { java.util.regex.Pattern.compile(regex) }).doesNotThrowAnyException()
             Assertions.assertThatCode(ThrowingCallable { org.safere.Pattern.compile(regex) }).doesNotThrowAnyException()
         }
     }
@@ -1154,7 +1150,7 @@ internal class PatternTest {
         @Test
         @DisplayName("case-insensitive end-anchored suffix rejects mismatched inputs")
         fun caseInsensitiveEndAnchoredSuffixRejectsMismatchedInputs() {
-            for (regex in mutableListOf<String?>("(?i).*\\.json$", ".*(?i:\\.json)$", "(?i).*\\.json\\z")) {
+            for (regex in mutableListOf<String>("(?i).*\\.json$", ".*(?i:\\.json)$", "(?i).*\\.json\\z")) {
                 val p = org.safere.Pattern.compile(regex)
 
                 Assertions.assertThat(p.matcher("config.json").matches()).isTrue()
@@ -1175,7 +1171,7 @@ internal class PatternTest {
         @Test
         @DisplayName("dollar and \\Z anchors match all supported trailing line terminators")
         fun dollarAndZAnchorsMatchAllTrailingLineTerminators() {
-            for (regex in mutableListOf<String?>(".*\\.json$", ".*\\.json\\Z")) {
+            for (regex in mutableListOf<String>(".*\\.json$", ".*\\.json\\Z")) {
                 val p = org.safere.Pattern.compile(regex)
                 val terminators = arrayOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")
                 for (term in terminators) {
@@ -1234,7 +1230,7 @@ internal class PatternTest {
             val input = "config.json" + terminator
             val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
 
-            for (anchor in mutableListOf<String?>("$", "\\Z")) {
+            for (anchor in mutableListOf<String>("$", "\\Z")) {
                 val suffix = org.safere.Pattern.compile(".*\\.json" + anchor)
                 val characterClass = org.safere.Pattern.compile(".*[0-9]" + anchor)
 
@@ -1261,7 +1257,7 @@ internal class PatternTest {
             val input = "config.json" + terminator
             val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
 
-            for (anchor in mutableListOf<String?>("$", "\\Z")) {
+            for (anchor in mutableListOf<String>("$", "\\Z")) {
                 val suffix = org.safere.Pattern.compile(".*\\.json" + anchor, org.safere.Pattern.UNIX_LINES)
 
                 Assertions.assertThat(suffix.matcher(input).find()).isFalse()
@@ -1272,7 +1268,7 @@ internal class PatternTest {
         @Test
         @DisplayName("end-anchored character class rejects inputs not ending with class")
         fun endAnchoredCharClassRejectsMismatchedInputs() {
-            for (regex in mutableListOf<String?>(".*[0-9]$", ".*[0-9]\\Z")) {
+            for (regex in mutableListOf<String>(".*[0-9]$", ".*[0-9]\\Z")) {
                 val p = org.safere.Pattern.compile(regex)
 
                 Assertions.assertThat(p.matcher("item123").find()).isTrue()
@@ -1399,7 +1395,7 @@ internal class PatternTest {
     @DisplayName("find(Utf8Input) agrees with the JDK for patterns its forward DFA can't answer")
     fun utf8FindWithoutForwardDfaAgreesWithJdk() {
         val prose = "fine food offer ".repeat(200)
-        for (regex in mutableListOf<String?>( // End anchors.
+        for (regex in mutableListOf<String>( // End anchors.
             "(foo|fax)$",
             "(?i)\\s*(foo|fax)$",
             "\\s*(foo|fax)\\z",
@@ -1409,7 +1405,7 @@ internal class PatternTest {
             "(a?)+fax",  // Grapheme semantics.
             "\\X(foo|fax)"
         )) {
-            for (text in List.of<String>(
+            for (text in java.util.List.of<String>(
                 "",
                 "foo",
                 prose,
@@ -1418,7 +1414,7 @@ internal class PatternTest {
                 prose + "fax\n",
                 "foo" + prose
             )) {
-                val expected = Pattern.compile(regex).matcher(text).find()
+                val expected = java.util.regex.Pattern.compile(regex).matcher(text).find()
                 Assertions.assertThat(
                     org.safere.Pattern.compile(regex).find(
                         Utf8Input.trusted(

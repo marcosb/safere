@@ -64,12 +64,12 @@ internal class StringLiteralSearchTest {
         Assertions.assertThat(offset).isNotEqualTo(StringLiteralSearch.NO_ANCHOR)
         val unit = StringLiteralSearch.anchorAt(literal, offset).toString() + "y".repeat(45)
         val noise = unit.repeat(64)
-        Assertions.assertThat(noise.size).isGreaterThan(StringLiteralSearch.MIN_ANCHORED_WINDOW)
+        Assertions.assertThat(noise.length).isGreaterThan(StringLiteralSearch.MIN_ANCHORED_WINDOW)
         Assertions.assertThat(anchored(noise, literal, 0)).isEqualTo(-1)
-        Assertions.assertThat(anchored(noise + literal, literal, 0)).isEqualTo(noise.size)
+        Assertions.assertThat(anchored(noise + literal, literal, 0)).isEqualTo(noise.length)
         val surrounded = noise + literal + noise
         var from = 0
-        while (from < surrounded.size) {
+        while (from < surrounded.length) {
             assertAgreesAt(surrounded, literal, from)
             from += 137
         }
@@ -280,7 +280,7 @@ internal class StringLiteralSearchTest {
         private fun anchored(text: String, literal: String?, fromIndex: Int): Int {
             val offset = StringLiteralSearch.anchorOffset(literal)
             return StringLiteralSearch.indexOf(
-                text, literal, offset, StringLiteralSearch.anchorAt(literal, offset), fromIndex
+                text, literal!!, offset, StringLiteralSearch.anchorAt(literal!!, offset), fromIndex
             )
         }
 
@@ -307,10 +307,10 @@ internal class StringLiteralSearchTest {
         private fun planned(text: String?, literal: String?, fromIndex: Int): Int {
             val offset = StringLiteralSearch.anchorOffset(literal)
             return StringLiteralSearch.indexOfPlanned(
-                text,
-                literal,
+                text!!,
+                literal!!,
                 offset,
-                StringLiteralSearch.anchorAt(literal, offset),
+                StringLiteralSearch.anchorAt(literal!!, offset),
                 StringLiteralSearch.singleAsciiChar(literal),
                 fromIndex
             )

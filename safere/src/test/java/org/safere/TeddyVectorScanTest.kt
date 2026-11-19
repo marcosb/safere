@@ -27,10 +27,10 @@ internal class TeddyVectorScanTest {
                     val bytes = text.toByteArray(StandardCharsets.US_ASCII)
                     for (start in intArrayOf(0, 1, 31, 64, 2049, bytes.size)) {
                         Assertions.assertThat(
-                            TeddyVectorScan.indexOfTeddyUtf8(bytes, 0, bytes.size, models[stage], start)
+                            TeddyVectorScan.indexOfTeddyUtf8(bytes, 0, bytes.size, models[stage]!!, start)
                         )
                             .`as`("stage %s, round %s, start %s", stage + 1, round, start)
-                            .isEqualTo(Companion.expected(text, LITERALS[stage], start))
+                            .isEqualTo(Companion.expected(text, LITERALS[stage]!!, start))
                     }
                 }
             }
@@ -55,12 +55,12 @@ internal class TeddyVectorScanTest {
                     System.arraycopy(literal, 0, bytes, 7 + length, literal.size)
                     val window = String(bytes, 7, length, StandardCharsets.US_ASCII)
                     for (start in intArrayOf(-1, 0, position, position + 1, length)) {
-                        Assertions.assertThat(TeddyVectorScan.indexOfTeddyUtf8(bytes, 7, length, models[stage], start))
+                        Assertions.assertThat(TeddyVectorScan.indexOfTeddyUtf8(bytes, 7, length, models[stage]!!, start))
                             .`as`(
                                 "stage %s, length %s, position %s, start %s",
                                 stage + 1, length, position, start
                             )
-                            .isEqualTo(Companion.expected(window, LITERALS[stage], start))
+                            .isEqualTo(Companion.expected(window, LITERALS[stage]!!, start))
                     }
                 }
             }
@@ -85,10 +85,10 @@ internal class TeddyVectorScanTest {
             return models
         }
 
-        private fun expected(text: String, literals: Array<String>, start: Int): Int {
+        private fun expected(text: String, literals: Array<String?>, start: Int): Int {
             var first = -1
             for (literal in literals) {
-                val found = text.indexOfBounded(literal, max(0, start))
+                val found = text.indexOf(literal!!, max(0, start))
                 if (found >= 0 && (first < 0 || found < first)) {
                     first = found
                 }

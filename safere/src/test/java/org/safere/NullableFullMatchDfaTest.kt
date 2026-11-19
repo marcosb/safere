@@ -13,8 +13,6 @@ import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.Isolated
 import java.nio.charset.StandardCharsets
-import java.util.List
-
 /** Full-match recognition can defer the ordered captures of progress-bearing programs.  */
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
@@ -27,7 +25,7 @@ internal class NullableFullMatchDfaTest {
 
     @Test
     fun successfulFullMatchesUseDfaBeforeAnyCaptureDemand() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             "(?:a?){0,32}b",
             "(?:a?){0,1000}b",
             "(?:(?<empty>)|a){0,32}b",
@@ -36,7 +34,7 @@ internal class NullableFullMatchDfaTest {
         )) {
             val input =
                 if (regex!!.contains("{2,3}")) "aab" else "a".repeat(if (regex.contains("1000")) 512 else 16) + "b"
-            for (utf8 in mutableListOf<Boolean?>(false, true)) {
+            for (utf8 in mutableListOf<Boolean>(false, true)) {
                 val pattern = Pattern.compile(regex)
                 Assertions.assertThat(pattern.prog().numLoopRegs()).isPositive()
                 Assertions.assertThat<PatternCapability?>(pattern.analysis().capabilities)
@@ -63,7 +61,7 @@ internal class NullableFullMatchDfaTest {
                         ThrowingConsumer { event: OperationDiagnostics? ->
                             Assertions.assertThat<MatchStrategy?>(event!!.boundaryStrategy).`as`(regex)
                                 .isEqualTo(MatchStrategy.DFA)
-                            Assertions.assertThat<PatternCapability?>(event.pattern.analysis.capabilities)
+                            Assertions.assertThat<PatternCapability?>(event.pattern!!.analysis!!.capabilities)
                                 .contains(PatternCapability.DFA_BOUNDARY_SEARCH)
                             Assertions.assertThat<MatchStrategy?>(event.captureStrategy).isEqualTo(MatchStrategy.NONE)
                             Assertions.assertThat(event.forwardDfaSearchCount).isEqualTo(1)
@@ -84,7 +82,7 @@ internal class NullableFullMatchDfaTest {
     fun staticDfaCapabilitiesRespectEngineAndGraphemeEligibility() {
         val disabled = Pattern.compile("(?:a?){0,32}b", 0, engineOptions(false))
         val grapheme = Pattern.compile("(?:\\X?){0,2}b")
-        for (pattern in List.of<Pattern>(disabled, grapheme)) {
+        for (pattern in java.util.List.of<Pattern>(disabled, grapheme)) {
             Assertions.assertThat<PatternCapability?>(pattern.analysis().capabilities)
                 .contains(PatternCapability.NFA)
                 .doesNotContain(
@@ -96,8 +94,8 @@ internal class NullableFullMatchDfaTest {
     @Test
     fun fullMatchRecognitionAndDeferredCapturesAgreeWithTheExactEngine() {
         val inputs: MutableList<String> =
-            mutableListOf<String?>("", "a", "b", "aa", "ab", "aaa", "aab", "abb", "a\n", "é", "éb", "😀", "😀b")
-        for (operand in mutableListOf<String?>(
+            mutableListOf<String>("", "a", "b", "aa", "ab", "aaa", "aab", "abb", "a\n", "é", "éb", "😀", "😀b")
+        for (operand in mutableListOf<String>(
             "a?",
             "()|a",
             "b?|a",
@@ -109,10 +107,10 @@ internal class NullableFullMatchDfaTest {
             "é?",
             "😀|"
         )) {
-            for (minimum in mutableListOf<Int?>(0, 1, 2)) {
-                for (maximum in List.of<Int?>(minimum, minimum!! + 1, minimum + 3, -1)) {
-                    for (mode in mutableListOf<String?>("", "?")) {
-                        for (suffix in mutableListOf<String?>("b", "\\z")) {
+            for (minimum in mutableListOf<Int>(0, 1, 2)) {
+                for (maximum in java.util.List.of<Int?>(minimum, minimum!! + 1, minimum + 3, -1)) {
+                    for (mode in mutableListOf<String>("", "?")) {
+                        for (suffix in mutableListOf<String>("b", "\\z")) {
                             val regex =
                                 ("(?:"
                                         + operand
@@ -160,8 +158,8 @@ internal class NullableFullMatchDfaTest {
 
     @Test
     fun deferredFullMatchCapturesKeepTheirPolicyAcrossRegionsAndSnapshots() {
-        for (regex in mutableListOf<String?>("(?:()|a){0,3}b", "(?:()|a){2,3}b", "(a?)*b")) {
-            for (region in mutableListOf<Boolean?>(false, true)) {
+        for (regex in mutableListOf<String>("(?:()|a){0,3}b", "(?:()|a){2,3}b", "(a?)*b")) {
+            for (region in mutableListOf<Boolean>(false, true)) {
                 val optimized = Pattern.compile(regex, 0, engineOptions(true))
                 val exact = Pattern.compile(regex, 0, engineOptions(false))
                 val prefix = if (region) "😀#" else ""
@@ -171,8 +169,8 @@ internal class NullableFullMatchDfaTest {
                 val actualBytes = optimized.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                 val expectedBytes = exact.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                 if (region) {
-                    actual.region(prefix.size, prefix.size + 3)
-                    expected.region(prefix.size, prefix.size + 3)
+                    actual.region(prefix.length, prefix.length + 3)
+                    expected.region(prefix.length, prefix.length + 3)
                     actualBytes.region(
                         prefix.toByteArray(StandardCharsets.UTF_8).size, prefix.toByteArray(
                             StandardCharsets.UTF_8
@@ -207,10 +205,10 @@ internal class NullableFullMatchDfaTest {
 
     @Test
     fun deferredCapturesCannotShortenFullMatchesBeforeFinalTerminators() {
-        for (terminator in mutableListOf<String?>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")) {
-            for (flags in List.of<Int?>(0, Pattern.UNIX_LINES)) {
+        for (terminator in mutableListOf<String>("\n", "\r\n", "\r", "\u0085", "\u2028", "\u2029")) {
+            for (flags in java.util.List.of<Int?>(0, Pattern.UNIX_LINES)) {
                 val regex = "^(a?)*((?:" + Pattern.quote(terminator) + ")??)$"
-                for (region in mutableListOf<Boolean?>(false, true)) {
+                for (region in mutableListOf<Boolean>(false, true)) {
                     val prefix = if (region) "😀#" else ""
                     val input = prefix + "aa" + terminator + (if (region) "!" else "")
                     val pattern = Pattern.compile(regex, flags)
@@ -219,7 +217,7 @@ internal class NullableFullMatchDfaTest {
                         Pattern.compile(regex, flags)
                             .matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
                     if (region) {
-                        matcher.region(prefix.size, prefix.size + 2 + terminator!!.length)
+                        matcher.region(prefix.length, prefix.length + 2 + terminator!!.length)
                         bytes.region(
                             prefix.toByteArray(StandardCharsets.UTF_8).size,
                             prefix.toByteArray(StandardCharsets.UTF_8).size + 2 + terminator.toByteArray(

@@ -8,16 +8,14 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import org.safere.MultiAnchorDescriptor.StartPlan
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.Map
 import java.util.function.Consumer
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("tests internal acceleration controls and compares directly with the JDK")
 internal class FixedOffsetClassAccelerationTest {
     @Test
     fun interiorClassesAccelerateUnselectivePrefixes() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             " [0-9]{4,}",
             "  [0-9]+",
             "( )([0-9]+)",
@@ -52,7 +50,7 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun variableOrNonAsciiPrefixWidthsDoNotProduceFixedOffsets() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             " ?[0-9]+",
             "[a-z]{1,2}[0-9]+",
             "[é😀][0-9]+",
@@ -67,7 +65,7 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun variableLeadingExpansionsDoNotWrapFixedClassOffsets() {
-        for (regex in mutableListOf<String?>("[0-9 ]+ [0-9]{4,}", "[0-9 ]* [0-9]+")) {
+        for (regex in mutableListOf<String>("[0-9 ]+ [0-9]{4,}", "[0-9 ]* [0-9]+")) {
             val pattern = Pattern.compile(regex)
             Assertions.assertThat<StringStartAccelerator?>(pattern.stringStartAccelerator()).`as`(regex).isNull()
             Assertions.assertThat<Utf8StartAccelerator?>(pattern.utf8StartAccelerator()).`as`(regex).isNull()
@@ -79,9 +77,9 @@ internal class FixedOffsetClassAccelerationTest {
     fun unicodeClassesInsideThePrefixPreserveCoordinateWidths() {
         // JDK 26 Pattern specifies concatenation and Unicode character-class membership. A class
         // consuming one code point need not consume one UTF-16 unit or one UTF-8 byte.
-        for (prefix in mutableListOf<String?>(" [é😀]", " [aé]", " [a-zé]", " [é😀]{2}", " (?:[aé]{2})")) {
+        for (prefix in mutableListOf<String>(" [é😀]", " [aé]", " [a-zé]", " [é😀]{2}", " (?:[aé]{2})")) {
             val regex = prefix + "([0-9]+)"
-            for (input in mutableListOf<String?>(" 😀1234 é5678", " aa1234 éé5678", " 😀😀1234 a😀5678")) {
+            for (input in mutableListOf<String>(" 😀1234 é5678", " aa1234 éé5678", " 😀😀1234 a😀5678")) {
                 assertFindSequence(regex, input!!, false)
                 assertFindSequence(regex, "noise é😀".repeat(100) + input, true)
             }
@@ -93,9 +91,9 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun consumingAtomsInsideThePrefixDoNotAcquireZeroWidthOffsets() {
-        for (prefix in mutableListOf<String?>(" .", " .{2}", " \\X")) {
+        for (prefix in mutableListOf<String>(" .", " .{2}", " \\X")) {
             val regex = prefix + "([0-9]+)"
-            for (input in mutableListOf<String?>(" x1234", " 😀1234", " aé1234", " 😀😀1234", " 👩‍🔬1234")) {
+            for (input in mutableListOf<String>(" x1234", " 😀1234", " aé1234", " 😀😀1234", " 👩‍🔬1234")) {
                 assertFindSequence(regex, input!!, false)
             }
             Assertions.assertThat<StartPlan?>(Pattern.compile(regex).startPlan())
@@ -106,7 +104,7 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun findSequencesPreservePriorityCapturesAndUnicodeCoordinates() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             " [0-9]{4,}",
             "e([0-9]+)",
             "(?i:e)([0-9]+)",
@@ -118,8 +116,8 @@ internal class FixedOffsetClassAccelerationTest {
             "\\B ([0-9]+)",
             " ([0-9]+)$"
         )) {
-            for (noise in List.of<String?>("", "words without digits ".repeat(100), "é😀 words ".repeat(100))) {
-                for (suffix in mutableListOf<String?>(
+            for (noise in java.util.List.of<String?>("", "words without digits ".repeat(100), "é😀 words ".repeat(100))) {
+                for (suffix in mutableListOf<String>(
                     "",
                     "123456 12 1234 56789",
                     " 2026😀 12345",
@@ -129,7 +127,7 @@ internal class FixedOffsetClassAccelerationTest {
                     "e12 E345"
                 )) {
                     val input = noise + suffix
-                    for (region in mutableListOf<Boolean?>(false, true)) {
+                    for (region in mutableListOf<Boolean>(false, true)) {
                         assertFindSequence(regex!!, input, region!!)
                     }
                 }
@@ -139,8 +137,8 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun denseFalseCandidatesAndFailedSuffixesPreserveTheLeftmostMatch() {
-        for (regex in mutableListOf<String?>(" ([0-9]{4,})", "[a-z]{2}([0-9]+)Z")) {
-            for (unit in mutableListOf<String?>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
+        for (regex in mutableListOf<String>(" ([0-9]{4,})", "[a-z]{2}([0-9]+)Z")) {
+            for (unit in mutableListOf<String>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
                 assertFindSequence(regex!!, unit!!.repeat(2000) + " aa1234Z 56789", false)
             }
         }
@@ -148,14 +146,14 @@ internal class FixedOffsetClassAccelerationTest {
 
     @Test
     fun denseInteriorClassesPreserveMatchesAfterRareLeadingCharacters() {
-        for (regex in mutableListOf<String?>(
+        for (regex in mutableListOf<String>(
             " ([0-9]{4,})",
             "[a-z]{2}([0-9]+)",
             "[ \\t]{3}([A-F0-9]+)",
             " {32}([0-9]+)"
         )) {
             val digits = "1234567890".repeat(2000)
-            for (tail in List.of<String?>("", " x", " aa1234Z", "   A1234Z", " ".repeat(32) + "12345")) {
+            for (tail in java.util.List.of<String?>("", " x", " aa1234Z", "   A1234Z", " ".repeat(32) + "12345")) {
                 assertFindSequence(regex!!, digits + tail, false)
                 assertFindSequence(regex, "é😀" + digits + tail, true)
             }
@@ -165,8 +163,8 @@ internal class FixedOffsetClassAccelerationTest {
     @Test
     fun replacementsUseTheSameCapturesAndMatchSequence() {
         val input = "é😀 noise ".repeat(200) + " 12 12345 6789"
-        for (regex in mutableListOf<String?>(" ([0-9]{4,})", " ([0-9]{1,3}?)")) {
-            val expected = Pattern.compile(regex).matcher(input).replaceAll("<$1>")
+        for (regex in mutableListOf<String>(" ([0-9]{4,})", " ([0-9]{1,3}?)")) {
+            val expected = java.util.regex.Pattern.compile(regex).matcher(input).replaceAll("<$1>")
             Assertions.assertThat(org.safere.Pattern.compile(regex).matcher(input).replaceAll("<$1>"))
                 .isEqualTo(expected)
         }
@@ -177,7 +175,7 @@ internal class FixedOffsetClassAccelerationTest {
         val input = "😀 1234x 56789"
         for (start in 0..input.length) {
             val safe = org.safere.Pattern.compile(" ([0-9]{4,})").matcher(input)
-            val jdk = Pattern.compile(" ([0-9]{4,})").matcher(input)
+            val jdk = java.util.regex.Pattern.compile(" ([0-9]{4,})").matcher(input)
             val matched = jdk.find(start)
             Assertions.assertThat(safe.find(start)).isEqualTo(matched)
             if (matched) {
@@ -212,7 +210,7 @@ internal class FixedOffsetClassAccelerationTest {
             val pattern = org.safere.Pattern.compile(regex)
             val safe = pattern.matcher(input)
             val unaccelerated = org.safere.Pattern.compile(regex, 0, WITHOUT_ACCELERATION).matcher(input)
-            val jdk = Pattern.compile(regex).matcher(input)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
             val padded = ("pad" + input + "tail").toByteArray(StandardCharsets.UTF_8)
             val bytes = Utf8Input.trusted(padded, 3, input.toByteArray(StandardCharsets.UTF_8).size)
             val utf8 = pattern.matcher(bytes)
@@ -247,7 +245,7 @@ internal class FixedOffsetClassAccelerationTest {
             }
             if (!region) {
                 Assertions.assertThat(pattern.find(bytes))
-                    .isEqualTo(Pattern.compile(regex).matcher(input).find())
+                    .isEqualTo(java.util.regex.Pattern.compile(regex).matcher(input).find())
             }
         }
 

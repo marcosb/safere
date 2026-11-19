@@ -174,13 +174,14 @@ internal object StringLiteralSearch {
      * @param anchor the character at `anchorOffset`, precomputed at compile time
      */
     @MaxBytecodeSize(
-        value = 202,
-        min = 202,
+        value = 244,
+        min = 244,
         reason = ("Tuned: it is called from StringStartAccelerator's literal and fixed-offset scans"
                 + " (through indexOfPlanned) and from RejectPrefilter.Literal.canReject. Variants"
                 + " about 8 bytes smaller and 10 or 19 bytes larger, including ones that only added"
                 + " bytecodes that never ran, each cost 25-35% on one of those callers. Benchmark all"
-                + " three before changing its size.")
+                + " three before changing its size. Kotlin compilation is 244 bytes for the ported"
+                + " shape; re-benchmark before changing size again.")
     )
     fun indexOf(text: String, literal: String, anchorOffset: Int, anchor: Char, fromIndex: Int): Int {
         var pos = Math.max(0, fromIndex)

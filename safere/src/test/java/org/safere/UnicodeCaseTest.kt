@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 /**
  * Tests for [Pattern.UNICODE_CASE] flag behavior.
@@ -199,7 +198,7 @@ internal class UnicodeCaseTest {
         // Under UNICODE_CASE, I and i also match U+0130 and U+0131, which the simple-fold cycle used by
         // case-insensitive literal search does not visit.
         val flags = Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
-        Assertions.assertThat(Pattern.compile(regex, flags).matcher(input).find()).isTrue()
+        Assertions.assertThat(java.util.regex.Pattern.compile(regex, flags).matcher(input).find()).isTrue()
 
         val pattern = org.safere.Pattern.compile(regex, flags)
         val matcher = pattern.matcher(input)

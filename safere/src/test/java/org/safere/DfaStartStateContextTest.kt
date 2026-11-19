@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 /** DFA start states memoized by word context must give the same results as the NFA.  */
 @DisabledForCrosscheck("compares SafeRE engine paths through package-private EnginePathOptions")
@@ -41,8 +40,8 @@ internal class DfaStartStateContextTest {
     )
     fun wordAssertionsAfterSplitSurrogateCursorsMatchInputContext(regex: String) {
         val pattern = Pattern.compile(regex)
-        val jdk = Pattern.compile(regex)
-        for (input in mutableListOf<String?>(
+        val jdk = java.util.regex.Pattern.compile(regex)
+        for (input in mutableListOf<String>(
             "\uD801\uDC00b",
             "\uD801\uDC00",
             "\uDC00b",
@@ -58,7 +57,7 @@ internal class DfaStartStateContextTest {
         )) {
             for (from in 0..input!!.length) {
                 val expected = jdk.matcher(input)
-                val bounds: MutableList<String?> = ArrayList<String?>()
+                val bounds: MutableList<String> = ArrayList<String>()
                 var found = expected.find(from)
                 while (found) {
                     bounds.add(expected.start().toString() + ":" + expected.end())
@@ -72,7 +71,7 @@ internal class DfaStartStateContextTest {
     }
 
     companion object {
-        private val INPUTS: MutableList<String> = mutableListOf<String?>(
+        private val INPUTS: MutableList<String> = mutableListOf<String>(
             "foo bar_baz foo",
             "éfoo foo-é föo_",
             "x\u00DFfoo\u00DF foo",
@@ -89,8 +88,8 @@ internal class DfaStartStateContextTest {
             ""
         )
 
-        private fun trace(matcher: org.safere.Matcher, from: Int): MutableList<String?> {
-            val out: MutableList<String?> = ArrayList<String?>()
+        private fun trace(matcher: org.safere.Matcher, from: Int): MutableList<String> {
+            val out: MutableList<String> = ArrayList<String>()
             var found = matcher.find(from)
             while (found) {
                 out.add(matcher.start().toString() + ":" + matcher.end())
@@ -99,8 +98,8 @@ internal class DfaStartStateContextTest {
             return out
         }
 
-        private fun trace(matcher: Utf8Matcher): MutableList<String?> {
-            val out: MutableList<String?> = ArrayList<String?>()
+        private fun trace(matcher: Utf8Matcher): MutableList<String> {
+            val out: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
                 out.add(matcher.start().toString() + ":" + matcher.end())
             }

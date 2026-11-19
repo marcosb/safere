@@ -15,9 +15,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.function.Function
-import java.util.regex.Pattern
 
 internal class Utf8ReplacementTest {
     @ParameterizedTest
@@ -37,12 +35,12 @@ internal class Utf8ReplacementTest {
         val literal = ranges.get(1)
         Assertions.assertThat(literal.bytes()).isSameAs(bytes)
         Assertions.assertThat(literal.offset()).isEqualTo(6)
-        Assertions.assertThat(literal.length).isEqualTo(text.toByteArray(StandardCharsets.UTF_8).size)
+        Assertions.assertThat(literal.length()).isEqualTo(text.toByteArray(StandardCharsets.UTF_8).size)
     }
 
     @Test
     fun trustedLiteralReplacementsPreserveUnicodeAndMalformedDecoding() {
-        for (bytes in List.of<ByteArray?>(
+        for (bytes in java.util.List.of<ByteArray?>(
             "plain".toByteArray(StandardCharsets.UTF_8),
             "前😀後".toByteArray(StandardCharsets.UTF_8),
             byteArrayOf('x'.code.toByte(), 0x80.toByte(), 'y'.code.toByte())
@@ -86,7 +84,7 @@ internal class Utf8ReplacementTest {
             val source: String = testCase[1]!!
             val replacement: String = testCase[2]!!
             val matcher: Utf8Matcher = matcher(regex, source)
-            val jdk = Pattern.compile(regex).matcher(source)
+            val jdk = java.util.regex.Pattern.compile(regex).matcher(source)
             val expected = if (all) jdk.replaceAll(replacement) else jdk.replaceFirst(replacement)
             val sink = CollectingSink()
 
@@ -156,7 +154,7 @@ internal class Utf8ReplacementTest {
     @Test
     @DisabledForCrosscheck("SafeRE intentionally invalidates match state after terminal empty matches")
     fun replaceAllInvalidatesTerminalEmptyMatch() {
-        for (source in mutableListOf<String?>("", "é😀")) {
+        for (source in mutableListOf<String>("", "é😀")) {
             val matcher: Utf8Matcher = matcher("", source!!)
 
             matcher.replaceAll(CollectingSink(), input("x"))
@@ -200,7 +198,7 @@ internal class Utf8ReplacementTest {
             .singleElement()
             .satisfies(ThrowingConsumer { range: Range? -> Assertions.assertThat(range!!.bytes()).isSameAs(source) })
         Assertions.assertThat<Range?>(ranges)
-            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length })
+            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length() })
             .containsExactly(
                 Assertions.tuple(6, 6)
             )
@@ -231,7 +229,7 @@ internal class Utf8ReplacementTest {
         for (groupCount in intArrayOf(0, 1, 2, 8)) {
             val regex = "(".repeat(groupCount) + "b" + ")".repeat(groupCount)
             val invalidGroup = groupCount + 1
-            for (replacement in List.of<String?>(
+            for (replacement in java.util.List.of<String?>(
                 "$" + invalidGroup,
                 "[$" + invalidGroup + "]",
                 "é😀$0-$" + invalidGroup
@@ -258,7 +256,7 @@ internal class Utf8ReplacementTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun invalidNumberedReferencesRemainLazyWithoutMatches(all: Boolean) {
-        for (replacement in mutableListOf<String?>("$1", "[$9]", "é😀$0-$2")) {
+        for (replacement in mutableListOf<String>("$1", "[$9]", "é😀$0-$2")) {
             val sink = CollectingSink()
             replace(matcher("b", "前é😀a後"), sink, input(replacement!!), all)
             Assertions.assertThat(sink.toString()).isEqualTo("前é😀a後")
@@ -269,7 +267,7 @@ internal class Utf8ReplacementTest {
     @EnumSource(ReplacementOperation::class)
     fun numberedReferenceDigitsRespectAvailableGroups(operation: ReplacementOperation) {
         data class Case(val groups: Int, val replacement: String?)
-        for (c in List.of<Case?>(
+        for (c in java.util.List.of<Case?>(
             Case(0, "$00"),
             Case(0, "$01"),
             Case(1, "$10"),
@@ -348,7 +346,7 @@ internal class Utf8ReplacementTest {
 
         Assertions.assertThat(sink.toString()).isEqualTo(if (all) "x[é]y[é]z" else "x[é]yéz")
         Assertions.assertThat<Int?>(captureStarts)
-            .isEqualTo(if (all) mutableListOf<Int?>(1, 4) else mutableListOf<Int?>(1))
+            .isEqualTo(if (all) mutableListOf<Int>(1, 4) else mutableListOf<Int>(1))
     }
 
     @ParameterizedTest
@@ -507,7 +505,7 @@ internal class Utf8ReplacementTest {
             Assertions.assertThat(range.bytes()).isSameAs(storage)
         }
         Assertions.assertThat<Range?>(ranges)
-            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length })
+            .extracting(Function { obj: Range? -> obj!!.offset() }, Function { obj: Range? -> obj!!.length() })
             .containsExactly(Assertions.tuple(3, 1), Assertions.tuple(4, 2), Assertions.tuple(6, 1))
     }
 
@@ -642,7 +640,7 @@ internal class Utf8ReplacementTest {
         Assertions.assertThat(direct.position()).isEqualTo(originalPosition)
     }
 
-    private enum class ReplacementOperation {
+    internal enum class ReplacementOperation {
         ALL,
         FIRST,
         APPEND
@@ -651,8 +649,8 @@ internal class Utf8ReplacementTest {
     private class CollectingSink : Utf8Sink {
         private val output = ByteArrayOutputStream()
 
-        override fun append(bytes: ByteArray, offset: Int, length: Int) {
-            output.write(bytes, offset, length)
+        override fun append(bytes: ByteArray?, offset: Int, length: Int) {
+            output.write(bytes!!, offset, length)
         }
 
         override fun toString(): String {
@@ -661,7 +659,9 @@ internal class Utf8ReplacementTest {
     }
 
     private class SinkFailure : RuntimeException() {
-        private const val serialVersionUID = 1L
+        companion object {
+            private const val serialVersionUID = 1L
+        }
     }
 
     private class Range(private val bytes: ByteArray?, private val offset: Int, private val length: Int) {

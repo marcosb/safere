@@ -12,7 +12,6 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.List
 import kotlin.IllegalArgumentException
 import kotlin.IndexOutOfBoundsException
 import kotlin.arrayOf
@@ -132,7 +131,7 @@ internal class Utf8InputScannerTest {
 
     @Test
     fun asciiCodePointClassSearchCoversOptimizedShapesAlignmentsAndPositions() {
-        for (ranges in List.of<IntArray?>(
+        for (ranges in java.util.List.of<IntArray?>(
             intArrayOf('x'.code, 'x'.code),
             intArrayOf('x'.code, 'x'.code, 'z'.code, 'z'.code),
             intArrayOf('0'.code, '9'.code)
@@ -159,7 +158,7 @@ internal class Utf8InputScannerTest {
     @Test
     fun asciiCodePointClassSearchCoversMultiRangeProviderAndDeclinePaths() {
         val classes =
-            List.of<IntArray?>(
+            java.util.List.of<IntArray?>(
                 intArrayOf('X'.code, 'X'.code, 'Z'.code, 'Z'.code, '_'.code, '_'.code),
                 intArrayOf('0'.code, '9'.code, 'A'.code, 'Z'.code),
                 intArrayOf('0'.code, '9'.code, 'A'.code, 'Z'.code, 'a'.code, 'z'.code),
@@ -299,7 +298,7 @@ internal class Utf8InputScannerTest {
 
     @Test
     fun asciiPrefixClassSearchCoversSingletonPairAndRange() {
-        for (members in List.of<IntArray?>(
+        for (members in java.util.List.of<IntArray?>(
             intArrayOf('x'.code),
             intArrayOf('x'.code, 'z'.code),
             asciiRange('0'.code, '9'.code)
@@ -342,7 +341,7 @@ internal class Utf8InputScannerTest {
             Assertions.assertThat(matcher.find()).`as`("%s in %s", literal, text).isEqualTo(expected >= 0)
             if (expected >= 0) {
                 Assertions.assertThat(matcher.start()).isEqualTo(expected)
-                Assertions.assertThat(matcher.end()).isEqualTo(expected + literal.size)
+                Assertions.assertThat(matcher.end()).isEqualTo(expected + literal.length)
             }
         }
     }
@@ -362,7 +361,7 @@ internal class Utf8InputScannerTest {
     fun multiByteLiteralSearchCoversEveryWindowAlignmentAndPosition() {
         // The candidate filter reads eight positions at a time and hands the remainder to a linear
         // tail, so every combination of window alignment and match position must agree.
-        for (literal in mutableListOf<String?>("zy", "zqy", "zabcdefy", "zabcdefghijy")) {
+        for (literal in mutableListOf<String>("zy", "zqy", "zabcdefy", "zabcdefghijy")) {
             val needle = literal!!.toByteArray(StandardCharsets.UTF_8)
             for (window in intArrayOf(40, filterThreshold(needle.size) + 40)) {
                 for (offset in 0..<java.lang.Long.BYTES * 2) {
@@ -467,16 +466,16 @@ internal class Utf8InputScannerTest {
 
     @Test
     fun multiByteLiteralSearchAgreesWithStringIndexOfOnNonAsciiLiterals() {
-        val literals: MutableList<String> = mutableListOf<String?>("é", "café", "日本語", "😀x", "aé😀")
+        val literals: MutableList<String> = mutableListOf<String>("é", "café", "日本語", "😀x", "aé😀")
         val texts =
-            List.of<String?>("", "café", "le café est chaud", "日本語のテキスト", "😀😀x", "aé😀aé😀", "z".repeat(50))
+            java.util.List.of<String?>("", "café", "le café est chaud", "日本語のテキスト", "😀😀x", "aé😀aé😀", "z".repeat(50))
         for (literal in literals) {
             val needle = literal.toByteArray(StandardCharsets.UTF_8)
             val failure: IntArray = literalFailure(needle)
             val shifts: IntArray? = literalShifts(needle)
             for (text in texts) {
                 // Padding pushes the same case past the threshold so both paths see non-ASCII literals.
-                for (padded in List.of<String>(text, "\u00e9\u65e5".repeat(filterThreshold(needle.size)) + text)) {
+                for (padded in java.util.List.of<String>(text, "\u00e9\u65e5".repeat(filterThreshold(needle.size)) + text)) {
                     val haystack = padded.toByteArray(StandardCharsets.UTF_8)
 
                     Assertions.assertThat(Utf8InputScanner(haystack).indexOf(needle, failure, shifts))
@@ -633,7 +632,7 @@ internal class Utf8InputScannerTest {
 
         // Tests that boundedBoyerMooreHorspool hits the WorkLimit on repetitive mismatches and returns
         // -2
-        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts, 0)).isEqualTo(-2)
+        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts!!, 0)).isEqualTo(-2)
 
         // Tests that the public indexOf catches -2, falls back to linear KMP, and correctly completes
         val failure: IntArray = literalFailure(needle)
@@ -647,7 +646,7 @@ internal class Utf8InputScannerTest {
         val haystack = "abcdefghijklmnopqrstuvwxyz".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(haystack)
 
-        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts, 0)).isEqualTo(23)
+        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts!!, 0)).isEqualTo(23)
     }
 
     @Test
@@ -659,7 +658,7 @@ internal class Utf8InputScannerTest {
         val haystack = "aaaaaaaaabaa".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(haystack)
 
-        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts, 0)).isEqualTo(9)
+        Assertions.assertThat(scanner.boundedBoyerMooreHorspool(needle, shifts!!, 0)).isEqualTo(9)
     }
 
     @Test
@@ -868,7 +867,7 @@ internal class Utf8InputScannerTest {
         }
 
         private fun malformedSequences(): MutableList<ByteArray> {
-            return List.of<ByteArray?>(
+            return java.util.List.of<ByteArray?>(
                 byteArrayOf(0x80.toByte()),
                 byteArrayOf(0xC0.toByte()),
                 byteArrayOf(0xC1.toByte()),
@@ -894,7 +893,7 @@ internal class Utf8InputScannerTest {
         private fun utf8MixedPairIndex(text: String, ascii: Int, sequence: ByteArray?, start: Int): Int {
             val bytes = text.toByteArray(StandardCharsets.UTF_8)
             return Utf8InputScanner(bytes, 0, bytes.size)
-                .indexOfMixedPair(ascii, sequence, start, bytes.size)
+                .indexOfMixedPair(ascii, sequence!!, start, bytes.size)
         }
     }
 }

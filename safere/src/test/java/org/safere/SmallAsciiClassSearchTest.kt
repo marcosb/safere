@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 @DisabledForCrosscheck("Already compares the String and UTF-8 matchers directly with the JDK")
 internal class SmallAsciiClassSearchTest {
@@ -19,7 +18,7 @@ internal class SmallAsciiClassSearchTest {
         val text = "Z_YX\u0000?\u007F" + noise + "_YXZbiI?\u007F\u0000"
         for (flags in intArrayOf(0, Pattern.CASE_INSENSITIVE, Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE)) {
             val pattern = Pattern.compile(regex, flags)
-            val expectedPattern = Pattern.compile(regex, flags)
+            val expectedPattern = java.util.regex.Pattern.compile(regex, flags)
             for (start in intArrayOf(0, 1, 16, 4095, text.length - 12)) {
                 for (end in intArrayOf(text.length - 12, text.length)) {
                     for (anchoring in booleanArrayOf(false, true)) {
@@ -89,7 +88,7 @@ internal class SmallAsciiClassSearchTest {
         val input = Utf8Input.validated(storage, 2, byteLength)
         val pattern = org.safere.Pattern.compile(regex)
         val actual = pattern.matcher(input)
-        val expected = Pattern.compile(regex).matcher(text)
+        val expected = java.util.regex.Pattern.compile(regex).matcher(text)
         Assertions.assertThat(pattern.find(input)).isTrue()
         while (expected.find()) {
             Assertions.assertThat(actual.find()).isTrue()

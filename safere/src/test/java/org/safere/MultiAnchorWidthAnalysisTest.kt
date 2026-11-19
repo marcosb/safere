@@ -7,16 +7,14 @@ package org.safere
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import org.safere.MultiAnchorCompiler.NodeAnalysis
-import java.util.List
-
 @DisabledForCrosscheck("tests internal ASCII width proofs")
 internal class MultiAnchorWidthAnalysisTest {
     @Test
     fun consumingAtomsWithoutAsciiWidthProofsInvalidateConcatenatedWidths() {
-        for (op in List.of<RegexpOp?>(RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.GRAPHEME_CLUSTER)) {
+        for (op in java.util.List.of<RegexpOp?>(RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.GRAPHEME_CLUSTER)) {
             val atom = Regexp(op, 0)
             val concat =
-                Regexp.concat(List.of<Regexp?>(Regexp.literal(' '.code, 0), atom, Regexp.literal('x'.code, 0)), 0)
+                Regexp.concat(java.util.List.of<Regexp?>(Regexp.literal(' '.code, 0), atom, Regexp.literal('x'.code, 0)), 0)
             Assertions.assertThat<NodeAnalysis?>(MultiAnchorCompiler.analyze(concat))
                 .`as`(op.toString())
                 .extracting("width.minWidth", "width.maxWidth")
@@ -26,7 +24,7 @@ internal class MultiAnchorWidthAnalysisTest {
 
     @Test
     fun knownZeroWidthAssertionsPreserveExactAsciiWidths() {
-        for (op in List.of<RegexpOp?>(
+        for (op in java.util.List.of<RegexpOp?>(
             RegexpOp.EMPTY_MATCH,
             RegexpOp.BEGIN_TEXT,
             RegexpOp.END_TEXT,
@@ -37,7 +35,7 @@ internal class MultiAnchorWidthAnalysisTest {
         )) {
             val concat =
                 Regexp.concat(
-                    List.of<Regexp?>(Regexp.literal(' '.code, 0), Regexp(op, 0), Regexp.literal('x'.code, 0)), 0
+                    java.util.List.of<Regexp?>(Regexp.literal(' '.code, 0), Regexp(op, 0), Regexp.literal('x'.code, 0)), 0
                 )
             Assertions.assertThat<NodeAnalysis?>(MultiAnchorCompiler.analyze(concat))
                 .`as`(op.toString())

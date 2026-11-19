@@ -10,7 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.stream.Stream
 
 /** Conformance to the minimum-respecting empty-stop rule in the repetition specification.  */
@@ -29,7 +28,7 @@ internal class RepetitionPolicyTest {
             for (region in booleanArrayOf(false, true)) {
                 val prefix = if (region) "😀#" else ""
                 val input = prefix + testCase.input + (if (region) "!" else "")
-                val offset = prefix.size
+                val offset = prefix.length
                 for (operation in 0..2) {
                     val matcher = pattern.matcher(input)
                     val bytes = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
@@ -69,7 +68,7 @@ internal class RepetitionPolicyTest {
     fun nestedNullableCountedSearchPreservesTheUnicodeFindHistory() {
         val regex = "(?:(?:(?:(?:(?:[^a])?)(?:(?:|[ab])))+?){0,2})(?:[^a])"
         val input = "béa\na\n.cabaaa"
-        for (engine in List.of<EnginePathOptions?>(
+        for (engine in java.util.List.of<EnginePathOptions?>(
             EnginePathOptions.allEnabled(),
             EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
         )) {
@@ -99,7 +98,7 @@ internal class RepetitionPolicyTest {
 
     @Test
     fun operandlessZeroCountsDoNotEraseAnEarlierFiniteEmptyCapture() {
-        for (regex in mutableListOf<String?>("(){0,2}", "(){0,2}{0}", "(){0,2}{0}{1}", "(){0,2}{1}?{0}?")) {
+        for (regex in mutableListOf<String>("(){0,2}", "(){0,2}{0}", "(){0,2}{0}{1}", "(){0,2}{1}?{0}?")) {
             val matcher = Pattern.compile(regex).matcher("")
             Assertions.assertThat(matcher.matches()).isTrue()
             Assertions.assertThat(matcher.group(1)).isEmpty()
@@ -110,25 +109,25 @@ internal class RepetitionPolicyTest {
 
     @Test
     fun finiteEmptyStopControlsFindReplacementAndSplitSequences() {
-        for (quantifier in mutableListOf<String?>("{0,2}", "{1,2}", "{2}")) {
+        for (quantifier in mutableListOf<String>("{0,2}", "{1,2}", "{2}")) {
             val pattern = Pattern.compile("(?:b?|a)" + quantifier + "b")
             val matcher = pattern.matcher("abb")
-            val history: MutableList<String?> = ArrayList<String?>()
+            val history: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
-                history.add(matcher.group())
+                history.add(matcher.group()!!)
                 Assertions.assertThat(matcher.toMatchResult().group()).isEqualTo(matcher.group())
             }
             val exact = quantifier == "{2}"
             Assertions.assertThat<String?>(history).containsExactlyElementsOf(
-                if (exact) mutableListOf<String?>(
+                if (exact) mutableListOf<String>(
                     "ab",
                     "b"
-                ) else mutableListOf<String?>("abb")
+                ) else mutableListOf<String>("abb")
             )
             Assertions.assertThat(pattern.matcher("abb").replaceAll("X")).isEqualTo(if (exact) "XX" else "X")
             Assertions.assertThat<String?>(pattern.split("abb", -1))
                 .containsExactlyElementsOf(
-                    if (exact) mutableListOf<String?>("", "", "") else mutableListOf<String?>(
+                    if (exact) mutableListOf<String>("", "", "") else mutableListOf<String>(
                         "",
                         ""
                     )
@@ -137,13 +136,14 @@ internal class RepetitionPolicyTest {
     }
 
     @JvmRecord
-    private data class PolicyCase(val regex: String?, val input: String, val end: Int, val groups: MutableList<Int?>?)
+    internal data class PolicyCase(val regex: String?, val input: String, val end: Int, val groups: MutableList<Int?>?)
 
     companion object {
+        @JvmStatic
         private fun policyCases(): Stream<Arguments?>? {
             val cases: MutableList<PolicyCase?> =
-                List.of<PolicyCase?>(
-                    policy("(?:b?|a) {0,2}b", "abb", 3),
+                java.util.List.of<PolicyCase?>(
+                    policy("(?:b?|a){0,2}b", "abb", 3),
                     policy("(?:b?|a){1,2}b", "abb", 3),
                     policy("(?:b?|a){2}b", "abb", 2),
                     policy("(?:()|\\W+){0,2}y", " y", 2, 1, 1),
@@ -172,7 +172,7 @@ internal class RepetitionPolicyTest {
                     policy("(a(b)?){0,2}", "aba", 3, 2, 3, 1, 2)
                 )
             val engines =
-                List.of<EnginePathOptions?>(
+                java.util.List.of<EnginePathOptions?>(
                     EnginePathOptions.allEnabled(),
                     EnginePathOptions.builder().lazyCaptureExtraction(false).build(),
                     EnginePathOptions.builder()
@@ -195,7 +195,7 @@ internal class RepetitionPolicyTest {
         }
 
         private fun policy(regex: String?, input: String, end: Int, vararg groups: Int?): PolicyCase {
-            return PolicyCase(regex, input, end, List.of<Int?>(*groups))
+            return PolicyCase(regex, input, end, java.util.List.of<Int?>(*groups))
         }
 
         private fun byteOffset(input: String, position: Int): Int {

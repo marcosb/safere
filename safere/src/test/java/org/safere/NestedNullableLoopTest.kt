@@ -9,9 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Fresh entries to nested nullable repetitions must not inherit a previous entry's progress.  */
@@ -24,7 +21,7 @@ internal class NestedNullableLoopTest {
         val nfaOnly =
             EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
         val pattern = Pattern.compile(regex, 0, nfaOnly)
-        val jdk = Pattern.compile(regex).matcher(input)
+        val jdk = java.util.regex.Pattern.compile(regex).matcher(input)
         val safere = pattern.matcher(input)
         val utf8 = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
         // The ASCII input gives both representations the same offsets and empty-match advancement.
@@ -42,7 +39,7 @@ internal class NestedNullableLoopTest {
     @ParameterizedTest(name = "[{index}] /{0}/ on {1}")
     @MethodSource("nestedNullableLoopCases")
     fun freshLoopEntriesMatchJdkAcrossEngines(regex: String, input: String) {
-        val jdkPattern = Pattern.compile(regex)
+        val jdkPattern = java.util.regex.Pattern.compile(regex)
         for (options in ENGINE_OPTIONS) {
             val pattern = org.safere.Pattern.compile(regex, 0, options)
             var jdk = jdkPattern.matcher(input)
@@ -88,19 +85,20 @@ internal class NestedNullableLoopTest {
     }
 
     companion object {
-        private val ENGINE_OPTIONS: MutableList<EnginePathOptions?> = List.of<EnginePathOptions?>(
+        private val ENGINE_OPTIONS: MutableList<EnginePathOptions?> = java.util.List.of<EnginePathOptions?>(
             EnginePathOptions.builder().build(),
             EnginePathOptions.builder().onePass(false).bitState(false).build(),
             EnginePathOptions.builder().dfa(false).onePass(false).build(),
             EnginePathOptions.builder().dfa(false).onePass(false).bitState(false).build()
         )
 
+        @JvmStatic
         private fun nestedNullableLoopCases(): Stream<Arguments?> {
             val cases: MutableList<Arguments?> = ArrayList<Arguments?>()
-            for (atom in mutableListOf<String?>("x", "xx", "é", "😀")) {
-                for (body in List.of<String?>("(?:" + atom + "|)", "(?:" + atom + "?)")) {
-                    for (inner in mutableListOf<String?>("+?", "*?", "+", "*")) {
-                        for (outer in mutableListOf<String?>("*", "+", "{1,}", "{2}", "+?")) {
+            for (atom in mutableListOf<String>("x", "xx", "é", "😀")) {
+                for (body in java.util.List.of<String?>("(?:" + atom + "|)", "(?:" + atom + "?)")) {
+                    for (inner in mutableListOf<String>("+?", "*?", "+", "*")) {
+                        for (outer in mutableListOf<String>("*", "+", "{1,}", "{2}", "+?")) {
                             val regex = "(?:" + body + inner + ")" + outer
                             val input = atom!!.repeat(4)
                             cases.add(Arguments.of(regex, input))
@@ -127,11 +125,11 @@ internal class NestedNullableLoopTest {
             cases.add(Arguments.of("(?:(?:x|)+?)*", "!xx!xxx"))
             // Empty paths must be revisited when a loop's progress state changes, including NOPs
             // and assertions shared by a consuming iteration and the final zero-width iteration.
-            for (empty in mutableListOf<String?>("", "\\b", "\\B", "\\b\\b", "(?:)")) {
-                for (quantifier in mutableListOf<String?>("+", "*", "+?", "{1,3}")) {
-                    for (atom in mutableListOf<String?>("a", "é", "😀")) {
+            for (empty in mutableListOf<String>("", "\\b", "\\B", "\\b\\b", "(?:)")) {
+                for (quantifier in mutableListOf<String>("+", "*", "+?", "{1,3}")) {
+                    for (atom in mutableListOf<String>("a", "é", "😀")) {
                         val regex = "(?:" + atom + "?(?:" + empty + "|.))" + quantifier
-                        for (input in List.of<String?>(atom + "!" + atom + "!", "!" + atom + "!", atom!!.repeat(3))) {
+                        for (input in java.util.List.of<String?>(atom + "!" + atom + "!", "!" + atom + "!", atom!!.repeat(3))) {
                             cases.add(Arguments.of(regex, input))
                             cases.add(Arguments.of(regex + "!", input))
                         }
@@ -141,10 +139,11 @@ internal class NestedNullableLoopTest {
             return cases.stream()
         }
 
+        @JvmStatic
         private fun nestedNullableEpsilonCases(): Stream<String?> {
             val cases: MutableList<String?> = ArrayList<String?>()
-            for (body in mutableListOf<String?>("(?:a?(?:|.))", "(?:a?(?:\\b|.))")) {
-                for (firstQuantifier in mutableListOf<String?>("+", "+?")) {
+            for (body in mutableListOf<String>("(?:a?(?:|.))", "(?:a?(?:\\b|.))")) {
+                for (firstQuantifier in mutableListOf<String>("+", "+?")) {
                     var regex: String = body!!
                     var quantifier: String = firstQuantifier!!
                     for (depth in 1..7) {
@@ -157,7 +156,7 @@ internal class NestedNullableLoopTest {
             return cases.stream()
         }
 
-        private fun assertGroupsMatch(jdk: Matcher, safere: org.safere.Matcher) {
+        private fun assertGroupsMatch(jdk: java.util.regex.Matcher, safere: org.safere.Matcher) {
             for (group in 0..jdk.groupCount()) {
                 Assertions.assertThat(safere.group(group)).isEqualTo(jdk.group(group))
                 Assertions.assertThat(safere.start(group)).isEqualTo(jdk.start(group))

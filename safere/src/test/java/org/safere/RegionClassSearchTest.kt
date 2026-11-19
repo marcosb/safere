@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test
 internal class RegionClassSearchTest {
     @Test
     fun cachedExistenceAgreesWithIndependentScalarScansAcrossChangingEdges() {
-        for (regex in mutableListOf<String?>("\\X?\\p{Cs}", "\\X?\\uDE00", "\\X?[a\\uDE00]")) {
+        for (regex in mutableListOf<String>("\\X?\\p{Cs}", "\\X?\\uDE00", "\\X?[a\\uDE00]")) {
             val cc =
                 Pattern.compile(regex).findRejectPrefilter() as RejectPrefilter.CharClass?
-            for (text in mutableListOf<String?>("a😀😀!", "😀\uDE00😀!", "a😀\uD83D!", "\uD83Dx\uDE00😀")) {
+            for (text in mutableListOf<String>("a😀😀!", "😀\uDE00😀!", "a😀\uD83D!", "\uD83Dx\uDE00😀")) {
                 val searches = RegionClassSearch()
                 val scanner: InputScanner = StringInputScanner(text)
                 for (direction in intArrayOf(1, -1, 1)) {

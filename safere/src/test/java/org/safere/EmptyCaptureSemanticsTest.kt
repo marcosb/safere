@@ -10,7 +10,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.List
 import java.util.function.Function
 import java.util.regex.MatchResult
 import java.util.stream.Stream
@@ -31,7 +30,7 @@ internal class EmptyCaptureSemanticsTest {
             val pattern = Pattern.compile(wrapped + repeat.regex + mode, 0, engine)
             for (region in booleanArrayOf(false, true)) {
                 val input = if (region) "😀#" else ""
-                val position = input.size
+                val position = input.length
                 for (operation in 0..2) {
                     val matcher = pattern.matcher(input)
                     val utf8 = pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8)))
@@ -65,15 +64,15 @@ internal class EmptyCaptureSemanticsTest {
 
     @Test
     fun countedZeroWidthProgramsStayBoundedWithoutLosingParticipation() {
-        for (operand in mutableListOf<String?>("()", "(())", "(()??)", "(?:()())", "(^)", "(\\b)", "(?:()|())")) {
-            for (mode in mutableListOf<String?>("", "?", "+")) {
-                for (range in mutableListOf<String?>("{0,%d}", "{%d}", "{1,%d}", "{%d,}")) {
-                    val small = Pattern.compile(operand + range.formatted(2) + mode)
-                    val large = Pattern.compile(operand + range.formatted(1000) + mode)
+        for (operand in mutableListOf<String>("()", "(())", "(()??)", "(?:()())", "(^)", "(\\b)", "(?:()|())")) {
+            for (mode in mutableListOf<String>("", "?", "+")) {
+                for (range in mutableListOf<String>("{0,%d}", "{%d}", "{1,%d}", "{%d,}")) {
+                    val small = Pattern.compile(operand + range.format(2) + mode)
+                    val large = Pattern.compile(operand + range.format(1000) + mode)
                     Assertions.assertThat(large.analysis().programSize)
                         .`as`("/%s/ should not expand identical zero-width iterations", large)
                         .isEqualTo(small.analysis().programSize)
-                    for (input in mutableListOf<String?>("", "a", "😀a")) {
+                    for (input in mutableListOf<String>("", "a", "😀a")) {
                         val expected = small.matcher(input)
                         val actual = large.matcher(input)
                         val bytes = large.matcher(Utf8Input.trusted(input!!.toByteArray(StandardCharsets.UTF_8)))
@@ -108,14 +107,14 @@ internal class EmptyCaptureSemanticsTest {
     fun followingOperandlessCountsDoNotEraseEarlierCaptures() {
         // Adjacent counted tokens after a quantifier have their own implicit empty operand in the
         // supported syntax. Only an actual enclosing zero-count repeat omits the earlier group.
-        for (regex in mutableListOf<String?>("(){0,2}", "(){0,2}{0}", "(){0,2}{0}{1}", "(){0,2}{1}?{0}?")) {
+        for (regex in mutableListOf<String>("(){0,2}", "(){0,2}{0}", "(){0,2}{0}{1}", "(){0,2}{1}?{0}?")) {
             for (operation in 0..2) {
                 val matcher = Pattern.compile(regex).matcher("")
                 Assertions.assertThat(match(matcher, operation)).`as`("/%s/", regex).isTrue()
                 assertEmptyGroups(matcher, 0, 1, true)
             }
         }
-        for (regex in mutableListOf<String?>("(){0}", "(?:(){0,2}){0}")) {
+        for (regex in mutableListOf<String>("(){0}", "(?:(){0,2}){0}")) {
             val matcher = Pattern.compile(regex).matcher("")
             Assertions.assertThat(matcher.matches()).isTrue()
             assertEmptyGroups(matcher, 0, 1, false)
@@ -124,8 +123,8 @@ internal class EmptyCaptureSemanticsTest {
 
     @Test
     fun emptyCaptureParticipationIsVisibleToReplacementCallbacks() {
-        for (quantifier in mutableListOf<String?>("*", "+", "{0,2}", "{1,2}", "{2,}")) {
-            for (operand in mutableListOf<String?>("(?<empty>)", "(?:(?<empty>))")) {
+        for (quantifier in mutableListOf<String>("*", "+", "{0,2}", "{1,2}", "{2,}")) {
+            for (operand in mutableListOf<String>("(?<empty>)", "(?:(?<empty>))")) {
                 val pattern = Pattern.compile(operand + quantifier)
                 Assertions.assertThat(
                     pattern
@@ -151,7 +150,7 @@ internal class EmptyCaptureSemanticsTest {
 
     @Test
     fun successiveFindsPublishFreshCapturesAndRepresentationSpecificPositions() {
-        for (regex in mutableListOf<String?>("()*", "(?:())*", "(){0,2}", "(?:()){0,2}")) {
+        for (regex in mutableListOf<String>("()*", "(?:())*", "(){0,2}", "(?:()){0,2}")) {
             val matcher = Pattern.compile(regex).matcher("😀a")
             val snapshots: MutableList<MatchResult?> = ArrayList<MatchResult?>()
             for (position in 0..3) {
@@ -194,14 +193,15 @@ internal class EmptyCaptureSemanticsTest {
     }
 
     @JvmRecord
-    private data class Operand(val regex: String, val groups: Int, val succeeds: Boolean)
+    internal data class Operand(val regex: String, val groups: Int, val succeeds: Boolean)
 
     @JvmRecord
-    private data class Repeat(val regex: String?, val minimum: Int, val maximum: Int)
+    internal data class Repeat(val regex: String?, val minimum: Int, val maximum: Int)
     companion object {
+        @JvmStatic
         private fun repetitions(): Stream<Arguments?>? {
             val operands =
-                List.of<Operand?>(
+                java.util.List.of<Operand?>(
                     Operand("()", 1, true),
                     Operand("((?:))", 1, true),
                     Operand("(())", 2, true),
@@ -213,7 +213,7 @@ internal class EmptyCaptureSemanticsTest {
                     Operand("(\\b)", 1, false)
                 )
             val repeats: MutableList<Repeat?> =
-                List.of<Repeat?>(
+                java.util.List.of<Repeat?>(
                     Repeat("?", 0, 1),
                     Repeat("*", 0, -1),
                     Repeat("+", 1, -1),
@@ -229,7 +229,7 @@ internal class EmptyCaptureSemanticsTest {
                     Repeat("{2,}", 2, -1)
                 )
             val engines =
-                List.of<EnginePathOptions?>(
+                java.util.List.of<EnginePathOptions?>(
                     EnginePathOptions.allEnabled(),
                     EnginePathOptions.builder().lazyCaptureExtraction(false).build(),
                     EnginePathOptions.builder()

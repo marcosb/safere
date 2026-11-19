@@ -13,7 +13,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /** Public searches must tolerate an unavailable standalone reject filter.  */
@@ -32,9 +31,9 @@ internal class MatcherFreeFindTest {
         diagnostics: Boolean, regex: String, input: String
     ) {
         Pattern.setDiagnostics(
-            if (diagnostics) SafeReMatchDiagnostics() else SafeReMatchDiagnostics.NONE
+            if (diagnostics) object : SafeReMatchDiagnostics() {} else SafeReMatchDiagnostics.NONE
         )
-        val expected = Pattern.compile(regex).matcher(input).find()
+        val expected = java.util.regex.Pattern.compile(regex).matcher(input).find()
         val pattern = org.safere.Pattern.compile(regex)
         val utf8 = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
         Assertions.assertThat(pattern.asPredicate().test(input)).isEqualTo(expected)
@@ -44,6 +43,7 @@ internal class MatcherFreeFindTest {
     }
 
     companion object {
+        @JvmStatic
         fun innerLiteralSearchCases(): Stream<Arguments?>? {
             return Stream.of<Boolean?>(false, true)
                 .flatMap<Arguments?> { diagnostics: Boolean? ->

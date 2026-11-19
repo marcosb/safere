@@ -22,15 +22,15 @@ import java.util.stream.Stream
 internal class SimplifierTest {
     @Test
     fun greedyNestedAtomRepeatsKeepTheLatestCaptureBeforeTheSuffix() {
-        val atoms: MutableList<String> = mutableListOf<String?>("(?<g>[ab])", "(?<g>ab)", "(?<g>😀)", "((?<g>a))")
-        val units = mutableListOf<String?>("a", "ab", "😀", "a")
+        val atoms: MutableList<String> = mutableListOf<String>("(?<g>[ab])", "(?<g>ab)", "(?<g>😀)", "((?<g>a))")
+        val units = mutableListOf<String>("a", "ab", "😀", "a")
         for (atom in atoms.indices) {
-            for (min in mutableListOf<Int?>(0, 1)) {
-                for (max in mutableListOf<Int?>(2, 3, 8)) {
-                    for (outer in mutableListOf<String?>("*", "+")) {
+            for (min in mutableListOf<Int>(0, 1)) {
+                for (max in mutableListOf<Int>(2, 3, 8)) {
+                    for (outer in mutableListOf<String>("*", "+")) {
                         val regex =
                             "\\A(?:(?:" + atoms.get(atom) + "){" + min + "," + max + "})" + outer + "b\\z"
-                        for (count in mutableListOf<Int?>(0, 1, 2, 5, 8)) {
+                        for (count in mutableListOf<Int>(0, 1, 2, 5, 8)) {
                             val body = units.get(atom)!!.repeat(count!!)
                             val matcher = Pattern.compile(regex).matcher(body + "b")
                             val matched = count != 0 || min == 0 || outer == "*"
@@ -38,8 +38,8 @@ internal class SimplifierTest {
                                 .isEqualTo(matched)
                             if (matched) {
                                 Assertions.assertThat(matcher.start("g"))
-                                    .isEqualTo(if (count == 0) -1 else body.size - units.get(atom)!!.length)
-                                Assertions.assertThat(matcher.end("g")).isEqualTo(if (count == 0) -1 else body.size)
+                                    .isEqualTo(if (count == 0) -1 else body.length - units.get(atom)!!.length)
+                                Assertions.assertThat(matcher.end("g")).isEqualTo(if (count == 0) -1 else body.length)
                             }
                         }
                     }
@@ -74,13 +74,13 @@ internal class SimplifierTest {
 
     @Test
     fun greedyNestedAtomRepeatProgramsDoNotGrowWithChunkLimit() {
-        for (atom in mutableListOf<String?>("(a)", "((a))", "([ab])", "(ab)", "(😀)", "(.)")) {
-            for (minimum in mutableListOf<Int?>(0, 1)) {
-                for (outer in mutableListOf<String?>("*", "+")) {
+        for (atom in mutableListOf<String>("(a)", "((a))", "([ab])", "(ab)", "(😀)", "(.)")) {
+            for (minimum in mutableListOf<Int>(0, 1)) {
+                for (outer in mutableListOf<String>("*", "+")) {
                     val flat = if (minimum == 1 && outer == "+") "+" else "*"
                     val expected =
                         Pattern.compile("^(?:" + atom + ")" + flat + "b$").analysis().programSize
-                    for (maximum in mutableListOf<Int?>(2, 32, 1000)) {
+                    for (maximum in mutableListOf<Int>(2, 32, 1000)) {
                         val nested =
                             Pattern.compile(
                                 "^(?:" + atom + "{" + minimum + "," + maximum + "})" + outer + "b$"
@@ -119,7 +119,7 @@ internal class SimplifierTest {
     fun deeplyNestedSimpleGroupsRemainStackSafeDuringSimplification() {
         val re = Parser.parse("(?:".repeat(10000) + "a" + ")".repeat(10000), FLAGS)
 
-        Assertions.assertThat(Simplifier.simplify(re).toString()).isEqualTo("a")
+        Assertions.assertThat(Simplifier.simplify(re)!!.toString()).isEqualTo("a")
     }
 
     @Test
@@ -143,15 +143,15 @@ internal class SimplifierTest {
     fun simplifyRepeatExactZero() {
         // a{0} should simplify to empty match.
         val re = Parser.parse("a{0}", FLAGS)
-        val simplified = Simplifier.simplify(re)
-        Assertions.assertThat<RegexpOp?>(simplified!!.op).isEqualTo(RegexpOp.EMPTY_MATCH)
+        val simplified = Simplifier.simplify(re)!!
+        Assertions.assertThat<RegexpOp?>(simplified.op).isEqualTo(RegexpOp.EMPTY_MATCH)
     }
 
     @Test
     fun simplifyRepeatFourOrMore() {
         // a{4,} should simplify to aaaa+
         val re = Parser.parse("a{4,}", FLAGS)
-        val simplified = Simplifier.simplify(re)
+        val simplified = Simplifier.simplify(re)!!
         val s = simplified.toString()
         Assertions.assertThat(s).contains("a").contains("+")
     }
@@ -160,7 +160,7 @@ internal class SimplifierTest {
     fun simplifyRepeatRangeMinMax() {
         // a{2,5} should simplify without REPEAT node.
         val re = Parser.parse("a{2,5}", FLAGS)
-        val simplified = Simplifier.simplify(re)
+        val simplified = Simplifier.simplify(re)!!
         Assertions.assertThat(simplified.toString()).doesNotContain("{")
     }
 
@@ -168,7 +168,7 @@ internal class SimplifierTest {
     fun simplifyRepeatZeroToN() {
         // a{0,3} should simplify to (a(a(a)?)?)?
         val re = Parser.parse("a{0,3}", FLAGS)
-        val simplified = Simplifier.simplify(re)
+        val simplified = Simplifier.simplify(re)!!
         Assertions.assertThat(simplified.toString()).doesNotContain("{")
         Assertions.assertThat(simplified.toString()).contains("?")
     }
@@ -197,8 +197,8 @@ internal class SimplifierTest {
     fun simplifyQuantifierOfEmptyMatch() {
         // (?:){3} — repeat of empty match simplifies to empty match
         val re = Parser.parse("(?:){3}", FLAGS)
-        val simplified = Simplifier.simplify(re)
-        Assertions.assertThat<RegexpOp?>(simplified!!.op).isEqualTo(RegexpOp.EMPTY_MATCH)
+        val simplified = Simplifier.simplify(re)!!
+        Assertions.assertThat<RegexpOp?>(simplified.op).isEqualTo(RegexpOp.EMPTY_MATCH)
     }
 
     @Test
@@ -223,10 +223,11 @@ internal class SimplifierTest {
 
         private fun simplify(pattern: String?): String {
             val re = Parser.parse(pattern, FLAGS)
-            val sre = Simplifier.simplify(re)
+            val sre = Simplifier.simplify(re)!!
             return sre.toString()
         }
 
+        @JvmStatic
         fun simplifyTests(): Stream<Arguments?> {
             return Stream.of<Arguments?>( // Already-simple constructs
                 Arguments.of("a", "a"),

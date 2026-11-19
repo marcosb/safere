@@ -9,7 +9,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 import java.util.*
-import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.math.min
 
@@ -146,14 +145,14 @@ internal class RandomTest {
 
             var totalTests = 0
             var skipped = 0
-            val failures: MutableList<String?> = ArrayList<String?>()
+            val failures: MutableList<String> = ArrayList<String>()
 
             for (i in 0..<REGEXP_COUNT) {
                 val pattern: String = generateRandomRegexp(regexpRng, atoms, ops, maxOps)
 
                 // Try to compile with both engines.
-                val saferePattern: Pattern?
-                val jdkPattern: Pattern?
+                val saferePattern: org.safere.Pattern?
+                val jdkPattern: java.util.regex.Pattern?
                 try {
                     saferePattern = org.safere.Pattern.compile(pattern)
                 } catch (e: PatternSyntaxException) {
@@ -161,7 +160,7 @@ internal class RandomTest {
                     continue
                 }
                 try {
-                    jdkPattern = Pattern.compile(pattern)
+                    jdkPattern = java.util.regex.Pattern.compile(pattern)
                 } catch (e: PatternSyntaxException) {
                     skipped++
                     continue
@@ -192,7 +191,7 @@ internal class RandomTest {
                     }
 
                     if (safereFound) {
-                        val safereGroup = safereMatcher.group()
+                        val safereGroup = safereMatcher.group()!!
                         val jdkGroup = jdkMatcher.group()
                         if (safereGroup != jdkGroup) {
                             failures.add(

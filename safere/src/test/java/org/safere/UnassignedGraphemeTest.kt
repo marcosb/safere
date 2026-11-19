@@ -18,7 +18,7 @@ internal class UnassignedGraphemeTest {
         // GB9 applies to unassigned Other code points just as it does to assigned bases.
         // U+8D43F followed by U+07EF is the reproducer from #925.
         val base = String(Character.toChars(codePoint))
-        for (suffix in mutableListOf<String?>("\u07EF", "\u0301", "\u200D", "\u07EF\u0301\u200D")) {
+        for (suffix in mutableListOf<String>("\u07EF", "\u0301", "\u200D", "\u07EF\u0301\u200D")) {
             val cluster = base + suffix
             Assertions.assertThat(Pattern.compile("\\X").matcher(cluster).matches()).`as`(cluster).isTrue()
             Assertions.assertThat(Pattern.compile("\\X{2}").matcher(cluster).matches()).`as`(cluster).isFalse()
@@ -26,11 +26,11 @@ internal class UnassignedGraphemeTest {
             val matcher = Pattern.compile("\\X").matcher(cluster + "a")
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.start()).isZero()
-            Assertions.assertThat(matcher.end()).isEqualTo(cluster.size)
+            Assertions.assertThat(matcher.end()).isEqualTo(cluster.length)
             Assertions.assertThat(matcher.group()).isEqualTo(cluster)
             Assertions.assertThat(matcher.find()).isTrue()
-            Assertions.assertThat(matcher.start()).isEqualTo(cluster.size)
-            Assertions.assertThat(matcher.end()).isEqualTo(cluster.size + 1)
+            Assertions.assertThat(matcher.start()).isEqualTo(cluster.length)
+            Assertions.assertThat(matcher.end()).isEqualTo(cluster.length + 1)
             Assertions.assertThat(matcher.group()).isEqualTo("a")
             Assertions.assertThat(matcher.find()).isFalse()
 
@@ -54,18 +54,18 @@ internal class UnassignedGraphemeTest {
     fun controlBreakTakesPrecedenceOverExtenderJoining(codePoint: Int) {
         // Unassigned default-ignorable ranges have grapheme property Control (UAX #29).
         val control = String(Character.toChars(codePoint))
-        for (suffix in mutableListOf<String?>("\u07EF", "\u0301", "\u200D")) {
+        for (suffix in mutableListOf<String>("\u07EF", "\u0301", "\u200D")) {
             val input = control + suffix
             Assertions.assertThat(Pattern.compile("\\X").matcher(input).matches()).isFalse()
             Assertions.assertThat(Pattern.compile("\\X{2}").matcher(input).matches()).isTrue()
             val matcher = Pattern.compile("\\X").matcher(input)
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.start()).isZero()
-            Assertions.assertThat(matcher.end()).isEqualTo(control.size)
+            Assertions.assertThat(matcher.end()).isEqualTo(control.length)
             Assertions.assertThat(matcher.group()).isEqualTo(control)
             Assertions.assertThat(matcher.find()).isTrue()
-            Assertions.assertThat(matcher.start()).isEqualTo(control.size)
-            Assertions.assertThat(matcher.end()).isEqualTo(input.size)
+            Assertions.assertThat(matcher.start()).isEqualTo(control.length)
+            Assertions.assertThat(matcher.end()).isEqualTo(input.length)
             Assertions.assertThat(matcher.group()).isEqualTo(suffix)
             Assertions.assertThat(matcher.find()).isFalse()
             Assertions.assertThat<String?>(Pattern.compile("\\b{g}").split(input)).containsExactly(control, suffix)

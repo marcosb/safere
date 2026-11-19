@@ -185,53 +185,53 @@ internal class ParserTest {
         fun simpleCharClass() {
             val re: Regexp = parse("[abc]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('b'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('c'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('d'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('b'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('c'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('d'.code)).isFalse()
         }
 
         @Test
         fun rangeCharClass() {
             val re: Regexp = parse("[a-z]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('m'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('m'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isFalse()
         }
 
         @Test
         fun multiRange() {
             val re: Regexp = parse("[0-9A-Fa-f]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('0'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('9'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('F'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('f'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('g'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('G'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('9'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('F'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('f'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('g'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('G'.code)).isFalse()
         }
 
         @Test
         fun negatedCharClass() {
             val re: Regexp = parse("[^abc]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('b'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('d'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('b'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('d'.code)).isTrue()
         }
 
         @Test
         fun negatedRange() {
             val re: Regexp = parse("[^a-z]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('z'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('0'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('z'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isTrue()
         }
 
         @ParameterizedTest
@@ -303,12 +303,12 @@ internal class ParserTest {
         fun mixedRangeAndLiterals() {
             val re: Regexp = parse("[a-zABC]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('B'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('C'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('D'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('B'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('C'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('D'.code)).isFalse()
         }
 
         // -- POSIX bracket-class spelling is ordinary JDK character-class text --
@@ -316,54 +316,54 @@ internal class ParserTest {
         fun posixLowerSpellingIsLiteralText() {
             val re: Regexp = parse("[[:lower:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains(':'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('l'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('r'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('z'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('l'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('r'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('z'.code)).isFalse()
         }
 
         @Test
         fun posixAlphaSpellingIsLiteralText() {
             val re: Regexp = parse("[[:alpha:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('p'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(':'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('0'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('Z'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('p'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('Z'.code)).isFalse()
         }
 
         @Test
         fun posixDigitSpellingIsLiteralText() {
             val re: Regexp = parse("[[:digit:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('d'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('t'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(':'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('0'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('9'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('d'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('t'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('9'.code)).isFalse()
         }
 
         @Test
         fun posixNegatedSpellingIsLiteralText() {
             val re: Regexp = parse("[[:^space:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('^'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('s'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(':'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(' '.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('x'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('^'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('s'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(' '.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('x'.code)).isFalse()
         }
 
         @Test
         fun negatedPosixSpellingNegatesLiteralText() {
             val re: Regexp = parse("[^[:lower:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('l'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains(':'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('l'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
         }
 
         // -- Perl shorthand classes --
@@ -371,62 +371,62 @@ internal class ParserTest {
         fun perlDigit() {
             val re: Regexp = parse("\\d")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('0'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('9'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('9'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
         }
 
         @Test
         fun perlNonDigit() {
             val re: Regexp = parse("\\D")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('0'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
         fun perlSpace() {
             val re: Regexp = parse("\\s")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains(' '.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('\t'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(' '.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('\t'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
         }
 
         @Test
         fun perlNonSpace() {
             val re: Regexp = parse("\\S")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains(' '.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(' '.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
         fun perlWord() {
             val re: Regexp = parse("\\w")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('Z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('0'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('_'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(' '.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('Z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('_'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(' '.code)).isFalse()
         }
 
         @Test
         fun perlNonWord() {
             val re: Regexp = parse("\\W")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains(' '.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(' '.code)).isTrue()
         }
 
         @Test
         fun caseInsensitiveWord() {
             val re: Regexp = parse("(?i)\\w")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('Z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('_'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('Z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('_'.code)).isTrue()
         }
 
         // -- Unicode property classes --
@@ -434,24 +434,24 @@ internal class ParserTest {
         fun unicodePropertyGreekBlock() {
             val re: Regexp = parse("\\p{InGreek}")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains(0x0391)).isTrue()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(0x0391)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isFalse()
         }
 
         @Test
         fun unicodePropertyGreekBlockNegated() {
             val re: Regexp = parse("\\P{InGreek}")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains(0x0391)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(0x0391)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
         fun unicodePropertyUppercaseLetter() {
             val re: Regexp = parse("\\p{Lu}")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
         }
 
         @ParameterizedTest
@@ -465,8 +465,8 @@ internal class ParserTest {
         fun unicodePropertyLatinScript() {
             val re: Regexp = parse("\\p{IsLatin}")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('z'.code)).isTrue()
         }
 
         @ParameterizedTest
@@ -480,8 +480,8 @@ internal class ParserTest {
         fun unicodePropertyNdNegated() {
             val re: Regexp = parse("\\P{Nd}")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('0'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('0'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         // -- Special character class contents --
@@ -489,8 +489,8 @@ internal class ParserTest {
         fun escapeSequencesInClass() {
             val re: Regexp = parse("[\\n\\t]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('\n'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('\t'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('\n'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('\t'.code)).isTrue()
         }
 
         @ParameterizedTest
@@ -502,7 +502,7 @@ internal class ParserTest {
                 Assertions.assertThat(re.rune).isEqualTo(codePoint)
             } else {
                 Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-                Assertions.assertThat(re.charClass.contains(codePoint)).isTrue()
+                Assertions.assertThat(re.charClass!!.contains(codePoint)).isTrue()
             }
         }
 
@@ -525,24 +525,24 @@ internal class ParserTest {
         fun dashAtEnd() {
             val re: Regexp = parse("[a-]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('-'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('-'.code)).isTrue()
         }
 
         @Test
         fun dashAtStart() {
             val re: Regexp = parse("[-a]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('-'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('-'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
         fun negatedBackslash() {
             val re: Regexp = parse("[^\\\\]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('\\'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('\\'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
@@ -755,22 +755,22 @@ internal class ParserTest {
 
         @Test
         fun nonCapturingGroup_simplifiesAway() {
-            val re: Regexp? = simplify("(?:a)")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.LITERAL)
+            val re: Regexp = simplify("(?:a)")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.LITERAL)
             Assertions.assertThat(re.rune).isEqualTo('a'.code)
         }
 
         @Test
         fun nonCapturingGroupConcat() {
             // (?:ab)(?:cd) should coalesce to "abcd"
-            val re: Regexp? = simplify("(?:ab)(?:cd)")
+            val re: Regexp = simplify("(?:ab)(?:cd)")!!
             Assertions.assertThat(re.toString()).isEqualTo("abcd")
         }
 
         @Test
         fun nonCapturingGroupWithAlternation() {
-            val re: Regexp? = simplify("(?:ab|cd)")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.ALTERNATE)
+            val re: Regexp = simplify("(?:ab|cd)")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.ALTERNATE)
         }
 
         @Test
@@ -802,10 +802,10 @@ internal class ParserTest {
             val inner = re.sub()
             Assertions.assertThat<RegexpOp?>(inner.op).isEqualTo(RegexpOp.CONCAT)
             Assertions.assertThat<Regexp?>(inner.subs).hasSize(2)
-            Assertions.assertThat<RegexpOp?>(inner.subs.get(0).op).isEqualTo(RegexpOp.CAPTURE)
-            Assertions.assertThat(inner.subs.get(0).cap).isEqualTo(2)
-            Assertions.assertThat<RegexpOp?>(inner.subs.get(1).op).isEqualTo(RegexpOp.CAPTURE)
-            Assertions.assertThat(inner.subs.get(1).cap).isEqualTo(3)
+            Assertions.assertThat<RegexpOp?>(inner.subs!!.get(0)!!.op).isEqualTo(RegexpOp.CAPTURE)
+            Assertions.assertThat(inner.subs!!.get(0)!!.cap).isEqualTo(2)
+            Assertions.assertThat<RegexpOp?>(inner.subs!!.get(1)!!.op).isEqualTo(RegexpOp.CAPTURE)
+            Assertions.assertThat(inner.subs!!.get(1)!!.cap).isEqualTo(3)
         }
 
         @Test
@@ -819,10 +819,10 @@ internal class ParserTest {
         fun multipleCaptures() {
             val re: Regexp = parse("(a)(b)")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CONCAT)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(0).op).isEqualTo(RegexpOp.CAPTURE)
-            Assertions.assertThat(re.subs.get(0).cap).isEqualTo(1)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(1).op).isEqualTo(RegexpOp.CAPTURE)
-            Assertions.assertThat(re.subs.get(1).cap).isEqualTo(2)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(0)!!.op).isEqualTo(RegexpOp.CAPTURE)
+            Assertions.assertThat(re.subs!!.get(0)!!.cap).isEqualTo(1)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(1)!!.op).isEqualTo(RegexpOp.CAPTURE)
+            Assertions.assertThat(re.subs!!.get(1)!!.cap).isEqualTo(2)
         }
     }
 
@@ -1008,10 +1008,10 @@ internal class ParserTest {
             val re: Regexp = parse("a.b")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CONCAT)
             Assertions.assertThat<Regexp?>(re.subs).hasSize(3)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(0).op).isEqualTo(RegexpOp.LITERAL)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(0)!!.op).isEqualTo(RegexpOp.LITERAL)
             // Dot is CHAR_CLASS (excluding \n) when DOT_NL is off.
-            Assertions.assertThat<RegexpOp?>(re.subs.get(1).op).isIn(RegexpOp.ANY_CHAR, RegexpOp.CHAR_CLASS)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(2).op).isEqualTo(RegexpOp.LITERAL)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(1)!!.op).isIn(RegexpOp.ANY_CHAR, RegexpOp.CHAR_CLASS)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(2)!!.op).isEqualTo(RegexpOp.LITERAL)
         }
 
         @Test
@@ -1059,7 +1059,7 @@ internal class ParserTest {
         fun formFeed() {
             val re: Regexp = parse("\\f")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.LITERAL)
-            Assertions.assertThat(re.rune).isEqualTo('\f'.code)
+            Assertions.assertThat(re.rune).isEqualTo(0x0C)
         }
 
         @Test
@@ -1312,20 +1312,20 @@ internal class ParserTest {
             // (?i)[a-z] should include uppercase letters.
             val re: Regexp = parse("(?i)[a-z]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('Z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('Z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isTrue()
         }
 
         @Test
         fun caseInsensitive_posixLowerSpellingIsLiteralText() {
             val re: Regexp = parse("(?i)[[:lower:]]")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CHAR_CLASS)
-            Assertions.assertThat(re.charClass.contains('L'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('l'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(':'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('A'.code)).isFalse()
-            Assertions.assertThat(re.charClass.contains('a'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('L'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('l'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(':'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('a'.code)).isFalse()
         }
     }
 
@@ -1619,8 +1619,8 @@ internal class ParserTest {
         @Test
         fun nestedRepetition_starStar() {
             // (?:(?:a)*)* simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)*)*")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)*)*")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
             Assertions.assertThat<RegexpOp?>(re.sub().op).isEqualTo(RegexpOp.LITERAL)
             Assertions.assertThat(re.sub().rune).isEqualTo('a'.code)
         }
@@ -1628,64 +1628,64 @@ internal class ParserTest {
         @Test
         fun nestedRepetition_plusPlus() {
             // (?:(?:a)+)+ simplifies to a+
-            val re: Regexp? = simplify("(?:(?:a)+)+")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.PLUS)
+            val re: Regexp = simplify("(?:(?:a)+)+")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.PLUS)
             Assertions.assertThat<RegexpOp?>(re.sub().op).isEqualTo(RegexpOp.LITERAL)
         }
 
         @Test
         fun nestedRepetition_questQuest() {
             // (?:(?:a)?)? simplifies to a?
-            val re: Regexp? = simplify("(?:(?:a)?)?")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.QUEST)
+            val re: Regexp = simplify("(?:(?:a)?)?")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.QUEST)
         }
 
         @Test
         fun nestedRepetition_starPlus() {
             // (?:(?:a)*)+ simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)*)+")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)*)+")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nestedRepetition_starQuest() {
             // (?:(?:a)*)? simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)*)?")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)*)?")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nestedRepetition_plusStar() {
             // (?:(?:a)+)* simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)+)*")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)+)*")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nestedRepetition_plusQuest() {
             // (?:(?:a)+)? simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)+)?")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)+)?")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nestedRepetition_questStar() {
             // (?:(?:a)?)* simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)?)*")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)?)*")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nestedRepetition_questPlus() {
             // (?:(?:a)?)+ simplifies to a*
-            val re: Regexp? = simplify("(?:(?:a)?)+")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.STAR)
+            val re: Regexp = simplify("(?:(?:a)?)+")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.STAR)
         }
 
         @Test
         fun nonCapturingNoop() {
-            val re: Regexp? = simplify("(?:a)")
-            Assertions.assertThat<RegexpOp?>(re!!.op).isEqualTo(RegexpOp.LITERAL)
+            val re: Regexp = simplify("(?:a)")!!
+            Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.LITERAL)
             Assertions.assertThat(re.rune).isEqualTo('a'.code)
         }
 
@@ -1740,17 +1740,17 @@ internal class ParserTest {
         fun caseInsensitiveUnicodeCaseCharClassAddsUnicodeFolds() {
             // (?iu)[a-z] should include the Kelvin sign (0x212A) and long-s (0x17F).
             val re: Regexp = parse("(?iu)[a-z]")
-            Assertions.assertThat(re.charClass.contains(0x17F)).isTrue() // ſ (long s)
-            Assertions.assertThat(re.charClass.contains(0x212A)).isTrue() // K (Kelvin sign)
+            Assertions.assertThat(re.charClass!!.contains(0x17F)).isTrue() // ſ (long s)
+            Assertions.assertThat(re.charClass!!.contains(0x212A)).isTrue() // K (Kelvin sign)
         }
 
         @Test
         fun caseInsensitiveCharClassUsesAsciiFoldsWithoutUnicodeCase() {
             val re: Regexp = parse("(?i)[a-z]")
-            Assertions.assertThat(re.charClass.contains('A'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains('Z'.code)).isTrue()
-            Assertions.assertThat(re.charClass.contains(0x17F)).isFalse()
-            Assertions.assertThat(re.charClass.contains(0x212A)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains('A'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains('Z'.code)).isTrue()
+            Assertions.assertThat(re.charClass!!.contains(0x17F)).isFalse()
+            Assertions.assertThat(re.charClass!!.contains(0x212A)).isFalse()
         }
 
         @Test
@@ -1765,8 +1765,8 @@ internal class ParserTest {
         fun dotConcatPattern() {
             val re: Regexp = parse("a.")
             Assertions.assertThat<RegexpOp?>(re.op).isEqualTo(RegexpOp.CONCAT)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(0).op).isEqualTo(RegexpOp.LITERAL)
-            Assertions.assertThat<RegexpOp?>(re.subs.get(1).op).isIn(RegexpOp.ANY_CHAR, RegexpOp.CHAR_CLASS)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(0)!!.op).isEqualTo(RegexpOp.LITERAL)
+            Assertions.assertThat<RegexpOp?>(re.subs!!.get(1)!!.op).isIn(RegexpOp.ANY_CHAR, RegexpOp.CHAR_CLASS)
         }
     }
 
@@ -1792,18 +1792,18 @@ internal class ParserTest {
                 or ParseFlags.UNICODE_GROUPS)
 
         private fun parse(pattern: String?): Regexp {
-            return Parser.parse(pattern, PERL)
+            return Parser.parse(pattern, PERL)!!
         }
 
         private fun parse(pattern: String?, flags: Int): Regexp {
-            return Parser.parse(pattern, flags)
+            return Parser.parse(pattern, flags)!!
         }
 
         private fun fullMatch(pattern: String?, text: String?, flags: Int): Boolean {
-            val re = Parser.parse(pattern, flags)
-            val prog = Compiler.compile(re)
+            val re = Parser.parse(pattern, flags)!!
+            val prog = Compiler.compile(re)!!
             val result =
-                Nfa.search(prog, text, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures())
+                Nfa.search(prog, text!!, Nfa.Anchor.UNANCHORED, Nfa.MatchKind.FULL_MATCH, prog.numCaptures())
             return result != null
         }
 

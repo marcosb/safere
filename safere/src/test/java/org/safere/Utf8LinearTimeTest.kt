@@ -88,12 +88,12 @@ internal class Utf8LinearTimeTest {
             WorkCounter.countForTesting(
                 Runnable { Assertions.assertThat(scanner.indexOfAsciiClass(asciiClass, 0)).isEqualTo(-1) })
 
-        Assertions.assertThat(work).isEqualTo(input.length.toLong())
+        Assertions.assertThat(work).isEqualTo(input.size.toLong())
     }
 
     @Test
     fun repeatedClassReplacementScalesLinearlyAcrossScalarsAndEmptyMatches() {
-        for (regex in mutableListOf<String?>("[aé😀]*", "[aé😀]+", "[^a]+")) {
+        for (regex in mutableListOf<String>("[aé😀]*", "[aé😀]+", "[^a]+")) {
             val pattern = Pattern.compile(regex)
             val replacement = Utf8Input.validated(byteArrayOf('x'.code.toByte()))
             assertFourXInputStaysNearLinear(
@@ -107,7 +107,7 @@ internal class Utf8LinearTimeTest {
 
     @Test
     fun fullyAnchoredBooleanFindScalesLinearlyWithInteriorFailures() {
-        for (terminal in mutableListOf<String?>("END", "[0-9]")) {
+        for (terminal in mutableListOf<String>("END", "[0-9]")) {
             val pattern = Pattern.compile("^([a-z]+)" + terminal + "\\z")
             val suffix = if (terminal == "END") "END" else "5"
             assertLargeFourXInputStaysNearLinear(
@@ -141,7 +141,7 @@ internal class Utf8LinearTimeTest {
         }
 
         private fun scanBothDirections(bytes: ByteArray?) {
-            val scanner = Utf8InputScanner(bytes)
+            val scanner = Utf8InputScanner(bytes!!)
             var position = 0
             while (position < scanner.length) {
                 position = InputScanner.position(scanner.decodeForward(position))

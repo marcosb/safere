@@ -15,18 +15,18 @@ internal class FailedFullMatchFindTest {
     fun failedFullMatchesPreserveInitialFindPosition() {
         // Issue #818: Matcher.find() starts at the region beginning when no find has succeeded.
         // Preserve that documented behavior, even where JDK 26.0.1 skips the initial match.
-        for (anchor in mutableListOf<String?>("\\A", "^")) {
-            for (atom in mutableListOf<String?>("a", "😀")) {
-                for (quantifier in mutableListOf<String?>("?", "*", "{0,2}", "??", "*?")) {
-                    for (empty in mutableListOf<Boolean?>(false, true)) {
-                        for (offset in mutableListOf<Int?>(0, 2)) {
-                            for (attempts in mutableListOf<Int?>(1, 2)) {
+        for (anchor in mutableListOf<String>("\\A", "^")) {
+            for (atom in mutableListOf<String>("a", "😀")) {
+                for (quantifier in mutableListOf<String>("?", "*", "{0,2}", "??", "*?")) {
+                    for (empty in mutableListOf<Boolean>(false, true)) {
+                        for (offset in mutableListOf<Int>(0, 2)) {
+                            for (attempts in mutableListOf<Int>(1, 2)) {
                                 val regex = anchor + "(" + atom + quantifier + ")"
                                 val input = (if (empty) "" else atom) + "!"
                                 val text = if (offset == 0) input else "xx" + input + "yy"
                                 val matcher = Pattern.compile(regex).matcher(text)
                                 if (offset != 0) {
-                                    matcher.region(offset!!, offset + input.size)
+                                    matcher.region(offset!!, offset + input.length)
                                 }
                                 for (attempt in 0..<attempts!!) {
                                     Assertions.assertThat(matcher.matches()).`as`("full match: %s", regex).isFalse()

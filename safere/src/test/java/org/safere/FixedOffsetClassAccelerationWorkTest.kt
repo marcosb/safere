@@ -18,7 +18,7 @@ internal class FixedOffsetClassAccelerationWorkTest {
     @ValueSource(booleans = [false, true])
     fun denseInteriorHitsWithNoLeadingCharacterCostOneLeadingScan(utf8: Boolean) {
         val input = "1234567890".repeat(10000)
-        for (regex in mutableListOf<String?>(" [0-9]{4,}", "[a-z]{2}[0-9]+", "[ \\t\\r\\n]{3}[0-9]+")) {
+        for (regex in mutableListOf<String>(" [0-9]{4,}", "[a-z]{2}[0-9]+", "[ \\t\\r\\n]{3}[0-9]+")) {
             val pattern = Pattern.compile(regex)
             val plan = pattern.startPlan() as StartPlan.FixedOffsetClass
             val scanner =
@@ -32,11 +32,11 @@ internal class FixedOffsetClassAccelerationWorkTest {
                         val candidate =
                             if (utf8)
                                 Utf8StartAccelerator.findNextCandidate(
-                                    pattern.utf8StartAccelerator(), scanner as Utf8InputScanner, 0
+                                    pattern.utf8StartAccelerator()!!, scanner as Utf8InputScanner, 0
                                 )
                             else
                                 StringStartAccelerator.findNextCandidate(
-                                    pattern.stringStartAccelerator(), input, 0, false
+                                    pattern.stringStartAccelerator()!!, input, 0, false
                                 )
                         Assertions.assertThat(candidate).isEqualTo(-1)
                     })
@@ -70,9 +70,9 @@ internal class FixedOffsetClassAccelerationWorkTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])
     fun falseCandidatesAndLongContinuationsRemainLinear(utf8: Boolean) {
-        for (regex in mutableListOf<String?>(" [0-9]{4,}", " ([0-9]+)Z", "[a-z]{2}([0-9]+)Z")) {
+        for (regex in mutableListOf<String>(" [0-9]{4,}", " ([0-9]+)Z", "[a-z]{2}([0-9]+)Z")) {
             val pattern = Pattern.compile(regex)
-            for (unit in mutableListOf<String?>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
+            for (unit in mutableListOf<String>("1111x", " 1x", "aa1234Y", "é😀1111x")) {
                 val small: Long = failureWork(pattern, unit!!.repeat(2000) + "Z", utf8)
                 val large: Long = failureWork(pattern, unit.repeat(10000) + "Z", utf8)
                 Assertions.assertThat(small).`as`("%s on %s", regex, unit).isPositive()

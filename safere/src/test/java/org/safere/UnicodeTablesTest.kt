@@ -18,8 +18,8 @@ internal class UnicodeTablesTest {
 
     @Test
     fun generatedCategories_includeUnassignedCategory() {
-        Assertions.assertThat<String?, Array<IntArray?>?>(UnicodeGeneratedTables.CATEGORIES).containsKey("Cn")
-        Assertions.assertThat<String?, Array<IntArray?>?>(UnicodeTables.UNICODE_GROUPS).containsKey("Cn")
+        Assertions.assertThat<String, Array<IntArray>>(UnicodeGeneratedTables.CATEGORIES).containsKey("Cn")
+        Assertions.assertThat<String, Array<IntArray>>(UnicodeTables.UNICODE_GROUPS).containsKey("Cn")
     }
 
     @Test
@@ -28,7 +28,7 @@ internal class UnicodeTablesTest {
         val unassigned = UnicodeGeneratedTables.CATEGORIES.get("Cn")
         Assertions.assertThat(assigned).isNotNull()
         Assertions.assertThat(unassigned).isNotNull()
-        val differences: MutableList<String?> = ArrayList<String?>()
+        val differences: MutableList<String> = ArrayList<String>()
         var assignedIndex = 0
         var unassignedIndex = 0
         for (cp in 0..Character.MAX_CODE_POINT) {
@@ -71,7 +71,7 @@ internal class UnicodeTablesTest {
         Assertions.assertThat(cn).isNotNull()
         for (entry in UnicodeGeneratedTables.CATEGORIES.entries) {
             val name = entry.key
-            if (name.size != 2 || name == "Cn") {
+            if (name.length != 2 || name == "Cn") {
                 continue
             }
             Assertions.assertThat(overlaps(cn!!, entry.value))

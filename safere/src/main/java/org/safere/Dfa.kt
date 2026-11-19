@@ -970,7 +970,7 @@ internal class Dfa {
                 text!!,
                 pos,
                 hasGraphemeSemantics,
-                graphemeContext!!,
+                graphemeContext,
                 prog.hasWordBoundary(),
                 prog.hasTextAnchor()
             )

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /**
@@ -31,14 +30,15 @@ internal class UnicodeCaseFoldingJdkImplementationDetailTest {
         description: String?, regex: String, input: String
     ) {
         val pattern =
-            Pattern.compile(
-                regex, Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+            java.util.regex.Pattern.compile(
+                regex, java.util.regex.Pattern.CASE_INSENSITIVE or java.util.regex.Pattern.UNICODE_CASE
             )
 
         Assertions.assertThat(pattern.matcher(input).matches()).`as`(description).isFalse()
     }
 
     companion object {
+        @JvmStatic
         private fun jdkCaseCases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(

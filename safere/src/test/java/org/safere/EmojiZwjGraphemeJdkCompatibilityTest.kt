@@ -9,9 +9,6 @@ import org.junit.jupiter.api.condition.EnabledForJreRange
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.List
-import java.util.regex.Matcher
-import java.util.regex.Pattern
 import java.util.stream.Stream
 
 /**
@@ -25,15 +22,15 @@ import java.util.stream.Stream
 internal class EmojiZwjGraphemeJdkCompatibilityTest {
     @ParameterizedTest(name = "{1}")
     @MethodSource("gb11Cases")
-    fun graphemeClustersMatchJdk(expected: MutableList<String?>, description: String?) {
-        val input = String.join("", expected)
+    fun graphemeClustersMatchJdk(expected: MutableList<String>, description: String?) {
+        val input = java.lang.String.join("", expected)
         Assertions.assertThat<String?>(clusters(Pattern.compile("\\X").matcher(input))).isEqualTo(expected)
-        Assertions.assertThat<String?>(jdkClusters(Pattern.compile("\\X").matcher(input)))
+        Assertions.assertThat<String?>(jdkClusters(java.util.regex.Pattern.compile("\\X").matcher(input)))
             .`as`("JDK \\X clusters")
             .isEqualTo(expected)
         Assertions.assertThat<String?>(org.safere.Pattern.compile("\\b{g}").split(input))
             .containsExactlyElementsOf(expected)
-            .containsExactly(*Pattern.compile("\\b{g}").split(input))
+            .containsExactly(*java.util.regex.Pattern.compile("\\b{g}").split(input))
     }
 
     companion object {
@@ -46,47 +43,48 @@ internal class EmojiZwjGraphemeJdkCompatibilityTest {
         private const val DEVANAGARI_VISARGA = "\u0903" // SpacingMark
         private const val ARABIC_NUMBER_SIGN = "\u0600" // Prepend
 
+        @JvmStatic
         fun gb11Cases(): Stream<Arguments?> {
             return Stream.of<Arguments?>(
                 Arguments.of(
-                    List.of<String?>(THUMBS_UP + DEVANAGARI_VISARGA + ZWJ, THUMBS_UP), "SpacingMark interrupts"
+                    java.util.List.of<String?>(THUMBS_UP + DEVANAGARI_VISARGA + ZWJ, THUMBS_UP), "SpacingMark interrupts"
                 ),
-                Arguments.of(List.of<String?>(THUMBS_UP + ZWJ + ZWJ, THUMBS_UP), "second ZWJ interrupts"),
+                Arguments.of(java.util.List.of<String?>(THUMBS_UP + ZWJ + ZWJ, THUMBS_UP), "second ZWJ interrupts"),
                 Arguments.of(
-                    List.of<String?>(THUMBS_UP + ZWJ + ACUTE, THUMBS_UP),
+                    java.util.List.of<String?>(THUMBS_UP + ZWJ + ACUTE, THUMBS_UP),
                     "Extend after ZWJ interrupts"
                 ),
-                Arguments.of(List.of<String?>(THUMBS_UP + ACUTE + ZWJ + THUMBS_UP), "Extend before ZWJ joins"),
+                Arguments.of(java.util.List.of<String?>(THUMBS_UP + ACUTE + ZWJ + THUMBS_UP), "Extend before ZWJ joins"),
                 Arguments.of(
-                    List.of<String?>(MAN + ZWJ + MEDIUM_DARK_SKIN_TONE + ZWJ, WOMAN),
+                    java.util.List.of<String?>(MAN + ZWJ + MEDIUM_DARK_SKIN_TONE + ZWJ, WOMAN),
                     "modifier after ZWJ is not a pictograph"
                 ),
                 Arguments.of(
-                    List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ZWJ + WOMAN), "Prepend before pictograph joins"
+                    java.util.List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ZWJ + WOMAN), "Prepend before pictograph joins"
                 ),
                 Arguments.of(
-                    List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ACUTE + ZWJ + WOMAN + ZWJ + WOMAN),
+                    java.util.List.of<String?>(ARABIC_NUMBER_SIGN + WOMAN + ACUTE + ZWJ + WOMAN + ZWJ + WOMAN),
                     "Prepend before a longer chain joins"
                 ),
                 Arguments.of(
-                    List.of<String?>(WOMAN, ARABIC_NUMBER_SIGN + ZWJ, WOMAN),
+                    java.util.List.of<String?>(WOMAN, ARABIC_NUMBER_SIGN + ZWJ, WOMAN),
                     "Prepend inside the prefix interrupts"
                 )
             )
         }
 
-        private fun clusters(matcher: Matcher): MutableList<String?> {
-            val clusters: MutableList<String?> = ArrayList<String?>()
+        private fun clusters(matcher: org.safere.Matcher): MutableList<String> {
+            val clusters: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
-                clusters.add(matcher.group())
+                clusters.add(matcher.group()!!)
             }
             return clusters
         }
 
-        private fun jdkClusters(matcher: Matcher): MutableList<String?> {
-            val clusters: MutableList<String?> = ArrayList<String?>()
+        private fun jdkClusters(matcher: java.util.regex.Matcher): MutableList<String> {
+            val clusters: MutableList<String> = ArrayList<String>()
             while (matcher.find()) {
-                clusters.add(matcher.group())
+                clusters.add(matcher.group()!!)
             }
             return clusters
         }
