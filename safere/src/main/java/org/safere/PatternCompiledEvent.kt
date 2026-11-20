@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 
 /** Event emitted after a pattern is compiled while diagnostics are enabled.  */
@@ -13,6 +12,6 @@ data class PatternCompiledEvent(val pattern: PatternDescriptor?) {
 
     /** Creates a pattern compilation event.  */
     init {
-        Objects.requireNonNull<PatternDescriptor?>(pattern, "pattern")
+        requireNotNull(pattern) { "pattern" }
     }
 }

@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 
 /**
@@ -19,6 +18,6 @@ data class PatternDescriptor(val patternId: Long, val analysis: PatternAnalysis?
     /** Creates a descriptor.  */
     init {
         require(patternId > 0) { "patternId must be positive" }
-        Objects.requireNonNull<PatternAnalysis?>(analysis, "analysis")
+        requireNotNull(analysis) { "analysis" }
     }
 }

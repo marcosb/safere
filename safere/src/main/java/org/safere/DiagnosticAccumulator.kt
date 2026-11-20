@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 
 /** Enabled-only, bounded diagnostics state for one public operation.  */
 internal class DiagnosticAccumulator {
@@ -17,13 +16,13 @@ internal class DiagnosticAccumulator {
     private var forwardDfaSearchCount = 0
     private var reverseDfaSearchCount = 0
     private var matchCount = 0
-    private var intentionalDivergences: EnumSet<IntentionalDivergence>? = null
+    private var intentionalDivergences: MutableSet<IntentionalDivergence>? = null
 
     fun intentionalDivergence(divergence: IntentionalDivergence?) {
         if (intentionalDivergences == null) {
-            intentionalDivergences = EnumSet.noneOf(IntentionalDivergence::class.java)
+            intentionalDivergences = linkedSetOf()
         }
-        intentionalDivergences!!.add(divergence)
+        intentionalDivergences!!.add(divergence!!)
     }
 
     fun reportIntentionalDivergences(listener: SafeReMatchDiagnostics) {
@@ -48,8 +47,8 @@ internal class DiagnosticAccumulator {
 
     fun participate(strategy: MatchStrategy, role: StrategyRole) {
         val token: Int = strategyIndex(strategy) * ROLE_COUNT + roleIndex(role)
-        val word = token / java.lang.Long.SIZE
-        val bit = 1L shl (token % java.lang.Long.SIZE)
+        val word = token / Long.SIZE_BITS
+        val bit = 1L shl (token % Long.SIZE_BITS)
         if ((seenParticipation[word] and bit) != 0L) {
             return
         }
@@ -61,8 +60,8 @@ internal class DiagnosticAccumulator {
         val token: Int =
             ((strategyIndex(strategy) * DISPOSITION_COUNT + dispositionIndex(disposition)) * REASON_COUNT
                     + reasonIndex(reason))
-        decisions[token / java.lang.Long.SIZE] =
-            decisions[token / java.lang.Long.SIZE] or (1L shl (token % java.lang.Long.SIZE))
+        decisions[token / Long.SIZE_BITS] =
+            decisions[token / Long.SIZE_BITS] or (1L shl (token % Long.SIZE_BITS))
     }
 
     fun incrementMatchCount() {
@@ -109,7 +108,7 @@ internal class DiagnosticAccumulator {
         }
         val decisionSet: MutableSet<StrategyDecision?> = LinkedHashSet<StrategyDecision?>()
         for (token in 0..<DECISION_COUNT) {
-            if ((decisions[token / java.lang.Long.SIZE] and (1L shl (token % java.lang.Long.SIZE))) == 0L) {
+            if ((decisions[token / Long.SIZE_BITS] and (1L shl (token % Long.SIZE_BITS))) == 0L) {
                 continue
             }
             val strategyOrdinal: Int = token / (DISPOSITION_COUNT * REASON_COUNT)
@@ -130,13 +129,13 @@ internal class DiagnosticAccumulator {
             outcome,
             boundaryStrategy,
             effectiveCaptureStrategy,
-            participation,
-            decisionSet,
+            participation.toList(),
+            decisionSet.toSet(),
             forwardDfaSearchCount,
             reverseDfaSearchCount,
             captureMode,
             inputLength,
-            matchCount
+            matchCount,
         )
     }
 
@@ -182,7 +181,7 @@ internal class DiagnosticAccumulator {
         private val DECISION_COUNT: Int = STRATEGY_COUNT * DISPOSITION_COUNT * REASON_COUNT
 
         private fun wordCount(bits: Int): Int {
-            return (bits + java.lang.Long.SIZE - 1) / java.lang.Long.SIZE
+            return (bits + Long.SIZE_BITS - 1) / Long.SIZE_BITS
         }
 
         private fun strategyIndex(strategy: MatchStrategy): Int {

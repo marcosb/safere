@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 
 /** Immutable execution bounds shared by raw byte matching engines.  */
 internal class ByteEngineContext(
@@ -22,7 +21,7 @@ internal class ByteEngineContext(
     private val text: ByteArray
 
     init {
-        this.text = Objects.requireNonNull<ByteArray>(text, "text")
+        this.text = requireNotNull(text) { "text" }
     }
 
     fun text(): ByteArray {

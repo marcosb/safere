@@ -60,14 +60,7 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/MatcherTransitionInventory.kt",
   "org/safere/RegionClassSearch.kt",
   "org/safere/EngineContext.kt",
-  "org/safere/ByteEngineContext.kt",
-  "org/safere/DiagnosticAccumulator.kt",
-  "org/safere/OperationDiagnostics.kt",
   "org/safere/Utf8Input.kt",
-  "org/safere/ClassHashChain.kt",
-  "org/safere/PatternCompiledEvent.kt",
-  "org/safere/PatternDescriptor.kt",
-  "org/safere/SafeReMatchDiagnostics.kt",
   "module-info.java",
 )
 

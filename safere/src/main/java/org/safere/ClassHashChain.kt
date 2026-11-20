@@ -4,8 +4,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.function.Predicate
+import kotlin.math.min
 
 /**
  * Precomputed 2-gram shift table (Hash-Chain scanner) for case-insensitive literal and prefix
@@ -130,36 +129,39 @@ internal class ClassHashChain private constructor(
                 return null
             }
             val m: Int = literal.length
-            val codePointVariants: MutableList<Array<CharArray>?> = ArrayList<Array<CharArray>?>()
-            run {
-                var i = 0
-                while (i < literal.length) {
-                    val codePoint = literal.codePointAt(i)
-                    val original = Character.toChars(codePoint)
-                    val variants: MutableList<CharArray?> = ArrayList<CharArray?>()
-                    var folded = codePoint
-                    do {
-                        val foldedChars = Character.toChars(folded)
-                        if (foldedChars.size != original.size) {
-                            return null
+            val codePointVariants = ArrayList<Array<CharArray>>()
+            var i = 0
+            while (i < literal.length) {
+                val codePoint = CodePoints.codePointAt(literal, i)
+                val original = CodePoints.toChars(codePoint)
+                val variants = ArrayList<CharArray>()
+                var folded = codePoint
+                do {
+                    val foldedChars = CodePoints.toChars(folded)
+                    if (foldedChars.size != original.size) {
+                        return null
+                    }
+                    var seen = false
+                    for (existing in variants) {
+                        if (existing.contentEquals(foldedChars)) {
+                            seen = true
+                            break
                         }
-                        if (variants.stream()
-                                .noneMatch(Predicate { existing: CharArray? -> Arrays.equals(existing, foldedChars) })
-                        ) {
-                            variants.add(foldedChars)
-                        }
-                        folded = Inst.simpleFold(folded)
-                    } while (folded != codePoint)
-                    codePointVariants.add(variants.toTypedArray() as Array<CharArray>)
-                    i += original.size
-                }
+                    }
+                    if (!seen) {
+                        variants.add(foldedChars)
+                    }
+                    folded = Inst.simpleFold(folded)
+                } while (folded != codePoint)
+                codePointVariants.add(variants.toTypedArray())
+                i += original.size
             }
 
             val codePointIndexForChar = IntArray(m)
             val intraCharOffset = IntArray(m)
             var charIndex = 0
             for (codePointIndex in codePointVariants.indices) {
-                val charCount: Int = codePointVariants.get(codePointIndex)!![0].size
+                val charCount = codePointVariants[codePointIndex][0].size
                 for (charOffset in 0..<charCount) {
                     codePointIndexForChar[charIndex] = codePointIndex
                     intraCharOffset[charIndex] = charOffset
@@ -168,25 +170,25 @@ internal class ClassHashChain private constructor(
             }
 
             val shifts = ByteArray(TABLE_SIZE)
-            val defaultShift = Math.min(127, m - 1)
-            Arrays.fill(shifts, defaultShift.toByte())
+            val defaultShift = min(127, m - 1)
+            shifts.fill(defaultShift.toByte())
 
-            for (i in 0..<m - 2) {
-                val shiftVal = m - 2 - i
-                val cp0 = codePointIndexForChar[i]
-                val off0 = intraCharOffset[i]
-                val cp1 = codePointIndexForChar[i + 1]
-                val off1 = intraCharOffset[i + 1]
+            for (pairIndex in 0..<m - 2) {
+                val shiftVal = m - 2 - pairIndex
+                val cp0 = codePointIndexForChar[pairIndex]
+                val off0 = intraCharOffset[pairIndex]
+                val cp1 = codePointIndexForChar[pairIndex + 1]
+                val off1 = intraCharOffset[pairIndex + 1]
                 if (cp0 == cp1) {
-                    for (variant in codePointVariants.get(cp0)!!) {
-                        val h: Int = hash(variant[off0], variant[off1])
-                        shifts[h] = Math.min(shifts[h].toInt() and 0xFF, shiftVal).toByte()
+                    for (variant in codePointVariants[cp0]) {
+                        val h = hash(variant[off0], variant[off1])
+                        shifts[h] = min(shifts[h].toInt() and 0xFF, shiftVal).toByte()
                     }
                 } else {
-                    for (variant0 in codePointVariants.get(cp0)!!) {
-                        for (variant1 in codePointVariants.get(cp1)!!) {
-                            val h: Int = hash(variant0[off0], variant1[off1])
-                            shifts[h] = Math.min(shifts[h].toInt() and 0xFF, shiftVal).toByte()
+                    for (variant0 in codePointVariants[cp0]) {
+                        for (variant1 in codePointVariants[cp1]) {
+                            val h = hash(variant0[off0], variant1[off1])
+                            shifts[h] = min(shifts[h].toInt() and 0xFF, shiftVal).toByte()
                         }
                     }
                 }
@@ -197,12 +199,12 @@ internal class ClassHashChain private constructor(
             val cpLast1 = codePointIndexForChar[m - 1]
             val offLast1 = intraCharOffset[m - 1]
             if (cpLast0 == cpLast1) {
-                for (variant in codePointVariants.get(cpLast0)!!) {
+                for (variant in codePointVariants[cpLast0]) {
                     shifts[hash(variant[offLast0], variant[offLast1])] = 0
                 }
             } else {
-                for (variant0 in codePointVariants.get(cpLast0)!!) {
-                    for (variant1 in codePointVariants.get(cpLast1)!!) {
+                for (variant0 in codePointVariants[cpLast0]) {
+                    for (variant1 in codePointVariants[cpLast1]) {
                         shifts[hash(variant0[offLast0], variant1[offLast1])] = 0
                     }
                 }
