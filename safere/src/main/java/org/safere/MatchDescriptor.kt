@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import org.safere.Pattern.CharClassMatchInfo
 import org.safere.Pattern.KeywordAlternation
 import kotlin.jvm.JvmRecord
 

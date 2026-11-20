@@ -41,7 +41,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/MultiAnchorCompiler.kt",
   "org/safere/MultiAnchorDescriptor.kt",
   "org/safere/MatchDescriptor.kt",
-  "org/safere/StringRegionInputScanner.kt",
   "org/safere/Nfa.kt",
   "org/safere/Dfa.kt",
   "org/safere/BitState.kt",
@@ -54,13 +53,12 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/SystemProperties.kt",
   "org/safere/UnicodeJdkAliases.kt",
   "org/safere/UnicodeCaseMapping.kt",
+  "org/safere/Utf8InputPlatform.kt",
   // JVM-only ByteBuffer sink extension (Utf8Sink itself is common)
   "org/safere/Utf8SinkBuffers.kt",
   // Remaining JDK-tied surface parked for later M3 batches
   "org/safere/MatcherTransitionInventory.kt",
-  "org/safere/RegionClassSearch.kt",
   "org/safere/EngineContext.kt",
-  "org/safere/Utf8Input.kt",
   "module-info.java",
 )
 
@@ -72,6 +70,7 @@ val kmpOverlayRelativePaths =
     "org/safere/SystemProperties.kt",
     "org/safere/UnicodeJdkAliases.kt",
     "org/safere/UnicodeCaseMapping.kt",
+    "org/safere/Utf8InputPlatform.kt",
   )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */

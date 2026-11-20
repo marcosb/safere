@@ -167,13 +167,13 @@ internal interface RejectPrefilter {
 
     @JvmRecord
     data class CharClass(
-        val ranges: IntArray?,
-        val bitmap0: Long,
-        val bitmap1: Long,
+        override val ranges: IntArray?,
+        override val bitmap0: Long,
+        override val bitmap1: Long,
         val singleAscii: Int,
         val smallChars: CharArray?,
         val nonAsciiUtf8: ByteArray?
-    ) : RejectPrefilter {
+    ) : RejectPrefilter, CharClassMembership {
         override fun canReject(
             text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {

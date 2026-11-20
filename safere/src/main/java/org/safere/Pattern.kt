@@ -2601,14 +2601,6 @@ class Pattern private constructor(
         }
     }
 
-    /** Holds precomputed data for the character-class-match fast path.  */ // TODO(#98): Replace int[] with Guava ImmutableIntArray to get proper value semantics.
-    internal data class CharClassMatchInfo(
-        val ranges: IntArray?,
-        val bitmap0: Long,
-        val bitmap1: Long,
-        val allowEmpty: Boolean
-    )
-
     internal data class SuffixInfo(
         val suffix: String?,
         val wasDollar: Boolean,
