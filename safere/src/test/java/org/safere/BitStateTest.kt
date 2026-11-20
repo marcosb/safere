@@ -65,11 +65,9 @@ internal class BitStateTest {
 
                 val expected = arrayOfNulls<IntArray>(1)
                 val interpreterWork =
-                    WorkCounter.countForTesting(
-                        Runnable { expected[0] = interpreter.doSearch(0, length, anchored!!) })
+                    WorkCounter.countForTesting({ expected[0] = interpreter.doSearch(0, length, anchored!!) })
                 val fusedWork =
-                    WorkCounter.countForTesting(
-                        Runnable {
+                    WorkCounter.countForTesting({
                             Assertions.assertThat(fused.doSearch(0, length, anchored!!))
                                 .`as`("%s, anchored=%s", scanner.javaClass.getSimpleName(), anchored)
                                 .isEqualTo(expected[0])

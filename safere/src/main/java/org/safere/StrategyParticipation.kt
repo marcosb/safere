@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 
 /** A strategy performing an auxiliary role during an operation.  */
@@ -13,7 +12,7 @@ data class StrategyParticipation(val strategy: MatchStrategy?, val role: Strateg
 
     /** Creates a participation pair.  */
     init {
-        Objects.requireNonNull<MatchStrategy?>(strategy, "strategy")
-        Objects.requireNonNull<StrategyRole?>(role, "role")
+        requireNotNull(strategy) { "strategy" }
+        requireNotNull(role) { "role" }
     }
 }

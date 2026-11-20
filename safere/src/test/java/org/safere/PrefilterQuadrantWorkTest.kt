@@ -109,7 +109,7 @@ internal class PrefilterQuadrantWorkTest {
                 )
             for (c in cases) {
                 ENTRY_POINTS.forEach { (name: String?, entryPoint: BiConsumer<Pattern?, String?>?) ->
-                    val work: Long = work(Runnable { entryPoint!!.accept(pattern, c.input) })
+                    val work: Long = work({ entryPoint!!.accept(pattern, c.input) })
                     if (work > c.bound) {
                         failures.add(
                             String.format(
@@ -167,8 +167,8 @@ internal class PrefilterQuadrantWorkTest {
             return body.substring(0, size - tail.length) + tail
         }
 
-        private fun work(task: Runnable): Long {
-            task.run() // Build lazily prepared engines outside the measurement.
+        private fun work(task: () -> Any?): Long {
+            task() // Build lazily prepared engines outside the measurement.
             return WorkCounter.countForTesting(task)
         }
 

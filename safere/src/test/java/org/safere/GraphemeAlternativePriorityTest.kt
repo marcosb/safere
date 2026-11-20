@@ -22,8 +22,7 @@ internal class GraphemeAlternativePriorityTest {
                     val input = "a".repeat(size) + "\uD83D\uDC4D"
                     val matcher = pattern.matcher(input).region(0, input.length - 1)
                     val work =
-                        WorkCounter.countForTesting(
-                            Runnable {
+                        WorkCounter.countForTesting({
                                 Assertions.assertThat(if (full) matcher.matches() else matcher.find()).isTrue()
                             })
                     Assertions.assertThat(work).isPositive()

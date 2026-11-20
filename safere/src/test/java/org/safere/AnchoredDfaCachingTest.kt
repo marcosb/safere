@@ -93,8 +93,8 @@ internal class AnchoredDfaCachingTest {
             operation.accept(1000)
             operation.accept(10000)
 
-            val smallerWork = WorkCounter.countForTesting(Runnable { operation.accept(1000) })
-            val largerWork = WorkCounter.countForTesting(Runnable { operation.accept(10000) })
+            val smallerWork = WorkCounter.countForTesting({ operation.accept(1000) })
+            val largerWork = WorkCounter.countForTesting({ operation.accept(10000) })
 
             Assertions.assertThat(largerWork)
                 .`as`("ordinary anchored transitions should use the DFA cache independent of input length")

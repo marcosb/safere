@@ -251,8 +251,7 @@ internal class BitStateWindowTest {
                     val stringMatcher = pattern.matcher(text)
                     val utf8Matcher = pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))
                     val work =
-                        WorkCounter.countForTesting(
-                            Runnable {
+                        WorkCounter.countForTesting({
                                 var matches = 0
                                 while (if (utf8) utf8Matcher.find() else stringMatcher.find()) {
                                     matches++
@@ -277,8 +276,7 @@ internal class BitStateWindowTest {
             val bs: BitState =
                 window(prog, StringInputScanner("a".repeat(size!!)), BitState.SPECULATIVE_WINDOW_SIZE)
             val work =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull() })
+                WorkCounter.countForTesting({ Assertions.assertThat(bs.doSearchWindow(0, 0, true, null)).isNull() })
             Assertions.assertThat(bs.windowExceeded()).isTrue()
             if (previous >= 0) {
                 Assertions.assertThat(work).isEqualTo(previous)
@@ -402,8 +400,7 @@ internal class BitStateWindowTest {
             for (size in mutableListOf<Int>(64, 128, 256)) {
                 val matcher: Matcher = matchers(pattern, block.repeat(size!!)).get(if (utf8) 1 else 0)
                 val work =
-                    WorkCounter.countForTesting(
-                        Runnable {
+                    WorkCounter.countForTesting({
                             var matches = 0
                             while (matcher.find()) {
                                 matches++
@@ -701,8 +698,7 @@ internal class BitStateWindowTest {
             val scanner: InputScanner = scanners("x" + "a".repeat(repeat) + "z").get(if (utf8) 1 else 0)
             val engine =
                 BitState.getOrCreate(null, prog!!, scanner, 0, scanner.length, ncap, false, false)
-            return WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length) })
+            return WorkCounter.countForTesting({ Assertions.assertThat(engine.doSearch(0, 0, true)).startsWith(0, scanner.length) })
         }
 
         private fun unhintedPattern(regex: String?): Pattern {

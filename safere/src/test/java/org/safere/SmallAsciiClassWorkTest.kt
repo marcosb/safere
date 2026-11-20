@@ -19,8 +19,7 @@ internal class SmallAsciiClassWorkTest {
         val scanner: InputScanner = StringInputScanner(text)
         val info: CharClassScanInfo? = smallSet("XZ_")
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(scanner.indexOfCharClass(info, 0)).isEqualTo(-1) })
+            WorkCounter.countForTesting({ Assertions.assertThat(scanner.indexOfCharClass(info, 0)).isEqualTo(-1) })
         // The bitmap prologue inspects each unit once; each absent member searches the remainder.
         Assertions.assertThat(work).isEqualTo(16L + 3L * (text.length - 16))
     }
@@ -35,8 +34,7 @@ internal class SmallAsciiClassWorkTest {
                         val text = (noise.repeat(gap - 1) + "Z").repeat(matches)
                         val scanner: InputScanner = StringInputScanner(text)
                         val work =
-                            WorkCounter.countForTesting(
-                                Runnable {
+                            WorkCounter.countForTesting({
                                     var from = 0
                                     for (i in 0..<matches) {
                                         val found = scanner.indexOfCharClass(info, from)
@@ -61,8 +59,7 @@ internal class SmallAsciiClassWorkTest {
         for (gap in intArrayOf(17, 65, 200, 5000)) {
             val text = ("a".repeat(gap - 1) + "Z").repeat(128)
             val work =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         val matcher = pattern.matcher(text)
                         var matches = 0
                         while (matcher.find()) {
@@ -90,8 +87,7 @@ internal class SmallAsciiClassWorkTest {
                         val text = (noise.repeat(gap - 1) + present).repeat(matches) + suffix
                         val scanner: InputScanner = StringInputScanner(text)
                         val work =
-                            WorkCounter.countForTesting(
-                                Runnable {
+                            WorkCounter.countForTesting({
                                     var from = 0
                                     for (i in 0..<matches) {
                                         val found = scanner.indexOfCharClass(info, from)

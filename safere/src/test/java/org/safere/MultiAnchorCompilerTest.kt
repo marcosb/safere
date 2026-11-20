@@ -999,7 +999,7 @@ internal class MultiAnchorCompilerTest {
         }
 
         private fun analysisWork(regexp: Regexp?): Long {
-            return WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.analyze(regexp) })
+            return WorkCounter.countForTesting({ MultiAnchorCompiler.analyze(regexp) })
         }
 
         private fun startSubsumesFindReject(regex: String?): Boolean {

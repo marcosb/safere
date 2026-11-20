@@ -188,7 +188,7 @@ internal class DfaStartAccelerationWorkTest {
                 Assertions.assertThat(matcher.find()).isTrue()
                 matcher.reset()
                 val work =
-                    WorkCounter.countStartAccelerationForTesting(Runnable {
+                    WorkCounter.countStartAccelerationForTesting({
                         Assertions.assertThat(matcher.find()).isTrue()
                     })
                 Assertions.assertThat(matcher.start())
@@ -201,7 +201,7 @@ internal class DfaStartAccelerationWorkTest {
             Assertions.assertThat(matcher.find()).isTrue()
             matcher.reset()
             val work =
-                WorkCounter.countStartAccelerationForTesting(Runnable {
+                WorkCounter.countStartAccelerationForTesting({
                     Assertions.assertThat(matcher.find()).isTrue()
                 })
             Assertions.assertThat(matcher.start()).isEqualTo(jdk.start())

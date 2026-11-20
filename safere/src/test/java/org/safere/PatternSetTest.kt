@@ -186,7 +186,7 @@ internal class PatternSetTest {
                 allocatedFor(
                     allocationTracker,
                     threadId,
-                    Runnable {
+                    {
                         for (i in 0..49) {
                             compileAndMatchEachPattern(patterns, "a")
                         }
@@ -195,7 +195,7 @@ internal class PatternSetTest {
                 allocatedFor(
                     allocationTracker,
                     threadId,
-                    Runnable {
+                    {
                         for (i in 0..49) {
                             Assertions.assertThat<Int?>(set.match("a")).containsExactly(0)
                         }
@@ -620,8 +620,8 @@ internal class PatternSetTest {
     companion object {
         private fun assertFourXInputStaysNearLinear(scenario: String?, task: IntConsumer) {
             task.accept(1000)
-            val smallerWork = WorkCounter.countForTesting(Runnable { task.accept(5000) })
-            val largerWork = WorkCounter.countForTesting(Runnable { task.accept(20000) })
+            val smallerWork = WorkCounter.countForTesting({ task.accept(5000) })
+            val largerWork = WorkCounter.countForTesting({ task.accept(20000) })
 
             Assertions.assertThat(smallerWork).`as`("%s: smaller input should use matcher work", scenario).isPositive()
             Assertions.assertThat(largerWork)
@@ -633,10 +633,10 @@ internal class PatternSetTest {
         }
 
         private fun allocatedFor(
-            allocationTracker: AllocationTracker, threadId: Long, task: Runnable
+            allocationTracker: AllocationTracker, threadId: Long, task: () -> Unit
         ): Long {
             val before = allocationTracker.allocatedBytes(threadId)
-            task.run()
+            task()
             return allocationTracker.allocatedBytes(threadId) - before
         }
 

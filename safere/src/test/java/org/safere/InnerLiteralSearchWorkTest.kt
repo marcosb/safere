@@ -48,10 +48,10 @@ internal class InnerLiteralSearchWorkTest {
         val pattern = Pattern.compile("record:[^;]*val=200")
         for (noise in mutableListOf<String>("record:x;", "other:x;")) {
             val input = noise!!.repeat(2048) + "record:target_val=200"
-            for (search in java.util.List.of<Runnable?>(
-                Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
-                Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).endsWith("X") },
-                Runnable { Assertions.assertThat<String?>(pattern.split(input, -1)).hasSize(2) })) {
+            for (search in listOf(
+                { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
+                { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).endsWith("X") },
+                { Assertions.assertThat<String?>(pattern.split(input, -1)).hasSize(2) })) {
                 val work = WorkCounter.countForTesting(search)
                 Assertions.assertThat(work).`as`("noise=%s", noise).isLessThan(input.length + 1024L)
             }
@@ -64,15 +64,15 @@ internal class InnerLiteralSearchWorkTest {
         for (count in intArrayOf(1024, 2048)) {
             for (unit in mutableListOf<String>("record:x;val=200;", "record:xval=200;")) {
                 val input = unit!!.repeat(count) + "record:target_val=200"
-                for (search in java.util.List.of<Runnable?>(
-                    Runnable {
+                for (search in listOf(
+                    {
                         val matcher = pattern.matcher(input)
                         while (matcher.find()) {
                             Assertions.assertThat(matcher.end()).isGreaterThan(matcher.start())
                         }
                     },
-                    Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isNotNull() },
-                    Runnable { Assertions.assertThat<String?>(pattern.split(input, -1)).isNotNull() })) {
+                    { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isNotNull() },
+                    { Assertions.assertThat<String?>(pattern.split(input, -1)).isNotNull() })) {
                     val work = WorkCounter.countWithForwardDfaStepsForTesting(search)
                     Assertions.assertThat(work)
                         .`as`("count=%s, unit=%s", count, unit)
@@ -84,8 +84,7 @@ internal class InnerLiteralSearchWorkTest {
 
     companion object {
         private fun findWork(pattern: Pattern, input: String, match: String, utf8: Boolean): Long {
-            return WorkCounter.countForwardDfaStepsForTesting(
-                Runnable {
+            return WorkCounter.countForwardDfaStepsForTesting({
                     if (utf8) {
                         val matcher = pattern.matcher(Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8)))
                         Assertions.assertThat(matcher.find()).isTrue()

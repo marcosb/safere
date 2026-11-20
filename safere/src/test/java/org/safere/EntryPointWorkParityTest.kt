@@ -44,8 +44,8 @@ internal class EntryPointWorkParityTest {
             val pattern = Pattern.compile(scenario.regex)
             for (size in SIZES) {
                 val input = FILLER.repeat(size / FILLER.length) + scenario.tail
-                val find: Long = work(Runnable { consume(pattern.matcher(input).find()) })
-                val findAll: Long = work(Runnable { findAll(pattern, input) })
+                val find: Long = work({ consume(pattern.matcher(input).find()) })
+                val findAll: Long = work({ findAll(pattern, input) })
                 FIRST_MATCH.forEach { (name: String?, op: BiConsumer<Pattern?, String?>?) ->
                     check(
                         failures,
@@ -89,7 +89,7 @@ internal class EntryPointWorkParityTest {
             )
         for (size in SIZES) {
             val input = FILLER.repeat(size / FILLER.length)
-            val search = Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() }
+            val search = { Assertions.assertThat(pattern.matcher(input).find()).isFalse() }
             val reference: Long = work(search)
             val dfaSteps = WorkCounter.countForwardDfaStepsForTesting(search)
 
@@ -112,30 +112,29 @@ internal class EntryPointWorkParityTest {
             val forwardOnly =
                 Pattern.compile(regex, 0, EnginePathOptions.builder().literalFastPaths(false).build())
             Assertions.assertThat(
-                WorkCounter.countForwardDfaStepsForTesting(
-                    Runnable { consume(forwardOnly.matcher(input).find()) })
+                WorkCounter.countForwardDfaStepsForTesting({ consume(forwardOnly.matcher(input).find()) })
             )
                 .`as`("the control must scan the dense prefix candidates")
                 .isGreaterThan(input.length / 4L)
 
             val check =
-                BiConsumer { name: String?, task: Runnable? ->
-                    task!!.run() // Prepare lazy engines outside the counted operation.
+                BiConsumer { name: String?, task: (() -> Any?)? ->
+                    task!!() // Prepare lazy engines outside the counted operation.
                     val steps = WorkCounter.countForwardDfaStepsForTesting(task)
                     Assertions.assertThat(steps)
                         .`as`("%s must narrow the guarded gap at %d chars", name, input.length)
                         .isLessThan(input.length / 16L)
                 }
-            check.accept("Matcher.find", Runnable { consume(pattern.matcher(input).find()) })
+            check.accept("Matcher.find", { consume(pattern.matcher(input).find()) })
             FIRST_MATCH.forEach { (name: String?, operation: BiConsumer<Pattern?, String?>?) ->
                 check.accept(
                     name,
-                    Runnable { operation!!.accept(pattern, input) })
+                    { operation!!.accept(pattern, input) })
             }
             ALL_MATCHES.forEach { (name: String?, operation: BiConsumer<Pattern?, String?>?) ->
                 check.accept(
                     name,
-                    Runnable { operation!!.accept(pattern, input) })
+                    { operation!!.accept(pattern, input) })
             }
         }
     }
@@ -223,7 +222,7 @@ internal class EntryPointWorkParityTest {
             input: String?,
             op: BiConsumer<Pattern?, String?>
         ) {
-            val actual: Long = work(Runnable { op.accept(pattern, input) })
+            val actual: Long = work({ op.accept(pattern, input) })
             val withinBound = actual <= FACTOR * reference + SLACK
             val key = scenario.toString() + " " + entryPoint
             val gap: String? = KNOWN_GAPS.get(key)
@@ -243,8 +242,8 @@ internal class EntryPointWorkParityTest {
             }
         }
 
-        private fun work(task: Runnable): Long {
-            task.run() // Build lazily prepared engines outside the measurement.
+        private fun work(task: () -> Any?): Long {
+            task() // Build lazily prepared engines outside the measurement.
             // Direct scanners record ordinary units; the DFA's ASCII loop records separate steps.
             return WorkCounter.countWithForwardDfaStepsForTesting(task)
         }

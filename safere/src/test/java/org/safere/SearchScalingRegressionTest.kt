@@ -48,8 +48,7 @@ internal class SearchScalingRegressionTest {
             val input = "a" + "😀".repeat(pairs) + "\uDE00!"
             val matcher = pattern.matcher(input)
             work[index] =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         for (end in input.length downTo 1) {
                             matcher.region(1, end)
                             Assertions.assertThat(matcher.find()).isEqualTo(end >= input.length - 1)
@@ -70,8 +69,7 @@ internal class SearchScalingRegressionTest {
                 val input = "a" + "😀".repeat(pairs) + "\uD83Dxy"
                 val matcher = pattern.matcher(input)
                 work[index] =
-                    WorkCounter.countForTesting(
-                        Runnable {
+                    WorkCounter.countForTesting({
                             var start = 2 * pairs - 1
                             while (start >= 1) {
                                 matcher.region(start, input.length)
@@ -96,8 +94,7 @@ internal class SearchScalingRegressionTest {
             val input = "a" + "😀".repeat(pairs + 1) + "!"
             val matcher = pattern.matcher(input).region(1, 2 * pairs + 2)
             work[index] =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         Assertions.assertThat(matcher.find()).isTrue()
                         Assertions.assertThat(matcher.start()).isEqualTo(2)
                         Assertions.assertThat(matcher.end()).isEqualTo(3)
@@ -208,7 +205,7 @@ internal class SearchScalingRegressionTest {
                 val pattern = Pattern.compile(template.format(8 * (index + 1)))
                 val matcher = pattern.matcher("a!").region(0, 1).useTransparentBounds(true)
                 work[index] =
-                    WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.lookingAt()).isTrue() })
+                    WorkCounter.countForTesting({ Assertions.assertThat(matcher.lookingAt()).isTrue() })
             }
             Assertions.assertThat(work[0]).`as`("epsilon work must be observed for %s", template).isPositive()
             Assertions.assertThat(work[1])
@@ -230,8 +227,7 @@ internal class SearchScalingRegressionTest {
         while (depth <= 12) {
             val pattern = Pattern.compile(alternatingNullableLoops(depth), 0, nfaOnly)
             work[depth] =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         val matcher = pattern.matcher(input)
                         while (matcher.find()) {
                         }
@@ -257,18 +253,18 @@ internal class SearchScalingRegressionTest {
                 val largeUtf8 = Utf8Input.trusted(large.toByteArray(StandardCharsets.UTF_8))
 
                 assertBoundedEndSearchWork(
-                    Runnable { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
-                    Runnable { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
+                    { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
+                    { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
                     regex + " String"
                 )
                 assertBoundedEndSearchWork(
-                    Runnable { Assertions.assertThat(pattern.matcher(smallUtf8).find()).isTrue() },
-                    Runnable { Assertions.assertThat(pattern.matcher(largeUtf8).find()).isTrue() },
+                    { Assertions.assertThat(pattern.matcher(smallUtf8).find()).isTrue() },
+                    { Assertions.assertThat(pattern.matcher(largeUtf8).find()).isTrue() },
                     regex + " UTF-8 matcher"
                 )
                 assertBoundedEndSearchWork(
-                    Runnable { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
-                    Runnable { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
+                    { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
+                    { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
                     regex + " UTF-8 existence"
                 )
             }
@@ -284,13 +280,13 @@ internal class SearchScalingRegressionTest {
             val smallUtf8 = Utf8Input.trusted(small.toByteArray(StandardCharsets.UTF_8))
             val largeUtf8 = Utf8Input.trusted(large.toByteArray(StandardCharsets.UTF_8))
             assertBoundedEndSearchWork(
-                Runnable { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
-                Runnable { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
+                { Assertions.assertThat(pattern.matcher(small).find()).isTrue() },
+                { Assertions.assertThat(pattern.matcher(large).find()).isTrue() },
                 "long literal String suffix"
             )
             assertBoundedEndSearchWork(
-                Runnable { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
-                Runnable { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
+                { Assertions.assertThat(pattern.find(smallUtf8)).isTrue() },
+                { Assertions.assertThat(pattern.find(largeUtf8)).isTrue() },
                 "long literal UTF-8 suffix"
             )
         }
@@ -310,8 +306,7 @@ internal class SearchScalingRegressionTest {
                 val reverse = Pattern.compile("needle.*$").reverseDfa()!!
                 for (pass in 0..1) {
                     val work =
-                        WorkCounter.countForTesting(
-                            Runnable {
+                        WorkCounter.countForTesting({
                                 val result =
                                     reverse.doSearchReverse(scanner, scanner.length, 0, true, true, 64)!!
                                 Assertions.assertThat<Dfa.SearchResult?>(result).isNotNull()
@@ -333,8 +328,8 @@ internal class SearchScalingRegressionTest {
                 val large =
                     Utf8Input.trusted((prefix.repeat(20000) + "abc" + terminator).toByteArray(StandardCharsets.UTF_8))
                 assertBoundedEndSearchWork(
-                    Runnable { Assertions.assertThat(pattern.find(small)).isTrue() },
-                    Runnable { Assertions.assertThat(pattern.find(large)).isTrue() },
+                    { Assertions.assertThat(pattern.find(small)).isTrue() },
+                    { Assertions.assertThat(pattern.find(large)).isTrue() },
                     "UTF-8 existence with greedy prefix"
                 )
             }
@@ -350,14 +345,11 @@ internal class SearchScalingRegressionTest {
             val pattern = Pattern.compile(regex)
             val text = IntFunction { size: Int -> "fine food offer ".repeat(size / 16) + "end" }
             val smallerString =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(text.apply(2000)).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(text.apply(2000)).find()).isFalse() })
             val largerString =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(text.apply(64000)).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(text.apply(64000)).find()).isFalse() })
             val smallerUtf8 =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         Assertions.assertThat(
                             pattern
                                 .matcher(Utf8Input.trusted(text.apply(2000)!!.toByteArray(StandardCharsets.UTF_8)))
@@ -366,8 +358,7 @@ internal class SearchScalingRegressionTest {
                             .isFalse()
                     })
             val largerUtf8 =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         Assertions.assertThat(
                             pattern
                                 .matcher(Utf8Input.trusted(text.apply(64000)!!.toByteArray(StandardCharsets.UTF_8)))
@@ -388,11 +379,9 @@ internal class SearchScalingRegressionTest {
             val text =
                 IntFunction { size: Int -> ("fine food offer ".repeat(size / 16) + "end").toByteArray(StandardCharsets.UTF_8) }
             val smaller =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(2000)))).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(2000)))).isFalse() })
             val larger =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(64000)))).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.find(Utf8Input.trusted(text.apply(64000)))).isFalse() })
 
             Assertions.assertThat(larger).`as`(regex).isLessThan(smaller * 2 + 64)
         }
@@ -519,11 +508,9 @@ internal class SearchScalingRegressionTest {
     fun smallSetReplaceAllWorkIsLinearWhenOneMemberIsAbsent() {
         val citation = Pattern.compile(" ?[\\[\\uFF3B](?:(?:\\d+\\.){2,}\\d+(?:, )?)+[\\]\\uFF3D]")
         val smallerWork =
-            WorkCounter.countForTesting(
-                Runnable { citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(200)).replaceAll("") })
+            WorkCounter.countForTesting({ citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(200)).replaceAll("") })
         val largerWork =
-            WorkCounter.countForTesting(
-                Runnable { citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(1000)).replaceAll("") })
+            WorkCounter.countForTesting({ citation.matcher("x \uFF3B1.2.3\uFF3D ".repeat(1000)).replaceAll("") })
 
         Assertions.assertThat(smallerWork).isPositive()
         Assertions.assertThat(largerWork)
@@ -569,11 +556,9 @@ internal class SearchScalingRegressionTest {
 
         for (suffix in arrayOf<String>("", "[")) {
             val smallerWork =
-                WorkCounter.countForTesting(
-                    Runnable { citation.matcher(fullWidth.repeat(200) + suffix).replaceAll("") })
+                WorkCounter.countForTesting({ citation.matcher(fullWidth.repeat(200) + suffix).replaceAll("") })
             val largerWork =
-                WorkCounter.countForTesting(
-                    Runnable { citation.matcher(fullWidth.repeat(1000) + suffix).replaceAll("") })
+                WorkCounter.countForTesting({ citation.matcher(fullWidth.repeat(1000) + suffix).replaceAll("") })
             Assertions.assertThat(smallerWork).isPositive()
             Assertions.assertThat(largerWork)
                 .`as`("replaceAll with spaced candidates and suffix '%s' should scale linearly", suffix)
@@ -586,14 +571,12 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("AAA[A-Z]+RAREST_TOKEN")
 
         val smallerWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(pattern.matcher("AAA".repeat(2000) + "xRAREST_TOKEN").find())
                         .isFalse()
                 })
         val largerWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(pattern.matcher("AAA".repeat(10000) + "xRAREST_TOKEN").find())
                         .isFalse()
                 })
@@ -608,9 +591,9 @@ internal class SearchScalingRegressionTest {
     fun multiAnchorCompilationDoesNotRepeatAstAnalysis() {
         val regexp = Parser.parse("foo.*bar.*baz", Pattern.toParseFlags(0))
 
-        val analysisWork = WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.analyze(regexp) })
+        val analysisWork = WorkCounter.countForTesting({ MultiAnchorCompiler.analyze(regexp) })
         val compilationWork =
-            WorkCounter.countForTesting(Runnable { MultiAnchorCompiler.compile(regexp, 0) })
+            WorkCounter.countForTesting({ MultiAnchorCompiler.compile(regexp, 0) })
 
         Assertions.assertThat(analysisWork).isPositive()
         Assertions.assertThat(compilationWork)
@@ -628,7 +611,7 @@ internal class SearchScalingRegressionTest {
         val input = "a".repeat(10000)
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).matches()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).matches()).isTrue() })
 
         Assertions.assertThat(work).isGreaterThanOrEqualTo(input.length.toLong())
     }
@@ -639,8 +622,7 @@ internal class SearchScalingRegressionTest {
         val input = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input)).matches()).isTrue() })
 
         Assertions.assertThat(work).isGreaterThanOrEqualTo(input.size.toLong())
     }
@@ -754,8 +736,7 @@ internal class SearchScalingRegressionTest {
                     captureEnd = IntSupplier { matcher.end(1) }
                 }
                 val captureWork =
-                    WorkCounter.countForTesting(
-                        Runnable {
+                    WorkCounter.countForTesting({
                             Assertions.assertThat(captureStart.asInt).isEqualTo(1024)
                             Assertions.assertThat(captureEnd.asInt).isEqualTo(1024)
                         })
@@ -775,7 +756,7 @@ internal class SearchScalingRegressionTest {
 
         val withoutDemand = Pattern.compile(regex)
         val deferredWork =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(withoutDemand.matcher(input).find()).isTrue()
             })
 
@@ -786,7 +767,7 @@ internal class SearchScalingRegressionTest {
         Assertions.assertThat(withDemand.innerCapturesObserved()).isTrue()
 
         val eagerWork =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(withDemand.matcher(input).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(withDemand.matcher(input).find()).isTrue() })
 
         Assertions.assertThat(deferredWork).isPositive()
         Assertions.assertThat(eagerWork)
@@ -804,8 +785,7 @@ internal class SearchScalingRegressionTest {
         val input = "abc ".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val replaced = pattern.matcher(input).replaceAll("[$0]")
                     Assertions.assertThat(replaced).isNotNull()
                 })
@@ -821,8 +801,7 @@ internal class SearchScalingRegressionTest {
         val input = "x".repeat(10000) + "needle"
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(input).replaceFirst("[$0]")).endsWith("[needle]") })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).replaceFirst("[$0]")).endsWith("[needle]") })
 
         Assertions.assertThat(work)
             .`as`("Literal replaceFirst must not rescan the prefix after finding the first match")
@@ -835,8 +814,7 @@ internal class SearchScalingRegressionTest {
         val input = "item delim ".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val parts = pattern.split(input)
                     Assertions.assertThat<String?>(parts).hasSize(1001)
                 })
@@ -914,7 +892,7 @@ internal class SearchScalingRegressionTest {
             Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")
         val input = "a".repeat(10000)
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
         Assertions.assertThat(work)
             .`as`("Dense false candidate prefix verification on String must remain linearly bounded")
             .isLessThan(input.length * 3L)
@@ -926,8 +904,7 @@ internal class SearchScalingRegressionTest {
             Pattern.compile("(?i)aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")
         val input = "a".repeat(10000)
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(
                         pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))).find()
                     )
@@ -959,8 +936,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("^(?:banana\\d|apple\\d)")
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher("x".repeat(32768)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher("x".repeat(32768)).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("start-anchored rejection should inspect only the viable start position")
@@ -1050,8 +1026,7 @@ internal class SearchScalingRegressionTest {
     fun startAnchoredRepeatedFindTerminatesInConstantWork() {
         val pattern = Pattern.compile("^abc")
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val m = pattern.matcher("abc" + "x".repeat(2000))
                     var matches = 0
                     while (m.find()) {
@@ -1060,8 +1035,7 @@ internal class SearchScalingRegressionTest {
                     Assertions.assertThat(matches).isEqualTo(1)
                 })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val m = pattern.matcher("abc" + "x".repeat(10000))
                     var matches = 0
                     while (m.find()) {
@@ -1083,7 +1057,7 @@ internal class SearchScalingRegressionTest {
         val input = "x".repeat(32768) + "cherry"
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isTrue() })
 
         Assertions.assertThat(work)
             .`as`("a positive disjoint-literal candidate should not repeat every full-input scan")
@@ -1098,7 +1072,7 @@ internal class SearchScalingRegressionTest {
         val input = "user_name_field_data____common_suffix\n".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("RarityOracle selection must avoid false candidate verification work on common tokens")
@@ -1113,7 +1087,7 @@ internal class SearchScalingRegressionTest {
         val input = "log_entry_line_with____________separators_and_delimiters\n".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("Required literal prefilter must reject on the selective token with minimal work")
@@ -1129,7 +1103,7 @@ internal class SearchScalingRegressionTest {
         val input = "the create starter test transaction context service\n".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`(
@@ -1147,11 +1121,11 @@ internal class SearchScalingRegressionTest {
         val input = "the_quick_brown_fox_jumps_over_the_lazy_dog\n".repeat(500)
 
         val workLower =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pLower.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pLower.matcher(input).find()).isFalse() })
         val workUpper =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pUpper.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pUpper.matcher(input).find()).isFalse() })
         val workMixed =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pMixed.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pMixed.matcher(input).find()).isFalse() })
 
         Assertions.assertThat(workLower)
             .`as`(
@@ -1171,23 +1145,22 @@ internal class SearchScalingRegressionTest {
         val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
 
         Assertions.assertThat(
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
         )
             .`as`("String Matcher.find must reject dense-prefix noise in a single pass")
             .isLessThanOrEqualTo((input.length + 100).toLong())
         Assertions.assertThat(
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
         )
             .`as`("Utf8Matcher.find must reject dense-prefix noise in a single pass")
             .isLessThanOrEqualTo((input.length + 100).toLong())
-        Assertions.assertThat(WorkCounter.countForTesting(Runnable {
+        Assertions.assertThat(WorkCounter.countForTesting({
             Assertions.assertThat(pattern.find(utf8)).isFalse()
         }))
             .`as`("Pattern.find(Utf8Input) must reject dense-prefix noise in a single pass")
             .isLessThanOrEqualTo((input.length + 100).toLong())
         Assertions.assertThat(
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.asPredicate().test(input)).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.asPredicate().test(input)).isFalse() })
         )
             .`as`("Pattern.asPredicate must reject dense-prefix noise in a single pass")
             .isLessThanOrEqualTo((input.length + 100).toLong())
@@ -1205,26 +1178,22 @@ internal class SearchScalingRegressionTest {
             val missingPrefixUtf8 = Utf8Input.trusted(missingPrefix.toByteArray(StandardCharsets.UTF_8))
 
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(missingPrefix).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(missingPrefix).find()).isFalse() })
             )
                 .`as`("%s String Matcher.find should scan once when start literal is absent", regex)
                 .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(missingPrefixUtf8).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(missingPrefixUtf8).find()).isFalse() })
             )
                 .`as`("%s Utf8Matcher.find should scan once when start literal is absent", regex)
                 .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.find(missingPrefixUtf8)).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.find(missingPrefixUtf8)).isFalse() })
             )
                 .`as`("%s Pattern.find(Utf8Input) should scan once when start literal is absent", regex)
                 .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.asPredicate().test(missingPrefix)).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.asPredicate().test(missingPrefix)).isFalse() })
             )
                 .`as`("%s Pattern.asPredicate should scan once when start literal is absent", regex)
                 .isLessThanOrEqualTo((missingPrefix.length + 64).toLong())
@@ -1235,26 +1204,22 @@ internal class SearchScalingRegressionTest {
             val lateDensePrefixUtf8 = Utf8Input.trusted(lateDensePrefix.toByteArray(StandardCharsets.UTF_8))
 
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(lateDensePrefix).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(lateDensePrefix).find()).isFalse() })
             )
                 .`as`("%s String Matcher.find should reject long dense prefix noise in one pass", regex)
                 .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(lateDensePrefixUtf8).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(lateDensePrefixUtf8).find()).isFalse() })
             )
                 .`as`("%s Utf8Matcher.find should reject long dense prefix noise in one pass", regex)
                 .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.find(lateDensePrefixUtf8)).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.find(lateDensePrefixUtf8)).isFalse() })
             )
                 .`as`("%s Pattern.find(Utf8Input) should reject long dense prefix noise in one pass", regex)
                 .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
             Assertions.assertThat(
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.asPredicate().test(lateDensePrefix)).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.asPredicate().test(lateDensePrefix)).isFalse() })
             )
                 .`as`("%s Pattern.asPredicate should reject long dense prefix noise in one pass", regex)
                 .isLessThanOrEqualTo((lateDensePrefix.length + 64).toLong())
@@ -1287,22 +1252,19 @@ internal class SearchScalingRegressionTest {
         val denseR = "re ra ri ro ru rt rg ".repeat(400)
         val denseRUtf8 = Utf8Input.trusted(denseR.toByteArray(StandardCharsets.UTF_8))
         Assertions.assertThat(
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(weakPrefix.matcher(denseR).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(weakPrefix.matcher(denseR).find()).isFalse() })
         )
             .isLessThanOrEqualTo((denseR.length + 32).toLong())
         Assertions.assertThat(
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(weakPrefix.matcher(denseRUtf8).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(weakPrefix.matcher(denseRUtf8).find()).isFalse() })
         )
             .isLessThanOrEqualTo((denseR.length + 32).toLong())
-        Assertions.assertThat(WorkCounter.countForTesting(Runnable {
+        Assertions.assertThat(WorkCounter.countForTesting({
             Assertions.assertThat(weakPrefix.find(denseRUtf8)).isFalse()
         }))
             .isLessThanOrEqualTo((denseR.length + 32).toLong())
         Assertions.assertThat(
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(weakPrefix.asPredicate().test(denseR)).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(weakPrefix.asPredicate().test(denseR)).isFalse() })
         )
             .isLessThanOrEqualTo((denseR.length + 32).toLong())
     }
@@ -1313,7 +1275,7 @@ internal class SearchScalingRegressionTest {
         val input = "{Link: target=home_page, category=general, priority=high}\n".repeat(1000)
 
         val work =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input)
             })
 
@@ -1324,8 +1286,8 @@ internal class SearchScalingRegressionTest {
 
     @Test
     fun literalSelectivityScoringIsLinearInPatternSize() {
-        val smallerWork = WorkCounter.countForTesting(Runnable { Pattern.compile(selectivityPattern(100)) })
-        val largerWork = WorkCounter.countForTesting(Runnable { Pattern.compile(selectivityPattern(400)) })
+        val smallerWork = WorkCounter.countForTesting({ Pattern.compile(selectivityPattern(100)) })
+        val largerWork = WorkCounter.countForTesting({ Pattern.compile(selectivityPattern(400)) })
 
         Assertions.assertThat(largerWork)
             .`as`("Literal selectivity scoring should scale linearly with pattern size")
@@ -1335,9 +1297,9 @@ internal class SearchScalingRegressionTest {
     @Test
     fun cachedDriverSelectionCompilationIsLinearInSegmentCount() {
         val smallerWork =
-            WorkCounter.countForTesting(Runnable { Pattern.compile(driverSelectionPattern(50)) })
+            WorkCounter.countForTesting({ Pattern.compile(driverSelectionPattern(50)) })
         val largerWork =
-            WorkCounter.countForTesting(Runnable { Pattern.compile(driverSelectionPattern(200)) })
+            WorkCounter.countForTesting({ Pattern.compile(driverSelectionPattern(200)) })
 
         Assertions.assertThat(largerWork)
             .`as`("Cached driver selection should scale linearly with the number of segments")
@@ -1351,7 +1313,7 @@ internal class SearchScalingRegressionTest {
         val input = "a".repeat(size)
 
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("Case-insensitive single char search must inspect text in a single pass")
@@ -1364,11 +1326,9 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("(?i)ab")
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher("a".repeat(2000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher("a".repeat(2000)).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher("a".repeat(10000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher("a".repeat(10000)).find()).isFalse() })
 
         // Without KMP fallback, work would be 2 * N. With KMP fallback after work exhaustion,
         // it must remain strictly linear (work(10000) <= work(2000) * 6).
@@ -1384,11 +1344,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "kind knowledge token lock keep track ".repeat(250).toByteArray(StandardCharsets.UTF_8)
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
 
         Assertions.assertThat(work10000)
             .`as`("UTF-8 case-insensitive false candidate search must remain linearly bounded")
@@ -1412,11 +1370,9 @@ internal class SearchScalingRegressionTest {
         val larger = "aaaaQaaaaX".repeat(2000).toByteArray(StandardCharsets.UTF_8)
 
         val smallerWork =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(smaller)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(smaller)).find()).isFalse() })
         val largerWork =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(larger)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(larger)).find()).isFalse() })
 
         Assertions.assertThat(largerWork)
             .`as`("UTF-8 literal-prefix search must scale with repeated false candidates")
@@ -1435,14 +1391,12 @@ internal class SearchScalingRegressionTest {
         Assertions.assertThat(candidate).isZero()
         dfa.doSearch(scanner, candidate, false, false, false)
         val ordinaryWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, false)!!.matched)
                         .isTrue()
                 })
         val preselectedWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(dfa.doSearch(scanner, candidate, false, false, true)!!.matched)
                         .isTrue()
                 })
@@ -1463,9 +1417,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "\"" + "a".repeat(10000) + "\""
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
 
         Assertions.assertThat(work10000)
             .`as`("DFA self-loop state accelerator on String should scale linearly with input size")
@@ -1479,11 +1433,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = ("\"" + "a".repeat(10000) + "\"").toByteArray(StandardCharsets.UTF_8)
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isTrue() })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isTrue() })
 
         Assertions.assertThat(work10000)
             .`as`("DFA self-loop state accelerator on UTF-8 should scale linearly with input size")
@@ -1497,9 +1449,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000) + "\n"
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
 
         Assertions.assertThat(work10000)
             .`as`("DFA self-loop state accelerator with newline on String should scale linearly")
@@ -1513,9 +1465,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "foox" + "a".repeat(10000) + "fo123"
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isTrue() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input10000).find()).isTrue() })
 
         Assertions.assertThat(work10000)
             .`as`("DFA start state re-acceleration work must scale linearly with non-matching span")
@@ -1533,16 +1485,14 @@ internal class SearchScalingRegressionTest {
         dfa.doSearch(StringInputScanner(input2000), 0, false, false)
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(
                         dfa.doSearch(StringInputScanner(input2000), 0, false, false)!!.matched
                     )
                         .isTrue()
                 })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(
                         dfa.doSearch(StringInputScanner(input10000), 0, false, false)!!.matched
                     )
@@ -1561,9 +1511,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -1579,11 +1529,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
 
         Assertions.assertThat(work10000)
             .`as`("Single character class find on UTF-8 should scale linearly")
@@ -1597,9 +1545,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -1618,12 +1566,11 @@ internal class SearchScalingRegressionTest {
         val utf8 = latin1.toByteArray(StandardCharsets.UTF_8)
 
         val workLatin1 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(latin1).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(latin1).find()).isFalse() })
         val workUtf16 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(utf16).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(utf16).find()).isFalse() })
         val workUtf8 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(utf8)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(utf8)).find()).isFalse() })
 
         Assertions.assertThat(workLatin1).`as`("Latin-1 search work").isLessThan(size * 4L)
         Assertions.assertThat(workUtf16)
@@ -1700,7 +1647,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("^abc")
         val displaced = "x".repeat(10000) + "abc"
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
         Assertions.assertThat(work)
             .`as`("Start-anchored pattern with displaced candidate must reject in constant work")
             .isLessThan(20)
@@ -1711,8 +1658,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("^abc")
         val displaced = ("x".repeat(10000) + "abc").toByteArray(StandardCharsets.UTF_8)
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(displaced)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(displaced)).find()).isFalse() })
         Assertions.assertThat(work)
             .`as`("Start-anchored UTF-8 pattern with displaced candidate must reject in constant work")
             .isLessThan(20)
@@ -1723,7 +1669,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("^[0-9]")
         val displaced = "a".repeat(10000) + "5"
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(displaced).find()).isFalse() })
         Assertions.assertThat(work)
             .`as`("Start-anchored char-class with displaced match must reject in constant work")
             .isLessThan(20)
@@ -1784,8 +1730,7 @@ internal class SearchScalingRegressionTest {
         val chc = ClassHashChain.compileCaseInsensitive("content_length_header")!!
         val text = "The quick brown fox jumps over the lazy dog. ".repeat(5) // 225 chars
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length)))
                         .isEqualTo(-1)
                 })
@@ -1804,8 +1749,7 @@ internal class SearchScalingRegressionTest {
         val chc = ClassHashChain.compileCaseInsensitive("конфигурация_сервера")!! // M = 20
         val text = "текст_без_совпадений_для_проверки_производительности_".repeat(5) // 270 chars
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(chc.search(text, 0, WorkLimit.forRemaining(text.length)))
                         .isEqualTo(-1)
                 })
@@ -1827,11 +1771,9 @@ internal class SearchScalingRegressionTest {
             val longInput = Utf8Input.validated(falseCandidate.repeat(2500).toByteArray(StandardCharsets.UTF_8))
 
             val shortWork =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(shortInput).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(shortInput).find()).isFalse() })
             val longWork =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher(longInput).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(longInput).find()).isFalse() })
 
             Assertions.assertThat(longWork)
                 .`as`("Unicode-folded UTF-8 filtering should scale linearly for %s", falseCandidate)
@@ -1865,7 +1807,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("(?i)keyword_to_find") // anchor is 'k' / 'K'
         val text = "k_other_words_".repeat(20) // 280 chars with 20 'k' false anchors
         val work =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(text).find()).isFalse() })
 
         // shiftAt skips forward on false anchors, keeping work well below quadratic O(N * M)
         Assertions.assertThat(work)
@@ -1884,8 +1826,7 @@ internal class SearchScalingRegressionTest {
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
         val groupReadWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(matcher.group(0)).isEqualTo("KEY:98765")
                     Assertions.assertThat(matcher.group(1)).isEqualTo("98765")
                 })
@@ -1907,8 +1848,7 @@ internal class SearchScalingRegressionTest {
         val matcher = pattern.matcher(input)
         Assertions.assertThat(matcher.find()).isTrue()
         val groupReadWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(matcher.group(1)).isEqualTo("alice")
                     Assertions.assertThat(matcher.group(2)).isEqualTo("google")
                 })
@@ -1926,8 +1866,7 @@ internal class SearchScalingRegressionTest {
         val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
         val input = "x".repeat(10000) + "cherry"
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val res = dfa.doSearch(input, false, false)!!
                     Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
                     Assertions.assertThat(res.matched).isTrue()
@@ -1948,8 +1887,7 @@ internal class SearchScalingRegressionTest {
         val noise = "A B C A B C ".repeat(10000).toByteArray(StandardCharsets.UTF_8)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("Multi-literal candidate verification must be bounded by WorkLimit on dense noise")
@@ -1962,11 +1900,10 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("([a-z]+)b([a-z]+)")
         val input = "helloworldbwelcome"
         val matcher = pattern.matcher(input)
-        val matchWork = WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.matches()).isTrue() })
+        val matchWork = WorkCounter.countForTesting({ Assertions.assertThat(matcher.matches()).isTrue() })
         Assertions.assertThat(matcher.group(0)).isEqualTo(input)
         val groupReadWork =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     Assertions.assertThat(matcher.group(1)).isEqualTo("helloworld")
                     Assertions.assertThat(matcher.group(2)).isEqualTo("welcome")
                 })
@@ -1983,7 +1920,7 @@ internal class SearchScalingRegressionTest {
         val pattern = Pattern.compile("([a-z]+)b([a-z]+)")
         val input = "x".repeat(10000)
         val matcher = pattern.matcher(input)
-        val work = WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.matches()).isFalse() })
+        val work = WorkCounter.countForTesting({ Assertions.assertThat(matcher.matches()).isFalse() })
         Assertions.assertThat(work)
             .`as`("Non-matching input in matches() must reject in linear DFA steps without NFA work")
             .isLessThanOrEqualTo((input.length + 20).toLong())
@@ -1995,8 +1932,7 @@ internal class SearchScalingRegressionTest {
         val dfa = Dfa(prog, 1000, Dfa.buildSetup(prog), false)
         val input = ("x".repeat(10000) + "cherry").toByteArray(StandardCharsets.UTF_8)
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val res =
                         dfa.doSearch(Utf8InputScanner(input, 0, input.size), 0, false, false)!!
                     Assertions.assertThat<Dfa.SearchResult?>(res).isNotNull()
@@ -2014,7 +1950,7 @@ internal class SearchScalingRegressionTest {
         val input = "application:12345 " + "x".repeat(10000)
         val matcher = pattern.matcher(input)
         val lookingAtWork =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.lookingAt()).isTrue() })
+            WorkCounter.countForTesting({ Assertions.assertThat(matcher.lookingAt()).isTrue() })
         Assertions.assertThat(lookingAtWork)
             .`as`(
                 "lookingAt() must only execute DFA prefix scan bounded by matched prefix, not trailing"
@@ -2033,8 +1969,7 @@ internal class SearchScalingRegressionTest {
         val noise = ("x".repeat(256) + "A".repeat(8192)).toByteArray(StandardCharsets.UTF_8)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(noise)).find()).isFalse() })
 
         Assertions.assertThat(work)
             .`as`("WorkLimit exhaustion must resume with the normal matcher without a scalar rescan")
@@ -2048,9 +1983,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -2070,11 +2005,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000).toByteArray(StandardCharsets.UTF_8)
 
         val work2000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input2000)).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(Utf8Input.trusted(input10000)).find()).isFalse() })
 
         Assertions.assertThat(work10000)
             .`as`("Leading expansion char class find on UTF-8 should scale linearly")
@@ -2103,9 +2036,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "a".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -2126,9 +2059,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "x".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -2144,9 +2077,9 @@ internal class SearchScalingRegressionTest {
         val input10000 = "x".repeat(10000)
 
         val work2000 =
-            WorkCounter.countForTesting(Runnable { Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
+            WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input2000).find()).isFalse() })
         val work10000 =
-            WorkCounter.countForTesting(Runnable {
+            WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input10000).find()).isFalse()
             })
 
@@ -2180,7 +2113,7 @@ internal class SearchScalingRegressionTest {
             return regex.toString()
         }
 
-        private fun assertBoundedEndSearchWork(small: Runnable?, large: Runnable?, label: String?) {
+        private fun assertBoundedEndSearchWork(small: (() -> Any?)?, large: (() -> Any?)?, label: String?) {
             val smallWork = WorkCounter.countForTesting(small!!)
             val largeWork = WorkCounter.countForTesting(large!!)
             Assertions.assertThat(smallWork).`as`("%s work must be observed", label).isPositive()
@@ -2192,8 +2125,8 @@ internal class SearchScalingRegressionTest {
         private fun assertFindAllWorkIsLinear(
             matcher: IntFunction<FindIterator?>, inputKind: String?
         ) {
-            val smallerWork = WorkCounter.countForTesting(Runnable { consumeMatches(matcher.apply(200)!!) })
-            val largerWork = WorkCounter.countForTesting(Runnable { consumeMatches(matcher.apply(1000)!!) })
+            val smallerWork = WorkCounter.countForTesting({ consumeMatches(matcher.apply(200)!!) })
+            val largerWork = WorkCounter.countForTesting({ consumeMatches(matcher.apply(1000)!!) })
 
             Assertions.assertThat(smallerWork).`as`("%s find-all work must be observed", inputKind).isPositive()
             Assertions.assertThat(largerWork)
@@ -2211,9 +2144,9 @@ internal class SearchScalingRegressionTest {
             matcher: IntFunction<FindIterator?>, inputKind: String?
         ) {
             val smallerWork =
-                WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.apply(2000)!!.find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(matcher.apply(2000)!!.find()).isFalse() })
             val largerWork =
-                WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.apply(10000)!!.find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(matcher.apply(10000)!!.find()).isFalse() })
 
             Assertions.assertThat(smallerWork).`as`("%s guarded-gap work must be observed", inputKind).isPositive()
             Assertions.assertThat(largerWork)
@@ -2227,14 +2160,14 @@ internal class SearchScalingRegressionTest {
             literal.setCharAt(literal.length - 2, 'e')
             val pattern = Pattern.compile("[xy]" + literal)
             val input = block.repeat(blocks)
-            return WorkCounter.countForTesting(Runnable {
+            return WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(input).find()).isFalse()
             })
         }
 
         private fun assertConstantRejectionWork(find: IntPredicate, description: String?) {
-            val work2000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(2000)).isFalse() })
-            val work10000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(10000)).isFalse() })
+            val work2000 = WorkCounter.countForTesting({ Assertions.assertThat(find.test(2000)).isFalse() })
+            val work10000 = WorkCounter.countForTesting({ Assertions.assertThat(find.test(10000)).isFalse() })
 
             Assertions.assertThat(work2000).`as`("%s rejection on short input", description).isLessThan(100)
             Assertions.assertThat(work10000).`as`("%s rejection on long input", description).isLessThan(100)
@@ -2267,8 +2200,7 @@ internal class SearchScalingRegressionTest {
         }
 
         private fun countAllMatches(matcher: FindIterator, expectedMatches: Int): Long {
-            return WorkCounter.countForTesting(
-                Runnable {
+            return WorkCounter.countForTesting({
                     var matches = 0
                     while (matcher.find()) {
                         matches++
@@ -2279,15 +2211,13 @@ internal class SearchScalingRegressionTest {
 
         private fun assertReverseDfaSuffixFailureIsConstantWork(find: IntPredicate) {
             val work2000 =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         val matched = find.test(2000)
                         Assertions.assertThat(matched).isFalse()
                     })
 
             val work10000 =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         val matched = find.test(10000)
                         Assertions.assertThat(matched).isFalse()
                     })
@@ -2314,8 +2244,8 @@ internal class SearchScalingRegressionTest {
         }
 
         private fun assertConstantWork(find: IntPredicate, description: String?) {
-            val work2000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(2000)).isTrue() })
-            val work10000 = WorkCounter.countForTesting(Runnable { Assertions.assertThat(find.test(10000)).isTrue() })
+            val work2000 = WorkCounter.countForTesting({ Assertions.assertThat(find.test(2000)).isTrue() })
+            val work10000 = WorkCounter.countForTesting({ Assertions.assertThat(find.test(10000)).isTrue() })
 
             Assertions.assertThat(work2000).`as`("%s on short input", description).isPositive().isLessThan(200)
             Assertions.assertThat(work10000).`as`("%s on long input", description).isPositive().isLessThan(200)

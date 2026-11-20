@@ -53,8 +53,9 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/InnerLiteralSearch.kt",
   "org/safere/GraphemeSupport.kt",
   "org/safere/JavaCharacterClasses.kt",
-  // Remaining JDK-tied surface parked for M1 native green
-  "org/safere/WorkCounter.kt",
+  // ThreadLocalRef: Maven JVM class; KMP uses expect/actual overlays
+  "org/safere/ThreadLocalRef.kt",
+  // Remaining JDK-tied surface parked for later M2 batches
   "org/safere/MatcherTransitionInventory.kt",
   "org/safere/RegionClassSearch.kt",
   "org/safere/EnginePathContract.kt",
@@ -83,31 +84,28 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/InputScanner.kt",
   "org/safere/PatternCompiledEvent.kt",
   "org/safere/PatternDescriptor.kt",
-  "org/safere/StrategyDecision.kt",
-  "org/safere/StrategyParticipation.kt",
   "org/safere/MultiLiteralInfo.kt",
   "org/safere/RarityOracle.kt",
-  "org/safere/WorkLimit.kt",
-  "org/safere/AsciiBitmap.kt",
-  "org/safere/IntArrayList.kt",
   "org/safere/Utf16.kt",
   "org/safere/StateAccelerator.kt",
   "org/safere/StringLiteralSearch.kt",
-  "org/safere/AdaptiveBackoff.kt",
   "org/safere/CaptureRune.kt",
   "org/safere/LazyRuneLoop.kt",
-  "org/safere/LoopEntry.kt",
   "org/safere/SafeReMatchDiagnostics.kt",
-  "org/safere/Ascii.kt",
-  "org/safere/AcceleratorPolicy.kt",
-  "org/safere/Utils.kt",
   "module-info.java",
 )
+
+/** Shared files replaced by KMP expect/actual overlays (not compiled from shared on any target). */
+val kmpOverlayRelativePaths =
+  setOf(
+    "org/safere/VectorScanProviders.kt",
+    "org/safere/ThreadLocalRef.kt",
+  )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */
 val jvmMainSharedIncludes =
   jvmOnlyRelativePaths.filter {
-    it.endsWith(".kt") && it != "org/safere/VectorScanProviders.kt"
+    it.endsWith(".kt") && it !in kmpOverlayRelativePaths
   }
 
 val sharedMain = file("../safere/src/main/java")

@@ -1808,7 +1808,7 @@ internal class ParserTest {
         }
 
         private fun parseWork(pattern: String?): Long {
-            return WorkCounter.countForTesting(Runnable { parse(pattern) })
+            return WorkCounter.countForTesting({ parse(pattern) })
         }
 
         private fun nestedCharacterClass(depth: Int): String {

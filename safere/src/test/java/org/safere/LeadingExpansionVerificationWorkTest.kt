@@ -40,30 +40,31 @@ internal class LeadingExpansionVerificationWorkTest {
             for (size in intArrayOf(2000, 20000)) {
                 val input = (if (regex!!.startsWith("[é")) "é😀" else " ").repeat(size) + "# noqaX"
                 val utf8 = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
-                val operations: MutableMap<String?, Runnable?> = LinkedHashMap<String?, Runnable?>()
+                val operations: MutableMap<String?, (() -> Any?)?> =
+                    LinkedHashMap<String?, (() -> Any?)?>()
                 operations.put(
                     "String find",
-                    Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
-                operations.put("UTF-8 find", Runnable { Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
-                operations.put("matcher-free find", Runnable { Assertions.assertThat(pattern.find(utf8)).isFalse() })
+                    { Assertions.assertThat(pattern.matcher(input).find()).isFalse() })
+                operations.put("UTF-8 find", { Assertions.assertThat(pattern.matcher(utf8).find()).isFalse() })
+                operations.put("matcher-free find", { Assertions.assertThat(pattern.find(utf8)).isFalse() })
                 operations.put(
                     "replaceAll",
-                    Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(input) })
+                    { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(input) })
                 operations.put(
                     "replaceFirst",
-                    Runnable { Assertions.assertThat(pattern.matcher(input).replaceFirst("X")).isEqualTo(input) })
+                    { Assertions.assertThat(pattern.matcher(input).replaceFirst("X")).isEqualTo(input) })
                 operations.put(
                     "function replacement",
-                    Runnable {
+                    {
                         Assertions.assertThat(
                             pattern.matcher(input).replaceAll(Function { m: MatchResult? -> "X" })
                         ).isEqualTo(input)
                     })
                 operations.put(
                     "split",
-                    Runnable { Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input) })
+                    { Assertions.assertThat<String?>(pattern.split(input)).containsExactly(input) })
                 val reference: Long = work(operations.get("String find")!!)
-                operations.forEach { (name: String?, operation: Runnable?) ->
+                operations.forEach { (name: String?, operation: (() -> Any?)?) ->
                     val actual: Long = work(operation!!)
                     if (actual > reference * 2 + 100) {
                         failures.add(
@@ -89,13 +90,13 @@ internal class LeadingExpansionVerificationWorkTest {
             val input = "# noqa1;" + " ".repeat(size) + "# noqaX"
             val expected = "X;" + " ".repeat(size) + "# noqaX"
             val reference: Long =
-                work(Runnable {
+                work({
                     Assertions.assertThat(
                         pattern.matcher(input).replaceAll(Function { m: MatchResult? -> "X" })
                     ).isEqualTo(expected)
                 })
             val actual: Long =
-                work(Runnable { Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(expected) })
+                work({ Assertions.assertThat(pattern.matcher(input).replaceAll("X")).isEqualTo(expected) })
             Assertions.assertThat(actual)
                 .`as`("%s leading spaces after a match, diagnostics=%s", size, diagnostics)
                 .isLessThanOrEqualTo(reference * 2 + 100)
@@ -103,8 +104,8 @@ internal class LeadingExpansionVerificationWorkTest {
     }
 
     companion object {
-        private fun work(operation: Runnable): Long {
-            operation.run()
+        private fun work(operation: () -> Any?): Long {
+            operation()
             return WorkCounter.countForTesting(operation)
         }
     }

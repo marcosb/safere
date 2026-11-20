@@ -38,7 +38,7 @@ internal class ScanDispatchAuditTest {
 
         val events =
             ScanAudit.captureForTesting(
-                Runnable { Assertions.assertThat(teddy.findCandidate(scanner, fromIndex)).isEqualTo(fromIndex) })
+                { Assertions.assertThat(teddy.findCandidate(scanner, fromIndex)).isEqualTo(fromIndex) })
 
         Assertions.assertThat<ScanEvent?>(events)
             .containsExactly(
@@ -65,7 +65,7 @@ internal class ScanDispatchAuditTest {
 
         val events =
             ScanAudit.captureForTesting(
-                Runnable { Assertions.assertThat(multiLiteral.findCandidate(scanner, fromIndex)).isNegative() })
+                { Assertions.assertThat(multiLiteral.findCandidate(scanner, fromIndex)).isNegative() })
 
         Assertions.assertThat<ScanEvent?>(events)
             .containsExactly(
@@ -104,7 +104,7 @@ internal class ScanDispatchAuditTest {
 
         val events =
             ScanAudit.captureForTesting(
-                Runnable {
+                {
                     Assertions.assertThat(scanner.indexOfCodePointClass(ranges, bitmap0, bitmap1, 0, window))
                         .isEqualTo(-1)
                 })
@@ -405,7 +405,7 @@ internal class ScanDispatchAuditTest {
         val teddyFromNarrow: Int = LONG_INPUT.size - (teddyMin - 1)
         val teddyNarrowEvents =
             ScanAudit.captureForTesting(
-                Runnable {
+                {
                     Assertions.assertThat(teddy.findCandidate(scanner, teddyFromNarrow))
                         .isEqualTo(teddyFromNarrow)
                 })
@@ -457,7 +457,7 @@ internal class ScanDispatchAuditTest {
     fun captureRejectsUnpairedConsultation() {
         Assertions.assertThatThrownBy(
             ThrowingCallable {
-                ScanAudit.captureForTesting(Runnable {
+                ScanAudit.captureForTesting({
                     ScanAudit.recordConsultation(
                         ScanKind.BYTE,
                         64
@@ -473,7 +473,7 @@ internal class ScanDispatchAuditTest {
         Assertions.assertThatThrownBy(
             ThrowingCallable {
                 ScanAudit.captureForTesting(
-                    Runnable {
+                    {
                         ScanAudit.record(ScanKind.BYTE, ScanDirection.FORWARD, 64, ScanPath.SWAR)
                         ScanAudit.record(ScanKind.BYTE, ScanDirection.FORWARD, 64, ScanPath.SWAR)
                     })
@@ -487,7 +487,7 @@ internal class ScanDispatchAuditTest {
         Assertions.assertThatThrownBy(
             ThrowingCallable {
                 ScanAudit.captureForTesting(
-                    Runnable {
+                    {
                         ScanAudit.recordConsultation(ScanKind.BYTE, 64)
                         ScanAudit.recordConsultation(ScanKind.BYTE, 64)
                     })
@@ -501,7 +501,7 @@ internal class ScanDispatchAuditTest {
         Assertions.assertThatThrownBy(
             ThrowingCallable {
                 ScanAudit.captureForTesting(
-                    Runnable {
+                    {
                         ScanAudit.recordConsultation(ScanKind.BYTE, 64)
                         ScanAudit.record(ScanKind.PAIR, ScanDirection.FORWARD, 64, ScanPath.SWAR)
                     })
@@ -515,7 +515,7 @@ internal class ScanDispatchAuditTest {
         Assertions.assertThatThrownBy(
             ThrowingCallable {
                 ScanAudit.captureForTesting(
-                    Runnable {
+                    {
                         ScanAudit.recordConsultation(ScanKind.BYTE, 64)
                         ScanAudit.record(ScanKind.BYTE, ScanDirection.FORWARD, 128, ScanPath.SWAR)
                     })
@@ -532,7 +532,7 @@ internal class ScanDispatchAuditTest {
     @Test
     @Tag("work-counter")
     fun captureRefusesToRunUnderWorkCounters() {
-        Assertions.assertThatThrownBy(ThrowingCallable { ScanAudit.captureForTesting(Runnable {}) })
+        Assertions.assertThatThrownBy(ThrowingCallable { ScanAudit.captureForTesting({}) })
             .isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("work-counters")
     }
@@ -561,7 +561,7 @@ internal class ScanDispatchAuditTest {
         /** Captures the dispatch events of one scan, asserting it finds nothing.  */
         private fun captureScan(scan: IntSupplier): MutableList<ScanEvent?> {
             return ScanAudit.captureForTesting(
-                    Runnable { Assertions.assertThat(scan.asInt).isEqualTo(-1) })
+                    { Assertions.assertThat(scan.asInt).isEqualTo(-1) })
                 .toMutableList()
         }
     }

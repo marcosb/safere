@@ -6,9 +6,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmOverloads
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * A resizable array of primitive `int` values to avoid boxing and object allocation overhead.
  */
@@ -68,7 +69,7 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
         }
         if (runs > 1) {
             if (size < MIN_MERGE_SIZE || runs > MAX_MERGED_RUNS) {
-                Arrays.sort(a, 0, size)
+                a.sort(0, size)
             } else {
                 a = mergeRuns(a, size, runs)
             }

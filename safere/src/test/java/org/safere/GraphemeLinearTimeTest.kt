@@ -158,8 +158,8 @@ internal class GraphemeLinearTimeTest {
                     Assertions.assertThat(matcher.start()).isEqualTo(1)
                     Assertions.assertThat(matcher.end()).isEqualTo(2)
                 }
-            val smallWork = WorkCounter.countForTesting(Runnable { match.accept(small) })
-            val largeWork = WorkCounter.countForTesting(Runnable { match.accept(large) })
+            val smallWork = WorkCounter.countForTesting({ match.accept(small) })
+            val largeWork = WorkCounter.countForTesting({ match.accept(large) })
             Assertions.assertThat(smallWork).isPositive()
             Assertions.assertThat(largeWork)
                 .`as`("first match must not copy or scan the full region")
@@ -203,8 +203,8 @@ internal class GraphemeLinearTimeTest {
         ) {
             task.accept(smallerInput!!)
             task.accept(largerInput!!)
-            val smallerWork = WorkCounter.countForTesting(Runnable { task.accept(smallerInput) })
-            val largerWork = WorkCounter.countForTesting(Runnable { task.accept(largerInput) })
+            val smallerWork = WorkCounter.countForTesting({ task.accept(smallerInput) })
+            val largerWork = WorkCounter.countForTesting({ task.accept(largerInput) })
 
             Assertions.assertThat(smallerWork).`as`("%s: smaller input should use grapheme work", scenario).isPositive()
             Assertions.assertThat(largerWork)

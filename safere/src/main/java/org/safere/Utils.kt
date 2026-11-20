@@ -83,7 +83,7 @@ internal object Utils {
      * @return a String containing the character(s) for that code point
      */
     fun runeToString(r: Int): String {
-        return String(Character.toChars(r))
+        return CodePoints.toChars(r).concatToString()
     }
 
     /**
@@ -91,7 +91,7 @@ internal object Utils {
      * correctly counts supplementary (non-BMP) characters as one.
      */
     fun runeCount(s: String): Int {
-        return s.codePointCount(0, s.length)
+        return CodePoints.codePointCount(s, 0, s.length)
     }
 
     /**
@@ -103,7 +103,7 @@ internal object Utils {
      * @throws IndexOutOfBoundsException if index is out of bounds
      */
     fun runeAt(s: String, index: Int): Int {
-        val charIndex = s.offsetByCodePoints(0, index)
-        return s.codePointAt(charIndex)
+        val charIndex = CodePoints.offsetByCodePoints(s, 0, index)
+        return CodePoints.codePointAt(s, charIndex)
     }
 }

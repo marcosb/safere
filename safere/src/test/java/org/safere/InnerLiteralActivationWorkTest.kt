@@ -37,7 +37,7 @@ internal class InnerLiteralActivationWorkTest {
             val pattern = Pattern.compile(regexes[i])
             val input = units[i]!!.repeat(64)
             for (operation in operations(pattern, input)) {
-                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!))
+                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation))
                     .`as`("successful /%s/", regexes[i])
                     .isZero()
             }
@@ -63,10 +63,10 @@ internal class InnerLiteralActivationWorkTest {
             for (gap in intArrayOf(1, 128, 2048)) {
                 val input = (prefixes[i] + "x".repeat(gap) + failures[i]).repeat(128) + tails[i]
                 for (operation in operations(pattern, input)) {
-                    Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!))
+                    Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation))
                         .`as`("failed /%s/, gap=%d", regexes[i], gap)
                         .isEqualTo(1)
-                    Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation!!))
+                    Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation))
                         .`as`("failed /%s/, gap=%d must avoid scanning later candidates", regexes[i], gap)
                         .isLessThan(input.length / 8L)
                 }
@@ -82,7 +82,7 @@ internal class InnerLiteralActivationWorkTest {
             ("record:x;" + "noise;".repeat(1024)).repeat(4) + "record:ok_val=200;"
         )) {
             for (operation in operations(pattern, input)) {
-                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation!!)).isZero()
+                Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation)).isZero()
             }
         }
     }
@@ -98,15 +98,15 @@ internal class InnerLiteralActivationWorkTest {
                 Pattern.compile(
                     regexes[i], 0, EnginePathOptions.builder().literalFastPaths(false).build()
                 )
-            val accelerated: MutableList<Runnable?> = operations(pattern, input)
-            val control: MutableList<Runnable?> = operations(ordinary, input)
+            val accelerated = operations(pattern, input)
+            val control = operations(ordinary, input)
             for (operation in accelerated.indices) {
-                accelerated.get(operation)!!.run()
-                control.get(operation)!!.run()
+                accelerated[operation]()
+                control[operation]()
                 val expected =
-                    WorkCounter.countStartAccelerationForTesting(control.get(operation)!!).calls
+                    WorkCounter.countStartAccelerationForTesting(control[operation]).calls
                 val actual =
-                    WorkCounter.countStartAccelerationForTesting(accelerated.get(operation)!!).calls
+                    WorkCounter.countStartAccelerationForTesting(accelerated[operation]).calls
                 Assertions.assertThat(actual)
                     .`as`("/%s/, operation=%d", regexes[i], operation)
                     .isLessThanOrEqualTo(expected + 2)
@@ -132,8 +132,7 @@ internal class InnerLiteralActivationWorkTest {
                 )
             )
         )) {
-            val operation =
-                Runnable {
+            val operation = {
                     val result =
                         pattern
                             .forwardFirstMatchDfa()
@@ -170,8 +169,7 @@ internal class InnerLiteralActivationWorkTest {
                     )
                 )
             )) {
-                val operation =
-                    Runnable {
+                val operation = {
                         val result =
                             pattern
                                 .forwardFirstMatchDfa()
@@ -191,10 +189,10 @@ internal class InnerLiteralActivationWorkTest {
         val pattern = Pattern.compile("record:[^;]*val=200")
         val input = "record:x;".repeat(1024)
         val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-        for (operation in java.util.List.of<Runnable?>(
-            Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
-            Runnable { Assertions.assertThat(pattern.matcher(bytes).find()).isFalse() },
-            Runnable { Assertions.assertThat(pattern.find(bytes)).isFalse() })) {
+        for (operation in listOf(
+            { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
+            { Assertions.assertThat(pattern.matcher(bytes).find()).isFalse() },
+            { Assertions.assertThat(pattern.find(bytes)).isFalse() })) {
             Assertions.assertThat(WorkCounter.countInnerLiteralProbesForTesting(operation)).isEqualTo(1)
             Assertions.assertThat(WorkCounter.countForwardDfaStepsForTesting(operation))
                 .isLessThan(input.length / 16L)
@@ -210,9 +208,9 @@ internal class InnerLiteralActivationWorkTest {
             val input =
                 ("record:x;".repeat(16) + "record:" + "x".repeat(512) + "val=200;").repeat(size)
             val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-            for (operation in java.util.List.of<Runnable?>(
-                Runnable { findAll(pattern, input) },
-                Runnable {
+            for (operation in listOf(
+                { findAll(pattern, input) },
+                {
                     val matcher = pattern.matcher(bytes)
                     while (matcher.find()) {
                         Assertions.assertThat(matcher.end()).isGreaterThan(matcher.start())
@@ -226,22 +224,22 @@ internal class InnerLiteralActivationWorkTest {
     }
 
     companion object {
-        private fun operations(pattern: Pattern, input: String): MutableList<Runnable?> {
+        private fun operations(pattern: Pattern, input: String): List<() -> Any?> {
             val bytes = Utf8Input.validated(input.toByteArray(StandardCharsets.UTF_8))
-            return java.util.List.of<Runnable?>(
-                Runnable { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
-                Runnable { Assertions.assertThat(pattern.matcher(bytes).find()).isTrue() },
-                Runnable { Assertions.assertThat(pattern.find(bytes)).isTrue() },
-                Runnable { Assertions.assertThat(pattern.asPredicate().test(input)).isTrue() },
-                Runnable { findAll(pattern, input) },
-                Runnable {
+            return listOf(
+                { Assertions.assertThat(pattern.matcher(input).find()).isTrue() },
+                { Assertions.assertThat(pattern.matcher(bytes).find()).isTrue() },
+                { Assertions.assertThat(pattern.find(bytes)).isTrue() },
+                { Assertions.assertThat(pattern.asPredicate().test(input)).isTrue() },
+                { findAll(pattern, input) },
+                {
                     val matcher = pattern.matcher(bytes)
                     while (matcher.find()) {
                         Assertions.assertThat(matcher.end()).isGreaterThan(matcher.start())
                     }
                 },
-                Runnable { pattern.matcher(input).replaceAll("X") },
-                Runnable { pattern.split(input, -1) })
+                { pattern.matcher(input).replaceAll("X"); Unit },
+                { pattern.split(input, -1); Unit })
         }
 
         private fun findAll(pattern: Pattern, input: String?) {

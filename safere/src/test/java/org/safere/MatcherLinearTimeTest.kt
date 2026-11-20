@@ -27,8 +27,7 @@ internal class MatcherLinearTimeTest {
             val pattern = Pattern.compile("(error:\\[)[A-Z](\\] code:500)")
             val rejected = "error:[x] code:500 ".repeat(repeats) + "C"
             val bytes = Utf8Input.validated(rejected.toByteArray(StandardCharsets.UTF_8))
-            val reject =
-                Runnable {
+            val reject = {
                     Assertions.assertThat(if (utf8) pattern.matcher(bytes).find() else pattern.matcher(rejected).find())
                         .isFalse()
                 }
@@ -147,8 +146,8 @@ internal class MatcherLinearTimeTest {
         }
 
         private fun assertNoWorkCliff(api: String?, scenario: IntConsumer) {
-            val largerPositiveWork: Long = countedWork(Runnable { scenario.accept(16) })
-            val nearMinimumWork: Long = countedWork(Runnable { scenario.accept(5) })
+            val largerPositiveWork: Long = countedWork({ scenario.accept(16) })
+            val nearMinimumWork: Long = countedWork({ scenario.accept(5) })
 
             Assertions.assertThat(largerPositiveWork).`as`("%s should use matcher work", api).isPositive()
             Assertions.assertThat(nearMinimumWork)
@@ -165,8 +164,8 @@ internal class MatcherLinearTimeTest {
         ) {
             scenario.accept(nearMinimumInput)
             scenario.accept(largerPositiveInput)
-            val largerPositiveWork: Long = countedWork(Runnable { scenario.accept(largerPositiveInput) })
-            val nearMinimumWork: Long = countedWork(Runnable { scenario.accept(nearMinimumInput) })
+            val largerPositiveWork: Long = countedWork({ scenario.accept(largerPositiveInput) })
+            val nearMinimumWork: Long = countedWork({ scenario.accept(nearMinimumInput) })
 
             Assertions.assertThat(largerPositiveWork).`as`("%s should use matcher work", api).isPositive()
             Assertions.assertThat(nearMinimumWork)
@@ -178,7 +177,7 @@ internal class MatcherLinearTimeTest {
                 .isLessThan(largerPositiveWork * 50)
         }
 
-        private fun countedWork(task: Runnable?): Long {
+        private fun countedWork(task: (() -> Any?)?): Long {
             return org.junit.jupiter.api.Assertions.assertTimeoutPreemptively<Long?>(
                 SCENARIO_TIMEOUT,
                 ThrowingSupplier { WorkCounter.countForTesting(task!!) })!!

@@ -33,7 +33,7 @@ internal class LeadingExpansionBackoffTest {
         val starts: MutableList<Int?> = ArrayList<Int?>()
 
         val work =
-            WorkCounter.countStartAccelerationForTesting(Runnable { findAll(input, starts) })
+            WorkCounter.countStartAccelerationForTesting({ findAll(input, starts) })
 
         Assertions.assertThat<Int?>(starts).isEqualTo(jdkStarts(input))
         Assertions.assertThat<Int?>(starts).hasSizeGreaterThan(2000)
@@ -48,7 +48,7 @@ internal class LeadingExpansionBackoffTest {
         val starts: MutableList<Int?> = ArrayList<Int?>()
 
         val work =
-            WorkCounter.countStartAccelerationForTesting(Runnable { findAll(input, starts) })
+            WorkCounter.countStartAccelerationForTesting({ findAll(input, starts) })
 
         Assertions.assertThat<Int?>(starts).isEqualTo(jdkStarts(input))
         Assertions.assertThat<Int?>(starts).hasSizeGreaterThan(50)

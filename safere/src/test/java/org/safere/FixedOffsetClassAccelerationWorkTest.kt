@@ -24,11 +24,9 @@ internal class FixedOffsetClassAccelerationWorkTest {
             val scanner =
                 if (utf8) Utf8InputScanner(input.toByteArray(StandardCharsets.UTF_8)) else StringInputScanner(input)
             val leadingWork =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(scanner.indexOfCharClass(plan.leadingClass, 0)).isEqualTo(-1) })
+                WorkCounter.countForTesting({ Assertions.assertThat(scanner.indexOfCharClass(plan.leadingClass, 0)).isEqualTo(-1) })
             val acceleratedWork =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         val candidate =
                             if (utf8)
                                 Utf8StartAccelerator.findNextCandidate(
@@ -50,8 +48,7 @@ internal class FixedOffsetClassAccelerationWorkTest {
         val pattern = Pattern.compile(" [0-9]{4,}")
         val input = "words with frequent spaces é😀 ".repeat(2000)
         val work =
-            WorkCounter.countStartAccelerationForTesting(
-                Runnable { Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
+            WorkCounter.countStartAccelerationForTesting({ Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
         Assertions.assertThat(work.calls).isZero()
     }
 
@@ -83,11 +80,11 @@ internal class FixedOffsetClassAccelerationWorkTest {
 
     companion object {
         private fun successWork(pattern: Pattern, input: String, utf8: Boolean): Long {
-            return WorkCounter.countForTesting(Runnable { Assertions.assertThat(find(pattern, input, utf8)).isTrue() })
+            return WorkCounter.countForTesting({ Assertions.assertThat(find(pattern, input, utf8)).isTrue() })
         }
 
         private fun failureWork(pattern: Pattern, input: String, utf8: Boolean): Long {
-            return WorkCounter.countForTesting(Runnable { Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
+            return WorkCounter.countForTesting({ Assertions.assertThat(find(pattern, input, utf8)).isFalse() })
         }
 
         private fun find(pattern: Pattern, input: String, utf8: Boolean): Boolean {

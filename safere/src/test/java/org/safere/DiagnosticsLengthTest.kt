@@ -165,15 +165,15 @@ internal class DiagnosticsLengthTest {
         for (size in mutableListOf<Int>(200, 800)) {
             val text = "a".repeat(size!!)
             val input = Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8))
-            for (search in java.util.List.of<Runnable?>(
-                Runnable { Assertions.assertThat(pattern.find(input)).isFalse() },
-                Runnable { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
-                Runnable { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })) {
+            for (search in listOf(
+                { Assertions.assertThat(pattern.find(input)).isFalse() },
+                { Assertions.assertThat(pattern.matcher(input).find()).isFalse() },
+                { Assertions.assertThat(pattern.matcher(text).find()).isFalse() })) {
                 Pattern.setDiagnostics(SafeReMatchDiagnostics.NONE)
-                search.run()
+                search()
                 val withoutDiagnostics = WorkCounter.countForTesting(search)
                 Pattern.setDiagnostics(listener)
-                search.run()
+                search()
                 val withDiagnostics = WorkCounter.countForTesting(search)
                 Assertions.assertThat(withDiagnostics).`as`("%s, length %s", regex, size).isEqualTo(withoutDiagnostics)
                 Assertions.assertThat(withDiagnostics).isZero()

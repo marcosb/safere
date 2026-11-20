@@ -6,6 +6,9 @@ package org.safere
 
 
 import kotlin.jvm.JvmOverloads
+import kotlin.math.max
+import kotlin.math.min
+
 /** ASCII character classification and case-folding utilities.  */
 internal object Ascii {
     /** Converts an ASCII uppercase character to lowercase; leaves other characters unchanged.  */
@@ -150,7 +153,7 @@ internal object Ascii {
         var matched = 0
         val prefixLen: Int = prefix.length
         val length = end
-        for (position in Math.max(0, start)..<length) {
+        for (position in max(0, start)..<length) {
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record()
             }
@@ -186,7 +189,7 @@ internal object Ascii {
         if (low == high) {
             return text.indexOf(low, fromIndex)
         }
-        for (i in Math.max(0, fromIndex)..<text.length) {
+        for (i in max(0, fromIndex)..<text.length) {
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record()
             }
@@ -206,7 +209,7 @@ internal object Ascii {
         if (b < 0) {
             return a
         }
-        return Math.min(a, b)
+        return min(a, b)
     }
 
     /** Returns whether a string matches a pattern prefix ignoring ASCII case.  */
@@ -278,11 +281,11 @@ internal fun String.indexOfCodePointBounded(codePoint: Int, fromIndex: Int, endI
     val end = minOf(length, endIndex)
     var i = from
     while (i < end) {
-        val cp = codePointAt(i)
+        val cp = CodePoints.codePointAt(this, i)
         if (cp == codePoint) {
             return i
         }
-        i += Character.charCount(cp)
+        i += CodePoints.charCount(cp)
     }
     return -1
 }

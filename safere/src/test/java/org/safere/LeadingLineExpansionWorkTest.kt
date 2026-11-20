@@ -25,8 +25,7 @@ internal class LeadingLineExpansionWorkTest {
         for (expected in booleanArrayOf(false, true)) {
             val bytes = (if (expected) "X!7" else "X!-7").toByteArray(StandardCharsets.UTF_8)
             val nativeWork =
-                WorkCounter.countWithForwardDfaStepsForTesting(
-                    Runnable {
+                WorkCounter.countWithForwardDfaStepsForTesting({
                         val result =
                             pattern
                                 .forwardFirstMatchDfa()
@@ -36,8 +35,7 @@ internal class LeadingLineExpansionWorkTest {
                     })
             for (diagnostics in booleanArrayOf(false, true)) {
                 val work =
-                    WorkCounter.countWithForwardDfaStepsForTesting(
-                        Runnable {
+                    WorkCounter.countWithForwardDfaStepsForTesting({
                             val found =
                                 if (diagnostics)
                                     pattern.findWithDiagnostics(Utf8InputScanner(bytes))
@@ -61,8 +59,7 @@ internal class LeadingLineExpansionWorkTest {
             val bytes = ("abcdefghijklmnopqrstuvwxyz".repeat(repetitions) + suffix).toByteArray(StandardCharsets.UTF_8)
             for (diagnostics in booleanArrayOf(false, true)) {
                 val steps =
-                    WorkCounter.countForwardDfaStepsForTesting(
-                        Runnable {
+                    WorkCounter.countForwardDfaStepsForTesting({
                             val found =
                                 if (diagnostics)
                                     pattern.findWithDiagnostics(Utf8InputScanner(bytes))
@@ -89,11 +86,9 @@ internal class LeadingLineExpansionWorkTest {
         val text = line.repeat(lines)
         val pattern = Pattern.compile(".*error: \\w+")
         val stringSteps =
-            WorkCounter.countForwardDfaStepsForTesting(
-                Runnable { Assertions.assertThat(count(pattern.matcher(text))).isEqualTo(lines) })
+            WorkCounter.countForwardDfaStepsForTesting({ Assertions.assertThat(count(pattern.matcher(text))).isEqualTo(lines) })
         val utf8Steps =
-            WorkCounter.countForwardDfaStepsForTesting(
-                Runnable {
+            WorkCounter.countForwardDfaStepsForTesting({
                     Assertions.assertThat(count(pattern.matcher(Utf8Input.trusted(text.toByteArray(StandardCharsets.UTF_8)))))
                         .isEqualTo(lines)
                 })
@@ -110,8 +105,7 @@ internal class LeadingLineExpansionWorkTest {
             val input = rejected + tail
             val expected = if (tail.isEmpty()) 0 else 1
             val work =
-                WorkCounter.countWithForwardDfaStepsForTesting(
-                    Runnable {
+                WorkCounter.countWithForwardDfaStepsForTesting({
                         val matches: Int =
                             if (utf8)
                                 count(pattern.matcher(Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))))

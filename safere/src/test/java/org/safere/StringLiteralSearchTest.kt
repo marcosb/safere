@@ -263,8 +263,8 @@ internal class StringLiteralSearchTest {
         val text = "abc-def-ghi" + FILLER + "-tail"
         for (literal in arrayOf<String>("-", "a", "z", "\n")) {
             for (from in intArrayOf(-3, 0, 1, 5, text.length - 1, text.length, text.length + 4)) {
-                val dispatched = WorkCounter.countForTesting(Runnable { planned(text, literal, from) })
-                val undispatched = WorkCounter.countForTesting(Runnable { anchored(text, literal, from) })
+                val dispatched = WorkCounter.countForTesting({ planned(text, literal, from) })
+                val undispatched = WorkCounter.countForTesting({ anchored(text, literal, from) })
                 Assertions.assertThat(dispatched).`as`("literal=%s fromIndex=%s", literal, from).isEqualTo(undispatched)
             }
         }

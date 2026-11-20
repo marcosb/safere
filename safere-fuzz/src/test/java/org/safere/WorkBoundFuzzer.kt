@@ -40,7 +40,7 @@ class WorkBoundFuzzer {
                         .build()
                 )
             val input = (if (unicode) "é" else "a").repeat(length)
-            val work = WorkCounter.countForTesting(Runnable { pattern.matcher(input).matches() })
+            val work = WorkCounter.countForTesting({ pattern.matcher(input).matches() })
             // countForTesting already rejects a build without instrumentation. Prefilters can
             // legitimately return without visiting any NFA instructions.
             Assertions.assertThat(work).isNotNegative()

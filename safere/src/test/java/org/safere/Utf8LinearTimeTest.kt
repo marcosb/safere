@@ -85,8 +85,7 @@ internal class Utf8LinearTimeTest {
         val asciiClass = AsciiBitmap.of('z'.code)
 
         val work =
-            WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(scanner.indexOfAsciiClass(asciiClass, 0)).isEqualTo(-1) })
+            WorkCounter.countForTesting({ Assertions.assertThat(scanner.indexOfAsciiClass(asciiClass, 0)).isEqualTo(-1) })
 
         Assertions.assertThat(work).isEqualTo(input.size.toLong())
     }
@@ -123,8 +122,8 @@ internal class Utf8LinearTimeTest {
         private fun assertFourXInputStaysNearLinear(task: Consumer<Int?>) {
             task.accept(10000)
             task.accept(40000)
-            val smallerWork = WorkCounter.countForTesting(Runnable { task.accept(10000) })
-            val largerWork = WorkCounter.countForTesting(Runnable { task.accept(40000) })
+            val smallerWork = WorkCounter.countForTesting({ task.accept(10000) })
+            val largerWork = WorkCounter.countForTesting({ task.accept(40000) })
 
             Assertions.assertThat(smallerWork).isGreaterThanOrEqualTo(0)
             Assertions.assertThat(largerWork).isLessThanOrEqualTo(max(10, smallerWork * 5))
@@ -133,8 +132,8 @@ internal class Utf8LinearTimeTest {
         private fun assertLargeFourXInputStaysNearLinear(task: Consumer<Int?>) {
             task.accept(40000)
             task.accept(160000)
-            val smallerWork = WorkCounter.countForTesting(Runnable { task.accept(40000) })
-            val largerWork = WorkCounter.countForTesting(Runnable { task.accept(160000) })
+            val smallerWork = WorkCounter.countForTesting({ task.accept(40000) })
+            val largerWork = WorkCounter.countForTesting({ task.accept(160000) })
 
             Assertions.assertThat(smallerWork).isGreaterThanOrEqualTo(0)
             Assertions.assertThat(largerWork).isLessThanOrEqualTo(max(10, smallerWork * 5))

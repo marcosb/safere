@@ -27,7 +27,7 @@ internal object WorkLimit {
 
     /** Accumulates verification work and returns the updated total.  */
     fun addCandidateWork(currentWork: Long, candidateCount: Int, matchLength: Int): Long {
-        return currentWork + candidateCount.toLong() * matchLength + java.lang.Long.BYTES
+        return currentWork + candidateCount.toLong() * matchLength + Long.SIZE_BYTES
     }
 
     /**

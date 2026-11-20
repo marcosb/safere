@@ -35,11 +35,9 @@ internal class LiteralAlternationWorkTest {
         for (regex in arrayOf<String>("apple|banana|cherry", "apple|banana|cherry|durian|elderberry|fig")) {
             val pattern = Pattern.compile(regex)
             val shorter =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher("x".repeat(32768)).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher("x".repeat(32768)).find()).isFalse() })
             val longer =
-                WorkCounter.countForTesting(
-                    Runnable { Assertions.assertThat(pattern.matcher("x".repeat(131072)).find()).isFalse() })
+                WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher("x".repeat(131072)).find()).isFalse() })
             Assertions.assertThat(shorter).isPositive()
             Assertions.assertThat(longer).`as`(regex).isLessThanOrEqualTo(shorter * 6)
         }
@@ -99,20 +97,18 @@ internal class LiteralAlternationWorkTest {
 
     companion object {
         private fun work(pattern: Pattern, text: String?): Long {
-            return WorkCounter.countForTesting(Runnable {
+            return WorkCounter.countForTesting({
                 Assertions.assertThat(pattern.matcher(text).find()).isTrue()
             })
         }
 
         private fun utf8Work(pattern: Pattern, text: String, expected: Boolean): Long {
             val input = Utf8Input.validated(text.toByteArray(StandardCharsets.UTF_8))
-            return WorkCounter.countForTesting(
-                Runnable { Assertions.assertThat(pattern.matcher(input).find()).isEqualTo(expected) })
+            return WorkCounter.countForTesting({ Assertions.assertThat(pattern.matcher(input).find()).isEqualTo(expected) })
         }
 
         private fun allWork(pattern: Pattern, text: String?): Long {
-            return WorkCounter.countForTesting(
-                Runnable {
+            return WorkCounter.countForTesting({
                     val matcher = pattern.matcher(text)
                     while (matcher.find()) {
                         Assertions.assertThat(matcher.group()).isEqualTo("cherry")

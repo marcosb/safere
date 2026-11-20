@@ -552,7 +552,7 @@ internal class RejectPrefilterTest {
         val options = EnginePathOptions.allEnabled()
 
         val earlyHit: Utf8InputScanner = utf8Scanner("\u4E00#" + "\u4E00".repeat(10000))
-        val work = WorkCounter.countForTesting(Runnable { prefilter.canReject(null, earlyHit, 0, options) })
+        val work = WorkCounter.countForTesting({ prefilter.canReject(null, earlyHit, 0, options) })
         Assertions.assertThat(work).isLessThan(16L)
     }
 
@@ -631,7 +631,7 @@ internal class RejectPrefilterTest {
         // the entire input for the absent ASCII member first.
         val earlyFullWidth: Utf8InputScanner = utf8Scanner("\u4E00\uFF3D" + "\u4E00".repeat(10000))
         val work =
-            WorkCounter.countForTesting(Runnable { prefilter.canReject(null, earlyFullWidth, 0, options) })
+            WorkCounter.countForTesting({ prefilter.canReject(null, earlyFullWidth, 0, options) })
         Assertions.assertThat(work).isLessThan(64L)
     }
 

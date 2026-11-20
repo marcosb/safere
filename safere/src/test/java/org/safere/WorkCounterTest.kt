@@ -21,7 +21,7 @@ internal class WorkCounterTest {
     @Test
     @DisplayName("countForTesting throws when work counters are disabled")
     fun countForTestingThrowsWhenCountersAreDisabled() {
-        Assertions.assertThatThrownBy(ThrowingCallable { WorkCounter.countForTesting(Runnable {}) })
+        Assertions.assertThatThrownBy(ThrowingCallable { WorkCounter.countForTesting({}) })
             .isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("WorkCounter is disabled")
     }

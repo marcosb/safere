@@ -20,16 +20,15 @@ internal class StringRegionWorkTest {
             Assertions.assertThat(matcher.find()).isTrue()
             Assertions.assertThat(matcher.capturesResolved()).isFalse()
             val boundsWork =
-                WorkCounter.countForTesting(
-                    Runnable {
+                WorkCounter.countForTesting({
                         Assertions.assertThat(matcher.start()).isEqualTo(1)
                         Assertions.assertThat(matcher.end()).isEqualTo(body.length + 1)
                     })
             Assertions.assertThat(boundsWork).isZero()
             val captureWork =
-                WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.group(1)).hasSize(size) })
+                WorkCounter.countForTesting({ Assertions.assertThat(matcher.group(1)).hasSize(size) })
             Assertions.assertThat(captureWork).isPositive()
-            Assertions.assertThat(WorkCounter.countForTesting(Runnable { matcher.group(1) })).isZero()
+            Assertions.assertThat(WorkCounter.countForTesting({ matcher.group(1) })).isZero()
         }
     }
 
@@ -44,11 +43,9 @@ internal class StringRegionWorkTest {
                     pattern.matcher(visible).find()
                     pattern.matcher(input).region(2, 2 + visible.length).find()
                     val independent =
-                        WorkCounter.countWithForwardDfaStepsForTesting(
-                            Runnable { Assertions.assertThat(pattern.matcher(visible).find()).isEqualTo(matches) })
+                        WorkCounter.countWithForwardDfaStepsForTesting({ Assertions.assertThat(pattern.matcher(visible).find()).isEqualTo(matches) })
                     val region =
-                        WorkCounter.countWithForwardDfaStepsForTesting(
-                            Runnable {
+                        WorkCounter.countWithForwardDfaStepsForTesting({
                                 Assertions.assertThat(pattern.matcher(input).region(2, 2 + visible.length).find())
                                     .isEqualTo(matches)
                             })
@@ -69,8 +66,7 @@ internal class StringRegionWorkTest {
         for (regex in arrayOf<String>("^a+b$", "^a+[0-9]$")) {
             val matcher = Pattern.compile(regex).matcher(input).region(1, input.length - 1)
             val work =
-                WorkCounter.countWithForwardDfaStepsForTesting(
-                    Runnable { Assertions.assertThat(matcher.matches()).isFalse() })
+                WorkCounter.countWithForwardDfaStepsForTesting({ Assertions.assertThat(matcher.matches()).isFalse() })
             Assertions.assertThat(work).`as`(regex).isLessThan(32)
         }
     }
@@ -81,7 +77,7 @@ internal class StringRegionWorkTest {
         val input = "!" + "a".repeat(8192) + "!"
         val matcher = Pattern.compile("(?i:" + literal + ")").matcher(input)
         matcher.region(1, input.length - 1)
-        val work = WorkCounter.countForTesting(Runnable { Assertions.assertThat(matcher.find()).isFalse() })
+        val work = WorkCounter.countForTesting({ Assertions.assertThat(matcher.find()).isFalse() })
         Assertions.assertThat(work).isLessThan(10L * (input.length + literal.length))
     }
 
@@ -91,7 +87,7 @@ internal class StringRegionWorkTest {
             val input = "!" + "a".repeat(8192) + "!"
             val matcher = Pattern.compile(regex).matcher(input).region(1, input.length - 1)
             val steps =
-                WorkCounter.countForwardDfaStepsForTesting(Runnable {
+                WorkCounter.countForwardDfaStepsForTesting({
                     Assertions.assertThat(matcher.matches()).isTrue()
                 })
             Assertions.assertThat(steps).isZero()

@@ -38,8 +38,7 @@ internal class RepetitionPolicyWorkTest {
                             val input = "a".repeat(length!!) + (if (rejects) "!b" else "b")
                             val bytes = Utf8Input.trusted(input.toByteArray(StandardCharsets.UTF_8))
                             val work =
-                                WorkCounter.countForTesting(
-                                    Runnable {
+                                WorkCounter.countForTesting({
                                         if (utf8) {
                                             Assertions.assertThat(pattern.matcher(bytes).matches())
                                                 .isEqualTo(!rejects!!)

@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 
 /** A strategy-specific explanation of routing or fallback.  */
@@ -17,8 +16,8 @@ data class StrategyDecision(
 
     /** Creates a strategy decision.  */
     init {
-        Objects.requireNonNull<MatchStrategy?>(strategy, "strategy")
-        Objects.requireNonNull<StrategyDisposition?>(disposition, "disposition")
-        Objects.requireNonNull<StrategyReason?>(reason, "reason")
+        requireNotNull(strategy) { "strategy" }
+        requireNotNull(disposition) { "disposition" }
+        requireNotNull(reason) { "reason" }
     }
 }

@@ -37,7 +37,7 @@ internal class DfaStartAccelerationBackoffTest {
         val starts: MutableList<Int?> = ArrayList<Int?>()
 
         val work =
-            WorkCounter.countStartAccelerationForTesting(Runnable { findAll(input, utf8, starts) })
+            WorkCounter.countStartAccelerationForTesting({ findAll(input, utf8, starts) })
 
         Assertions.assertThat<Int?>(starts).hasSize(DENSE_COUNT)
         Assertions.assertThat(starts.get(DENSE_COUNT - 1)).isEqualTo((DENSE_COUNT - 1) * DENSE_UNIT.length)
@@ -56,8 +56,7 @@ internal class DfaStartAccelerationBackoffTest {
         val result = arrayOfNulls<String>(1)
 
         val work =
-            WorkCounter.countStartAccelerationForTesting(
-                Runnable { result[0] = pattern.matcher(input).replaceAll("-") })
+            WorkCounter.countStartAccelerationForTesting({ result[0] = pattern.matcher(input).replaceAll("-") })
 
         Assertions.assertThat(result[0]).isEqualTo("-".repeat(DENSE_COUNT))
         Assertions.assertThat(work.calls).`as`("%s", work).isLessThan(DENSE_COUNT / 100L)
@@ -70,7 +69,7 @@ internal class DfaStartAccelerationBackoffTest {
         val result = arrayOfNulls<Array<String?>>(1)
 
         val work =
-            WorkCounter.countStartAccelerationForTesting(Runnable { result[0] = pattern.split(input) })
+            WorkCounter.countStartAccelerationForTesting({ result[0] = pattern.split(input) })
 
         Assertions.assertThat<String?>(result[0]).hasSize(DENSE_COUNT + 1).containsOnly("", ",")
         Assertions.assertThat(work.calls).`as`("%s", work).isLessThan(DENSE_COUNT / 100L)
@@ -88,15 +87,13 @@ internal class DfaStartAccelerationBackoffTest {
             Pattern.compile(REGEX).matcher(Utf8Input.validated((dense + sparse).toByteArray(StandardCharsets.UTF_8)))
 
         val denseWork =
-            WorkCounter.countStartAccelerationForTesting(
-                Runnable {
+            WorkCounter.countStartAccelerationForTesting({
                     for (i in 0..<DENSE_COUNT) {
                         Assertions.assertThat(if (utf8) utf8Matcher.find() else matcher.find()).isTrue()
                     }
                 })
         val sparseWork =
-            WorkCounter.countStartAccelerationForTesting(
-                Runnable {
+            WorkCounter.countStartAccelerationForTesting({
                     for (i in 0..<sparseCount) {
                         Assertions.assertThat(if (utf8) utf8Matcher.find() else matcher.find()).isTrue()
                     }
@@ -157,7 +154,7 @@ internal class DfaStartAccelerationBackoffTest {
         }
 
         private fun findCalls(matcher: Matcher): Long {
-            return WorkCounter.countStartAccelerationForTesting(Runnable {
+            return WorkCounter.countStartAccelerationForTesting({
                 Assertions.assertThat(matcher.find()).isTrue()
             })
                 .calls

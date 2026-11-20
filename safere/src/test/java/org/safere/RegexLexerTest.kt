@@ -163,8 +163,7 @@ internal class RegexLexerTest {
     fun surrogateLookaheadConsumesLongTriviaOnlyOnce() {
         val regex = "\\uD83D\\uDE" + " #c\n".repeat(512) + "00"
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val lexer = RegexLexer(regex, ParseFlags.LIKE_PERL or ParseFlags.COMMENTS)
                     Assertions.assertThat(lexer.next().rune).isEqualTo(0x1f600)
                     Assertions.assertThat<RegexLexer.Kind?>(lexer.next().kind).isEqualTo(RegexLexer.Kind.END)
@@ -177,8 +176,7 @@ internal class RegexLexerTest {
     fun repeatedClassPeeksDoNotRescanUnboundedTrivia() {
         val regex = "\\Q\\E #ignored\\Q\n".repeat(512) + "a"
         val work =
-            WorkCounter.countForTesting(
-                Runnable {
+            WorkCounter.countForTesting({
                     val lexer = RegexLexer(regex, ParseFlags.LIKE_PERL or ParseFlags.COMMENTS)
                     for (i in 0..999) {
                         Assertions.assertThat(lexer.peekClass().rune).isEqualTo('a'.code)

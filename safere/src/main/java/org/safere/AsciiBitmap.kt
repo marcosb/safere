@@ -4,9 +4,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * Immutable 128-bit bitmap representing a set of ASCII code points (0–127).
  * 
@@ -30,7 +31,8 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
     }
 
     fun cardinality(): Int {
-        return java.lang.Long.bitCount(bitmap0) + java.lang.Long.bitCount(bitmap1)
+        return bitmap0.countOneBits() + bitmap1.countOneBits()
+
     }
 
     fun isEmpty(): Boolean = bitmap0 == 0L && bitmap1 == 0L
@@ -95,7 +97,7 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
         }
 
         fun addRange(lo: Int, hi: Int): Builder {
-            for (cp in max(0, lo)..Math.min(127, hi)) {
+            for (cp in max(0, lo)..min(127, hi)) {
                 add(cp)
             }
             return this
