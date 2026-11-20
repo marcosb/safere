@@ -6,8 +6,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.List
 
 /**
  * A node in the regular expression abstract syntax tree (AST). Each node has a [RegexpOp]
@@ -296,21 +294,21 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
         /** Creates a LITERAL_STRING node matching a sequence of code points.  */
         fun literalString(runes: IntArray, flags: Int): Regexp {
             val re = Regexp(RegexpOp.LITERAL_STRING, flags)
-            re.runes = Arrays.copyOf(runes, runes.size)
+            re.runes = runes.copyOf()
             return re
         }
 
         /** Creates a CONCAT node matching the concatenation of the given sub-expressions in order.  */
         fun concat(subs: Collection<Regexp?>, flags: Int): Regexp {
             val re = Regexp(RegexpOp.CONCAT, flags)
-            re.subs = List.copyOf(subs)
+            re.subs = subs.toMutableList()
             return re
         }
 
         /** Creates an ALTERNATE node matching any one of the given sub-expressions.  */
         fun alternate(subs: Collection<Regexp?>, flags: Int): Regexp {
             val re = Regexp(RegexpOp.ALTERNATE, flags)
-            re.subs = List.copyOf(subs)
+            re.subs = subs.toMutableList()
             return re
         }
 
@@ -347,7 +345,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
                     return s
                 }
                 val re = Regexp(RegexpOp.STAR, flags)
-                re.subs = List.of(s.sub())
+                re.subs = mutableListOf(s.sub())
                 return re
             }
             return rawQuantifier(op, s, flags)
@@ -360,7 +358,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
          */
         fun rawQuantifier(op: RegexpOp, sub: Regexp?, flags: Int): Regexp {
             val re = Regexp(op, flags)
-            re.subs = List.of(sub!!)
+            re.subs = mutableListOf(sub!!)
             return re
         }
 
@@ -370,7 +368,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
          */
         fun repeat(sub: Regexp?, flags: Int, min: Int, max: Int): Regexp {
             val re = Regexp(RegexpOp.REPEAT, flags)
-            re.subs = List.of(sub)
+            re.subs = mutableListOf(sub)
             re.min = min
             re.max = max
             return re
@@ -379,7 +377,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
         /** Creates a NON_CAPTURE node preserving a source-level `(?:...)` group boundary.  */
         fun nonCapture(sub: Regexp?, flags: Int): Regexp {
             val re = Regexp(RegexpOp.NON_CAPTURE, flags)
-            re.subs = List.of(sub)
+            re.subs = mutableListOf(sub)
             return re
         }
 
@@ -389,7 +387,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
          */
         fun capture(sub: Regexp?, flags: Int, cap: Int, name: String?): Regexp {
             val re = Regexp(RegexpOp.CAPTURE, flags)
-            re.subs = List.of(sub)
+            re.subs = mutableListOf(sub)
             re.cap = cap
             re.name = name
             return re
@@ -467,7 +465,7 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
         private fun appendLiteral(sb: StringBuilder, r: Int, foldCase: Boolean) {
             if (r != 0 && r < 0x80 && "(){}[]*+?|.^$\\".indexOf(r.toChar()) >= 0) {
                 sb.append('\\')
-                sb.appendCodePoint(r)
+                sb.append(r.toChar())
             } else if (foldCase && Ascii.isLower(r)) {
                 val upper = Ascii.toUpperCase(r)
                 sb.append('[')
@@ -543,9 +541,9 @@ internal class Regexp(val op: RegexpOp, val flags: Int) {
                 else -> {}
             }
             if (r < 0x100) {
-                sb.append(String.format(Locale.ROOT, "\\x%02x", r))
+                sb.append("\\x").append(r.toString(16).padStart(2, '0'))
             } else {
-                sb.append(String.format(Locale.ROOT, "\\x{%x}", r))
+                sb.append("\\x{").append(r.toString(16)).append('}')
             }
         }
     }

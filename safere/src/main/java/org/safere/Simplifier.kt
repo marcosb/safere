@@ -4,8 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.List
 import kotlin.jvm.JvmRecord
 
 /**
@@ -77,8 +75,8 @@ internal object Simplifier {
                         if (!topEqual(a2, b2)) {
                             return false
                         }
-                        stk.push(a2)
-                        stk.push(b2)
+                        stk.addLast(a2)
+                        stk.addLast(b2)
                     }
                 }
 
@@ -99,8 +97,8 @@ internal object Simplifier {
             if (stk.isEmpty()) {
                 break
             }
-            b = stk.pop()
-            a = stk.pop()
+            b = stk.removeLast()
+            a = stk.removeLast()
         }
         return true
     }
@@ -117,10 +115,7 @@ internal object Simplifier {
 
             RegexpOp.LITERAL -> return a.rune == b.rune && ((a.flags xor b.flags) and ParseFlags.FOLD_CASE) == 0
 
-            RegexpOp.LITERAL_STRING -> return Arrays.equals(
-                a.runes,
-                b.runes
-            ) && ((a.flags xor b.flags) and ParseFlags.FOLD_CASE) == 0
+            RegexpOp.LITERAL_STRING -> return a.runes.contentEquals(b.runes) && ((a.flags xor b.flags) and ParseFlags.FOLD_CASE) == 0
 
             RegexpOp.ALTERNATE, RegexpOp.CONCAT -> return a.subs!!.size == b.subs!!.size
 
@@ -134,7 +129,7 @@ internal object Simplifier {
 
             RegexpOp.HAVE_MATCH -> return a.matchId == b.matchId
 
-            RegexpOp.CHAR_CLASS -> return Arrays.equals(a.charClass!!.flatRanges(), b.charClass!!.flatRanges())
+            RegexpOp.CHAR_CLASS -> return a.charClass!!.flatRanges().contentEquals(b.charClass!!.flatRanges())
 
             else -> return false
         }
@@ -323,7 +318,7 @@ internal object Simplifier {
                 }
                 // Partial match: the repeat goes first, remainder of literal string second.
                 val nre: Regexp = Regexp.repeat(operand, r1.flags, min, max)
-                val remainRunes = Arrays.copyOfRange(r2.runes, n, r2.runes.size)
+                val remainRunes = r2.runes.copyOfRange(n, r2.runes.size)
                 val remainder: Regexp = Regexp.literalString(remainRunes, r2.flags)
                 return CoalescePair(nre, remainder)
             }
@@ -348,27 +343,27 @@ internal object Simplifier {
      */
     private fun computeSimple(re: Regexp): Boolean {
         val stack = ArrayDeque<Regexp>()
-        stack.push(re)
+        stack.addLast(re)
         while (!stack.isEmpty()) {
-            val node = stack.pop()
+            val node = stack.removeLast()
             when (node.op) {
                 RegexpOp.NO_MATCH, RegexpOp.EMPTY_MATCH, RegexpOp.LITERAL, RegexpOp.LITERAL_STRING, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY, RegexpOp.GRAPHEME_CLUSTER_BOUNDARY, RegexpOp.END_TEXT, RegexpOp.ANY_CHAR, RegexpOp.ANY_BYTE, RegexpOp.HAVE_MATCH -> {}
                 RegexpOp.CONCAT, RegexpOp.ALTERNATE -> for (sub in node.subs!!) {
-                    stack.push(sub)
+                    stack.addLast(sub!!)
                 }
 
                 RegexpOp.CHAR_CLASS -> if (node.charClass!!.isEmpty() || isFull(node.charClass!!)) {
                     return false
                 }
 
-                RegexpOp.CAPTURE -> stack.push(node.subs!![0]!!)
+                RegexpOp.CAPTURE -> stack.addLast(node.subs!![0]!!)
                 RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> {
                     val sub: Regexp = node.subs!![0]!!
                     val subOp = sub.op
                     if (subOp == RegexpOp.STAR || subOp == RegexpOp.PLUS || subOp == RegexpOp.QUEST || subOp == RegexpOp.EMPTY_MATCH || subOp == RegexpOp.NO_MATCH) {
                         return false
                     }
-                    stack.push(sub)
+                    stack.addLast(sub)
                 }
 
                 RegexpOp.NON_CAPTURE, RegexpOp.REPEAT -> return false
@@ -453,7 +448,7 @@ internal object Simplifier {
                 suf =
                     starPlusOrQuest(
                         RegexpOp.QUEST,
-                        Regexp.concat(List.of(re, suf), flags),
+                        Regexp.concat(listOf(re, suf), flags),
                         flags,
                         reHasVisibleCapture,
                     )
@@ -461,7 +456,7 @@ internal object Simplifier {
             if (nre == null) {
                 nre = suf
             } else {
-                nre = Regexp.concat(List.of<Regexp?>(nre, suf), flags)
+                nre = Regexp.concat(listOf(nre, suf), flags)
             }
         }
 
@@ -710,7 +705,8 @@ internal object Simplifier {
 
     /** Classifies zero-width operands without rescanning shared or nested simplified subtrees.  */
     private class ZeroWidthWalker : Walker<Boolean?>() {
-        private val known = IdentityHashMap<Regexp?, Boolean?>()
+        // Regexp does not override equals/hashCode; HashMap is identity-keyed here.
+        private val known = HashMap<Regexp?, Boolean?>()
 
         override fun preVisit(re: Regexp, parentArg: Boolean?, stop: BooleanArray): Boolean? {
             val result = known.get(re)

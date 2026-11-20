@@ -4,8 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-
 /**
  * Non-recursive tree walker for [Regexp] ASTs. Uses an explicit stack to avoid stack overflow
  * on deeply nested expressions.
@@ -180,6 +178,6 @@ internal abstract class Walker<T> {
     private class WalkState<T>(val re: Regexp?, val parentArg: T?) {
         var n: Int = -1 // -1 means need preVisit; >= 0 is index of next child to process
         var preArg: T? = null
-        var childArgs: MutableList<T?> = Collections.emptyList<T?>()
+        var childArgs: MutableList<T?> = mutableListOf()
     }
 }

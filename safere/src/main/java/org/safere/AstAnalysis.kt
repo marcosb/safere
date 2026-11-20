@@ -4,9 +4,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.Collections
 import kotlin.jvm.JvmRecord
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * Encapsulates structural analysis of a regular expression AST in a single bottom-up pass using the
  * stack-safe [Walker].
@@ -186,7 +187,7 @@ internal data class AstAnalysis(
                 root.hasUserCaptures,
                 root.minMatchLength,
                 if (namedGroups == null) emptyMap()
-                else Collections.unmodifiableMap(namedGroups)
+                else namedGroups.toMap()
             )
         }
     }

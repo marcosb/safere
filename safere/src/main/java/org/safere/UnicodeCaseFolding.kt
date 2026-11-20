@@ -4,11 +4,12 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 
 /** Utilities for regex case-folded literal and range expansion.  */
 internal object UnicodeCaseFolding {
-    private val CASE_FOLD_NOT_FOUND = Integer.MIN_VALUE
+    private val CASE_FOLD_NOT_FOUND = Int.MIN_VALUE
 
     fun asciiFoldRune(r: Int): Int {
         return Ascii.toLowerCase(r)
@@ -16,13 +17,13 @@ internal object UnicodeCaseFolding {
 
     fun addAsciiFoldedRange(ccb: CharClassBuilder, lo: Int, hi: Int) {
         ccb.addRange(lo, hi)
-        val upperLo = Math.max(lo, 'A'.code)
-        val upperHi = Math.min(hi, 'Z'.code)
+        val upperLo = max(lo, 'A'.code)
+        val upperHi = min(hi, 'Z'.code)
         if (upperLo <= upperHi) {
             ccb.addRange(Ascii.toLowerCase(upperLo), Ascii.toLowerCase(upperHi))
         }
-        val lowerLo = Math.max(lo, 'a'.code)
-        val lowerHi = Math.min(hi, 'z'.code)
+        val lowerLo = max(lo, 'a'.code)
+        val lowerHi = min(hi, 'z'.code)
         if (lowerLo <= lowerHi) {
             ccb.addRange(Ascii.toUpperCase(lowerLo), Ascii.toUpperCase(lowerHi))
         }
@@ -34,9 +35,9 @@ internal object UnicodeCaseFolding {
     }
 
     fun hasUnicodeCaseVariant(cp: Int): Boolean {
-        return Character.toUpperCase(cp) != cp || Character.toLowerCase(cp) != cp || Character.toTitleCase(cp) != cp || Character.toLowerCase(
-            Character.toUpperCase(cp)
-        ) != cp || Character.toUpperCase(Character.toLowerCase(cp)) != cp
+        return UnicodeCaseMapping.toUpperCase(cp) != cp || UnicodeCaseMapping.toLowerCase(cp) != cp || UnicodeCaseMapping.toTitleCase(cp) != cp || UnicodeCaseMapping.toLowerCase(
+            UnicodeCaseMapping.toUpperCase(cp)
+        ) != cp || UnicodeCaseMapping.toUpperCase(UnicodeCaseMapping.toLowerCase(cp)) != cp
     }
 
     fun cycleFoldRune(r: Int): Int {
@@ -121,9 +122,9 @@ internal object UnicodeCaseFolding {
             // code points have no links and need no entry in the component arrays.
             val links = LongArrayBuilder()
             for (cp in 0..Utils.MAX_RUNE) {
-                addLink(links, cp, Character.toUpperCase(cp))
-                addLink(links, cp, Character.toLowerCase(cp))
-                addLink(links, cp, Character.toTitleCase(cp))
+                addLink(links, cp, UnicodeCaseMapping.toUpperCase(cp))
+                addLink(links, cp, UnicodeCaseMapping.toLowerCase(cp))
+                addLink(links, cp, UnicodeCaseMapping.toTitleCase(cp))
                 addLink(links, cp, cycleFoldRune(cp))
             }
             val edges = links.toArray()
@@ -132,7 +133,7 @@ internal object UnicodeCaseFolding {
                 codePoints[2 * i] = target(edges[i])
                 codePoints[2 * i + 1] = source(edges[i])
             }
-            Arrays.sort(codePoints)
+            codePoints.sort()
             var count = 0
             for (cp in codePoints) {
                 if (count == 0 || codePoints[count - 1] != cp) {
@@ -144,13 +145,13 @@ internal object UnicodeCaseFolding {
             // component also represents its least code point.
             val parent = IntArray(count)
             val next = IntArray(count)
-            Arrays.fill(next, -1)
+            next.fill(-1)
             for (i in 0 until count) {
                 parent[i] = i
             }
             for (edge in edges) {
-                val first = Arrays.binarySearch(codePoints, 0, count, target(edge))
-                val second = Arrays.binarySearch(codePoints, 0, count, source(edge))
+                val first = binarySearch(codePoints, 0, count, target(edge))
+                val second = binarySearch(codePoints, 0, count, source(edge))
                 union(parent, first, second)
             }
             // Each component is a linked list starting at its least code point.
@@ -178,8 +179,23 @@ internal object UnicodeCaseFolding {
             // Every member indexes every other member exactly once. One range lookup therefore
             // gives the complete symmetric/transitive closure, with no iterative parser expansion.
             val sorted = pairs.toArray()
-            Arrays.sort(sorted)
+            sorted.sort()
             return sorted
+        }
+
+        fun binarySearch(a: IntArray, fromIndex: Int, toIndex: Int, key: Int): Int {
+            var lo = fromIndex
+            var hi = toIndex - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                val midVal = a[mid]
+                when {
+                    midVal < key -> lo = mid + 1
+                    midVal > key -> hi = mid - 1
+                    else -> return mid
+                }
+            }
+            return -(lo + 1)
         }
 
         fun addLink(links: LongArrayBuilder, first: Int, second: Int) {
@@ -200,15 +216,15 @@ internal object UnicodeCaseFolding {
         fun union(parent: IntArray, a: Int, b: Int) {
             val first: Int = find(parent, a)
             val second: Int = find(parent, b)
-            parent[Math.max(first, second)] = Math.min(first, second)
+            parent[max(first, second)] = min(first, second)
         }
 
         fun pack(target: Int, source: Int): Long {
-            return (target.toLong() shl Integer.SIZE) or Integer.toUnsignedLong(source)
+            return (target.toLong() shl Int.SIZE_BITS) or (source.toLong() and 0xffffffffL)
         }
 
         fun target(pair: Long): Int {
-            return (pair ushr Integer.SIZE).toInt()
+            return (pair ushr Int.SIZE_BITS).toInt()
         }
 
         fun source(pair: Long): Int {
@@ -222,13 +238,13 @@ internal object UnicodeCaseFolding {
 
         fun add(value: Long) {
             if (size == values.size) {
-                values = Arrays.copyOf(values, values.size * 2)
+                values = values.copyOf(values.size * 2)
             }
             values[size++] = value
         }
 
         fun toArray(): LongArray {
-            return Arrays.copyOf(values, size)
+            return values.copyOf(size)
         }
     }
 }
