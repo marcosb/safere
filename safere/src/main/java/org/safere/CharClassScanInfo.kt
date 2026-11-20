@@ -29,7 +29,7 @@ internal sealed interface CharClassScanInfo {
   val isSelective: Boolean
     get() {
       val classRanges = ranges
-      val asciiCount = java.lang.Long.bitCount(bitmap0) + java.lang.Long.bitCount(bitmap1)
+      val asciiCount = bitmap0.countOneBits() + bitmap1.countOneBits()
       if (asciiCount > 3) {
         return false
       }
@@ -96,7 +96,7 @@ internal sealed interface CharClassScanInfo {
       if (cp < 128) {
         return (bitmap1 and (1L shl (cp - 64))) != 0L
       }
-      return Matcher.binarySearchRanges(ranges, cp)
+      return CharClass.containsInFlatRanges(ranges, cp)
     }
   }
 
@@ -164,7 +164,7 @@ internal sealed interface CharClassScanInfo {
       if (cp < 128) {
         return (bitmap1 and (1L shl (cp - 64))) != 0L
       }
-      return Matcher.binarySearchRanges(ranges, cp)
+      return CharClass.containsInFlatRanges(ranges, cp)
     }
   }
 
@@ -175,7 +175,7 @@ internal sealed interface CharClassScanInfo {
       }
       val b0 = asciiClass.bitmap0
       val b1 = asciiClass.bitmap1
-      val count = java.lang.Long.bitCount(b0) + java.lang.Long.bitCount(b1)
+      val count = b0.countOneBits() + b1.countOneBits()
       val ranges = buildRangesFromBitmaps(b0, b1)
       if (count > 0 && count <= 3) {
         val chars = CharArray(count)
@@ -225,7 +225,7 @@ internal sealed interface CharClassScanInfo {
 
       val isAscii = numRanges > 0 && cc.hi(numRanges - 1) <= 127
       if (isAscii) {
-        val count = java.lang.Long.bitCount(b0) + java.lang.Long.bitCount(b1)
+        val count = b0.countOneBits() + b1.countOneBits()
         if (count > 0 && count <= 3) {
           val chars = CharArray(count)
           var idx = 0
@@ -269,7 +269,7 @@ internal sealed interface CharClassScanInfo {
      */
     private fun overlapsSurrogates(cc: CharClass): Boolean {
       for (i in 0 until cc.numRanges()) {
-        if (cc.lo(i) <= Character.MAX_SURROGATE.code && cc.hi(i) >= Character.MIN_SURROGATE.code) {
+        if (cc.lo(i) <= Utils.MAX_SURROGATE && cc.hi(i) >= Utils.MIN_SURROGATE) {
           return true
         }
       }

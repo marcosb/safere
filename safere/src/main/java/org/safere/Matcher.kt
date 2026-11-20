@@ -5571,21 +5571,7 @@ class Matcher : MatchResult {
 
         /** Binary search through sorted [lo, hi] ranges to check if `cp` is in any range.  */
         fun binarySearchRanges(ranges: IntArray, cp: Int): Boolean {
-            var lo = 0
-            var hi: Int = ranges.size / 2 - 1
-            while (lo <= hi) {
-                val mid = (lo + hi) ushr 1
-                val rangeLo = ranges[mid * 2]
-                val rangeHi = ranges[mid * 2 + 1]
-                if (cp < rangeLo) {
-                    hi = mid - 1
-                } else if (cp > rangeHi) {
-                    lo = mid + 1
-                } else {
-                    return true
-                }
-            }
-            return false
+            return CharClass.containsInFlatRanges(ranges, cp)
         }
 
         /**

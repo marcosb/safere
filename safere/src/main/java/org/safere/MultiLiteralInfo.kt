@@ -4,10 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.io.Serializable
-import java.util.*
 import kotlin.jvm.JvmRecord
-import kotlin.math.*
+import kotlin.math.min
+
 /**
  * Metadata for small multi-literal alternation acceleration (2  N  4) using multi-vector
  * SIMD matching on distinct initial prefix characters.
@@ -40,9 +39,7 @@ internal data class MultiLiteralInfo(
     val anchorOffsets: IntArray?,
     val anchorRanges: IntArray?,
     val minLength: Int
-) : Serializable {
-
-
+) {
     companion object {
         fun create(literals: Array<String?>?): MultiLiteralInfo? {
             if (literals == null || literals.size < 2 || literals.size > 4) {
@@ -85,7 +82,7 @@ internal data class MultiLiteralInfo(
             }
 
             return MultiLiteralInfo(
-                Arrays.copyOf<String?>(literals, literals.size),
+                literals.copyOf(),
                 anchorChars,
                 anchorOffsets,
                 anchorBitmap.build().toRanges(),

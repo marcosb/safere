@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.math.*
 /**
  * A mutable builder for [CharClass]. Maintains a set of Unicode code point ranges and
@@ -53,7 +52,7 @@ internal class CharClassBuilder {
             return
         }
         // Code points are non-negative, so sorting the packed values sorts by lo, then hi.
-        Arrays.sort(ranges, 0, size)
+        ranges.sort(0, size)
         var out = 0
         var count = 0
         var i = 0

@@ -6,8 +6,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-
 /**
  * An immutable character class, represented as a sorted, non-overlapping list of Unicode code point
  * ranges. Each range is an inclusive `[lo, hi]` pair.
@@ -88,9 +86,10 @@ internal class CharClass(// Flat array: [lo0, hi0, lo1, hi1, ...]. Always sorted
             val lo = lo(i)
             val hi = hi(i)
             if (lo == hi) {
-                sb.append(String.format(Locale.ROOT, "0x%X", lo))
+                sb.append("0x").append(lo.toString(16).uppercase())
             } else {
-                sb.append(String.format(Locale.ROOT, "0x%X-0x%X", lo, hi))
+                sb.append("0x").append(lo.toString(16).uppercase())
+                    .append("-0x").append(hi.toString(16).uppercase())
             }
         }
         sb.append(']')
@@ -100,5 +99,24 @@ internal class CharClass(// Flat array: [lo0, hi0, lo1, hi1, ...]. Always sorted
     companion object {
         /** An empty character class that matches nothing.  */
         val EMPTY: CharClass = CharClass(IntArray(0), 0)
+
+        /** Binary search through sorted `[lo, hi]` flat ranges.  */
+        fun containsInFlatRanges(ranges: IntArray, cp: Int): Boolean {
+            var lo = 0
+            var hi = ranges.size / 2 - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                val rangeLo = ranges[mid * 2]
+                val rangeHi = ranges[mid * 2 + 1]
+                if (cp < rangeLo) {
+                    hi = mid - 1
+                } else if (cp > rangeHi) {
+                    lo = mid + 1
+                } else {
+                    return true
+                }
+            }
+            return false
+        }
     }
 }

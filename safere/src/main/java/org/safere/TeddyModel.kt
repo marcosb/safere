@@ -4,9 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.io.Serializable
-import java.util.*
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * Immutable precomputed lookup tables and metadata for Teddy SIMD vector-shuffle multi-literal
  * acceleration.
@@ -28,7 +28,7 @@ internal class TeddyModel private constructor(
     private val minLength: Int,
     private val is2Byte: Boolean,
     private val is3Byte: Boolean,
-) : Serializable {
+) {
     fun lutLo(): ByteArray? {
         return lutLo
     }
@@ -74,8 +74,6 @@ internal class TeddyModel private constructor(
     }
 
     companion object {
-        private const val serialVersionUID = 1L
-
         private const val MAX_BUCKETS = 8
         private const val NIBBLE_TABLE_SIZE = 16
 
@@ -174,7 +172,7 @@ internal class TeddyModel private constructor(
                 repeatedHi1,
                 repeatedLo2,
                 repeatedHi2,
-                Arrays.copyOf<String?>(literals, literals.size),
+                literals.copyOf(),
                 literalBuckets,
                 minLen,
                 is2Byte,

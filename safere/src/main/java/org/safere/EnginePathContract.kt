@@ -4,8 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.List
 import kotlin.jvm.JvmRecord
 
 /** Machine-readable engine-path contract metadata for package-private tests.  */
@@ -13,32 +11,32 @@ import kotlin.jvm.JvmRecord
 internal data class EnginePathContract(
     val path: EnginePath?,
     val role: EnginePathRole?,
-    val authorities: MutableSet<ResultAuthority?>?,
-    val guards: MutableSet<SemanticGuard?>?
+    val authorities: Set<ResultAuthority?>?,
+    val guards: Set<SemanticGuard?>?
 ) {
     companion object {
-        private val ALL: MutableList<EnginePathContract?> = List.of<EnginePathContract?>(
+        private val ALL: List<EnginePathContract?> = listOf(
             EnginePathContract(
                 EnginePath.LITERAL_FAST_PATHS,
                 EnginePathRole.AUTHORITATIVE_PRODUCER,
-                EnumSet.of<ResultAuthority?>(
+                setOf(
                     ResultAuthority.NO_MATCH,
                     ResultAuthority.GROUP_ZERO,
                     ResultAuthority.SEARCH_CURSOR
                 ),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.NO_USER_CAPTURES)
+                setOf(SemanticGuard.NO_USER_CAPTURES)
             ),
             EnginePathContract(
                 EnginePath.CHAR_CLASS_MATCH_FAST_PATHS,
                 EnginePathRole.AUTHORITATIVE_PRODUCER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.WHOLE_PATTERN_SHAPE)
+                setOf(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
+                setOf(SemanticGuard.WHOLE_PATTERN_SHAPE)
             ),
             EnginePathContract(
                 EnginePath.CHAR_CLASS_REPLACEMENT_FAST_PATH,
                 EnginePathRole.AUTHORITATIVE_PRODUCER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.REPLACEMENT_RESULT),
-                EnumSet.of<SemanticGuard?>(
+                setOf(ResultAuthority.REPLACEMENT_RESULT),
+                setOf(
                     SemanticGuard.NON_NULLABLE_PATTERN,
                     SemanticGuard.SIMPLE_REPLACEMENT,
                     SemanticGuard.WHOLE_PATTERN_SHAPE
@@ -47,73 +45,73 @@ internal data class EnginePathContract(
             EnginePathContract(
                 EnginePath.KEYWORD_ALTERNATION_FAST_PATH,
                 EnginePathRole.GUARDED_OPTIMIZATION,
-                EnumSet.of<ResultAuthority?>(
+                setOf(
                     ResultAuthority.NO_MATCH,
                     ResultAuthority.GROUP_ZERO,
                     ResultAuthority.CAPTURES,
                     ResultAuthority.SEARCH_CURSOR
                 ),
-                EnumSet.of<SemanticGuard?>(
+                setOf(
                     SemanticGuard.WHOLE_PATTERN_SHAPE, SemanticGuard.LEFTMOST_FIRST_EQUIVALENT
                 )
             ),
             EnginePathContract(
                 EnginePath.START_ACCELERATION,
                 EnginePathRole.FILTER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.CANDIDATE_START),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.CONSERVATIVE_START_SET)
+                setOf(ResultAuthority.CANDIDATE_START),
+                setOf(SemanticGuard.CONSERVATIVE_START_SET)
             ),
             EnginePathContract(
                 EnginePath.SHIFT_DFA,
                 EnginePathRole.GUARDED_OPTIMIZATION,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.WHOLE_PATTERN_SHAPE, SemanticGuard.BOUNDED_STATE)
+                setOf(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
+                setOf(SemanticGuard.WHOLE_PATTERN_SHAPE, SemanticGuard.BOUNDED_STATE)
             ),
             EnginePathContract(
                 EnginePath.ONE_PASS,
                 EnginePathRole.GUARDED_OPTIMIZATION,
-                EnumSet.of<ResultAuthority?>(
+                setOf(
                     ResultAuthority.NO_MATCH,
                     ResultAuthority.GROUP_ZERO,
                     ResultAuthority.CAPTURES,
                     ResultAuthority.SEARCH_CURSOR
                 ),
-                EnumSet.of<SemanticGuard?>(
+                setOf(
                     SemanticGuard.LEFTMOST_FIRST_EQUIVALENT, SemanticGuard.CAPTURE_EQUIVALENT
                 )
             ),
             EnginePathContract(
                 EnginePath.DFA,
                 EnginePathRole.PARTIAL_PRODUCER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.GROUP_ZERO_EQUIVALENT)
+                setOf(ResultAuthority.NO_MATCH, ResultAuthority.GROUP_ZERO),
+                setOf(SemanticGuard.GROUP_ZERO_EQUIVALENT)
             ),
             EnginePathContract(
                 EnginePath.REVERSE_DFA,
                 EnginePathRole.FILTER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.CANDIDATE_START, ResultAuthority.NO_MATCH),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.GROUP_ZERO_EQUIVALENT)
+                setOf(ResultAuthority.CANDIDATE_START, ResultAuthority.NO_MATCH),
+                setOf(SemanticGuard.GROUP_ZERO_EQUIVALENT)
             ),
             EnginePathContract(
                 EnginePath.BIT_STATE,
                 EnginePathRole.GUARDED_OPTIMIZATION,
-                EnumSet.of<ResultAuthority?>(
+                setOf(
                     ResultAuthority.NO_MATCH,
                     ResultAuthority.GROUP_ZERO,
                     ResultAuthority.CAPTURES,
                     ResultAuthority.SEARCH_CURSOR
                 ),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.BOUNDED_STATE, SemanticGuard.CAPTURE_EQUIVALENT)
+                setOf(SemanticGuard.BOUNDED_STATE, SemanticGuard.CAPTURE_EQUIVALENT)
             ),
             EnginePathContract(
                 EnginePath.LAZY_CAPTURE_EXTRACTION,
                 EnginePathRole.PARTIAL_PRODUCER,
-                EnumSet.of<ResultAuthority?>(ResultAuthority.GROUP_ZERO, ResultAuthority.DEFERRED_CAPTURES),
-                EnumSet.of<SemanticGuard?>(SemanticGuard.CAPTURE_DEFERABLE)
+                setOf(ResultAuthority.GROUP_ZERO, ResultAuthority.DEFERRED_CAPTURES),
+                setOf(SemanticGuard.CAPTURE_DEFERABLE)
             )
         )
 
-        fun all(): MutableList<EnginePathContract?> {
+        fun all(): List<EnginePathContract?> {
             return ALL
         }
     }
