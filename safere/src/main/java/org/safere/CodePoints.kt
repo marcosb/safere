@@ -81,9 +81,11 @@ internal object CodePoints {
   fun lowSurrogate(cp: Int): Char =
     (((cp - 0x10000) and 0x3FF) + 0xDC00).toChar()
 
-  fun toChars(cp: Int): CharArray =
-    if (cp < MIN_SUPPLEMENTARY_CODE_POINT) charArrayOf(cp.toChar())
+  fun toChars(cp: Int): CharArray {
+    require(isValidCodePoint(cp)) { "Not a valid Unicode code point: 0x${cp.toString(16)}" }
+    return if (cp < MIN_SUPPLEMENTARY_CODE_POINT) charArrayOf(cp.toChar())
     else charArrayOf(highSurrogate(cp), lowSurrogate(cp))
+  }
 
   fun digit(cp: Int, radix: Int): Int {
     if (radix !in 2..36) return -1

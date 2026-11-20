@@ -6,7 +6,9 @@ package org.safere
 
 
 
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * Static helpers for the start-acceleration give-up rule, over state packed into one `long`.
  * 

@@ -32,7 +32,6 @@ internal data class AsciiBitmap(val bitmap0: Long, val bitmap1: Long) {
 
     fun cardinality(): Int {
         return bitmap0.countOneBits() + bitmap1.countOneBits()
-
     }
 
     fun isEmpty(): Boolean = bitmap0 == 0L && bitmap1 == 0L

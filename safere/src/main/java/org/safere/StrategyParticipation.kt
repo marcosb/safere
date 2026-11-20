@@ -12,7 +12,7 @@ data class StrategyParticipation(val strategy: MatchStrategy?, val role: Strateg
 
     /** Creates a participation pair.  */
     init {
-        requireNotNull(strategy) { "strategy" }
-        requireNotNull(role) { "role" }
+        strategy ?: throw NullPointerException("strategy")
+        role ?: throw NullPointerException("role")
     }
 }

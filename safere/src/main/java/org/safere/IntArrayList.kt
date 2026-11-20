@@ -52,8 +52,8 @@ internal class IntArrayList @JvmOverloads constructor(capacity: Int = 16) {
      * 
      * Callers often add values as a concatenation of a few long ascending runs (for example, the
      * range boundaries of each character class in a program). Those are merged pairwise in linear
-     * passes, which is much cheaper than a general sort; `Arrays.sort` only looks for runs in
-     * arrays with thousands of elements. Small inputs and inputs with many short runs are sorted
+     * passes, which is much cheaper than a general sort; ranged `IntArray.sort` only looks for runs
+     * in arrays with thousands of elements. Small inputs and inputs with many short runs are sorted
      * directly.
      */
     fun toSortedUniqueArray(): IntArray {

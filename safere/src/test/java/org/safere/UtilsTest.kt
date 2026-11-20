@@ -86,6 +86,12 @@ internal class UtilsTest {
     }
 
     @Test
+    fun runeToString_invalidCodePointThrows() {
+        Assertions.assertThatIllegalArgumentException().isThrownBy { Utils.runeToString(-1) }
+        Assertions.assertThatIllegalArgumentException().isThrownBy { Utils.runeToString(0x110000) }
+    }
+
+    @Test
     fun runeCount_ascii() {
         Assertions.assertThat(Utils.runeCount("hello")).isEqualTo(5)
     }

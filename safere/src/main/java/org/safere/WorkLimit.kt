@@ -6,7 +6,8 @@ package org.safere
 
 
 
-import kotlin.math.*
+import kotlin.math.max
+
 /**
  * Bounds checking and work-budget accounting for candidate-filtering string search kernels.
  * 

@@ -16,8 +16,8 @@ data class StrategyDecision(
 
     /** Creates a strategy decision.  */
     init {
-        requireNotNull(strategy) { "strategy" }
-        requireNotNull(disposition) { "disposition" }
-        requireNotNull(reason) { "reason" }
+        strategy ?: throw NullPointerException("strategy")
+        disposition ?: throw NullPointerException("disposition")
+        reason ?: throw NullPointerException("reason")
     }
 }
