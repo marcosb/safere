@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 
 /**
  * Expands parsed character-class atoms according to SafeRE's regex flags and Unicode property
@@ -231,7 +230,7 @@ internal object CharClassExpander {
     }
 
     private fun normalizePropertyName(name: String): String {
-        return name.uppercase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "")
+        return name.uppercase().replace("_", "").replace("-", "").replace(" ", "")
     }
 
     internal enum class CaseFoldPolicy {

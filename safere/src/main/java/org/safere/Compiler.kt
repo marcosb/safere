@@ -6,7 +6,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 import kotlin.math.*
 /**
@@ -703,15 +702,15 @@ internal class Compiler private constructor(private val maxInst: Int = DEFAULT_M
         private fun maxCapture(re: Regexp): Int {
             var max = 0
             val stack = ArrayDeque<Regexp>()
-            stack.push(re)
+            stack.addLast(re)
             while (!stack.isEmpty()) {
-                val node = stack.pop()
+                val node = stack.removeLast()
                 if (node.op == RegexpOp.CAPTURE && node.cap > max) {
                     max = node.cap
                 }
                 if (node.subs != null) {
                     for (sub in node.subs!!) {
-                        stack.push(sub)
+                        stack.addLast(sub!!)
                     }
                 }
             }

@@ -6,20 +6,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import kotlin.BooleanArray
-import kotlin.arrayOfNulls
-import kotlin.collections.ArrayList
-import kotlin.collections.MutableList
-import kotlin.collections.indices
-import kotlin.collections.minus
-import kotlin.collections.plus
 import kotlin.concurrent.Volatile
-import kotlin.plus
-import kotlin.sequences.minus
-import kotlin.sequences.plus
-import kotlin.times
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * A compiled regular expression program, consisting of an array of [Inst] instructions. This
  * is the output of the `Compiler` and the input to the execution engines (NFA, DFA, etc.).
@@ -377,24 +367,15 @@ internal class Prog {
             } else {
                 sb.append(' ')
             }
-            sb.append(
-                String.format(
-                    Locale.ROOT, "%d. %s\n", i, if (instArray != null) instArray!![i] else instructions.get(i)
-                )
-            )
+            sb.append(i).append(". ").append(
+                if (instArray != null) instArray!![i] else instructions.get(i)
+            ).append('\n')
         }
         return sb.toString()
     }
 
     override fun toString(): String {
-        return String.format(
-            Locale.ROOT,
-            "Prog{size=%d, start=%d, startUnanchored=%d, captures=%d}",
-            size,
-            start,
-            startUnanchored,
-            numCaptures
-        )
+        return "Prog{size=$size, start=$start, startUnanchored=$startUnanchored, captures=$numCaptures}"
     }
 
     // ---------------------------------------------------------------------------
@@ -631,7 +612,7 @@ internal class Prog {
         addSuccessor(startUnanchored, reachable, stack)
 
         while (!stack.isEmpty()) {
-            val id: Int = stack.pop()!!
+            val id: Int = stack.removeLast()!!
             val inst = inst(id)
             when (inst.op) {
                 InstOp.ALT, InstOp.ALT_MATCH, InstOp.PROGRESS_CHECK -> {
@@ -665,7 +646,7 @@ internal class Prog {
         addEpsilonSuccessors(target, reachable, visited, stack)
 
         while (!stack.isEmpty()) {
-            val id: Int = stack.pop()!!
+            val id: Int = stack.removeLast()!!
             if (id == target) {
                 return true
             }
@@ -752,7 +733,7 @@ internal class Prog {
 
         // Pass 2: Mark dominator roots by working backwards.
         val sortedRoots = roots.toArray()
-        Arrays.sort(sortedRoots)
+        sortedRoots.sort()
         for (i in sortedRoots.indices.reversed()) {
             val root = sortedRoots[i]
             markDominator(root, rootmap, roots, predecessors, reachable, reachableList, stack)
@@ -1048,14 +1029,14 @@ internal class Prog {
         ) {
             if (id > 0 && id < reachable.size && reachable[id] && !visited[id]) {
                 visited[id] = true
-                stack.push(id)
+                stack.addLast(id)
             }
         }
 
         private fun addSuccessor(id: Int, reachable: BooleanArray, stack: ArrayDeque<Int?>) {
             if (id > 0 && id < reachable.size && !reachable[id]) {
                 reachable[id] = true
-                stack.push(id)
+                stack.addLast(id)
             }
         }
     }

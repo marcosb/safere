@@ -49,7 +49,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/ShiftDfa.kt",
   "org/safere/InnerLiteralSearch.kt",
   "org/safere/GraphemeSupport.kt",
-  "org/safere/JavaCharacterClasses.kt",
   // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",
   "org/safere/SystemProperties.kt",
@@ -65,9 +64,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/DiagnosticAccumulator.kt",
   "org/safere/OperationDiagnostics.kt",
   "org/safere/Utf8Input.kt",
-  "org/safere/Prog.kt",
-  "org/safere/Compiler.kt",
-  "org/safere/CharClassExpander.kt",
   "org/safere/ClassHashChain.kt",
   "org/safere/PatternCompiledEvent.kt",
   "org/safere/PatternDescriptor.kt",
