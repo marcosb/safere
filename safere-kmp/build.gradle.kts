@@ -42,7 +42,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/MultiAnchorDescriptor.kt",
   "org/safere/MatchDescriptor.kt",
   "org/safere/StringRegionInputScanner.kt",
-  "org/safere/StringInputScanner.kt",
   "org/safere/UnicodeCaseFolding.kt",
   "org/safere/Nfa.kt",
   "org/safere/Dfa.kt",
@@ -52,8 +51,9 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/InnerLiteralSearch.kt",
   "org/safere/GraphemeSupport.kt",
   "org/safere/JavaCharacterClasses.kt",
-  // ThreadLocalRef: Maven JVM class; KMP uses expect/actual overlays
+  // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",
+  "org/safere/SystemProperties.kt",
   // Remaining JDK-tied surface parked for later M2 batches
   "org/safere/MatcherTransitionInventory.kt",
   "org/safere/RegionClassSearch.kt",
@@ -61,7 +61,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/ByteEngineContext.kt",
   "org/safere/DiagnosticAccumulator.kt",
   "org/safere/OperationDiagnostics.kt",
-  "org/safere/ScanAudit.kt",
   "org/safere/Utf8Input.kt",
   "org/safere/Utf8Sink.kt",
   "org/safere/Inst.kt",
@@ -89,6 +88,7 @@ val kmpOverlayRelativePaths =
   setOf(
     "org/safere/VectorScanProviders.kt",
     "org/safere/ThreadLocalRef.kt",
+    "org/safere/SystemProperties.kt",
   )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */

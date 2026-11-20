@@ -4,10 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import org.safere.ScanAudit.ENABLED
-import org.safere.ScanAudit.record
-
-
 /**
  * Package-private record of which scan kernel each dispatch site chose, for tests.
  *
@@ -41,16 +37,16 @@ internal object ScanAudit {
      * scanned, where even a folded branch in the interpreter matters. A dispatch event fires once per
      * scan call, three orders of magnitude less often.
      */
-    val ENABLED: Boolean = java.lang.Boolean.getBoolean(PROPERTY)
+    val ENABLED: Boolean = SystemProperties.getBoolean(PROPERTY)
 
-    private val LOG = ThreadLocal<MutableList<ScanEvent>?>()
+    private val LOG = ThreadLocalRef<MutableList<ScanEvent>>()
 
     /**
      * Runs `task` and returns the dispatch events it recorded, in the order they occurred.
      *
      * @throws IllegalStateException if recording is off, or if work counting is on
      */
-    fun captureForTesting(task: Runnable): List<ScanEvent> {
+    fun captureForTesting(task: () -> Any?): List<ScanEvent> {
         check(ENABLED) { "ScanAudit is disabled; run tests with -D" + PROPERTY }
         check(!WorkCounterConfig.ENABLED) {
             "ScanAudit cannot observe dispatch under -Pwork-counters, which bypasses every ladder"
@@ -59,9 +55,9 @@ internal object ScanAudit {
         val current: MutableList<ScanEvent> = ArrayList()
         LOG.set(current)
         try {
-            task.run()
+            task()
             validateDispatchPairs(current)
-            return java.util.List.copyOf(current)
+            return current.toList()
         } finally {
             if (previous == null) {
                 LOG.remove()
