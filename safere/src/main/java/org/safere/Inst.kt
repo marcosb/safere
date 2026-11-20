@@ -4,8 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /**
  * A single instruction in a compiled regular expression program. Each instruction has an [ ] and opcode-specific data.
  * 
@@ -304,32 +305,22 @@ internal class Inst {
 
     override fun toString(): String {
         return when (op!!) {
-            InstOp.ALT -> String.format(Locale.ROOT, "alt -> %d | %d", out, out1)
-            InstOp.ALT_MATCH -> String.format(Locale.ROOT, "altmatch -> %d | %d", out, out1)
-            InstOp.CHAR_RANGE -> String.format(
-                Locale.ROOT,
-                "char [0x%X-0x%X]%s -> %d",
-                lo,
-                hi,
-                if (foldCase) "/i" else "",
-                out
-            )
+            InstOp.ALT -> "alt -> $out | $out1"
+            InstOp.ALT_MATCH -> "altmatch -> $out | $out1"
+            InstOp.CHAR_RANGE ->
+                "char [0x${lo.toString(16).uppercase()}-0x${hi.toString(16).uppercase()}]" +
+                    "${if (foldCase) "/i" else ""} -> $out"
 
-            InstOp.CAPTURE -> String.format(Locale.ROOT, "capture %d -> %d", arg, out)
-            InstOp.EMPTY_WIDTH -> String.format(Locale.ROOT, "empty 0x%X -> %d", arg, out)
-            InstOp.MATCH -> String.format(Locale.ROOT, "match %d", arg)
-            InstOp.NOP -> String.format(Locale.ROOT, "nop -> %d", out)
-            InstOp.LOOP_ENTER -> String.format(Locale.ROOT, "loop_enter reg=%d -> %d", arg, out)
+            InstOp.CAPTURE -> "capture $arg -> $out"
+            InstOp.EMPTY_WIDTH -> "empty 0x${arg.toString(16).uppercase()} -> $out"
+            InstOp.MATCH -> "match $arg"
+            InstOp.NOP -> "nop -> $out"
+            InstOp.LOOP_ENTER -> "loop_enter reg=$arg -> $out"
             InstOp.FAIL -> "fail"
-            InstOp.GRAPHEME_CLUSTER -> String.format(Locale.ROOT, "grapheme_cluster -> %d", out)
-            InstOp.PROGRESS_CHECK -> String.format(
-                Locale.ROOT,
-                "progress_check reg=%d body=%d exit=%d %s",
-                arg,
-                out,
-                out1,
-                if (foldCase) "non-greedy" else "greedy"
-            )
+            InstOp.GRAPHEME_CLUSTER -> "grapheme_cluster -> $out"
+            InstOp.PROGRESS_CHECK ->
+                "progress_check reg=$arg body=$out exit=$out1 " +
+                    if (foldCase) "non-greedy" else "greedy"
 
             InstOp.CHAR_CLASS -> {
                 val sb = StringBuilder("charclass [")
@@ -338,10 +329,11 @@ internal class Inst {
                     if (i > 0) {
                         sb.append(',')
                     }
-                    sb.append(String.format(Locale.ROOT, "0x%X-0x%X", ranges[i], ranges[i + 1]))
+                    sb.append("0x").append(ranges[i].toString(16).uppercase())
+                        .append("-0x").append(ranges[i + 1].toString(16).uppercase())
                     i += 2
                 }
-                sb.append(String.format(Locale.ROOT, "] -> %d", out))
+                sb.append("] -> ").append(out)
                 sb.toString()
             }
 

@@ -54,6 +54,9 @@ val jvmOnlyRelativePaths = listOf(
   // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",
   "org/safere/SystemProperties.kt",
+  "org/safere/UnicodeJdkAliases.kt",
+  // JVM-only ByteBuffer sink extension (Utf8Sink itself is common)
+  "org/safere/Utf8SinkBuffers.kt",
   // Remaining JDK-tied surface parked for later M2 batches
   "org/safere/MatcherTransitionInventory.kt",
   "org/safere/RegionClassSearch.kt",
@@ -62,23 +65,16 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/DiagnosticAccumulator.kt",
   "org/safere/OperationDiagnostics.kt",
   "org/safere/Utf8Input.kt",
-  "org/safere/Utf8Sink.kt",
-  "org/safere/Inst.kt",
   "org/safere/Simplifier.kt",
   "org/safere/Regexp.kt",
   "org/safere/Prog.kt",
   "org/safere/Compiler.kt",
   "org/safere/Walker.kt",
-  "org/safere/UnicodeTables.kt",
-  "org/safere/UnicodeProperties.kt",
   "org/safere/CharClassExpander.kt",
   "org/safere/ClassHashChain.kt",
   "org/safere/AstAnalysis.kt",
   "org/safere/PatternCompiledEvent.kt",
   "org/safere/PatternDescriptor.kt",
-  "org/safere/Utf16.kt",
-  "org/safere/CaptureRune.kt",
-  "org/safere/LazyRuneLoop.kt",
   "org/safere/SafeReMatchDiagnostics.kt",
   "module-info.java",
 )
@@ -89,6 +85,7 @@ val kmpOverlayRelativePaths =
     "org/safere/VectorScanProviders.kt",
     "org/safere/ThreadLocalRef.kt",
     "org/safere/SystemProperties.kt",
+    "org/safere/UnicodeJdkAliases.kt",
   )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */

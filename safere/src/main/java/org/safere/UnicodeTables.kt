@@ -6,8 +6,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.Map
+import kotlin.math.max
+
 
 /**
  * Unicode character data tables for the SafeRE regular expression library.
@@ -53,12 +53,12 @@ internal object UnicodeTables {
         intArrayOf(0x0A, 0x0D), intArrayOf(0x85, 0x85), intArrayOf(0x2028, 0x2029),
     )
 
-    val PERL_GROUPS: MutableMap<String, Array<IntArray>> = Map.of<String, Array<IntArray>>(
-        "\\d", PERL_DIGIT,
-        "\\s", PERL_SPACE,
-        "\\w", PERL_WORD,
-        "\\h", HORIZ_SPACE,
-        "\\v", VERT_SPACE
+    val PERL_GROUPS: Map<String, Array<IntArray>> = mapOf(
+        "\\d" to PERL_DIGIT,
+        "\\s" to PERL_SPACE,
+        "\\w" to PERL_WORD,
+        "\\h" to HORIZ_SPACE,
+        "\\v" to VERT_SPACE
     )
 
     // POSIX character classes
@@ -84,23 +84,23 @@ internal object UnicodeTables {
      * POSIX character class names for use with the `\p{...}` property syntax (e.g., `\p{Lower}`). These are the 13 POSIX classes defined in the JDK's `java.util.regex.Pattern` documentation. In the default (non-UNICODE_CHARACTER_CLASS) mode, they
      * match ASCII-only ranges.
      */
-    val POSIX_PROPERTY_GROUPS: MutableMap<String, Array<IntArray>> = Map.ofEntries<String, Array<IntArray>>(
-        Map.entry<String, Array<IntArray>>("Lower", POSIX_LOWER),
-        Map.entry<String, Array<IntArray>>("Upper", POSIX_UPPER),
-        Map.entry<String, Array<IntArray>>("ASCII", POSIX_ASCII),
-        Map.entry<String, Array<IntArray>>("Alpha", POSIX_ALPHA),
-        Map.entry<String, Array<IntArray>>("Digit", POSIX_DIGIT),
-        Map.entry<String, Array<IntArray>>("Alnum", POSIX_ALNUM),
-        Map.entry<String, Array<IntArray>>("Punct", POSIX_PUNCT),
-        Map.entry<String, Array<IntArray>>("Graph", POSIX_GRAPH),
-        Map.entry<String, Array<IntArray>>("Print", POSIX_PRINT),
-        Map.entry<String, Array<IntArray>>("Blank", POSIX_BLANK),
-        Map.entry<String, Array<IntArray>>("Cntrl", POSIX_CNTRL),
-        Map.entry<String, Array<IntArray>>("XDigit", POSIX_XDIGIT),
-        Map.entry<String, Array<IntArray>>("Space", POSIX_SPACE)
+    val POSIX_PROPERTY_GROUPS: Map<String, Array<IntArray>> = mapOf(
+        "Lower" to POSIX_LOWER,
+        "Upper" to POSIX_UPPER,
+        "ASCII" to POSIX_ASCII,
+        "Alpha" to POSIX_ALPHA,
+        "Digit" to POSIX_DIGIT,
+        "Alnum" to POSIX_ALNUM,
+        "Punct" to POSIX_PUNCT,
+        "Graph" to POSIX_GRAPH,
+        "Print" to POSIX_PRINT,
+        "Blank" to POSIX_BLANK,
+        "Cntrl" to POSIX_CNTRL,
+        "XDigit" to POSIX_XDIGIT,
+        "Space" to POSIX_SPACE
     )
 
-    fun unicodePosixPropertyGroups(): MutableMap<String, Array<IntArray>> {
+    fun unicodePosixPropertyGroups(): Map<String, Array<IntArray>> {
         return UnicodePosixHolder.UNICODE_POSIX_PROPERTY_GROUPS
     }
 
@@ -728,7 +728,7 @@ internal object UnicodeTables {
 
     // Unicode script and category groups generated from the maintainer JDK. See UnicodeGroups for
     // details.
-    val UNICODE_GROUPS: MutableMap<String, Array<IntArray>> = UnicodeGroups.groups()
+    val UNICODE_GROUPS: Map<String, Array<IntArray>> = UnicodeGroups.groups()
 
     // ---------------------------------------------------------------------------
     // Unicode Perl character classes (for UNICODE_CHARACTER_CLASS flag)
@@ -778,7 +778,7 @@ internal object UnicodeTables {
     /**
      * Map of Unicode-aware Perl shorthand classes, paralleling [.PERL_GROUPS]. Used when [ ][ParseFlags.UNICODE_CHAR_CLASS] is active.
      */
-    fun unicodePerlGroups(): MutableMap<String, Array<IntArray>> {
+    fun unicodePerlGroups(): Map<String, Array<IntArray>> {
         return UnicodePerlHolder.UNICODE_PERL_GROUPS
     }
 
@@ -798,25 +798,23 @@ internal object UnicodeTables {
         val all = arrayOfNulls<IntArray>(total) as Array<IntArray>
         var idx = 0
         for (t in tables) {
-            System.arraycopy(t, 0, all, idx, t.size)
+            t.copyInto(all, idx)
             idx += t.size
         }
         // Sort by lo, then by hi.
-        Arrays.sort<IntArray?>(
-            all,
-            Comparator { a: IntArray?, b: IntArray? -> if (a!![0] != b!![0]) a[0] - b[0] else a[1] - b[1] })
+        all.sortWith(compareBy({ it[0] }, { it[1] }))
         // Merge overlapping/adjacent ranges.
         val merged = arrayOfNulls<IntArray>(total)
         var count = 0
         for (range in all) {
             if (count > 0 && range[0] <= merged[count - 1]!![1] + 1) {
                 // Extend existing range.
-                merged[count - 1]!![1] = Math.max(merged[count - 1]!![1], range[1])
+                merged[count - 1]!![1] = max(merged[count - 1]!![1], range[1])
             } else {
                 merged[count++] = intArrayOf(range[0], range[1])
             }
         }
-        return Arrays.copyOf<IntArray?>(merged, count)
+        return Array(count) { merged[it]!! }
     }
 
     private object UnicodePosixHolder {
@@ -849,21 +847,21 @@ internal object UnicodeTables {
         // Print: Graph plus the blanks that aren't controls, which are the space separators.
         val UNICODE_PRINT: Array<IntArray> = mergeRangeTables(UNICODE_GRAPH, UnicodeProperties.lookupCategory("Zs")!!)
 
-        val UNICODE_POSIX_PROPERTY_GROUPS: MutableMap<String, Array<IntArray>> =
-            Map.ofEntries<String, Array<IntArray>>(
-                Map.entry("Lower", UnicodeProperties.lookupBinaryProperty("Lowercase")!!),
-                Map.entry("Upper", UnicodeProperties.lookupBinaryProperty("Uppercase")!!),
-                Map.entry<String, Array<IntArray>>("ASCII", POSIX_ASCII),
-                Map.entry("Alpha", UNICODE_ALPHA!!),
-                Map.entry("Digit", UNICODE_DIGIT!!),
-                Map.entry<String, Array<IntArray>>("Alnum", UNICODE_ALNUM),
-                Map.entry("Punct", UNICODE_PUNCT!!),
-                Map.entry<String, Array<IntArray>>("Graph", UNICODE_GRAPH),
-                Map.entry<String, Array<IntArray>>("Print", UNICODE_PRINT),
-                Map.entry<String, Array<IntArray>>("Blank", UNICODE_BLANK),
-                Map.entry("Cntrl", UNICODE_CNTRL!!),
-                Map.entry<String, Array<IntArray>>("XDigit", UNICODE_XDIGIT),
-                Map.entry<String, Array<IntArray>>("Space", unicodeSpace())
+        val UNICODE_POSIX_PROPERTY_GROUPS: Map<String, Array<IntArray>> =
+            mapOf(
+                "Lower" to UnicodeProperties.lookupBinaryProperty("Lowercase")!!,
+                "Upper" to UnicodeProperties.lookupBinaryProperty("Uppercase")!!,
+                "ASCII" to POSIX_ASCII,
+                "Alpha" to UNICODE_ALPHA!!,
+                "Digit" to UNICODE_DIGIT!!,
+                "Alnum" to UNICODE_ALNUM,
+                "Punct" to UNICODE_PUNCT!!,
+                "Graph" to UNICODE_GRAPH,
+                "Print" to UNICODE_PRINT,
+                "Blank" to UNICODE_BLANK,
+                "Cntrl" to UNICODE_CNTRL!!,
+                "XDigit" to UNICODE_XDIGIT,
+                "Space" to unicodeSpace()!!
             )
     }
 
@@ -878,12 +876,12 @@ internal object UnicodeTables {
             JOIN_CONTROL
         )
 
-        val UNICODE_PERL_GROUPS: MutableMap<String, Array<IntArray>> = Map.of<String, Array<IntArray>>(
-            "\\d", unicodeDigit(),
-            "\\s", unicodeSpace(),
-            "\\w", UNICODE_WORD,
-            "\\h", HORIZ_SPACE,
-            "\\v", VERT_SPACE
+        val UNICODE_PERL_GROUPS: Map<String, Array<IntArray>> = mapOf(
+            "\\d" to unicodeDigit()!!,
+            "\\s" to unicodeSpace()!!,
+            "\\w" to UNICODE_WORD,
+            "\\h" to HORIZ_SPACE,
+            "\\v" to VERT_SPACE
         )
     }
 }

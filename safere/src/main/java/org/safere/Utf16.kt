@@ -4,6 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+import kotlin.math.max
+import kotlin.math.min
+
 /** UTF-16 code unit traversal and search utilities.  */
 internal object Utf16 {
     /** Returns the UTF-16 code unit at `index` in little-endian byte representation.  */
@@ -15,11 +18,11 @@ internal object Utf16 {
     /** Finds an ASCII prefix in UTF-16 code units in linear time.  */
     fun indexOfIgnoreCase(input: CharArray, offset: Int, length: Int, pattern: String, start: Int): Int {
         if (pattern.isEmpty()) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         val failure = Ascii.ignoreCaseFailure(pattern)
         var matched = 0
-        for (i in Math.max(0, start) until length) {
+        for (i in max(0, start) until length) {
             val ch = input[offset + i]
             while (matched > 0 && !Ascii.equalsIgnoreCase(ch, pattern[matched])) {
                 matched = failure[matched - 1]
@@ -39,11 +42,11 @@ internal object Utf16 {
         input: ByteArray, offset: Int, length: Int, pattern: String, start: Int
     ): Int {
         if (pattern.isEmpty()) {
-            return Math.min(Math.max(0, start), length)
+            return min(max(0, start), length)
         }
         val failure = Ascii.ignoreCaseFailure(pattern)
         var matched = 0
-        for (i in Math.max(0, start) until length) {
+        for (i in max(0, start) until length) {
             val ch = getChar(input, offset, i)
             while (matched > 0 && !Ascii.equalsIgnoreCase(ch, pattern[matched])) {
                 matched = failure[matched - 1]
@@ -61,15 +64,22 @@ internal object Utf16 {
     /** Finds a Unicode simple-folded prefix in a String in linear time.  */
     fun indexOfUnicodeIgnoreCase(input: CharSequence, pattern: String, start: Int): Int {
         if (pattern.isEmpty()) {
-            return Math.min(Math.max(0, start), input.length)
+            return min(max(0, start), input.length)
         }
-        val patternCodePoints = pattern.codePoints().toArray()
+        val patternCodePoints = IntArray(CodePoints.codePointCount(pattern, 0, pattern.length))
+        var write = 0
+        var read = 0
+        while (read < pattern.length) {
+            val cp = CodePoints.codePointAt(pattern, read)
+            patternCodePoints[write++] = cp
+            read += CodePoints.charCount(cp)
+        }
         val failure = unicodeFailure(patternCodePoints)
         var matched = 0
-        var i = Math.max(0, start)
+        var i = max(0, start)
         while (i < input.length) {
-            val codePoint = Character.codePointAt(input, i)
-            val next = i + Character.charCount(codePoint)
+            val codePoint = CodePoints.codePointAt(input, i)
+            val next = i + CodePoints.charCount(codePoint)
             while (matched > 0 && !unicodeEqualsIgnoreCase(codePoint, patternCodePoints[matched])) {
                 matched = failure[matched - 1]
             }
@@ -91,13 +101,13 @@ internal object Utf16 {
             if (inputIndex >= input.length) {
                 return false
             }
-            val inputCodePoint = Character.codePointAt(input, inputIndex)
-            val patternCodePoint = pattern.codePointAt(patternIndex)
+            val inputCodePoint = CodePoints.codePointAt(input, inputIndex)
+            val patternCodePoint = CodePoints.codePointAt(pattern, patternIndex)
             if (!unicodeEqualsIgnoreCase(inputCodePoint, patternCodePoint)) {
                 return false
             }
-            inputIndex += Character.charCount(inputCodePoint)
-            patternIndex += Character.charCount(patternCodePoint)
+            inputIndex += CodePoints.charCount(inputCodePoint)
+            patternIndex += CodePoints.charCount(patternCodePoint)
         }
         return inputIndex == offset + pattern.length
     }
@@ -121,12 +131,12 @@ internal object Utf16 {
         if (left == right) {
             return true
         }
-        var folded: Int = Inst.Companion.simpleFold(left)
+        var folded = Inst.simpleFold(left)
         while (folded != left) {
             if (folded == right) {
                 return true
             }
-            folded = Inst.Companion.simpleFold(folded)
+            folded = Inst.simpleFold(folded)
         }
         return false
     }

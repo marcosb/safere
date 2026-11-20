@@ -4,8 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-
 /**
  * Unicode property lookups for JDK-compatible `\p{...}` syntax extensions.
  * 
@@ -21,12 +19,12 @@ internal object UnicodeProperties {
      * @return the range table, or `null` if not a recognized binary property
      */
     fun lookupBinaryProperty(name: String): Array<IntArray>? {
-        val table = UnicodeGeneratedTables.BINARY_PROPERTIES.get(name)
+        val table = UnicodeGeneratedTables.BINARY_PROPERTIES[name]
         if (table != null) {
             return table
         }
-        val canonicalKey: String? = BinaryNormalizedHolder.NORMALIZED_KEYS.get(normalize(name))
-        return if (canonicalKey == null) null else UnicodeGeneratedTables.BINARY_PROPERTIES.get(canonicalKey)
+        val canonicalKey: String? = BinaryNormalizedHolder.NORMALIZED_KEYS[normalize(name)]
+        return if (canonicalKey == null) null else UnicodeGeneratedTables.BINARY_PROPERTIES[canonicalKey]
     }
 
     /**
@@ -36,20 +34,16 @@ internal object UnicodeProperties {
      * @return the range table, or `null` if not a recognized block
      */
     fun lookupBlock(name: String): Array<IntArray>? {
-        val table = UnicodeGeneratedTables.BLOCKS.get(name)
+        val table = UnicodeGeneratedTables.BLOCKS[name]
         if (table != null) {
             return table
         }
-        val canonicalKey: String? = BlockNormalizedHolder.NORMALIZED_KEYS.get(normalize(name))
+        val canonicalKey: String? = BlockNormalizedHolder.NORMALIZED_KEYS[normalize(name)]
         if (canonicalKey != null) {
-            return UnicodeGeneratedTables.BLOCKS.get(canonicalKey)
+            return UnicodeGeneratedTables.BLOCKS[canonicalKey]
         }
-        try {
-            val runtimeJdkName = toTitleSnake(Character.UnicodeBlock.forName(name).toString())
-            return UnicodeGeneratedTables.BLOCKS.get(runtimeJdkName)
-        } catch (e: IllegalArgumentException) {
-            return null
-        }
+        val runtimeJdkName = UnicodeJdkAliases.resolveBlockTableKey(name) ?: return null
+        return UnicodeGeneratedTables.BLOCKS[runtimeJdkName]
     }
 
     /**
@@ -59,20 +53,16 @@ internal object UnicodeProperties {
      * @return the range table, or `null` if not a recognized script
      */
     fun lookupScript(name: String): Array<IntArray>? {
-        val table = UnicodeGeneratedTables.SCRIPTS.get(name)
+        val table = UnicodeGeneratedTables.SCRIPTS[name]
         if (table != null) {
             return table
         }
-        val canonicalKey: String? = ScriptNormalizedHolder.NORMALIZED_KEYS.get(normalize(name))
+        val canonicalKey: String? = ScriptNormalizedHolder.NORMALIZED_KEYS[normalize(name)]
         if (canonicalKey != null) {
-            return UnicodeGeneratedTables.SCRIPTS.get(canonicalKey)
+            return UnicodeGeneratedTables.SCRIPTS[canonicalKey]
         }
-        try {
-            val runtimeJdkName = scriptName(Character.UnicodeScript.forName(name))
-            return UnicodeGeneratedTables.SCRIPTS.get(runtimeJdkName)
-        } catch (e: IllegalArgumentException) {
-            return null
-        }
+        val runtimeJdkName = UnicodeJdkAliases.resolveScriptTableKey(name) ?: return null
+        return UnicodeGeneratedTables.SCRIPTS[runtimeJdkName]
     }
 
     /**
@@ -82,10 +72,7 @@ internal object UnicodeProperties {
      */
     fun lookupCategory(name: String): Array<IntArray>? {
         return when (name) {
-            "L", "M", "N", "P", "S", "Z", "C", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Me", "Mc", "Nd", "Nl", "No", "Zs", "Zl", "Zp", "Cc", "Cn", "Cf", "Co", "Cs", "Pd", "Ps", "Pe", "Pc", "Po", "Pi", "Pf", "Sm", "Sc", "Sk", "So" -> UnicodeGeneratedTables.CATEGORIES.get(
-                name
-            )
-
+            "L", "M", "N", "P", "S", "Z", "C", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Me", "Mc", "Nd", "Nl", "No", "Zs", "Zl", "Zp", "Cc", "Cn", "Cf", "Co", "Cs", "Pd", "Ps", "Pe", "Pc", "Po", "Pi", "Pf", "Sm", "Sc", "Sk", "So" -> UnicodeGeneratedTables.CATEGORIES[name]
             else -> null
         }
     }
@@ -97,12 +84,12 @@ internal object UnicodeProperties {
      * @return the range table, or `null` if not found
      */
     fun lookupScriptOrCategory(name: String): Array<IntArray>? {
-        val table = UnicodeTables.UNICODE_GROUPS.get(name)
+        val table = UnicodeTables.UNICODE_GROUPS[name]
         if (table != null) {
             return table
         }
-        val canonicalKey: String? = ScriptOrCategoryNormalizedHolder.NORMALIZED_KEYS.get(normalize(name))
-        return if (canonicalKey == null) null else UnicodeTables.UNICODE_GROUPS.get(canonicalKey)
+        val canonicalKey: String? = ScriptOrCategoryNormalizedHolder.NORMALIZED_KEYS[normalize(name)]
+        return if (canonicalKey == null) null else UnicodeTables.UNICODE_GROUPS[canonicalKey]
     }
 
     /**
@@ -110,52 +97,31 @@ internal object UnicodeProperties {
      * hyphens, and spaces.
      */
     private fun normalize(name: String): String {
-        return name.uppercase(Locale.ROOT).replace("_", "").replace("-", "").replace(" ", "")
+        return name.uppercase().replace("_", "").replace("-", "").replace(" ", "")
     }
 
-    private fun buildNormalizedKeys(tables: Map<String, out Array<IntArray>?>): MutableMap<String?, String?> {
-        val map: MutableMap<String?, String?> = HashMap<String?, String?>()
+    private fun buildNormalizedKeys(tables: Map<String, out Array<IntArray>?>): Map<String, String> {
+        val map = LinkedHashMap<String, String>()
         for (key in tables.keys) {
-            map.put(normalize(key), key)
+            map[normalize(key)] = key
         }
         return map
     }
 
-    private fun scriptName(script: Character.UnicodeScript): String {
-        if (script == Character.UnicodeScript.SIGNWRITING) {
-            return "SignWriting"
-        }
-        return toTitleSnake(script.name)
-    }
-
-    private fun toTitleSnake(upperSnake: String): String {
-        val result: StringBuilder = StringBuilder(upperSnake.length)
-        for (part in upperSnake.split("_")) {
-            if (!result.isEmpty()) {
-                result.append('_')
-            }
-            result.append(Character.toUpperCase(part[0]))
-            if (part.length > 1) {
-                result.append(part.substring(1).lowercase(Locale.ROOT))
-            }
-        }
-        return result.toString()
-    }
-
     private object ScriptOrCategoryNormalizedHolder {
-        val NORMALIZED_KEYS: MutableMap<String?, String?> = buildNormalizedKeys(UnicodeTables.UNICODE_GROUPS)
+        val NORMALIZED_KEYS: Map<String, String> = buildNormalizedKeys(UnicodeTables.UNICODE_GROUPS)
     }
 
     private object ScriptNormalizedHolder {
-        val NORMALIZED_KEYS: MutableMap<String?, String?> = buildNormalizedKeys(UnicodeGeneratedTables.SCRIPTS)
+        val NORMALIZED_KEYS: Map<String, String> = buildNormalizedKeys(UnicodeGeneratedTables.SCRIPTS)
     }
 
     private object BlockNormalizedHolder {
-        val NORMALIZED_KEYS: MutableMap<String?, String?> = buildNormalizedKeys(UnicodeGeneratedTables.BLOCKS)
+        val NORMALIZED_KEYS: Map<String, String> = buildNormalizedKeys(UnicodeGeneratedTables.BLOCKS)
     }
 
     private object BinaryNormalizedHolder {
-        val NORMALIZED_KEYS: MutableMap<String?, String?> =
+        val NORMALIZED_KEYS: Map<String, String> =
             buildNormalizedKeys(UnicodeGeneratedTables.BINARY_PROPERTIES)
     }
 }
