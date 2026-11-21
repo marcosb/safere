@@ -6,8 +6,6 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import org.safere.Pattern.KeywordAlternation
-
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")
 internal class MatchDescriptorTest {
     @Test
