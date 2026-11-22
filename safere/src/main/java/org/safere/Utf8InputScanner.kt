@@ -14,6 +14,10 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     InputScanner {
     constructor(bytes: ByteArray) : this(bytes, 0, bytes.size)
 
+    override fun supportsUtf8ByteSearch(): Boolean {
+        return true
+    }
+
     override fun indexOfAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
         val start = Math.max(0, fromIndex)
         val scanLen = Math.min(length, limit)
@@ -199,7 +203,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return false
     }
 
-    fun endsWith(suffix: ByteArray, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
+    override fun endsWith(suffix: ByteArray, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
         val suffixLen: Int = suffix.size
         if (length >= suffixLen) {
             val start = offset + length - suffixLen
@@ -414,7 +418,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return result
     }
 
-    fun indexOfMixedPair(ascii: Int, sequence: ByteArray, start: Int, limit: Int): Int {
+    override fun indexOfMixedPair(ascii: Int, sequence: ByteArray, start: Int, limit: Int): Int {
         val position = Math.max(0, start)
         val scanLen = Math.min(length, limit)
         if (position >= scanLen) {
@@ -490,7 +494,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return indexOf(literal, failure, shifts, 0)
     }
 
-    fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int): Int {
+    override fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int): Int {
         if (literal.size == 0) {
             return start
         }
@@ -531,7 +535,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
      * filter's fixed setup. Callers that search a short tail for a literal that is often present use
      * this instead.
      */
-    fun indexOfInTail(literal: ByteArray, failure: IntArray, start: Int): Int {
+    override fun indexOfInTail(literal: ByteArray, failure: IntArray, start: Int): Int {
         if (!WorkCounterConfig.ENABLED && literal.size > 1) {
             val result: Int = indexOfFiltered(bytes, offset, length, literal, start)
             if (result >= -1) {

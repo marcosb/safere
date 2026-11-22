@@ -4,7 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
+import kotlin.math.max
+import kotlin.math.min
+
 import kotlin.jvm.JvmOverloads
 
 /**
@@ -96,8 +98,8 @@ internal class OnePass {
             ensureStateCapacity(stateCount + 1)
             val state = stateCount++
             val stateOffset = state * numClasses
-            Arrays.fill(actions, stateOffset, stateOffset + numClasses, NO_ACTION)
-            Arrays.fill(matchActions, stateOffset, stateOffset + numClasses, NO_ACTION)
+            actions.fill(NO_ACTION, stateOffset, stateOffset + numClasses)
+            matchActions.fill(NO_ACTION, stateOffset, stateOffset + numClasses)
             return state
         }
 
@@ -122,17 +124,19 @@ internal class OnePass {
         }
 
         fun matchActions(): LongArray {
-            return Arrays.copyOf(matchActions, stateCount * numClasses)
+            return matchActions.copyOf(stateCount * numClasses)
         }
 
         fun ensureStateCapacity(minStates: Int) {
             if (allocatedStates >= minStates) {
                 return
             }
-            var newStates = Math.max(minStates, Math.max(4, allocatedStates * 2))
-            newStates = Math.min(newStates, maxStates)
-            actions = Arrays.copyOf(actions, Math.toIntExact(newStates.toLong() * numClasses))
-            matchActions = Arrays.copyOf(matchActions, Math.toIntExact(newStates.toLong() * numClasses))
+            var newStates = max(minStates, max(4, allocatedStates * 2))
+            newStates = min(newStates, maxStates)
+            val cells = newStates.toLong() * numClasses
+            require(cells <= Int.MAX_VALUE.toLong()) { "OnePass action table too large" }
+            actions = actions.copyOf(cells.toInt())
+            matchActions = matchActions.copyOf(cells.toInt())
             allocatedStates = newStates
         }
     }
@@ -202,9 +206,9 @@ internal class OnePass {
         scratchCap: IntArray?,
         graphemeContext: GraphemeSupport.Context?
     ): IntArray? {
-        val ncap = 2 * Math.max(nsubmatch, 1)
+        val ncap = 2 * max(nsubmatch, 1)
         val cap = if (scratchCap != null && scratchCap.size >= ncap) scratchCap else IntArray(ncap)
-        Arrays.fill(cap, 0, ncap, -1)
+        cap.fill(-1, 0, ncap)
         cap[0] = startPos
 
         var stateOffset = 0
@@ -252,11 +256,11 @@ internal class OnePass {
                 if (ch.code < 128) {
                     nextPos = pos + 1
                     cls = ascMap[ch.code]
-                } else if (Character.isHighSurrogate(ch)
-                    && pos + 1 < endPos && Character.isLowSurrogate(stringText[pos + 1])
+                } else if (CodePoints.isHighSurrogate(ch)
+                    && pos + 1 < endPos && CodePoints.isLowSurrogate(stringText[pos + 1])
                 ) {
                     nextPos = pos + 2
-                    cls = classOf(Character.toCodePoint(ch, stringText[pos + 1]))
+                    cls = classOf(CodePoints.toCodePoint(ch, stringText[pos + 1]))
                 } else {
                     nextPos = pos + 1
                     cls = classOf(ch.code)
@@ -279,7 +283,7 @@ internal class OnePass {
             val action = fa[stateOffset + cls]
             if (action == NO_ACTION) {
                 if (shouldCopy) {
-                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                    cap.copyInto(bestCap, 0, 0, 0 + ncap)
                 }
                 break
             }
@@ -294,7 +298,7 @@ internal class OnePass {
                     }
                 }
                 if (!skipCopy) {
-                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                    cap.copyInto(bestCap, 0, 0, 0 + ncap)
                 }
             }
 
@@ -335,7 +339,7 @@ internal class OnePass {
                         cap[1] = pos
                     }
                     matched = true
-                    System.arraycopy(cap, 0, bestCap, 0, ncap)
+                    cap.copyInto(bestCap, 0, 0, 0 + ncap)
                 }
             }
         }
@@ -374,7 +378,7 @@ internal class OnePass {
 
     fun searchUnanchored(text: InputScanner, startPos: Int, searchLimit: Int, nsubmatch: Int): IntArray? {
         val textLen = text.length
-        val limit = Math.min(searchLimit, textLen) + 1
+        val limit = min(searchLimit, textLen) + 1
         val graphemeContext: GraphemeSupport.Context =
             GraphemeSupport.Context.create(text, hasGraphemeSemantics)
         var start = startPos
@@ -397,13 +401,30 @@ internal class OnePass {
         if (cp < 128 && cp >= 0) {
             return asciiClassMap[cp]
         }
-        val idx = Arrays.binarySearch(boundaries, cp)
+        val idx = binarySearchInt(boundaries, cp)
         return if (idx >= 0) idx else (-idx - 1) - 1
     }
 
     /** Prevents instantiation via no-arg constructor.  */
 
     companion object {
+        private fun binarySearchInt(a: IntArray, key: Int): Int {
+            var low = 0
+            var high = a.size - 1
+            while (low <= high) {
+                val mid = (low + high) ushr 1
+                val midVal = a[mid]
+                if (midVal < key) {
+                    low = mid + 1
+                } else if (midVal > key) {
+                    high = mid - 1
+                } else {
+                    return mid
+                }
+            }
+            return -(low + 1)
+        }
+
         /**
          * Maximum number of capture groups the one-pass engine supports (including group 0). This limit
          * exists because capture group tracking is encoded in a bitmask within each action integer.
@@ -417,7 +438,7 @@ internal class OnePass {
         // budget and fall back to the other engines when a pattern would exceed it.
         private const val MAX_STATES = 65000
         private val MAX_ACTION_BYTES = 16L * 1024L * 1024L
-        val MAX_ACTION_CELLS: Long = MAX_ACTION_BYTES / java.lang.Long.BYTES
+        val MAX_ACTION_CELLS: Long = MAX_ACTION_BYTES / 8
 
         // -------------------------------------------------------------------------
         // Action encoding: each action is packed into a single long.
@@ -484,7 +505,7 @@ internal class OnePass {
             // State table. States are identified by instruction IDs.
             // nodeMap: instruction ID -> state index (-1 if unallocated).
             val nodeMap = IntArray(prog.size)
-            Arrays.fill(nodeMap, -1)
+            nodeMap.fill(-1)
             val tables = BuildTables(numClasses, maxStates)
 
             // BFS worklist of instruction IDs.
@@ -517,7 +538,7 @@ internal class OnePass {
                 stack[stackTop++] = 0 // capMask
                 stack[stackTop++] = 0 // emptyFlags
 
-                Arrays.fill(nextStates, -1)
+                nextStates.fill(-1)
                 var matched = false
 
                 while (stackTop > 0) {
@@ -539,7 +560,7 @@ internal class OnePass {
                         InstOp.FAIL -> {}
                         InstOp.ALT, InstOp.ALT_MATCH -> {
                             if (stackTop + 6 > stack.size) {
-                                stack = Arrays.copyOf(stack, stack.size * 2)
+                                stack = stack.copyOf(stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -551,7 +572,7 @@ internal class OnePass {
 
                         InstOp.NOP, InstOp.LOOP_ENTER -> {
                             if (stackTop + 3 > stack.size) {
-                                stack = Arrays.copyOf(stack, stack.size * 2)
+                                stack = stack.copyOf(stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -560,7 +581,7 @@ internal class OnePass {
 
                         InstOp.PROGRESS_CHECK -> {
                             if (stackTop + 6 > stack.size) {
-                                stack = Arrays.copyOf(stack, stack.size * 2)
+                                stack = stack.copyOf(stack.size * 2)
                             }
                             stack[stackTop++] = ip.out
                             stack[stackTop++] = capMask
@@ -572,7 +593,7 @@ internal class OnePass {
 
                         InstOp.CAPTURE -> {
                             if (stackTop + 3 > stack.size) {
-                                stack = Arrays.copyOf(stack, stack.size * 2)
+                                stack = stack.copyOf(stack.size * 2)
                             }
                             val reg = ip.arg
                             val newCapMask = if (reg < MAX_CAP_REGS) (capMask or (1 shl reg)) else capMask
@@ -583,7 +604,7 @@ internal class OnePass {
 
                         InstOp.EMPTY_WIDTH -> {
                             if (stackTop + 3 > stack.size) {
-                                stack = Arrays.copyOf(stack, stack.size * 2)
+                                stack = stack.copyOf(stack.size * 2)
                             }
                             val newEmpty = emptyFlags or ip.arg
                             stack[stackTop++] = ip.out
@@ -703,7 +724,7 @@ internal class OnePass {
         private fun exceedsActionBudget(maxStates: Int, numClasses: Int): Boolean {
             // Both dense tables count toward the memory budget. Every offset must also fit in the
             // action word after the assertion flags, capture mask, and priority bit.
-            val maxCells = Math.min(MAX_ACTION_CELLS / 2, 1L shl (java.lang.Long.SIZE - INDEX_SHIFT))
+            val maxCells = min(MAX_ACTION_CELLS / 2, 1L shl (Long.SIZE_BITS - INDEX_SHIFT))
             return maxStates > maxCells / numClasses
         }
 
@@ -763,7 +784,7 @@ internal class OnePass {
         private fun buildAsciiClassMap(boundaries: IntArray): IntArray {
             val map = IntArray(128)
             for (cp in 0..127) {
-                val idx = Arrays.binarySearch(boundaries, cp)
+                val idx = binarySearchInt(boundaries, cp)
                 map[cp] = if (idx >= 0) idx else (-idx - 1) - 1
             }
             return map
@@ -773,7 +794,7 @@ internal class OnePass {
         private fun applyCaptures(mask: Int, pos: Int, cap: IntArray) {
             var mask = mask
             while (mask != 0) {
-                val reg = Integer.numberOfTrailingZeros(mask)
+                val reg = mask.countTrailingZeroBits()
                 if (reg >= cap.size) {
                     break
                 }

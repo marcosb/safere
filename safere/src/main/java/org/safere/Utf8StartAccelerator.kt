@@ -13,15 +13,32 @@ import kotlin.math.*
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
  * positions in a [Utf8InputScanner].
  */
-internal interface Utf8StartAccelerator {
+internal interface Utf8StartAccelerator : Utf8StartAcceleration {
     /** A search-local cursor for accelerators that scan multiple folded byte variants.  */
     interface SearchCursor {
         fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int
     }
 
     /** Returns the tuning and diagnostic policy for this accelerator.  */
-    fun policy(): AcceleratorPolicy {
+    override fun policy(): AcceleratorPolicy {
         return AcceleratorPolicy.Companion.DEFAULT
+    }
+
+    override fun findNextCandidate(scanner: InputScanner, pos: Int): Int {
+        check(scanner is Utf8InputScanner) {
+            "supportsUtf8ByteSearch() requires Utf8InputScanner for start acceleration"
+        }
+        return Companion.findNextCandidate(this, scanner, pos)
+    }
+
+    override fun searchCursor(): Utf8StartSearchCursor? {
+        val cursor = Companion.searchCursor(this) ?: return null
+        return Utf8StartSearchCursor { scanner, fromIndex ->
+            check(scanner is Utf8InputScanner) {
+                "supportsUtf8ByteSearch() requires Utf8InputScanner for start acceleration"
+            }
+            cursor.findCandidate(scanner, fromIndex)
+        }
     }
 
     // The arrays are immutable search metadata owned by this internal accelerator.

@@ -33,24 +33,19 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/Utf8Matcher.kt",
   "org/safere/Parser.kt",
   "org/safere/PatternSet.kt",
-  "org/safere/RegexLexer.kt",
-  // Tightly coupled to Pattern/Matcher/Character.getType
-  "org/safere/RejectPrefilter.kt",
-  "org/safere/SafeReDiagnostics.kt",
-  "org/safere/Nfa.kt",
-  "org/safere/Dfa.kt",
-  "org/safere/BitState.kt",
-  "org/safere/OnePass.kt",
-  "org/safere/InnerLiteralSearch.kt",
+  // Pattern-typed diagnostics overloads (core SafeReDiagnostics is common)
+  "org/safere/SafeReDiagnosticsPattern.kt",
   // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",
   "org/safere/SystemProperties.kt",
   "org/safere/UnicodeJdkAliases.kt",
   "org/safere/UnicodeCaseMapping.kt",
   "org/safere/Utf8InputPlatform.kt",
+  "org/safere/PatternSyntaxExceptions.kt",
+  "org/safere/UnicodeCharacterNames.kt",
   // JVM-only ByteBuffer sink extension (Utf8Sink itself is common)
   "org/safere/Utf8SinkBuffers.kt",
-  // Remaining JDK-tied surface parked for later M3 batches
+  // Class-reflection Matcher inventory (stays JVM)
   "org/safere/MatcherTransitionInventory.kt",
   "module-info.java",
 )
@@ -64,6 +59,8 @@ val kmpOverlayRelativePaths =
     "org/safere/UnicodeJdkAliases.kt",
     "org/safere/UnicodeCaseMapping.kt",
     "org/safere/Utf8InputPlatform.kt",
+    "org/safere/PatternSyntaxExceptions.kt",
+    "org/safere/UnicodeCharacterNames.kt",
   )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */

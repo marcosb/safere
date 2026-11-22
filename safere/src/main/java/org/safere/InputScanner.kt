@@ -126,6 +126,38 @@ internal interface InputScanner {
         throw UnsupportedOperationException("slice")
     }
 
+    /**
+     * Returns whether this scanner exposes UTF-8 byte-search kernels (literal BMH, mixed-pair,
+     * byte-suffix endsWith, and related helpers).
+     *
+     * Callers that also use [Utf8StartAcceleration] must only return true for scanners that are
+     * [Utf8InputScanner] (or otherwise accepted by that bridge). Returning true for any other
+     * type would make start acceleration treat every candidate search as a miss.
+     */
+    fun supportsUtf8ByteSearch(): Boolean {
+        return false
+    }
+
+    /** UTF-8 literal search; default is unsupported (`-1`).  */
+    fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int): Int {
+        return -1
+    }
+
+    /** UTF-8 literal search tuned for short tails; default is unsupported (`-1`).  */
+    fun indexOfInTail(literal: ByteArray, failure: IntArray, start: Int): Int {
+        return -1
+    }
+
+    /** Mixed ASCII + UTF-8-sequence search; default is unsupported (`-1`).  */
+    fun indexOfMixedPair(ascii: Int, sequence: ByteArray, start: Int, limit: Int): Int {
+        return -1
+    }
+
+    /** UTF-8 suffix check; default is unsupported (`false`).  */
+    fun endsWith(suffix: ByteArray, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
+        return false
+    }
+
     companion object {
         fun decoded(codePoint: Int, position: Int): Long {
             return (codePoint.toLong() shl 32) or (position.toLong() and 0xFFFFFFFFL)

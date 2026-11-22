@@ -13,7 +13,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsNfaProgramShapeFromPatternProg() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "literal-a",
                 "a",
                 0,
@@ -38,7 +38,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun nestedRepeatsExportAcceptedPathCapturesWithLegacyMetadata() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "nested-repeat",
                 "(?:(a){0,2})*",
                 0,
@@ -54,7 +54,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsAnchoredNfaCaptureGroups() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "capture",
                 "(a)",
                 0,
@@ -73,7 +73,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsNonparticipatingCapturesWithExplicitMatchedFlagAndMinusOneOffsets() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "optional-capture",
                 "(a)?",
                 0,
@@ -89,7 +89,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsUnmatchedAnchoredNfaResult() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "miss",
                 "a",
                 0,
@@ -105,7 +105,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun compilesPatternInConvenienceOverload() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "compiled", "a", 0, "a", SafeReDiagnostics.BytecodeMatchMode.ANCHORED
             )
 
@@ -117,7 +117,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsCharClassRangesAsPairs() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "digits",
                 "[0-9A-Z]",
                 0,
@@ -134,7 +134,7 @@ internal class SafeReDiagnosticsTest {
     fun exportsFlagsAndEscapedStringsDeterministically() {
         val flags = Pattern.CASE_INSENSITIVE or Pattern.MULTILINE
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "escape",
                 "a\\nb",
                 flags,
@@ -153,7 +153,7 @@ internal class SafeReDiagnosticsTest {
     fun escapesLoneSurrogateCodeUnitsInJsonStrings() {
         val loneHighSurrogate = 0xD800.toChar().toString()
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "surrogate",
                 "a",
                 0,
@@ -169,7 +169,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun exportsProgressCheckGreedinessBySemanticName() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "nullable-loop",
                 "(?:a?)*?",
                 0,
@@ -186,7 +186,7 @@ internal class SafeReDiagnosticsTest {
     @Test
     fun omitsUnsupportedMatcherEndpointMetadata() {
         val json =
-            SafeReDiagnostics.bytecodeCaseToJsonLine(
+            SafeReDiagnosticsPattern.bytecodeCaseToJsonLine(
                 "literal-a",
                 "a",
                 0,

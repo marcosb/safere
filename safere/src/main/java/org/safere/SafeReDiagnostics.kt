@@ -4,8 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import kotlin.jvm.JvmOverloads
 import kotlin.math.*
 /**
  * Diagnostic export helpers for verifier fixtures and bytecode inspection.
@@ -20,6 +18,15 @@ import kotlin.math.*
  */
 object SafeReDiagnostics {
     private const val SCHEMA = "safere-bytecode-v1"
+    // Public java.util.regex.Pattern flag bits (same values Pattern aliases).
+    private const val FLAG_UNIX_LINES = 0x01
+    private const val FLAG_CASE_INSENSITIVE = 0x02
+    private const val FLAG_COMMENTS = 0x04
+    private const val FLAG_MULTILINE = 0x08
+    private const val FLAG_LITERAL = 0x10
+    private const val FLAG_DOTALL = 0x20
+    private const val FLAG_UNICODE_CASE = 0x40
+    private const val FLAG_UNICODE_CHARACTER_CLASS = 0x100
     private val BYTECODE_MATCH_KIND = Nfa.MatchKind.FIRST_MATCH
 
     /**
@@ -35,28 +42,25 @@ object SafeReDiagnostics {
      * @param input input text to record and match
      * @param mode match mode for result metadata; currently only [BytecodeMatchMode.ANCHORED]
      * @param engine engine for result metadata; currently only [BytecodeResultEngine.NFA]
-     * @param pattern compiled SafeRE pattern whose NFA program is exported
+     * @param prog compiled NFA program to export
      * @return one complete JSON object followed by no trailing newline
      */
-    fun bytecodeCaseToJsonLine(
+    internal fun bytecodeCaseToJsonLine(
         caseId: String?,
         regex: String?,
         flags: Int,
         input: String?,
         mode: BytecodeMatchMode?,
         engine: BytecodeResultEngine?,
-        pattern: Pattern?
+        prog: Prog
     ): String {
-        Objects.requireNonNull<String?>(caseId, "caseId")
-        Objects.requireNonNull<String?>(regex, "regex")
-        Objects.requireNonNull<String?>(input, "input")
-        Objects.requireNonNull<BytecodeMatchMode?>(mode, "mode")
-        Objects.requireNonNull<BytecodeResultEngine?>(engine, "engine")
-        Objects.requireNonNull<Pattern?>(pattern, "pattern")
+        requireNotNull(caseId) { "caseId" }
+        requireNotNull(regex) { "regex" }
+        requireNotNull(input) { "input" }
+        requireNotNull(mode) { "mode" }
+        requireNotNull(engine) { "engine" }
         require(mode == BytecodeMatchMode.ANCHORED) { "Unsupported match mode: " + mode }
         require(engine == BytecodeResultEngine.NFA) { "Unsupported diagnostic engine: " + engine }
-
-        val prog = pattern!!.prog()
         require(!prog.didFlatten()) { "NFA bytecode export requires an unflattened program" }
 
         val json = StringBuilder()
@@ -74,39 +78,16 @@ object SafeReDiagnostics {
         return json.toString()
     }
 
-    /**
-     * Exports one verifier fixture JSONL record using SafeRE's NFA engine result metadata.
-     * 
-     * @param caseId stable fixture case identifier
-     * @param regex source regular expression to record in the fixture
-     * @param flags source flags value to record in the fixture
-     * @param input input text to record and match
-     * @param mode match mode for result metadata; currently only [BytecodeMatchMode.ANCHORED]
-     * @param pattern compiled SafeRE pattern whose NFA program is exported
-     * @return one complete JSON object followed by no trailing newline
-     */
-    /**
-     * Compiles a pattern and exports one verifier fixture JSONL record using SafeRE's NFA engine
-     * result metadata.
-     * 
-     * @param caseId stable fixture case identifier
-     * @param regex source regular expression to compile and record in the fixture
-     * @param flags source flags value to compile and record in the fixture
-     * @param input input text to record and match
-     * @param mode match mode for result metadata; currently only [BytecodeMatchMode.ANCHORED]
-     * @return one complete JSON object followed by no trailing newline
-     */
-    @JvmOverloads
-    fun bytecodeCaseToJsonLine(
+    internal fun bytecodeCaseToJsonLine(
         caseId: String?,
         regex: String?,
         flags: Int,
         input: String?,
         mode: BytecodeMatchMode?,
-        pattern: Pattern? = Pattern.compile(regex, flags)
+        prog: Prog
     ): String {
         return bytecodeCaseToJsonLine(
-            caseId, regex, flags, input, mode, BytecodeResultEngine.NFA, pattern
+            caseId, regex, flags, input, mode, BytecodeResultEngine.NFA, prog
         )
     }
 
@@ -148,14 +129,14 @@ object SafeReDiagnostics {
     private fun appendFlags(json: StringBuilder, flags: Int) {
         json.append("\"flags\":[")
         var needsComma = false
-        needsComma = appendFlag(json, needsComma, flags, Pattern.UNIX_LINES, "UNIX_LINES")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.CASE_INSENSITIVE, "CASE_INSENSITIVE")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.COMMENTS, "COMMENTS")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.MULTILINE, "MULTILINE")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.LITERAL, "LITERAL")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.DOTALL, "DOTALL")
-        needsComma = appendFlag(json, needsComma, flags, Pattern.UNICODE_CASE, "UNICODE_CASE")
-        appendFlag(json, needsComma, flags, Pattern.UNICODE_CHARACTER_CLASS, "UNICODE_CHARACTER_CLASS")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_UNIX_LINES, "UNIX_LINES")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_CASE_INSENSITIVE, "CASE_INSENSITIVE")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_COMMENTS, "COMMENTS")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_MULTILINE, "MULTILINE")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_LITERAL, "LITERAL")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_DOTALL, "DOTALL")
+        needsComma = appendFlag(json, needsComma, flags, FLAG_UNICODE_CASE, "UNICODE_CASE")
+        appendFlag(json, needsComma, flags, FLAG_UNICODE_CHARACTER_CLASS, "UNICODE_CHARACTER_CLASS")
         json.append(']')
     }
 
@@ -386,7 +367,7 @@ object SafeReDiagnostics {
 
     private fun appendUnicodeEscape(json: StringBuilder, ch: Char) {
         json.append("\\u")
-        val hex = Integer.toHexString(ch.code)
+        val hex = ch.code.toString(16)
         for (i in hex.length until 4) {
             json.append('0')
         }

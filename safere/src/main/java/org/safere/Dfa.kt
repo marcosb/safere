@@ -4,9 +4,11 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+import kotlin.math.absoluteValue
+import kotlin.math.max
+import kotlin.math.min
+
 import org.safere.StateAccelerator.*
-import org.safere.Utf8StartAccelerator.SearchCursor
-import java.util.*
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmRecord
 
@@ -108,12 +110,12 @@ internal class Dfa {
         }
 
         override fun hashCode(): Int {
-            return Arrays.hashCode(insts) * 31 + flags
+            return insts.contentHashCode() * 31 + flags
         }
 
         override fun equals(o: Any?): Boolean {
             return (o is StateKey)
-                    && flags == o.flags && Arrays.equals(insts, o.insts)
+                    && flags == o.flags && insts.contentEquals(o.insts)
         }
     }
 
@@ -272,7 +274,7 @@ internal class Dfa {
     private var hasStateAccelerators = false
     private var nextStateId = 0
 
-    private val utf8StartAccelerator: Utf8StartAccelerator?
+    private val utf8StartAccelerator: Utf8StartAcceleration?
     private val stringStartAccelerator: StringStartAccelerator?
     private val innerLiteralSearch: InnerLiteralSearch?
     private val hasStartAcceleration: Boolean
@@ -299,7 +301,7 @@ internal class Dfa {
         maxStates: Int,
         setup: Setup,
         longest: Boolean,
-        utf8StartAccelerator: Utf8StartAccelerator? = null,
+        utf8StartAccelerator: Utf8StartAcceleration? = null,
         stringStartAccelerator: StringStartAccelerator? = null,
         innerLiteralSearch: InnerLiteralSearch? = null
     ) {
@@ -336,7 +338,7 @@ internal class Dfa {
         this.numClasses = setup.numClasses
         this.splitUnicodeWordClasses = setup.splitUnicodeWordClasses
         this.asciiClassMap = setup.asciiClassMap
-        Arrays.fill(this.cacheCps, -1)
+        this.cacheCps.fill(-1)
         this.expandVisitedGen = IntArray(prog.size)
         this.expandStack = IntArray(prog.size)
         this.expandFrontier = IntArray(prog.size)
@@ -352,10 +354,10 @@ internal class Dfa {
     private fun addStateToFlatArrays(s: State) {
         val minTransLen = (s!!.id + 1) * numClasses
         if (minTransLen > transitions.size) {
-            val newLen = Math.max(transitions.size * 2, minTransLen)
-            transitions = Arrays.copyOf(transitions, newLen)
-            offsetToState = Arrays.copyOf<State?>(offsetToState, newLen)
-            isAcceleratedStateOffset = Arrays.copyOf(isAcceleratedStateOffset, newLen)
+            val newLen = max(transitions.size * 2, minTransLen)
+            transitions = transitions.copyOf(newLen)
+            offsetToState = offsetToState.copyOf(newLen)
+            isAcceleratedStateOffset = isAcceleratedStateOffset.copyOf(newLen)
         }
         offsetToState[s!!.id * numClasses] = s
         isAcceleratedStateOffset[s!!.id * numClasses] = s!!.isStartState || s!!.accelerator != null
@@ -383,7 +385,7 @@ internal class Dfa {
     private fun pauseFailureTransition(index: Int, offset: Int) {
         if (pausedFailureTransitionCount == pausedFailureTransitions.size) {
             pausedFailureTransitions =
-                Arrays.copyOf(pausedFailureTransitions, Math.max(8, pausedFailureTransitionCount * 2))
+                pausedFailureTransitions.copyOf(max(8, pausedFailureTransitionCount * 2))
         }
         pausedFailureTransitions[pausedFailureTransitionCount++] = index
         // This positive entry cannot be queued again before it is restored.
@@ -421,7 +423,7 @@ internal class Dfa {
         if (cacheCps[cacheIdx] == cp) {
             return cacheClasses[cacheIdx]
         }
-        val idx = Arrays.binarySearch(boundaries, cp)
+        val idx = binarySearch(boundaries, cp)
         var cls = if (idx >= 0) idx else (-idx - 1) - 1
         if (splitUnicodeWordClasses) {
             cls = cls * 2 + (if (Nfa.isUnicodeWordChar(cp)) 1 else 0)
@@ -549,7 +551,7 @@ internal class Dfa {
         if (longest) {
             sortSmall(frontier, frontierSize)
         }
-        return Arrays.copyOf(frontier, frontierSize)
+        return frontier.copyOf(frontierSize)
     }
 
     /** Returns true if any instruction ID in the sorted array is a MATCH instruction.  */
@@ -597,7 +599,7 @@ internal class Dfa {
         }
         if (uniqueCount == count) {
             val result = IntArray(count)
-            System.arraycopy(insts, 0, result, 0, count)
+            insts.copyInto(result, 0, 0, 0 + count)
             return result
         }
         val result = IntArray(uniqueCount)
@@ -689,7 +691,7 @@ internal class Dfa {
 
     /** Credits only the span reached while the current DFA search was active.  */
     private fun recordSearchProgress(pos: Int) {
-        val span = Math.abs(pos.toLong() - progressAnchor)
+        val span = (pos.toLong() - progressAnchor).absoluteValue
         dfaStepsSinceReset += span
         backoffProgress += span
         progressAnchor = pos
@@ -737,7 +739,7 @@ internal class Dfa {
      * stale.
      */
     private fun resetCache(pos: Int): Boolean {
-        val delta = Math.abs(pos.toLong() - progressAnchor)
+        val delta = (pos.toLong() - progressAnchor).absoluteValue
         dfaStepsSinceReset += delta
         backoffProgress += delta
         progressAnchor = pos
@@ -750,7 +752,7 @@ internal class Dfa {
                 if (currentGenerationPenalized)
                     unproductiveResets
                 else
-                    Math.min(unproductiveResets + 1, MAX_RESET_BACKOFF_SHIFT)
+                    min(unproductiveResets + 1, MAX_RESET_BACKOFF_SHIFT)
             unproductiveResets = shifts
             if (backoffProgress < (baseThreshold shl shifts)) {
                 currentGenerationPenalized = true
@@ -763,18 +765,18 @@ internal class Dfa {
         backoffProgress = 0
         lastSearchBailed = false
         currentGenerationPenalized = false
-        val used = Math.min(nextStateId * numClasses, transitions.size)
-        Arrays.fill(transitions, 0, used, 0)
+        val used = min(nextStateId * numClasses, transitions.size)
+        transitions.fill(0, 0, used)
         pausedFailureTransitionCount = 0
         pendingFailureTransitionIndex = -1
-        Arrays.fill(offsetToState, 0, used, null)
-        Arrays.fill(isAcceleratedStateOffset, 0, used, false)
+        offsetToState.fill(null, 0, used)
+        isAcceleratedStateOffset.fill(false, 0, used)
         // The dead state outlives the reset, so clear the transitions recorded on it by hand.
-        Arrays.fill(deadState!!.next, null)
+        deadState!!.next.fill(null)
         // A surviving start-cache entry would hand back a state the flat arrays no longer describe.
-        Arrays.fill(startStateByContext, null)
+        startStateByContext.fill(null)
         if (fastStartStates != null) {
-            Arrays.fill(fastStartStates, null)
+            fastStartStates.fill(null)
         }
         cache.clear()
         hasStateAccelerators = false
@@ -894,7 +896,7 @@ internal class Dfa {
                     seeds[seedCount++] = ip.out
                 }
             }
-            if (seedCount == 0 || !Arrays.equals(expand(seeds, seedCount, 0), insts)) {
+            if (seedCount == 0 || !expand(seeds, seedCount, 0).contentEquals(insts)) {
                 if (escapeCount < 3) {
                     escapes[escapeCount] = ch
                 }
@@ -910,7 +912,7 @@ internal class Dfa {
         // the accelerator. The DFA boundaries make one representative per interval sufficient.
         var i = 0
         while (i + 1 < boundaries.size) {
-            val ch = Math.max(128, boundaries[i])
+            val ch = max(128, boundaries[i])
             if (ch >= boundaries[i + 1]) {
                 i++
                 continue
@@ -922,7 +924,7 @@ internal class Dfa {
                     seeds[seedCount++] = ip.out
                 }
             }
-            if (seedCount == 0 || !Arrays.equals(expand(seeds, seedCount, 0), insts)) {
+            if (seedCount == 0 || !expand(seeds, seedCount, 0).contentEquals(insts)) {
                 return null
             }
             i++
@@ -948,10 +950,13 @@ internal class Dfa {
 
     private fun startAccelerationPolicy(text: InputScanner, startState: State?): AcceleratorPolicy? {
         val policy =
-            when (text) {
-                is Utf8InputScanner -> if (utf8StartAccelerator != null) utf8StartAccelerator.policy() else null
-                is StringInputScanner -> if (stringStartAccelerator != null) stringStartAccelerator.policy() else null
-                is StringRegionInputScanner -> if (stringStartAccelerator != null) stringStartAccelerator.policy() else null
+            when {
+                text.supportsUtf8ByteSearch() ->
+                    if (utf8StartAccelerator != null) utf8StartAccelerator.policy() else null
+                text is StringInputScanner ->
+                    if (stringStartAccelerator != null) stringStartAccelerator.policy() else null
+                text is StringRegionInputScanner ->
+                    if (stringStartAccelerator != null) stringStartAccelerator.policy() else null
                 else -> null
             }
         if (policy != null) {
@@ -1196,7 +1201,7 @@ internal class Dfa {
     }
 
     private fun hasSurrogateWordContext(cp: Int): Boolean {
-        return cp >= Character.MIN_SURROGATE.code && cp <= Character.MAX_SURROGATE.code && prog.hasWordBoundary()
+        return cp in 0xD800..0xDFFF && prog.hasWordBoundary()
     }
 
     /**
@@ -1251,7 +1256,7 @@ internal class Dfa {
             return getOrCreate(nextInsts, flags)
         }
 
-        val pos = if (cp >= 0) nextPos - Character.charCount(cp) else text.length
+        val pos = if (cp >= 0) nextPos - CodePoints.charCount(cp) else text.length
         // Step 1: Re-evaluate unsatisfied EMPTY_WIDTH instructions that are now satisfiable.
         // Two kinds of assertions fire BEFORE consuming cp and depend on context that can't
         // be predicted when the state was built:
@@ -1289,7 +1294,7 @@ internal class Dfa {
                 // see the whole pair, not the half.
                 // Only split-pair cursors bypass the cache; truly unpaired halves remain cacheable.
                 if (prog.reversed()
-                    && Character.isLowSurrogate(cp.toChar())
+                    && CodePoints.isLowSurrogate(cp.toChar())
                     && !text.isCodePointBoundary(nextPos)
                 ) {
                     val pairIsUnicodeWord: Boolean = Nfa.isUnicodeWordChar(text.codePointBefore(nextPos + 1))
@@ -1342,7 +1347,7 @@ internal class Dfa {
                     for (x in expanded) {
                         if (prog.inst(x).opCode != InstOp.OP_MATCH) {
                             if (tempCount == tempExpanded.size) {
-                                tempExpanded = Arrays.copyOf(tempExpanded, tempExpanded.size * 2)
+                                tempExpanded = tempExpanded.copyOf(tempExpanded.size * 2)
                             }
                             tempExpanded[tempCount++] = x
                         }
@@ -1365,14 +1370,14 @@ internal class Dfa {
                 } else {
                     for (x in expanded) {
                         if (tempCount == tempExpanded.size) {
-                            tempExpanded = Arrays.copyOf(tempExpanded, tempExpanded.size * 2)
+                            tempExpanded = tempExpanded.copyOf(tempExpanded.size * 2)
                         }
                         tempExpanded[tempCount++] = x
                     }
                 }
             } else {
                 if (tempCount == tempExpanded.size) {
-                    tempExpanded = Arrays.copyOf(tempExpanded, tempExpanded.size * 2)
+                    tempExpanded = tempExpanded.copyOf(tempExpanded.size * 2)
                 }
                 tempExpanded[tempCount++] = id
             }
@@ -1554,7 +1559,7 @@ internal class Dfa {
         pos: Int,
         posDepThreshold: Int,
         startState: State?,
-        utf8Cursor: SearchCursor?,
+        utf8Cursor: Utf8StartSearchCursor?,
         allowInnerProbe: Boolean
     ): Int {
         val candidate = findStartCandidate(text, pos, posDepThreshold, startState, utf8Cursor)
@@ -1562,7 +1567,7 @@ internal class Dfa {
             return candidate
         }
         if (innerProbeState == INNER_PROBE_WAITING) {
-            innerProbeResumePos += Math.max(0, candidate - pos).toLong()
+            innerProbeResumePos += max(0, candidate - pos).toLong()
             return candidate
         }
         if (innerProbeState != INNER_PROBE_READY) {
@@ -1576,7 +1581,7 @@ internal class Dfa {
         // Preserve the ordinary accelerator's terminal context boundary. The DFA evaluates
         // position-dependent transitions from there rather than skipping over that boundary.
         if (hasPositionDependentTransitions && narrowed >= posDepThreshold - 1) {
-            return Math.max(candidate, posDepThreshold - 1)
+            return max(candidate, posDepThreshold - 1)
         }
         return findStartCandidate(text, narrowed, posDepThreshold, startState, utf8Cursor)
     }
@@ -1593,15 +1598,15 @@ internal class Dfa {
         pos: Int,
         posDepThreshold: Int,
         startState: State?,
-        utf8Cursor: SearchCursor?
+        utf8Cursor: Utf8StartSearchCursor?
     ): Int {
-        if (text is Utf8InputScanner && utf8StartAccelerator != null) {
+        if (text.supportsUtf8ByteSearch() && utf8StartAccelerator != null) {
             val idx =
                 if (utf8Cursor != null)
                     utf8Cursor.findCandidate(text, pos)
                 else
-                    Utf8StartAccelerator.findNextCandidate(utf8StartAccelerator, text, pos)
-            return if (idx >= 0) Math.min(idx, posDepThreshold - 1) else -1
+                    utf8StartAccelerator.findNextCandidate(text, pos)
+            return if (idx >= 0) min(idx, posDepThreshold - 1) else -1
         }
         if (text is StringInputScanner && stringStartAccelerator != null) {
             return StringStartAccelerator.findNextCandidate(
@@ -1622,7 +1627,7 @@ internal class Dfa {
         if (startState != null && startState!!.accelerator != null) {
             val limit =
                 if (hasPositionDependentTransitions)
-                    Math.min(text.length, posDepThreshold - 1)
+                    min(text.length, posDepThreshold - 1)
                 else
                     text.length
             val idx: Int = StateAccelerator.findNextEscape(startState!!.accelerator, text, pos, limit)
@@ -1708,9 +1713,9 @@ internal class Dfa {
 
         val activePolicy = startAccelerationPolicy(text, s)
         val canAccelerate = activePolicy != null && !anchored
-        val utf8Cursor: SearchCursor? =
-            if (canAccelerate && text is Utf8InputScanner)
-                Utf8StartAccelerator.searchCursor(utf8StartAccelerator)
+        val utf8Cursor: Utf8StartSearchCursor? =
+            if (canAccelerate && text.supportsUtf8ByteSearch())
+                utf8StartAccelerator?.searchCursor()
             else
                 null
         val tuning: AcceleratorPolicy = if (canAccelerate) activePolicy else AcceleratorPolicy.DEFAULT
@@ -1732,7 +1737,7 @@ internal class Dfa {
         // The first position at which the loops below may call the accelerator, or MAX_VALUE when
         // they never may. Folding canAccelerate in keeps the per-step test to one comparison.
         var accelerationResumePos =
-            if (canAccelerate) AdaptiveBackoff.resumePos(backoff) else Integer.MAX_VALUE
+            if (canAccelerate) AdaptiveBackoff.resumePos(backoff) else Int.MAX_VALUE
         // A preselected start position is never re-scanned; -1 when there is none.
         val preselectedPos = if (startPositionPreselected) startPos else -1
         // A successful first candidate pays no suffix scan or backward probe. Returning to the
@@ -1828,10 +1833,10 @@ internal class Dfa {
                 innerProbeState == INNER_PROBE_READY || pos >= accelerationResumePos || hasStateAccelerators
             var hitAcceleratedState = false
             var limit =
-                if (hasPositionDependentTransitions) Math.min(textLen, posDepThreshold - 1) else textLen
+                if (hasPositionDependentTransitions) min(textLen, posDepThreshold - 1) else textLen
             if (innerProbeState == INNER_PROBE_WAITING) {
                 // Reuse the scan limit to pay the budget without polling a long threshold in the loop.
-                limit = Math.min(limit.toLong(), innerProbeResumePos).toInt()
+                limit = min(limit.toLong(), innerProbeResumePos).toInt()
             }
             var sId = s!!.id * numClasses
             if (breakOnAcceleratedState) {
@@ -2022,9 +2027,9 @@ internal class Dfa {
             // Step the DFA until it may call the start accelerator again. Making that test the exit of
             // this inner loop keeps the accelerator path out of the hot per-character loop.
             val stepLimit =
-                if (innerProbeState == INNER_PROBE_WAITING) Math.min(Integer.MAX_VALUE.toLong(), innerProbeResumePos)
+                if (innerProbeState == INNER_PROBE_WAITING) min(Int.MAX_VALUE.toLong(), innerProbeResumePos)
                     .toInt() else
-                    Integer.MAX_VALUE
+                    Int.MAX_VALUE
             do {
                 if (s!!.accelerator != null && (textLen - pos >= 16) && (!s.isStartState || anchored)) {
                     val nextPos: Int = StateAccelerator.findNextEscape(s!!.accelerator, text, pos, textLen)
@@ -2071,7 +2076,7 @@ internal class Dfa {
                 // (END_TEXT, DOLLAR_END) must bypass the cache to preserve the invariant that
                 // cached transitions are position-independent. The end-of-text sentinel (cp < 0)
                 // is always safe to cache because it always means "at text end".
-                val effectiveNextPos = Math.min(nextPos, textLen)
+                val effectiveNextPos = min(nextPos, textLen)
                 var ns: State?
                 if ((hasSurrogateWordContext(cp) && !text.isCodePointBoundary(pos))
                     || transitionDependsOnPosition(cp, effectiveNextPos, posDepThreshold)
@@ -2114,7 +2119,7 @@ internal class Dfa {
                     // rejected (e.g., needEndMatch but pos != textLen) and an after-consume match also
                     // exists (FLAG_MATCH_AFTER_DEFERRED).
                     if ((s!!.flags and (FLAG_MATCH_BEFORE or FLAG_MATCH_AFTER_DEFERRED)) != FLAG_MATCH_BEFORE) {
-                        val endPos = Math.min(nextPos, textLen)
+                        val endPos = min(nextPos, textLen)
                         if (isRequiredEndMatch(endPos, needEndMatch, textLen, trailingTermStart)) {
                             matched = true
                             matchEnd = endPos
@@ -2169,7 +2174,7 @@ internal class Dfa {
     fun doSearchReverse(
         text: InputScanner, endPos: Int, startLimit: Int, anchored: Boolean, longest: Boolean
     ): SearchResult? {
-        return doSearchReverse(text, endPos, startLimit, anchored, longest, Integer.MAX_VALUE)
+        return doSearchReverse(text, endPos, startLimit, anchored, longest, Int.MAX_VALUE)
     }
 
     /**
@@ -2186,7 +2191,7 @@ internal class Dfa {
         longest: Boolean,
         maxInputUnits: Int
     ): SearchResult? {
-        val scanLimit = Math.max(startLimit, endPos - maxInputUnits)
+        val scanLimit = max(startLimit, endPos - maxInputUnits)
         graphemeContext = GraphemeSupport.Context.create(text, hasGraphemeSemantics)
         beginSearch(endPos)
         var pos = endPos
@@ -2234,7 +2239,7 @@ internal class Dfa {
                 var sId = s!!.id * numClasses
                 while (pos > limit) {
                     // Probe work includes cached transitions; keep ordinary-search counter behavior stable.
-                    if (WorkCounterConfig.ENABLED && maxInputUnits != Integer.MAX_VALUE) {
+                    if (WorkCounterConfig.ENABLED && maxInputUnits != Int.MAX_VALUE) {
                         WorkCounter.record()
                     }
                     val ch = text.asciiAt(pos - 1)
@@ -2255,7 +2260,7 @@ internal class Dfa {
                                 if (pos >= startLimit && (!needEndMatch || pos == startLimit)) {
                                     val alreadyMatched = matched
                                     matched = true
-                                    matchStart = if (longest && alreadyMatched) Math.min(matchStart, pos) else pos
+                                    matchStart = if (longest && alreadyMatched) min(matchStart, pos) else pos
                                     ambiguous = ambiguous or ((flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                                     if (!longest && !needEndMatch) {
                                         return completeSearch<SearchResult?>(
@@ -2273,7 +2278,7 @@ internal class Dfa {
                                     val alreadyMatched = matched
                                     matched = true
                                     matchStart =
-                                        if (longest && alreadyMatched) Math.min(matchStart, prevPos) else prevPos
+                                        if (longest && alreadyMatched) min(matchStart, prevPos) else prevPos
                                     ambiguous = ambiguous or ((flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                                     if (!longest && !needEndMatch) {
                                         return completeSearch<SearchResult?>(
@@ -2298,7 +2303,7 @@ internal class Dfa {
                 break // fall back to general loop for position-dependent context
             }
 
-            if (WorkCounterConfig.ENABLED && maxInputUnits != Integer.MAX_VALUE) {
+            if (WorkCounterConfig.ENABLED && maxInputUnits != Int.MAX_VALUE) {
                 WorkCounter.record()
             }
             val ch = text.asciiAt(pos - 1)
@@ -2325,7 +2330,7 @@ internal class Dfa {
                     if (pos >= startLimit && (!needEndMatch || pos == startLimit)) {
                         val alreadyMatched = matched
                         matched = true
-                        matchStart = if (longest && alreadyMatched) Math.min(matchStart, pos) else pos
+                        matchStart = if (longest && alreadyMatched) min(matchStart, pos) else pos
                         ambiguous = ambiguous or ((s!!.flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                         if (!longest && !needEndMatch) {
                             return completeSearch<SearchResult?>(SearchResult(true, matchStart, ambiguous), pos)
@@ -2339,7 +2344,7 @@ internal class Dfa {
                     if (prevPos >= startLimit && (!needEndMatch || prevPos == startLimit)) {
                         val alreadyMatched = matched
                         matched = true
-                        matchStart = if (longest && alreadyMatched) Math.min(matchStart, prevPos) else prevPos
+                        matchStart = if (longest && alreadyMatched) min(matchStart, prevPos) else prevPos
                         ambiguous = ambiguous or ((s!!.flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                         if (!longest && !needEndMatch) {
                             return completeSearch<SearchResult?>(SearchResult(true, matchStart, ambiguous), pos)
@@ -2398,7 +2403,7 @@ internal class Dfa {
             }
 
             // Bypass cache for position-dependent transitions (same invariant as doSearch).
-            val effectivePrevPos = Math.max(prevPos, startLimit)
+            val effectivePrevPos = max(prevPos, startLimit)
             var ns: State?
             if ((hasSurrogateWordContext(cp)
                         && !(text.isCodePointBoundary(pos) && text.isCodePointBoundary(effectivePrevPos)))
@@ -2428,7 +2433,7 @@ internal class Dfa {
                     if (pos >= startLimit && (!needEndMatch || pos == startLimit)) {
                         val alreadyMatched = matched
                         matched = true
-                        matchStart = if (longest && alreadyMatched) Math.min(matchStart, pos) else pos
+                        matchStart = if (longest && alreadyMatched) min(matchStart, pos) else pos
                         ambiguous = ambiguous or ((s!!.flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                         if (!longest && !needEndMatch) {
                             return completeSearch<SearchResult?>(SearchResult(true, matchStart, ambiguous), pos)
@@ -2441,7 +2446,7 @@ internal class Dfa {
                     if (prevPos >= startLimit && (!needEndMatch || prevPos == startLimit)) {
                         val alreadyMatched = matched
                         matched = true
-                        matchStart = if (longest && alreadyMatched) Math.min(matchStart, prevPos) else prevPos
+                        matchStart = if (longest && alreadyMatched) min(matchStart, prevPos) else prevPos
                         ambiguous = ambiguous or ((s!!.flags and FLAG_MATCH_AFTER_DEFERRED) != 0)
                         if (!longest && !needEndMatch) {
                             return completeSearch<SearchResult?>(SearchResult(true, matchStart, ambiguous), pos)
@@ -2451,7 +2456,7 @@ internal class Dfa {
                         // starts at startLimit, with the preceding character as its assertion context.
                         val alreadyMatched = matched
                         matched = true
-                        matchStart = if (longest && alreadyMatched) Math.min(matchStart, pos) else pos
+                        matchStart = if (longest && alreadyMatched) min(matchStart, pos) else pos
                         if (!longest && !needEndMatch) {
                             return completeSearch<SearchResult?>(SearchResult(true, matchStart, ambiguous), pos)
                         }
@@ -2493,13 +2498,13 @@ internal class Dfa {
         }
 
         // Use a bitset to track which match IDs have been seen.
-        val seen = BitSet()
+        val seenIds = linkedSetOf<Int>()
 
         // Check if start state is already a match.
         if (s!!.isMatch) {
             if (!needEndMatch || textLen == 0 || (trailingTermStart < textLen && trailingTermStart == 0)) {
                 for (id in collectMatchIds(s!!.insts)) {
-                    seen.set(id)
+                    seenIds.add(id)
                 }
             }
         }
@@ -2563,11 +2568,11 @@ internal class Dfa {
                     if (!needEndMatch || endPos == textLen || (trailingTermStart < textLen && endPos == trailingTermStart)) {
                         // Collect match IDs from the state's instructions.
                         for (id in collectMatchIds(ns.insts)) {
-                            seen.set(id)
+                            seenIds.add(id)
                         }
                         if (ns.wordBoundaryMatchIds != null) {
                             for (id in ns.wordBoundaryMatchIds) {
-                                seen.set(id)
+                                seenIds.add(id)
                             }
                         }
                     }
@@ -2607,7 +2612,7 @@ internal class Dfa {
                 }
 
                 // Bypass cache for position-dependent transitions (same invariant as doSearch).
-                val effectiveNextPos = Math.min(nextPos, textLen)
+                val effectiveNextPos = min(nextPos, textLen)
                 var ns: State?
                 if ((hasSurrogateWordContext(cp) && !text.isCodePointBoundary(pos))
                     || transitionDependsOnPosition(cp, effectiveNextPos, posDepThreshold)
@@ -2636,16 +2641,16 @@ internal class Dfa {
                         if ((s!!.flags and (FLAG_MATCH_BEFORE or FLAG_MATCH_AFTER_DEFERRED)) == FLAG_MATCH_BEFORE)
                             pos
                         else
-                            Math.min(nextPos, textLen)
+                            min(nextPos, textLen)
                     if (!needEndMatch || endPos == textLen || (trailingTermStart < textLen && endPos == trailingTermStart)) {
                         // Collect match IDs from the state's instructions.
                         for (id in collectMatchIds(s!!.insts)) {
-                            seen.set(id)
+                            seenIds.add(id)
                         }
                         // Also collect match IDs from word-boundary expansion (if any).
                         if (s!!.wordBoundaryMatchIds != null) {
                             for (id in s!!.wordBoundaryMatchIds) {
-                                seen.set(id)
+                                seenIds.add(id)
                             }
                         }
                     }
@@ -2658,8 +2663,8 @@ internal class Dfa {
             }
         }
 
-        val matched = !seen.isEmpty
-        val matchIds = seen.stream().toArray()
+        val matched = seenIds.isNotEmpty()
+        val matchIds = seenIds.toIntArray()
         return completeSearch<ManyMatchResult?>(ManyMatchResult(matched, matchIds), pos)
     }
 
@@ -2940,10 +2945,28 @@ internal class Dfa {
          * Builds a 128-element lookup table mapping ASCII code points (0–127) to their equivalence class
          * indices. This avoids binary search for the most common characters.
          */
+
+        private fun binarySearch(a: IntArray, key: Int): Int {
+            var low = 0
+            var high = a.size - 1
+            while (low <= high) {
+                val mid = (low + high) ushr 1
+                val midVal = a[mid]
+                if (midVal < key) {
+                    low = mid + 1
+                } else if (midVal > key) {
+                    high = mid - 1
+                } else {
+                    return mid
+                }
+            }
+            return -(low + 1)
+        }
+
         private fun buildAsciiClassMap(boundaries: IntArray): IntArray {
             val map = IntArray(128)
             for (cp in 0..127) {
-                val idx = Arrays.binarySearch(boundaries, cp)
+                val idx = binarySearch(boundaries, cp)
                 map[cp] = if (idx >= 0) idx else (-idx - 1) - 1
             }
             return map
@@ -2952,7 +2975,7 @@ internal class Dfa {
         /** Sorts DFA frontiers, keeping insertion sort only for genuinely small arrays.  */
         private fun sortSmall(a: IntArray, len: Int) {
             if (len > 32) {
-                Arrays.sort(a, 0, len)
+                a.sort(0, len)
                 return
             }
             for (i in 1..<len) {

@@ -4,8 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
-import java.util.function.Function
+import kotlin.math.max
+import kotlin.math.min
+
 import kotlin.jvm.JvmOverloads
 
 /**
@@ -84,7 +85,7 @@ internal class Nfa {
             } else {
                 visitedGeneration++
                 if (visitedGeneration == 0) {
-                    Arrays.fill(visitedInst, 0)
+                    visitedInst.fill(0)
                     visitedGeneration = 1
                 }
             }
@@ -110,7 +111,7 @@ internal class Nfa {
 
         fun pushRestore(restoreIndex: Int, restoreValue: Int) {
             ensureCapacity(size + 1)
-            frames[size++] = (restoreIndex.toLong() shl 32) or Integer.toUnsignedLong(restoreValue)
+            frames[size++] = (restoreIndex.toLong() shl 32) or (restoreValue.toLong() and 0xffffffffL)
         }
 
         fun pushCompletion(instructionId: Int) {
@@ -130,7 +131,7 @@ internal class Nfa {
             while (newCapacity < minCapacity) {
                 newCapacity *= 2
             }
-            frames = Arrays.copyOf(frames, newCapacity)
+            frames = frames.copyOf(newCapacity)
         }
     }
 
@@ -165,9 +166,9 @@ internal class Nfa {
         }
         t.id = id
         if (captureSource != null) {
-            System.arraycopy(captureSource, 0, t.capture, 0, threadArraySize)
+            captureSource.copyInto(t.capture, 0, 0, 0 + threadArraySize)
         } else {
-            Arrays.fill(t.capture, -1)
+            t.capture.fill(-1)
         }
         t.graphemeStart = graphemeStart
         return t
@@ -175,7 +176,7 @@ internal class Nfa {
 
     private fun freeThread(t: NfaThread?) {
         if (threadPool.size <= threadPoolSize) {
-            threadPool = Arrays.copyOf<NfaThread?>(threadPool, threadPool.size * 2)
+            threadPool = threadPool.copyOf(threadPool.size * 2)
         }
         threadPool[threadPoolSize] = t!!
         threadPoolSize++
@@ -209,7 +210,7 @@ internal class Nfa {
         this.endmatch = endmatch
         this.context = context
         this.bestMatch = IntArray(ncapture)
-        Arrays.fill(bestMatch, -1)
+        bestMatch.fill(-1)
     }
 
     private fun canReuse(prog: Prog, ncapture: Int): Boolean {
@@ -230,7 +231,7 @@ internal class Nfa {
         if (this.bestMatch.size < ncapture) {
             this.bestMatch = IntArray(ncapture)
         }
-        Arrays.fill(this.bestMatch, 0, ncapture, -1)
+        this.bestMatch.fill(-1, 0, ncapture)
         this.addToThreadqStack.clear()
     }
 
@@ -261,10 +262,10 @@ internal class Nfa {
 
         val nlen = 2 * nsubmatch
         val result = if (reuseGroups != null && reuseGroups.size >= nlen) reuseGroups else IntArray(nlen)
-        val ncopy = Math.min(ncapture, result.size)
-        System.arraycopy(bestMatch, 0, result, 0, ncopy)
+        val ncopy = min(ncapture, result.size)
+        bestMatch.copyInto(result, 0, 0, 0 + ncopy)
         if (ncopy < result.size) {
-            Arrays.fill(result, ncopy, result.size, -1)
+            result.fill(-1, ncopy, result.size)
         }
         return result
     }
@@ -299,7 +300,7 @@ internal class Nfa {
             // Also don't start threads past searchLimit — the DFA has already determined
             // there's no match starting beyond that position.
             if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
-                Arrays.fill(initialCap, -1)
+                initialCap.fill(-1)
                 initialCap[0] = pos
                 // Always use prog.start() (anchored start). Unanchored matching is achieved
                 // by starting a new thread at each position. The startUnanchored() entry point
@@ -360,7 +361,7 @@ internal class Nfa {
         val prog = prog!!
         val startPos = ctx.searchStart
         val searchLimit = ctx.searchLimit
-        val start = Math.max(0, startPos)
+        val start = max(0, startPos)
         val runq = allocQueueState()
 
         var delayedBuffer: Array<QueueState?>? = null
@@ -375,7 +376,7 @@ internal class Nfa {
         val initialCap = IntArray(threadArraySize)
 
         val endPos = ctx.endPos
-        val isUtf8 = text is Utf8InputScanner
+        val isUtf8 = text.supportsUtf8ByteSearch()
         var pos = start
         while (pos < endPos + 2) {
             if (WorkCounterConfig.ENABLED) {
@@ -387,7 +388,7 @@ internal class Nfa {
                 mergeDelayedQueue(delayedBuffer!!, pos, runq)
             }
             if (!matched && pos <= searchLimit && (!anchored || pos == startPos)) {
-                Arrays.fill(initialCap, -1)
+                initialCap.fill(-1)
                 initialCap[0] = pos
                 addToThreadq(runq, prog.start(), text, pos, initialCap, false)
             }
@@ -403,7 +404,7 @@ internal class Nfa {
                 freeQueue(runq)
                 if (isUtf8 && pos < endPos) {
                     val decoded = text.decodeForward(pos)
-                    nextBoundaryPos = Math.max(pos + 1, InputScanner.position(decoded))
+                    nextBoundaryPos = max(pos + 1, InputScanner.position(decoded))
                 } else {
                     nextBoundaryPos = pos + 1
                 }
@@ -499,7 +500,7 @@ internal class Nfa {
         if (pos < 0 || pos > endPos + 1) {
             return null
         }
-        return delayedGrapheme.computeIfAbsent(pos, Function { unused: Int? -> allocQueueState() })
+        return delayedGrapheme.getOrPut(pos) { allocQueueState() }
     }
 
     private fun visitKey(ip: Inst, id: Int, text: InputScanner, pos: Int, graphemeStart: Int): Long {
@@ -545,7 +546,7 @@ internal class Nfa {
             return false
         }
         if (!longest || !matched || capture[0] < bestMatch[0] || (capture[0] == bestMatch[0] && pos > bestMatch[1])) {
-            System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+            capture.copyInto(bestMatch, 0, 0, 0 + ncapture)
             bestMatch[1] = pos
             matched = true
         }
@@ -814,7 +815,7 @@ internal class Nfa {
                 InstOp.GRAPHEME_CLUSTER -> {
                     if (matchPos < context!!.endPos) {
                         val graphemeStart =
-                            Math.max(
+                            max(
                                 context!!.consumeRegionStart,
                                 if (t.graphemeStart >= 0) t.graphemeStart else matchPos
                             )
@@ -859,7 +860,7 @@ internal class Nfa {
                 InstOp.ALT_MATCH -> {
                     // Optimization: if this is the first thread and we want the match, take it.
                     if (longest || threadIndex == 0) {
-                        System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+                        capture.copyInto(bestMatch, 0, 0, 0 + ncapture)
                         matched = true
                     }
                 }
@@ -916,7 +917,7 @@ internal class Nfa {
                 InstOp.ALT_MATCH -> {
                     // Optimization: if this is the first thread and we want the match, take it.
                     if (longest || threadIndex == 0) {
-                        System.arraycopy(capture, 0, bestMatch, 0, ncapture)
+                        capture.copyInto(bestMatch, 0, 0, 0 + ncapture)
                         matched = true
                     }
                 }
@@ -937,7 +938,7 @@ internal class Nfa {
             text,
             matchPos,
             prog!!.dollarAnchorUnixLines(),
-            Math.min(context!!.emptyAnchorStartPos, context!!.boundaryRegionStart),
+            min(context!!.emptyAnchorStartPos, context!!.boundaryRegionStart),
             context!!.anchorEndPos
         )
     }
@@ -1200,7 +1201,7 @@ internal class Nfa {
             }
 
             // We always need at least capture[0..1] to track the match boundaries.
-            val ncapture = 2 * Math.max(nsubmatch, 1)
+            val ncapture = 2 * max(nsubmatch, 1)
 
             val context: EngineContext =
                 EngineContext.create(
@@ -1275,7 +1276,7 @@ internal class Nfa {
         ): Boolean {
             val terminatorStart = text.trailingLineTerminatorStart(unixLines, logicalEndPos)
             // A logical context starting at the LF half of CRLF contains a standalone LF.
-            return terminatorStart >= 0 && pos < logicalEndPos && pos == Math.max(terminatorStart, logicalStartPos)
+            return terminatorStart >= 0 && pos < logicalEndPos && pos == max(terminatorStart, logicalStartPos)
         }
 
         /**
@@ -1474,7 +1475,7 @@ internal class Nfa {
         ): Int {
             var flags = 0
             // Anchoring bounds set logical line ends; transparent bounds still expose CRLF context.
-            val lineContextStart = Math.min(anchorStartPos, regionStart)
+            val lineContextStart = min(anchorStartPos, regionStart)
             if (pos == anchorStartPos) {
                 flags = flags or EmptyOp.BEGIN_TEXT
                 if (pos < anchorEndPos) {
@@ -1557,12 +1558,7 @@ internal class Nfa {
 
         /** Returns true if the code point is a Unicode word character (matching `\w` under UCC).  */
         fun isUnicodeWordChar(c: Int): Boolean {
-            return Character.isAlphabetic(c)
-                    || Character.getType(c) == Character.NON_SPACING_MARK.toInt() || Character.getType(c) == Character.ENCLOSING_MARK.toInt() || Character.getType(
-                c
-            ) == Character.COMBINING_SPACING_MARK.toInt() || Character.isDigit(c)
-                    || Character.getType(c) == Character.CONNECTOR_PUNCTUATION.toInt() || c == 0x200C // ZWNJ
-                    || c == 0x200D // ZWJ
+            return WordCharacters.isUnicodeWordChar(c)
         }
     }
 }

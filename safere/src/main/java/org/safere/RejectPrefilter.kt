@@ -123,7 +123,7 @@ internal interface RejectPrefilter {
         override fun canRejectTail(
             text: String?, scanner: InputScanner?, searchFrom: Int, options: EnginePathOptions?
         ): Boolean {
-            if (text == null && scanner is Utf8InputScanner) {
+            if (text == null && scanner != null && scanner.supportsUtf8ByteSearch()) {
                 return options != null && options.literalFastPaths
                         && scanner.indexOfInTail(this.utf8!!, failure!!, searchFrom) < 0
             }
@@ -131,7 +131,7 @@ internal interface RejectPrefilter {
         }
 
         private fun canReject(scanner: InputScanner?, searchFrom: Int): Boolean {
-            if (scanner is Utf8InputScanner) {
+            if (scanner != null && scanner.supportsUtf8ByteSearch()) {
                 return scanner.indexOf(this.utf8!!, failure!!, shifts, searchFrom) < 0
             }
             if (scanner is StringRegionInputScanner) {
@@ -191,7 +191,7 @@ internal interface RejectPrefilter {
                     ))
                         < 0)
             }
-            if (scanner is Utf8InputScanner) {
+            if (scanner != null && scanner.supportsUtf8ByteSearch()) {
                 return canRejectUtf8(scanner, searchFrom)
             }
             if (scanner != null) {
@@ -213,10 +213,10 @@ internal interface RejectPrefilter {
             val ranges = ranges!!
             var i = 0
             while (i < ranges.size) {
-                if (ranges[i] > Character.MAX_LOW_SURROGATE.code) {
+                if (ranges[i] > Char.MAX_LOW_SURROGATE.code) {
                     break
                 }
-                if (ranges[i + 1] >= Character.MIN_LOW_SURROGATE.code) {
+                if (ranges[i + 1] >= Char.MIN_LOW_SURROGATE.code) {
                     return !searches.contains(this, scanner!!, start, end)
                 }
                 i += 2
@@ -275,12 +275,12 @@ internal interface RejectPrefilter {
          * A mixed pair such as `[\]\uFF3D]` is first checked with one search for the ASCII
          * member or any non-ASCII byte. On ASCII text that one pass decides the check, as it did when
          * the class was searched as code points. Only from the first non-ASCII byte on is the class
-         * checked as two searches: the ASCII member with [Utf8InputScanner.indexOfAscii], and the
-         * non-ASCII member as a byte sequence with [Utf8InputScanner.indexOfUtf8Sequence]. Both
-         * use the byte search kernel. Decoding code points instead, as [ ][Utf8InputScanner.indexOfCodePointClass] does, costs several nanoseconds per character on text
+         * checked as two searches: the ASCII member with UTF-8 indexOfAscii, and the
+         * non-ASCII member as a byte sequence with UTF-8 indexOfUtf8Sequence. Both
+         * use the byte search kernel. Decoding code points instead, as indexOfCodePointClass does, costs several nanoseconds per character on text
          * with no ASCII to skip, such as CJK.
          */
-        private fun canRejectUtf8(scanner: Utf8InputScanner, searchFrom: Int): Boolean {
+        private fun canRejectUtf8(scanner: InputScanner, searchFrom: Int): Boolean {
             if (searchFrom > 0 && ranges!![ranges.size - 1] >= 0x80) {
                 return false
             }
@@ -359,7 +359,7 @@ internal interface RejectPrefilter {
                 }
                 return true
             }
-            if (scanner is Utf8InputScanner) {
+            if (scanner != null && scanner.supportsUtf8ByteSearch()) {
                 for (i in utf8Literals!!.indices) {
                     if (scanner.indexOf(utf8Literals[i]!!, failures!![i]!!, shifts!![i], 0) >= 0) {
                         return false
@@ -414,7 +414,7 @@ internal interface RejectPrefilter {
             if (text != null) {
                 return !endsWith(text, suffix!!, wasDollar, unixLines, foldCase)
             }
-            if (scanner is Utf8InputScanner) {
+            if (scanner != null && scanner.supportsUtf8ByteSearch()) {
                 return !scanner.endsWith(suffixUtf8!!, wasDollar, unixLines, foldCase)
             }
             if (scanner is StringRegionInputScanner) {
@@ -493,7 +493,9 @@ internal interface RejectPrefilter {
             if (text != null) {
                 return canReject(text)
             }
-            if (scanner is Utf8InputScanner || scanner is StringRegionInputScanner) {
+            if (scanner != null
+                && (scanner.supportsUtf8ByteSearch() || scanner is StringRegionInputScanner)
+            ) {
                 return canRejectTerminal(scanner)
             }
             return false

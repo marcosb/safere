@@ -6,8 +6,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.regex.PatternSyntaxException
-
 /**
  * Streaming source interpretation for [Parser]. Only this class reads the original source.
  * Tokens are borrowed until the next read; no object is allocated for an individual source rune.
@@ -119,19 +117,12 @@ internal class RegexLexer(private val source: String, flags: Int) {
         return source.length
     }
 
-    fun error(description: String?, index: Int): PatternSyntaxException {
-        return PatternSyntaxException(description, source, index)
+    fun error(description: String?, index: Int, cause: Throwable? = null): RuntimeException {
+        return PatternSyntaxExceptions.create(description, source, index, cause)
     }
 
-    fun classError(description: String?, index: Int): PatternSyntaxException {
-        return ClassSyntaxException(description, source, index)
-    }
-
-    private class ClassSyntaxException(description: String?, pattern: String?, index: Int) :
-        PatternSyntaxException(description, pattern, index) {
-        companion object {
-            private const val serialVersionUID = 1L
-        }
+    fun classError(description: String?, index: Int): RuntimeException {
+        return PatternSyntaxExceptions.createClass(description, source, index)
     }
 
     fun next(): Token {
@@ -181,7 +172,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
                 out.kind = Kind.END
             } else {
                 out.kind = Kind.LITERAL
-                out.rune = source.codePointAt(sourcePosition)
+                out.rune = CodePoints.codePointAt(source, sourcePosition)
                 sourcePosition += CodePoints.charCount(out.rune)
             }
             out.end = sourcePosition
@@ -321,7 +312,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
                     skipTrivia()
                     out.text = payload('}'.code, "invalid Unicode group", out.start)
                 } else {
-                    out.text = String(CodePoints.toChars(first))
+                    out.text = CodePoints.toChars(first).concatToString()
                 }
             }
 
@@ -367,12 +358,9 @@ internal class RegexLexer(private val source: String, flags: Int) {
                 if (readRaw() != '{'.code) throw error("invalid escape sequence", out.start)
                 val name = payload('}'.code, "invalid escape sequence", out.start)
                 try {
-                    out.rune = Character.codePointOf(name)
+                    out.rune = UnicodeCharacterNames.codePointOf(name)
                 } catch (e: IllegalArgumentException) {
-                    val failure =
-                        error("unknown Unicode character name: " + name, out.start + 3)
-                    failure.initCause(e)
-                    throw failure
+                    throw error("unknown Unicode character name: " + name, out.start + 3, e)
                 }
             }
 
@@ -456,7 +444,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
         readRaw()
         val low = exactHex(4, start)
         if (CodePoints.isLowSurrogate(low.toChar())) {
-            out.rune = Character.toCodePoint(code.toChar(), low.toChar())
+            out.rune = CodePoints.toCodePoint(code.toChar(), low.toChar())
             out.end = lastEnd
         } else {
             unicodeUnitReady = true
@@ -501,7 +489,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
 
     private fun payload(terminator: Int, message: String?, start: Int): String {
         val result = StringBuilder()
-        while (peekRaw() >= 0 && peekRaw() != terminator) result.appendCodePoint(readRaw())
+        while (peekRaw() >= 0 && peekRaw() != terminator) appendCodePoint(result, readRaw())
         if (readRaw() != terminator) throw error(message, start)
         return result.toString()
     }
@@ -517,7 +505,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             val name = StringBuilder()
             skipTrivia()
             while (peekRaw() >= 0 && peekRaw() != '>'.code) {
-                name.appendCodePoint(readRaw())
+                appendCodePoint(name, readRaw())
                 skipTrivia()
             }
             if (readRaw() != '>'.code) throw error("invalid named capture", out.start)
@@ -594,7 +582,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
         // and consuming the cursor for each whitespace rune; quotes still use logical interpretation.
         var skipped = false
         while (sourcePosition < source.length) {
-            val c = source.codePointAt(sourcePosition)
+            val c = CodePoints.codePointAt(source, sourcePosition)
             if (c == ' '.code || (c >= '\t'.code && c <= '\r'.code)) {
                 if (WorkCounterConfig.ENABLED) WorkCounter.record()
                 sourcePosition += CodePoints.charCount(c)
@@ -623,7 +611,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
         escapedSourceRune = false
         while (sourcePosition < source.length) {
             if (WorkCounterConfig.ENABLED) WorkCounter.record()
-            val cp = source.codePointAt(sourcePosition)
+            val cp = CodePoints.codePointAt(source, sourcePosition)
             if (cp == 0 || cp == '\n'.code || ((flags and ParseFlags.UNIX_LINES) == 0 && Nfa.isLineTerminator(
                     cp
                 ))
@@ -697,7 +685,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
         // Keep ordinary source reads small enough to inline into numeric readers and token scanning.
         // Quote expansion and backslash state transitions share the general path below.
         if (!quoting && pendingIndex == pendingCount && sourcePosition < source.length) {
-            val cp = source.codePointAt(sourcePosition)
+            val cp = CodePoints.codePointAt(source, sourcePosition)
             if (cp != '\\'.code || escapedSourceRune
                 || (flags and ParseFlags.PERL_X) == 0 || sourcePosition + 1 == source.length || source[
                     sourcePosition + 1
@@ -734,7 +722,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
             }
             start = sourcePosition
             if (WorkCounterConfig.ENABLED) WorkCounter.record()
-            val cp = source.codePointAt(sourcePosition)
+            val cp = CodePoints.codePointAt(source, sourcePosition)
             sourcePosition += CodePoints.charCount(cp)
             end = sourcePosition
             if (quoting) {
@@ -791,12 +779,22 @@ internal class RegexLexer(private val source: String, flags: Int) {
         currentEnd = end
     }
 
+
+    private fun appendCodePoint(sb: StringBuilder, cp: Int) {
+        if (cp <= 0xFFFF) {
+            sb.append(cp.toChar())
+        } else {
+            sb.append(CodePoints.highSurrogate(cp))
+            sb.append(CodePoints.lowSurrogate(cp))
+        }
+    }
+
     companion object {
         private val UNREAD = -2
         private const val MAX_LOOKAHEAD = 2
 
-        fun isClassSyntaxError(error: PatternSyntaxException?): Boolean {
-            return error is ClassSyntaxException
+        fun isClassSyntaxError(error: Throwable?): Boolean {
+            return PatternSyntaxExceptions.isClassSyntaxError(error)
         }
 
         private fun validCaptureName(name: String, underscores: Boolean): Boolean {

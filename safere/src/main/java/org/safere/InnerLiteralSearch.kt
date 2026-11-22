@@ -28,7 +28,7 @@ internal class InnerLiteralSearch private constructor(private val plan: InnerLit
       WorkCounter.recordInnerLiteralProbe()
     }
     val inner: Int
-    if (scanner is Utf8InputScanner) {
+    if (scanner.supportsUtf8ByteSearch()) {
       inner = scanner.indexOf(plan.utf8, plan.failure, plan.shifts, from)
     } else if (scanner is StringRegionInputScanner) {
       inner = scanner.indexOf(plan.literal, from, scanner.length)

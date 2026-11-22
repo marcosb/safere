@@ -4,7 +4,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
+import kotlin.math.max
+import kotlin.math.min
+
 import kotlin.jvm.JvmOverloads
 
 /**
@@ -74,15 +76,15 @@ internal class BitState(// -----------------------------------------------------
         windowExceeded = false
         budgetExceeded = false
         stepCount = 0
-        stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
+        stepBudget = max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
         bestMatch = null
         matchResult =
             if (resultBuffer != null && resultBuffer.size >= ncap) resultBuffer else IntArray(ncap)
-        val limit = if (anchored) startPos + 1 else Math.min(searchLimit + 1, textLen + 1)
+        val limit = if (anchored) startPos + 1 else min(searchLimit + 1, textLen + 1)
         pruneAcrossStarts = false
         unvisitedKindLimit = ALT
         nextStepThreshold =
-            if (limit - startPos > 1) Math.min(stepBudget, PRUNE_ACTIVATION_STEPS) else stepBudget
+            if (limit - startPos > 1) min(stepBudget, PRUNE_ACTIVATION_STEPS) else stepBudget
         var searchStart = startPos
         while (searchStart < limit) {
             if (speculative && searchStart > endPos) {
@@ -250,24 +252,24 @@ internal class BitState(// -----------------------------------------------------
         val visitedLen = (totalBits + 63) / 64
         this.visited = LongArray(visitedLen)
         this.dead = LongArray(visitedLen)
-        this.visitedLo = Integer.MAX_VALUE
+        this.visitedLo = Int.MAX_VALUE
         this.visitedHi = -1
-        this.deadLo = Integer.MAX_VALUE
+        this.deadLo = Int.MAX_VALUE
         this.deadHi = -1
 
         this.cap = IntArray(ncap)
-        Arrays.fill(cap, -1)
+        cap.fill(-1)
         val nlr = prog.numLoopRegs()
         this.loopRegs = IntArray(nlr)
         if (nlr > 0) {
-            Arrays.fill(loopRegs, -1)
+            loopRegs.fill(-1)
         }
 
-        val maxJobs = Math.min(totalBits, 4096)
+        val maxJobs = min(totalBits, 4096)
         this.jobInstId = IntArray(maxJobs)
         this.jobPos = IntArray(maxJobs)
         this.jobCount = 0
-        this.stepBudget = Math.max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
+        this.stepBudget = max(4096L, MAX_WORK_PER_SLOT.toLong() * prog.size * textSlots)
         this.nextStepThreshold = this.stepBudget
         this.unvisitedKindLimit = ALT
         this.stepCount = 0
@@ -351,7 +353,7 @@ internal class BitState(// -----------------------------------------------------
         if (visitedHi > deadHi) {
             deadHi = visitedHi
         }
-        visitedLo = Integer.MAX_VALUE
+        visitedLo = Int.MAX_VALUE
         visitedHi = -1
     }
 
@@ -359,8 +361,8 @@ internal class BitState(// -----------------------------------------------------
     private fun push(instId: Int, pos: Int) {
         if (jobCount >= jobInstId.size) {
             val newLen: Int = jobInstId.size * 2
-            jobInstId = Arrays.copyOf(jobInstId, newLen)
-            jobPos = Arrays.copyOf(jobPos, newLen)
+            jobInstId = jobInstId.copyOf(newLen)
+            jobPos = jobPos.copyOf(newLen)
         }
         jobInstId[jobCount] = instId
         jobPos[jobCount] = pos
@@ -394,12 +396,12 @@ internal class BitState(// -----------------------------------------------------
         var matched = false
 
         // Initialize captures and loop registers.
-        Arrays.fill(cap, -1)
+        cap.fill(-1)
         if (ncap > 0) {
             cap[0] = startPos
         }
         if (loopRegs.size > 0) {
-            Arrays.fill(loopRegs, -1)
+            loopRegs.fill(-1)
         }
 
         // Seed the search.
@@ -667,7 +669,7 @@ internal class BitState(// -----------------------------------------------------
 
                         if (!matched || (longest && pos > bestMatch!![1])) {
                             matched = true
-                            System.arraycopy(cap, 0, matchResult, 0, ncap)
+                            cap.copyInto(matchResult, 0, 0, 0 + ncap)
                             bestMatch = matchResult
                         }
 
@@ -755,7 +757,7 @@ internal class BitState(// -----------------------------------------------------
             }
             if (WorkCounterConfig.ENABLED) {
                 // The interpreter decodes the byte once for the failed literal and once for the body.
-                WorkCounter.record((steps + (if (text is Utf8InputScanner) 2 else 0)).toLong())
+                WorkCounter.record((steps + (if (text!!.supportsUtf8ByteSearch()) 2 else 0)).toLong())
             }
             // No tracked ALT intervenes between the two consumers. Check the budget before the
             // next ALT visit so that it observes the same pruning state as ordinary dispatch.
@@ -829,7 +831,7 @@ internal class BitState(// -----------------------------------------------------
         val newTextSlots = (endPos - startPos) + 2
         val totalBits = prog.size * newTextSlots
         val requiredVisitedLen = (totalBits + 63) / 64
-        return visited.size >= requiredVisitedLen && jobInstId.size >= Math.min(totalBits, 4096)
+        return visited.size >= requiredVisitedLen && jobInstId.size >= min(totalBits, 4096)
     }
 
     /** Clears input-dependent references before this object enters the Pattern-level reuse cache.  */
@@ -857,21 +859,21 @@ internal class BitState(// -----------------------------------------------------
         this.bestMatch = null
         this.jobCount = 0
         if (visitedHi >= visitedLo) {
-            Arrays.fill(visited, visitedLo, visitedHi + 1, 0L)
-            visitedLo = Integer.MAX_VALUE
+            visited.fill(0L, visitedLo, visitedHi + 1)
+            visitedLo = Int.MAX_VALUE
             visitedHi = -1
         }
         if (deadHi >= deadLo) {
-            Arrays.fill(dead, deadLo, deadHi + 1, 0L)
-            deadLo = Integer.MAX_VALUE
+            dead.fill(0L, deadLo, deadHi + 1)
+            deadLo = Int.MAX_VALUE
             deadHi = -1
         }
         if (cap.size < ncap) {
             cap = IntArray(ncap)
         }
-        Arrays.fill(cap, 0, ncap, -1)
+        cap.fill(-1, 0, ncap)
         if (loopRegs.size > 0) {
-            Arrays.fill(loopRegs, -1)
+            loopRegs.fill(-1)
         }
     }
 
@@ -1053,7 +1055,7 @@ internal class BitState(// -----------------------------------------------------
                 endMatch = true
             }
 
-            val ncap = 2 * Math.max(nsubmatch, 1)
+            val ncap = 2 * max(nsubmatch, 1)
             val bs: BitState?
             if (cached != null && cached.canReuse(prog, text, startPos, textLen)) {
                 bs = cached
