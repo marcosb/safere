@@ -8,13 +8,10 @@ import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredCharClass
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
 import org.safere.MultiAnchorDescriptor.StartPlan
-import org.safere.Pattern.*
-import java.util.*
-import java.util.List
-import java.util.function.Consumer
 import kotlin.jvm.JvmOverloads
 import kotlin.jvm.JvmRecord
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
 /**
  * Compiles AST representations of regular expressions into [MultiAnchorDescriptor], [ ], and [RejectDescriptor] instances in a single bottom-up traversal.
  */
@@ -31,6 +28,30 @@ internal object MultiAnchorCompiler {
     const val MIN_WIDE_LEADING_SKIP: Int = 256
 
     private const val MAX_LEADING_CLASS_COMPLEMENT = LeadingClassWidth.MAX_LEADING_CLASS_COMPLEMENT
+
+    // Matches java.util.regex.Pattern.MULTILINE / org.safere.Pattern.MULTILINE.
+    private const val MULTILINE = 8
+
+    private fun runesToString(runes: IntArray): String {
+        val sb = StringBuilder(runes.size)
+        for (r in runes) {
+            sb.append(Utils.runeToString(r))
+        }
+        return sb.toString()
+    }
+
+    private fun stringToCodePoints(literal: String): IntArray {
+        val count = CodePoints.codePointCount(literal, 0, literal.length)
+        val codePoints = IntArray(count)
+        var i = 0
+        var index = 0
+        while (i < literal.length) {
+            val cp = CodePoints.codePointAt(literal, i)
+            codePoints[index++] = cp
+            i += CodePoints.charCount(cp)
+        }
+        return codePoints
+    }
 
     fun analyze(re: Regexp?): NodeAnalysis {
         return analyze(re, 0).root
@@ -537,7 +558,7 @@ internal object MultiAnchorCompiler {
         copy.name = re.name
         // charClass is null for non-CHAR_CLASS ops; preserve that like the Java original.
         copy.charClass = re.charClass
-        copy.subs = List.copyOf<Regexp?>(newSubs)
+        copy.subs = newSubs.toMutableList()
         return copy
     }
 
@@ -576,7 +597,7 @@ internal object MultiAnchorCompiler {
                     else
                         Regexp.literalString(prefixRunes, prefixFlags)
                 val alternateNode: Regexp = Regexp.alternate(remainders, re.flags)
-                return Regexp.concat(List.of<Regexp?>(prefixNode, alternateNode), re.flags)
+                return Regexp.concat(listOf(prefixNode, alternateNode), re.flags)
             }
         }
 
@@ -631,7 +652,7 @@ internal object MultiAnchorCompiler {
         if (re == null) {
             return false
         }
-        val pending: Deque<Regexp> = ArrayDeque<Regexp>()
+        val pending= ArrayDeque<Regexp>()
         pending.addLast(re)
         while (!pending.isEmpty()) {
             val current = pending.removeLast()
@@ -740,7 +761,7 @@ internal object MultiAnchorCompiler {
             if (count >= re.runes.size) {
                 return Regexp.emptyMatch(re.flags)
             }
-            val remainder = Arrays.copyOfRange(re.runes, count, re.runes.size)
+            val remainder = re.runes.copyOfRange(count, re.runes.size)
             return if (remainder.size == 1)
                 Regexp.literal(remainder[0], re.flags)
             else
@@ -915,7 +936,7 @@ internal object MultiAnchorCompiler {
     }
 
     fun extractUnicodeFoldedPrefix(re: Regexp?): PrefixResult {
-        val work: Deque<Regexp?> = ArrayDeque<Regexp?>()
+        val work= ArrayDeque<Regexp?>()
         work.add(re)
         val prefix = StringBuilder()
         var sawFoldClass = false
@@ -940,7 +961,7 @@ internal object MultiAnchorCompiler {
                 if (representative < 0) {
                     break
                 }
-                prefix.appendCodePoint(representative)
+                prefix.append(Utils.runeToString(representative))
                 sawFoldClass = true
                 continue
             }
@@ -967,7 +988,7 @@ internal object MultiAnchorCompiler {
         }
 
         return if (sawFoldClass && !prefix.isEmpty())
-            PrefixResult(prefix.toString().lowercase(Locale.ROOT), true)
+            PrefixResult(prefix.toString().lowercase(), true)
         else
             PrefixResult(null, false)
     }
@@ -979,7 +1000,7 @@ internal object MultiAnchorCompiler {
         if ((flags and ParseFlags.FOLD_CASE) == 0 && Inst.simpleFold(rune) != rune) {
             return false
         }
-        prefix.appendCodePoint(rune)
+        prefix.append(Utils.runeToString(rune))
         return true
     }
 
@@ -1045,10 +1066,10 @@ internal object MultiAnchorCompiler {
             if (!Utils.isValidRune(node.rune)) {
                 return PrefixResult(null, false)
             }
-            sb.appendCodePoint(node.rune)
+            sb.append(Utils.runeToString(node.rune))
         } else if (node.op == RegexpOp.LITERAL_STRING && areAllValidRunes(node.runes)) {
             for (r in node.runes) {
-                sb.appendCodePoint(r)
+                sb.append(Utils.runeToString(r))
             }
         } else {
             return PrefixResult(null, false)
@@ -1058,21 +1079,21 @@ internal object MultiAnchorCompiler {
             return PrefixResult(null, false)
         }
 
-        val prefix = if (foldCase) sb.toString().lowercase(Locale.ROOT) else sb.toString()
+        val prefix = if (foldCase) sb.toString().lowercase() else sb.toString()
         return PrefixResult(prefix, foldCase)
     }
 
     fun firstPrefixCandidate(re: Regexp?): Regexp? {
-        val stack: Deque<Regexp?> = ArrayDeque<Regexp?>()
-        stack.push(re)
+        val stack= ArrayDeque<Regexp?>()
+        stack.addFirst(re)
         while (!stack.isEmpty()) {
-            val node = unwrapCaptures(stack.pop())
+            val node = unwrapCaptures(stack.removeFirst())
             if (node == null || isLeadingZeroWidth(node)) {
                 continue
             }
             if (node.op == RegexpOp.CONCAT) {
                 for (i in node.subs!!.indices.reversed()) {
-                    stack.push(node.subs!!.get(i))
+                    stack.addFirst(node.subs!!.get(i))
                 }
             } else {
                 return node
@@ -1082,17 +1103,17 @@ internal object MultiAnchorCompiler {
     }
 
     fun firstPrefixCandidateAfterTextAnchor(re: Regexp?): Regexp? {
-        val stack: Deque<Regexp?> = ArrayDeque<Regexp?>()
-        stack.push(re)
+        val stack= ArrayDeque<Regexp?>()
+        stack.addFirst(re)
         var sawTextAnchor = false
         while (!stack.isEmpty()) {
-            val node = unwrapCaptures(stack.pop())
+            val node = unwrapCaptures(stack.removeFirst())
             if (node == null) {
                 continue
             }
             if (node.op == RegexpOp.CONCAT && node.subs != null) {
                 for (i in node.subs!!.indices.reversed()) {
-                    stack.push(node.subs!!.get(i))
+                    stack.addFirst(node.subs!!.get(i))
                 }
                 continue
             }
@@ -1118,10 +1139,10 @@ internal object MultiAnchorCompiler {
             return null
         }
         val literal = StringBuilder()
-        val pending: Deque<Regexp?> = ArrayDeque<Regexp?>()
-        pending.push(re)
+        val pending= ArrayDeque<Regexp?>()
+        pending.addFirst(re)
         while (!pending.isEmpty()) {
-            val node = unwrapCaptures(pending.pop())
+            val node = unwrapCaptures(pending.removeFirst())
             if (node == null || (node.flags and ParseFlags.FOLD_CASE) != 0) {
                 return null
             }
@@ -1140,7 +1161,7 @@ internal object MultiAnchorCompiler {
             }
             if (node.op == RegexpOp.CONCAT && node.subs != null) {
                 for (index in node.subs!!.indices.reversed()) {
-                    pending.push(node.subs!!.get(index))
+                    pending.addFirst(node.subs!!.get(index))
                 }
                 continue
             }
@@ -1154,10 +1175,10 @@ internal object MultiAnchorCompiler {
             return null
         }
         val literal = StringBuilder()
-        val pending: Deque<Regexp?> = ArrayDeque<Regexp?>()
-        pending.push(re)
+        val pending= ArrayDeque<Regexp?>()
+        pending.addFirst(re)
         while (!pending.isEmpty()) {
-            val node = unwrapCaptures(pending.pop())
+            val node = unwrapCaptures(pending.removeFirst())
             if (node == null) {
                 return null
             }
@@ -1176,7 +1197,7 @@ internal object MultiAnchorCompiler {
             }
             if (node.op == RegexpOp.CONCAT && node.subs != null) {
                 for (index in node.subs!!.indices.reversed()) {
-                    pending.push(node.subs!!.get(index))
+                    pending.addFirst(node.subs!!.get(index))
                 }
                 continue
             }
@@ -1187,7 +1208,7 @@ internal object MultiAnchorCompiler {
 
     fun extractCharClassPrefix(re: Regexp?): CharClassScanInfo? {
         val builder = CharClassBuilder()
-        val work: Deque<Regexp?> = ArrayDeque<Regexp?>()
+        val work= ArrayDeque<Regexp?>()
         work.add(re)
 
         while (!work.isEmpty()) {
@@ -1305,7 +1326,7 @@ internal object MultiAnchorCompiler {
                         }
                     }
                 }
-                prefixWidth = concatenateWidths(prefixWidth, AsciiWidthRange.exact(literal.length))
+                prefixWidth = AsciiWidthRange.concatenate(prefixWidth, AsciiWidthRange.exact(literal.length))
                 if (!prefixWidth.isValid) {
                     break
                 }
@@ -1318,7 +1339,7 @@ internal object MultiAnchorCompiler {
                     children.get(index)!!.width
                 else
                     computeAsciiWidthRange(node.subs!!.get(index)))!!
-            prefixWidth = concatenateWidths(prefixWidth, childWidth)
+            prefixWidth = AsciiWidthRange.concatenate(prefixWidth, childWidth)
             if (!prefixWidth.isValid) {
                 break
             }
@@ -1330,74 +1351,6 @@ internal object MultiAnchorCompiler {
     fun computeAsciiWidthRange(re: Regexp?): AsciiWidthRange {
         return AsciiWidthRangeWalker().walk(re, AsciiWidthRange.INVALID)
             ?: AsciiWidthRange.INVALID
-    }
-
-    private fun concatenateWidths(widths: MutableList<AsciiWidthRange>): AsciiWidthRange {
-        var result = AsciiWidthRange.ZERO
-        for (width in widths) {
-            result = concatenateWidths(result, width)
-            if (!result.isValid) {
-                return result
-            }
-        }
-        return result
-    }
-
-    private fun concatenateWidths(left: AsciiWidthRange, right: AsciiWidthRange): AsciiWidthRange {
-        if (!left.isValid || !right.isValid) {
-            return AsciiWidthRange.INVALID
-        }
-        if (left == AsciiWidthRange.ZERO) {
-            return right
-        }
-        if (right == AsciiWidthRange.ZERO) {
-            return left
-        }
-        val minWidth = addWidth(left.minWidth, right.minWidth)
-        val maxWidth = addWidth(left.maxWidth, right.maxWidth)
-        if (minWidth < 0 || maxWidth < 0) {
-            return AsciiWidthRange.INVALID
-        }
-        var discrete: IntArray? = null
-        if (left.discreteWidths != null && right.discreteWidths != null && left.discreteWidths.size * right.discreteWidths.size <= 16) {
-            val combined = IntArray(left.discreteWidths.size * right.discreteWidths.size)
-            var size = 0
-            for (leftWidth in left.discreteWidths) {
-                for (rightWidth in right.discreteWidths) {
-                    val width = addWidth(leftWidth, rightWidth)
-                    if (width < 0) {
-                        return AsciiWidthRange.INVALID
-                    }
-                    size = insertWidth(combined, size, width)
-                }
-            }
-            discrete = if (size == combined.size) combined else (combined).copyOf(size)
-        }
-        return AsciiWidthRange(minWidth, maxWidth, discrete)
-    }
-
-    // Width sets have at most sixteen entries. Keep them sorted without boxing or tree nodes;
-    // a return value beyond capacity means the caller must discard the discrete approximation.
-    private fun insertWidth(widths: IntArray, size: Int, width: Int): Int {
-        var index = Arrays.binarySearch(widths, 0, size, width)
-        if (index >= 0) {
-            return size
-        }
-        if (size == widths.size) {
-            return size + 1
-        }
-        index = -index - 1
-        widths.copyInto(widths, index + 1, index, index + size - index)
-        widths[index] = width
-        return size + 1
-    }
-
-    private fun addWidth(left: Int, right: Int): Int {
-        return if (left > Int.MAX_VALUE - right) -1 else left + right
-    }
-
-    private fun multiplyWidth(width: Int, count: Int): Int {
-        return if (width != 0 && count > Int.MAX_VALUE / width) -1 else width * count
     }
 
     private fun isLeadingZeroWidth(re: Regexp): Boolean {
@@ -1525,13 +1478,13 @@ internal object MultiAnchorCompiler {
         if (last == null || last.op != RegexpOp.END_TEXT) {
             return null
         }
-        if ((flags and Pattern.MULTILINE) != 0 && (last.flags and ParseFlags.WAS_DOLLAR) != 0) {
+        if ((flags and MULTILINE) != 0 && (last.flags and ParseFlags.WAS_DOLLAR) != 0) {
             return null
         }
         val wasDollar = (last.flags and ParseFlags.WAS_DOLLAR) != 0
         var foldCase = false
 
-        val suffixParts: Deque<String?> = ArrayDeque<String?>()
+        val suffixParts = ArrayDeque<String?>()
         var suffixLength = 0
         for (i in subs.size - 2 downTo 0) {
             val sub = unwrapCaptures(subs.get(i))
@@ -1543,7 +1496,7 @@ internal object MultiAnchorCompiler {
                 if (!Utils.isValidRune(sub.rune) || (subFold && sub.rune > 0x7F)) {
                     break
                 }
-                val part = Character.toString(sub.rune)
+                val part = Utils.runeToString(sub.rune)
                 suffixParts.addFirst(part)
                 suffixLength += part.length
                 foldCase = foldCase or subFold
@@ -1551,7 +1504,7 @@ internal object MultiAnchorCompiler {
                 if (subFold && !isAllAscii(sub.runes)) {
                     break
                 }
-                val part = String(sub.runes, 0, sub.runes.size)
+                val part = runesToString(sub.runes)
                 suffixParts.addFirst(part)
                 suffixLength += part.length
                 foldCase = foldCase or subFold
@@ -1563,7 +1516,9 @@ internal object MultiAnchorCompiler {
             return null
         }
         val suffix = StringBuilder(suffixLength)
-        suffixParts.forEach(Consumer { str: String? -> suffix.append(str) })
+        for (str in suffixParts) {
+            suffix.append(str)
+        }
         return SuffixInfo(
             suffix.toString(), wasDollar, (last.flags and ParseFlags.UNIX_LINES) != 0, foldCase
         )
@@ -1590,7 +1545,10 @@ internal object MultiAnchorCompiler {
             if (r < Utils.MIN_RUNE || r > Utils.MAX_RUNE) {
                 return false
             }
-            if (r >= Character.MIN_HIGH_SURROGATE.code && r <= Character.MAX_HIGH_SURROGATE.code && i + 1 < runes.size && runes[i + 1] >= Character.MIN_LOW_SURROGATE.code && runes[i + 1] <= Character.MAX_LOW_SURROGATE.code) {
+            if (CodePoints.isHighSurrogate(r) &&
+                i + 1 < runes.size &&
+                CodePoints.isLowSurrogate(runes[i + 1])
+            ) {
                 return false
             }
         }
@@ -1618,7 +1576,7 @@ internal object MultiAnchorCompiler {
         if (last == null || last.op != RegexpOp.END_TEXT) {
             return null
         }
-        if ((flags and Pattern.MULTILINE) != 0 && (last.flags and ParseFlags.WAS_DOLLAR) != 0) {
+        if ((flags and MULTILINE) != 0 && (last.flags and ParseFlags.WAS_DOLLAR) != 0) {
             return null
         }
         val wasDollar = (last.flags and ParseFlags.WAS_DOLLAR) != 0
@@ -1650,7 +1608,7 @@ internal object MultiAnchorCompiler {
         var prefixWidth = AsciiWidthRange.ZERO
         for (index in node.subs!!.indices) {
             val sub = node.subs!!.get(index)
-            prefixWidth = concatenateWidths(prefixWidth, children.get(index)!!.width)
+            prefixWidth = AsciiWidthRange.concatenate(prefixWidth, children.get(index)!!.width)
             if (!prefixWidth.isValid) {
                 break
             }
@@ -1665,7 +1623,7 @@ internal object MultiAnchorCompiler {
             literals.add(exact)
         }
 
-        val pending: Deque<Regexp?> = ArrayDeque<Regexp?>()
+        val pending= ArrayDeque<Regexp?>()
         pending.addLast(re)
         while (!pending.isEmpty()) {
             val node = unwrapCaptures(pending.removeLast())
@@ -1676,7 +1634,7 @@ internal object MultiAnchorCompiler {
                 && (node.flags and ParseFlags.FOLD_CASE) == 0 && areAllValidRunes(node.runes)
                 && node.runes.size >= 2
             ) {
-                literals.add(String(node.runes, 0, node.runes.size))
+                literals.add(runesToString(node.runes))
             }
             if (node.subs != null) {
                 for (child in node.subs!!) {
@@ -1691,10 +1649,10 @@ internal object MultiAnchorCompiler {
     ): String? {
         var best: String? = null
         var bestScore = 0
-        val pending: Deque<Regexp> = ArrayDeque<Regexp>()
+        val pending = ArrayDeque<Regexp?>()
         pending.addLast(re)
         while (!pending.isEmpty()) {
-            val node = pending.removeLast()
+            val node = pending.removeLast() ?: continue
             when (node.op) {
                 RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE, RegexpOp.PLUS -> pending.addLast(node.sub())
                 RegexpOp.REPEAT -> {
@@ -1725,7 +1683,7 @@ internal object MultiAnchorCompiler {
                     if ((node.flags and ParseFlags.FOLD_CASE) == 0 && areAllValidRunes(node.runes)
                         && node.runes.size >= 2
                     ) {
-                        val candidate = String(node.runes, 0, node.runes.size)
+                        val candidate = runesToString(node.runes)
                         if (!isLiteralSubsumed(candidate, excludePrefixes, excludeSuffix)) {
                             val candidateScore: Int = RarityOracle.literalSelectivityScore(candidate)
                             if (best == null || candidateScore > bestScore) {
@@ -1778,11 +1736,16 @@ internal object MultiAnchorCompiler {
                 return null
             }
         }
-        val rawList: MutableList<String> = ArrayList<String>(literalSet)
+        val rawList = ArrayList<String>(literalSet.size)
+        for (literal in literalSet) {
+            if (literal != null) {
+                rawList.add(literal)
+            }
+        }
         val rawCodePoints: MutableList<IntArray?> = ArrayList<IntArray?>(rawList.size)
         val rawFailures: MutableList<IntArray?> = ArrayList<IntArray?>(rawList.size)
         for (literal in rawList) {
-            val codePoints = literal.codePoints().toArray()
+            val codePoints = stringToCodePoints(literal)
             rawCodePoints.add(codePoints)
             rawFailures.add(literalFailure(codePoints))
         }
@@ -1862,119 +1825,6 @@ internal object MultiAnchorCompiler {
             node = node.sub()
         }
         return node
-    }
-
-    @JvmRecord
-    internal data class PrefixResult(val prefix: String?, val foldCase: Boolean) {
-        companion object {
-            val NO_PREFIX: PrefixResult = PrefixResult(null, false)
-        }
-    }
-
-    @JvmRecord
-    internal data class FixedOffsetLiteralSpan(
-        val literal: String?,
-        val minOffset: Int,
-        val maxOffset: Int,
-        val discreteOffsets: IntArray?
-    )
-
-    internal class AsciiWidthRange(
-        val minWidth: Int, val maxWidth: Int, // Sorted and duplicate-free when present.
-        val discreteWidths: IntArray?
-    ) {
-        val isValid: Boolean
-            get() = minWidth >= 0
-
-        val isExact: Boolean
-            get() = minWidth >= 0 && minWidth == maxWidth
-
-        val isExactAscii: Boolean
-            get() =// Non-discrete widths can count Unicode code points rather than ASCII input units.
-                this.isExact && discreteWidths != null
-
-        companion object {
-            val INVALID: AsciiWidthRange = AsciiWidthRange(-1, -1, null)
-            val ZERO: AsciiWidthRange = AsciiWidthRange(0, 0, intArrayOf(0))
-            val ONE: AsciiWidthRange = AsciiWidthRange(1, 1, intArrayOf(1))
-            val NON_DISCRETE_ONE: AsciiWidthRange = AsciiWidthRange(1, 1, null)
-
-            fun exact(width: Int): AsciiWidthRange {
-                return AsciiWidthRange(width, width, intArrayOf(width))
-            }
-        }
-    }
-
-    @JvmRecord
-    internal data class StartFacets(
-        val prefix: PrefixResult?,
-        val charClassPrefix: CharClassScanInfo?,
-        val fixedOffsetLiteral: FixedOffsetLiteralSpan?,
-        val startAcceleration: StartAcceleration?,
-        val anchoredPrefix: PrefixResult,
-        val anchoredCharClassPrefix: CharClassScanInfo?,
-        val literalAlternation: Array<String?>?
-    ) {
-
-
-        companion object {
-            val EMPTY: StartFacets = StartFacets(
-                PrefixResult.NO_PREFIX, null, null, null, PrefixResult.NO_PREFIX, null, null
-            )
-        }
-    }
-
-    @JvmRecord
-    internal data class RejectFacets(
-        val bestRequiredLiteral: String?,
-        val bestRequiredLiteralScore: Int,
-        val bestRequiredClass: CharClass?,
-        val disjointRequiredLiterals: Array<String?>?,
-        val endAnchoredSuffix: SuffixInfo?,
-        val endAnchoredCharClass: EndAnchoredCharClassInfo?
-    ) {
-
-
-        companion object {
-            val EMPTY: RejectFacets = RejectFacets(null, 0, null, null, null, null)
-        }
-    }
-
-    @JvmRecord
-    internal data class ClassAnchor(val scanInfo: CharClassScanInfo?, val offset: Int)
-
-    @JvmRecord
-    internal data class NodeAnalysis(
-        val width: AsciiWidthRange,
-        val start: StartFacets,
-        val reject: RejectFacets,
-        val atomicRequiredClass: CharClass?,
-        val classAnchor: ClassAnchor?
-    ) {
-        constructor(
-            width: AsciiWidthRange,
-            start: StartFacets,
-            reject: RejectFacets,
-            atomicRequiredClass: CharClass?
-        ) : this(width, start, reject, atomicRequiredClass, null)
-
-
-        companion object {
-            val EMPTY: NodeAnalysis = NodeAnalysis(
-                AsciiWidthRange.ZERO,
-                StartFacets.EMPTY,
-                RejectFacets.EMPTY,
-                null
-            )
-
-            // Cached widths must remain conservative, just as in the standalone width walker.
-            val UNKNOWN: NodeAnalysis = NodeAnalysis(
-                AsciiWidthRange.INVALID,
-                StartFacets.EMPTY,
-                RejectFacets.EMPTY,
-                null
-            )
-        }
     }
 
     // The walker owns these child results; they are used only during this compilation and are
@@ -2060,7 +1910,7 @@ internal object MultiAnchorCompiler {
             }
             var width = AsciiWidthRange.ZERO
             for (c in children) {
-                width = concatenateWidths(width, c.width)
+                width = AsciiWidthRange.concatenate(width, c.width)
                 if (!width.isValid) {
                     break
                 }
@@ -2164,7 +2014,7 @@ internal object MultiAnchorCompiler {
                         for (child in children) {
                             val candidate = child.classAnchor
                             if (candidate != null) {
-                                val combinedOffset = addWidth(offset, candidate.offset)
+                                val combinedOffset = AsciiWidthRange.addWidth(offset, candidate.offset)
                                 if (combinedOffset >= 0
                                     && (best == null
                                             || classSize(candidate.scanInfo!!) < classSize(best.scanInfo!!))
@@ -2175,7 +2025,7 @@ internal object MultiAnchorCompiler {
                             if (!child.width.isExactAscii) {
                                 break
                             }
-                            offset = addWidth(offset, child.width.minWidth)
+                            offset = AsciiWidthRange.addWidth(offset, child.width.minWidth)
                             if (offset < 0) {
                                 break
                             }
@@ -2188,7 +2038,7 @@ internal object MultiAnchorCompiler {
             }
 
             private fun classSize(scanInfo: CharClassScanInfo): Int {
-                return java.lang.Long.bitCount(scanInfo.bitmap0) + java.lang.Long.bitCount(scanInfo.bitmap1)
+                return scanInfo.bitmap0.countOneBits() + scanInfo.bitmap1.countOneBits()
             }
 
             private fun usefulClassAnchor(scanInfo: CharClassScanInfo?): Boolean {
@@ -2213,7 +2063,7 @@ internal object MultiAnchorCompiler {
             private fun visitLiteral(node: Regexp): NodeAnalysis {
                 val foldCase = (node.flags and ParseFlags.FOLD_CASE) != 0
                 val validRune = Utils.isValidRune(node.rune)
-                val lit = if (validRune) Character.toString(node.rune) else null
+                val lit = if (validRune) Utils.runeToString(node.rune) else null
                 val width =
                     if (node.rune >= 0 && node.rune < 128 && !foldCase)
                         AsciiWidthRange.ONE
@@ -2224,7 +2074,7 @@ internal object MultiAnchorCompiler {
                         PrefixResult.NO_PREFIX
                     else
                         if (foldCase)
-                            PrefixResult(lit!!.lowercase(Locale.ROOT), true)
+                            PrefixResult(lit!!.lowercase(), true)
                         else
                             PrefixResult(lit, false)
                 val reqClass = literalCharClass(node.rune, node.flags)
@@ -2248,14 +2098,14 @@ internal object MultiAnchorCompiler {
             private fun visitLiteralString(node: Regexp): NodeAnalysis {
                 val foldCase = (node.flags and ParseFlags.FOLD_CASE) != 0
                 val validRunes = areAllValidRunes(node.runes)
-                val lit = if (validRunes) String(node.runes, 0, node.runes.size) else null
+                val lit = if (validRunes) runesToString(node.runes) else null
                 val width = AsciiWidthRangeWalker.literalStringWidth(node)
                 val prefix =
                     if (!validRunes)
                         PrefixResult.NO_PREFIX
                     else
                         if (foldCase)
-                            PrefixResult(lit!!.lowercase(Locale.ROOT), true)
+                            PrefixResult(lit!!.lowercase(), true)
                         else
                             PrefixResult(lit, false)
                 // bestRequiredLiteral only feeds DisjointLiterals. A lone surrogate is safe on String inputs
@@ -2265,7 +2115,7 @@ internal object MultiAnchorCompiler {
                 // String literal would coalesce them into a supplementary code point.
                 val reqLit =
                     if (!foldCase && canRepresentAsCodePointString(node.runes) && node.runes.size >= 1)
-                        (if (lit != null) lit else String(node.runes, 0, node.runes.size))
+                        (lit ?: runesToString(node.runes))
                     else
                         null
                 val reqClass =
@@ -2301,7 +2151,7 @@ internal object MultiAnchorCompiler {
                 val rep = simpleFoldClassRepresentative(cc)
                 val prefix =
                     if (rep >= 0)
-                        PrefixResult(Character.toString(rep).lowercase(Locale.ROOT), true)
+                        PrefixResult(Utils.runeToString(rep).lowercase(), true)
                     else
                         PrefixResult.NO_PREFIX
                 return NodeAnalysis(
@@ -2512,145 +2362,6 @@ internal object MultiAnchorCompiler {
                         RejectFacets.EMPTY
                 return NodeAnalysis(
                     width, start, reject, if (node.min > 0) child.atomicRequiredClass else null
-                )
-            }
-        }
-    }
-
-    internal class AsciiWidthRangeWalker : Walker<AsciiWidthRange>() {
-        override fun postVisit(
-            node: Regexp,
-            parentArg: AsciiWidthRange?,
-            preArg: AsciiWidthRange?,
-            childArgs: MutableList<AsciiWidthRange>
-        ): AsciiWidthRange {
-            return when (node.op) {
-                RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE -> if (childArgs.isEmpty()) AsciiWidthRange.INVALID else childArgs.first()
-                RegexpOp.EMPTY_MATCH, RegexpOp.BEGIN_LINE, RegexpOp.END_LINE, RegexpOp.BEGIN_TEXT, RegexpOp.END_TEXT, RegexpOp.WORD_BOUNDARY, RegexpOp.NO_WORD_BOUNDARY -> AsciiWidthRange.ZERO
-                RegexpOp.LITERAL -> if (node.rune >= 0 && node.rune < 128 && (node.flags and ParseFlags.FOLD_CASE) == 0)
-                    AsciiWidthRange.ONE
-                else
-                    AsciiWidthRange.INVALID
-
-                RegexpOp.LITERAL_STRING -> literalStringWidth(node)
-                RegexpOp.CHAR_CLASS -> characterClassWidth(node)
-                RegexpOp.REPEAT -> if (childArgs.isEmpty()) AsciiWidthRange.INVALID else repeatWidth(
-                    node,
-                    childArgs.first()
-                )
-
-                RegexpOp.QUEST -> if (childArgs.isEmpty()) AsciiWidthRange.INVALID else optionalWidth(
-                    childArgs.first()
-                )
-
-                RegexpOp.ALTERNATE -> alternateWidth(childArgs)
-                RegexpOp.CONCAT -> concatenateWidths(childArgs)
-                else -> AsciiWidthRange.INVALID
-            }
-        }
-
-        override fun shortVisit(re: Regexp, parentArg: AsciiWidthRange?): AsciiWidthRange {
-            return AsciiWidthRange.INVALID
-        }
-
-        companion object {
-            internal fun literalStringWidth(node: Regexp): AsciiWidthRange {
-                if ((node.flags and ParseFlags.FOLD_CASE) != 0 || node.runes == null) {
-                    return AsciiWidthRange.INVALID
-                }
-                for (rune in node.runes) {
-                    if (rune < 0 || rune >= 128) {
-                        return AsciiWidthRange.INVALID
-                    }
-                }
-                return AsciiWidthRange.exact(node.runes.size)
-            }
-
-            internal fun characterClassWidth(node: Regexp): AsciiWidthRange {
-                if (node.charClass == null || node.charClass!!.isEmpty()) {
-                    return AsciiWidthRange.INVALID
-                }
-                return if (node.charClass!!.hi(node.charClass!!.numRanges() - 1) < 128)
-                    AsciiWidthRange.ONE
-                else
-                    AsciiWidthRange.NON_DISCRETE_ONE
-            }
-
-            internal fun repeatWidth(node: Regexp, child: AsciiWidthRange): AsciiWidthRange {
-                if (node.min < 0 || node.max < 0) {
-                    return AsciiWidthRange.INVALID
-                }
-                if (!child.isValid) {
-                    return AsciiWidthRange.INVALID
-                }
-                val minWidth = multiplyWidth(child.minWidth, node.min)
-                val maxWidth = multiplyWidth(child.maxWidth, node.max)
-                if (minWidth < 0 || maxWidth < 0) {
-                    return AsciiWidthRange.INVALID
-                }
-                if (child.discreteWidths != null && child.isExact && node.max - node.min <= 8) {
-                    if (child.minWidth == 0) {
-                        return AsciiWidthRange.ZERO
-                    }
-                    val discrete = IntArray(node.max - node.min + 1)
-                    for (index in discrete.indices) {
-                        val width = multiplyWidth(child.minWidth, node.min + index)
-                        if (width < 0) {
-                            return AsciiWidthRange.INVALID
-                        }
-                        discrete[index] = width
-                    }
-                    return AsciiWidthRange(minWidth, maxWidth, discrete)
-                }
-                return AsciiWidthRange(minWidth, maxWidth, null)
-            }
-
-            internal fun optionalWidth(child: AsciiWidthRange): AsciiWidthRange {
-                if (!child.isValid) {
-                    return AsciiWidthRange.INVALID
-                }
-                if (child.discreteWidths == null) {
-                    return AsciiWidthRange(0, child.maxWidth, null)
-                }
-                val discrete = IntArray(child.discreteWidths.size + 1)
-                var size = 1
-                for (width in child.discreteWidths) {
-                    size = insertWidth(discrete, size, width)
-                }
-                return AsciiWidthRange(
-                    0, child.maxWidth, if (size <= 16) (discrete).copyOf(size) else null
-                )
-            }
-
-            internal fun alternateWidth(childArgs: MutableList<AsciiWidthRange>): AsciiWidthRange {
-                if (childArgs.isEmpty()) {
-                    return AsciiWidthRange.INVALID
-                }
-                var minWidth = Int.MAX_VALUE
-                var maxWidth = Int.MIN_VALUE
-                val discrete = IntArray(8)
-                var size = 0
-                var allDiscrete = true
-                for (child in childArgs) {
-                    if (!child.isValid) {
-                        return AsciiWidthRange.INVALID
-                    }
-                    minWidth = min(minWidth, child.minWidth)
-                    maxWidth = max(maxWidth, child.maxWidth)
-                    if (allDiscrete && child.discreteWidths != null) {
-                        for (width in child.discreteWidths) {
-                            size = insertWidth(discrete, size, width)
-                            if (size > discrete.size) {
-                                allDiscrete = false
-                                break
-                            }
-                        }
-                    } else {
-                        allDiscrete = false
-                    }
-                }
-                return AsciiWidthRange(
-                    minWidth, maxWidth, if (allDiscrete) (discrete).copyOf(size) else null
                 )
             }
         }

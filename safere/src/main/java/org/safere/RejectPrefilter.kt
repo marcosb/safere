@@ -10,7 +10,6 @@ import org.safere.EndAnchoredCharClassInfo
 import org.safere.SuffixInfo
 import kotlin.jvm.JvmRecord
 import kotlin.math.*
-import kotlin.text.Charsets
 /**
  * Whole-input rejection filter (Tier 0 acceleration).
  * 
@@ -149,9 +148,9 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(literal: String): Literal {
-                val utf8: ByteArray = literal.toByteArray(Charsets.UTF_8)
-                val failure: IntArray = Pattern.literalFailure(utf8)
-                val shifts: IntArray? = Pattern.literalShifts(utf8)
+                val utf8: ByteArray = literal.encodeToByteArray()
+                val failure: IntArray = ByteLiteralScan.literalFailure(utf8)
+                val shifts: IntArray? = ByteLiteralScan.literalShifts(utf8)
                 val anchorOffset = StringLiteralSearch.anchorOffset(literal)
                 return Literal(
                     literal,
@@ -329,7 +328,7 @@ internal interface RejectPrefilter {
              */
             private fun nonAsciiUtf8OfMixedPair(small: CharArray?): ByteArray? {
                 return if (small != null && small.size == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
-                    small[1].toString().toByteArray(Charsets.UTF_8)
+                    small[1].toString().encodeToByteArray()
                 else
                     null
             }
@@ -443,10 +442,10 @@ internal interface RejectPrefilter {
                 for (literal in literals) {
                     val lit = literal!!
                     if (!hasUnpairedSurrogate(lit)) {
-                        val utf8: ByteArray = lit.toByteArray(Charsets.UTF_8)
+                        val utf8: ByteArray = lit.encodeToByteArray()
                         utf8Literals[idx] = utf8
-                        failures[idx] = Pattern.literalFailure(utf8)
-                        shifts[idx] = Pattern.literalShifts(utf8)
+                        failures[idx] = ByteLiteralScan.literalFailure(utf8)
+                        shifts[idx] = ByteLiteralScan.literalShifts(utf8)
                         idx++
                     }
                 }
@@ -510,7 +509,7 @@ internal interface RejectPrefilter {
                 if (info == null || info.suffix == null || info.suffix.isEmpty()) {
                     return null
                 }
-                val utf8: ByteArray = info.suffix.toByteArray(Charsets.UTF_8)
+                val utf8: ByteArray = info.suffix.encodeToByteArray()
                 return EndAnchoredSuffix(
                     info.suffix, utf8, info.wasDollar, info.unixLines, info.foldCase
                 )

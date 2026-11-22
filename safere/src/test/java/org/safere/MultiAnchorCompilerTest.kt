@@ -14,13 +14,10 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
-import org.safere.MultiAnchorCompiler.AsciiWidthRange
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredCharClass
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
 import org.safere.MultiAnchorDescriptor.StartPlan
-import org.safere.EndAnchoredCharClassInfo
-import org.safere.SuffixInfo
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.function.Consumer
@@ -226,12 +223,12 @@ internal class MultiAnchorCompilerTest {
         val ast = Parser.parse(prefix + "needle", Pattern.toParseFlags(0))
         val standalone =
             MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(standalone).isNotNull()
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(standalone).isNotNull()
         Assertions.assertThat(standalone.literal).isEqualTo("needle")
         Assertions.assertThat(standalone.minOffset).isEqualTo(min)
         Assertions.assertThat(standalone.maxOffset).isEqualTo(max)
         Assertions.assertThat(standalone.discreteOffsets).isEqualTo(offsets)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(standalone)
     }
@@ -243,9 +240,9 @@ internal class MultiAnchorCompilerTest {
     )
     fun unsupportedWidthStopsFixedOffsetAnalysis(regex: String?) {
         val ast = Parser.parse(regex, Pattern.toParseFlags(0))
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
             .isNull()
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .isNull()
     }
 
@@ -263,7 +260,7 @@ internal class MultiAnchorCompilerTest {
             )
         Assertions.assertThat(MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!.discreteOffsets)
             .containsExactly(2)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
     }
@@ -326,7 +323,7 @@ internal class MultiAnchorCompilerTest {
             MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!
         Assertions.assertThat(literal.minOffset).isEqualTo(Int.MAX_VALUE)
         Assertions.assertThat(literal.maxOffset).isEqualTo(Int.MAX_VALUE)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(literal)
     }

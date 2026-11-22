@@ -6,7 +6,6 @@ package org.safere
 
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import org.safere.MultiAnchorCompiler.NodeAnalysis
 @DisabledForCrosscheck("tests internal ASCII width proofs")
 internal class MultiAnchorWidthAnalysisTest {
     @Test

@@ -38,7 +38,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/RejectPrefilter.kt",
   "org/safere/SafeReDiagnostics.kt",
   "org/safere/StringStartAccelerator.kt",
-  "org/safere/MultiAnchorCompiler.kt",
   "org/safere/Nfa.kt",
   "org/safere/Dfa.kt",
   "org/safere/BitState.kt",
