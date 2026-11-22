@@ -5,7 +5,7 @@
 package org.safere
 
 import org.safere.MultiAnchorDescriptor.StartPlan
-import org.safere.Pattern.StartAcceleration
+import org.safere.StartAcceleration
 import kotlin.jvm.JvmRecord
 
 /**
@@ -128,7 +128,7 @@ internal interface StringStartAccelerator {
      */
     @JvmRecord
     data class FixedOffset(
-        val fixedOffset: Pattern.FixedOffsetLiteral?,
+        val fixedOffset: FixedOffsetLiteral?,
         val firstCharClass: CharClassScanInfo?,
         val anchorOffset: Int,
         val anchor: Char,
@@ -146,7 +146,7 @@ internal interface StringStartAccelerator {
 
 
         companion object {
-            fun create(fixedOffset: Pattern.FixedOffsetLiteral, firstCharClass: CharClassScanInfo?): FixedOffset {
+            fun create(fixedOffset: FixedOffsetLiteral, firstCharClass: CharClassScanInfo?): FixedOffset {
                 val literal = fixedOffset.literal()
                 val anchorOffset = StringLiteralSearch.anchorOffset(literal)
                 return FixedOffset(
@@ -160,7 +160,7 @@ internal interface StringStartAccelerator {
 
             private fun nextFixedOffsetCandidate(
                 text: CharSequence,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 firstCharClass: CharClassScanInfo?,
                 anchorOffset: Int,
                 anchor: Char,
@@ -252,7 +252,7 @@ internal interface StringStartAccelerator {
              */
             private fun resolveMultiOffsetStart(
                 text: CharSequence,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 discreteOffsets: IntArray,
                 firstCharClass: CharClassScanInfo,
                 literalStart: Int,
@@ -278,7 +278,7 @@ internal interface StringStartAccelerator {
              */
             private fun retreatedStartInClass(
                 text: CharSequence,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 firstCharClass: CharClassScanInfo,
                 literalStart: Int,
                 fromIndex: Int

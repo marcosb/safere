@@ -19,8 +19,8 @@ import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredCharClass
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
 import org.safere.MultiAnchorDescriptor.StartPlan
-import org.safere.Pattern.EndAnchoredCharClassInfo
-import org.safere.Pattern.SuffixInfo
+import org.safere.EndAnchoredCharClassInfo
+import org.safere.SuffixInfo
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.function.Consumer
@@ -214,7 +214,7 @@ internal class MultiAnchorCompilerTest {
         Assertions.assertThat<StartPlan?>(start).isInstanceOf(StartPlan.FixedOffset::class.java)
         val fo =
             start as StartPlan.FixedOffset
-        Assertions.assertThat<Pattern.FixedOffsetLiteral?>(fo.fol).isNotNull()
+        Assertions.assertThat<FixedOffsetLiteral?>(fo.fol).isNotNull()
         Assertions.assertThat(fo.fol!!.literal()).isEqualTo("-target")
         Assertions.assertThat(fo.fol!!.minOffset()).isEqualTo(7)
         Assertions.assertThat(fo.fol!!.maxOffset()).isEqualTo(7)
@@ -226,12 +226,12 @@ internal class MultiAnchorCompilerTest {
         val ast = Parser.parse(prefix + "needle", Pattern.toParseFlags(0))
         val standalone =
             MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(standalone).isNotNull()
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(standalone).isNotNull()
         Assertions.assertThat(standalone.literal).isEqualTo("needle")
         Assertions.assertThat(standalone.minOffset).isEqualTo(min)
         Assertions.assertThat(standalone.maxOffset).isEqualTo(max)
         Assertions.assertThat(standalone.discreteOffsets).isEqualTo(offsets)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(standalone)
     }
@@ -243,9 +243,9 @@ internal class MultiAnchorCompilerTest {
     )
     fun unsupportedWidthStopsFixedOffsetAnalysis(regex: String?) {
         val ast = Parser.parse(regex, Pattern.toParseFlags(0))
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
             .isNull()
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .isNull()
     }
 
@@ -263,7 +263,7 @@ internal class MultiAnchorCompilerTest {
             )
         Assertions.assertThat(MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!.discreteOffsets)
             .containsExactly(2)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(MultiAnchorCompiler.extractFixedOffsetLiteral(ast))
     }
@@ -326,7 +326,7 @@ internal class MultiAnchorCompilerTest {
             MultiAnchorCompiler.extractFixedOffsetLiteral(ast)!!
         Assertions.assertThat(literal.minOffset).isEqualTo(Int.MAX_VALUE)
         Assertions.assertThat(literal.maxOffset).isEqualTo(Int.MAX_VALUE)
-        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteral?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
+        Assertions.assertThat<MultiAnchorCompiler.FixedOffsetLiteralSpan?>(MultiAnchorCompiler.analyze(ast).start.fixedOffsetLiteral)
             .usingRecursiveComparison()
             .isEqualTo(literal)
     }

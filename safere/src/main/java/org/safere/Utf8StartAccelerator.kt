@@ -313,7 +313,7 @@ internal interface Utf8StartAccelerator {
     }
 
     @JvmRecord
-    data class FixedOffset(val fixedOffset: Pattern.FixedOffsetLiteral?, val charClassPrefix: CharClassScanInfo?) :
+    data class FixedOffset(val fixedOffset: FixedOffsetLiteral?, val charClassPrefix: CharClassScanInfo?) :
         Utf8StartAccelerator {
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.LITERAL
@@ -328,7 +328,7 @@ internal interface Utf8StartAccelerator {
         companion object {
             private fun nextFixedOffsetCandidate(
                 scanner: Utf8InputScanner,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 charClassPrefix: CharClassScanInfo?,
                 searchFrom: Int
             ): Int {
@@ -409,7 +409,7 @@ internal interface Utf8StartAccelerator {
              */
             private fun resolveMultiOffsetStart(
                 scanner: InputScanner,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 discreteOffsets: IntArray,
                 charClassPrefix: CharClassScanInfo,
                 literalStart: Int,
@@ -435,7 +435,7 @@ internal interface Utf8StartAccelerator {
              */
             private fun retreatedStartInClass(
                 scanner: InputScanner,
-                fixedOffsetLiteral: Pattern.FixedOffsetLiteral,
+                fixedOffsetLiteral: FixedOffsetLiteral,
                 charClassPrefix: CharClassScanInfo,
                 literalStart: Int,
                 searchFrom: Int

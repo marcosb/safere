@@ -2418,106 +2418,6 @@ class Pattern private constructor(
         }
     }
 
-    /**
-     * Conservative start-position accelerator.
-     * 
-     * 
-     * Every match must start at a multiline `^` position, optionally with the first consumed
-     * ASCII character in `asciiStart`. The accelerator only advances the initial search
-     * position before handing off to the normal linear engine pipeline.
-     */
-    internal class StartAcceleration(requireLineStart: Boolean, allowLineStart: Boolean, asciiStart: AsciiBitmap?) {
-        val requireLineStart: Boolean
-        val allowLineStart: Boolean
-        val asciiStart: AsciiBitmap?
-
-        init {
-            this.requireLineStart = requireLineStart
-            this.allowLineStart = allowLineStart
-            this.asciiStart = asciiStart
-        }
-    }
-
-    internal class FixedOffsetLiteral(literal: String, minOffset: Int, maxOffset: Int, discreteOffsets: IntArray?) {
-        private val literal: String?
-        private val minOffset: Int
-        private val maxOffset: Int
-        private val discreteOffsets: IntArray?
-        private val utf8: ByteArray
-        private val failure: IntArray
-        private val shifts: IntArray?
-
-        constructor(literal: String, offset: Int) : this(literal, offset, offset, intArrayOf(offset))
-
-        init {
-            this.literal = literal
-            this.minOffset = minOffset
-            this.maxOffset = maxOffset
-            this.discreteOffsets = discreteOffsets
-            this.utf8 = literal.toByteArray(Charsets.UTF_8)
-            this.failure = literalFailure(utf8)
-            this.shifts = literalShifts(utf8)
-        }
-
-        fun literal(): String? {
-            return literal
-        }
-
-        fun offset(): Int {
-            return minOffset
-        }
-
-        fun minOffset(): Int {
-            return minOffset
-        }
-
-        fun maxOffset(): Int {
-            return maxOffset
-        }
-
-        fun discreteOffsets(): IntArray? {
-            return discreteOffsets
-        }
-
-        val isExactOffset: Boolean
-            get() = minOffset == maxOffset
-
-        fun utf8(): ByteArray {
-            return utf8
-        }
-
-        fun failure(): IntArray {
-            return failure
-        }
-
-        fun shifts(): IntArray? {
-            return shifts
-        }
-    }
-
-    internal data class SuffixInfo(
-        val suffix: String?,
-        val wasDollar: Boolean,
-        val unixLines: Boolean,
-        val foldCase: Boolean
-    ) {
-        constructor(suffix: String?, wasDollar: Boolean) : this(suffix, wasDollar, false, false)
-
-        constructor(suffix: String?, wasDollar: Boolean, unixLines: Boolean) : this(suffix, wasDollar, unixLines, false)
-
-
-    }
-
-    internal data class EndAnchoredCharClassInfo(
-        val bitmap: AsciiBitmap?,
-        val wasDollar: Boolean,
-        val unixLines: Boolean
-    ) {
-        constructor(bitmap: AsciiBitmap?, wasDollar: Boolean) : this(bitmap, wasDollar, false)
-
-
-    }
-
     private data class LiteralResult(val literal: String?, val foldCase: Boolean) {
 
 
@@ -2790,30 +2690,11 @@ class Pattern private constructor(
         }
 
         fun literalFailure(literal: ByteArray): IntArray {
-            val failure = IntArray(literal.size)
-            var matched = 0
-            for (index in 1..<literal.size) {
-                while (matched > 0 && literal[index] != literal[matched]) {
-                    matched = failure[matched - 1]
-                }
-                if (literal[index] == literal[matched]) {
-                    matched++
-                }
-                failure[index] = matched
-            }
-            return failure
+            return ByteLiteralScan.literalFailure(literal)
         }
 
         fun literalShifts(literal: ByteArray): IntArray? {
-            if (literal.size < 2) {
-                return null
-            }
-            val shifts = IntArray(256)
-            (shifts).fill(literal.size)
-            for (index in 0..<literal.size - 1) {
-                shifts[literal[index].toInt() and 0xFF] = literal.size - index - 1
-            }
-            return shifts
+            return ByteLiteralScan.literalShifts(literal)
         }
 
         internal fun borrowBitState(cache: ThreadCache): BitState? {

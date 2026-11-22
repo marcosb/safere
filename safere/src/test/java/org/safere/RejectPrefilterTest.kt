@@ -12,8 +12,8 @@ import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredCharClass
 import org.safere.MultiAnchorDescriptor.RejectPlan.RequiredLiteral
-import org.safere.Pattern.EndAnchoredCharClassInfo
-import org.safere.Pattern.SuffixInfo
+import org.safere.EndAnchoredCharClassInfo
+import org.safere.SuffixInfo
 import java.nio.charset.StandardCharsets
 
 @DisabledForCrosscheck("implementation test uses package-private SafeRE internals")

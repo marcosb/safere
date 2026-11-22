@@ -6,8 +6,8 @@ package org.safere
 
 import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.RejectPlan
-import org.safere.Pattern.EndAnchoredCharClassInfo
-import org.safere.Pattern.SuffixInfo
+import org.safere.EndAnchoredCharClassInfo
+import org.safere.SuffixInfo
 import kotlin.jvm.JvmRecord
 import kotlin.math.*
 import kotlin.text.Charsets

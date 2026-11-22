@@ -275,7 +275,7 @@ internal class StartAcceleratorTest {
 
     @Test
     fun fixedOffsetLiteralAcceleratesStringAndUtf8() {
-        val fixed = org.safere.Pattern.FixedOffsetLiteral("token", 2, 2, intArrayOf(2))
+        val fixed = org.safere.FixedOffsetLiteral("token", 2, 2, intArrayOf(2))
         val plan: StartPlan = plan(null, false, fixed, null)
 
         val strAcc = StringStartAccelerator.create(plan, false)!!
@@ -993,7 +993,7 @@ internal class StartAcceleratorTest {
         private fun plan(
             prefix: String?,
             prefixFoldCase: Boolean,
-            fixedOffsetLiteral: org.safere.Pattern.FixedOffsetLiteral?,
+            fixedOffsetLiteral: org.safere.FixedOffsetLiteral?,
             charClassPrefix: CharClassScanInfo?
         ): StartPlan {
             if (prefix != null) {

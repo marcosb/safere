@@ -25,16 +25,12 @@ internal object MultiAnchorCompiler {
     // eligible folded prefix, catching growth beyond this bound.
     private const val MAX_UNICODE_FOLD_CLASS_RUNES = 4
 
-    // The most code points a leading class may exclude and still drive a leading expansion when it
-    // has more than MAX_LEADING_CLASS_RUNES members. Non-DOTALL `.` excludes five line terminators.
-    private const val MAX_LEADING_CLASS_COMPLEMENT = 8
-
     // The shortest skip, in input units, for which a leading expansion over a wide class finds its
     // start candidate. Its backward walk covers the rest of the line, so on shorter skips the
     // literal scan and the walk cost more than letting the engine scan from the search start.
     const val MIN_WIDE_LEADING_SKIP: Int = 256
 
-    private const val MAX_LEADING_CLASS_RUNES = 150000
+    private const val MAX_LEADING_CLASS_COMPLEMENT = LeadingClassWidth.MAX_LEADING_CLASS_COMPLEMENT
 
     fun analyze(re: Regexp?): NodeAnalysis {
         return analyze(re, 0).root
@@ -121,7 +117,7 @@ internal object MultiAnchorCompiler {
         if (fol != null && !folPoisonous) {
             if (prefix == null || prefixPoisonous) {
                 return StartPlan.FixedOffset(
-                    Pattern.FixedOffsetLiteral(
+                    org.safere.FixedOffsetLiteral(
                         fol.literal!!, fol.minOffset, fol.maxOffset, fol.discreteOffsets
                     ),
                     start.charClassPrefix
@@ -131,7 +127,7 @@ internal object MultiAnchorCompiler {
             val folScore: Int = RarityOracle.literalSelectivityScore(fol.literal!!)
             if (folScore > prefixScore) {
                 return StartPlan.FixedOffset(
-                    Pattern.FixedOffsetLiteral(
+                    org.safere.FixedOffsetLiteral(
                         fol.literal!!, fol.minOffset, fol.maxOffset, fol.discreteOffsets
                     ),
                     start.charClassPrefix
@@ -291,15 +287,7 @@ internal object MultiAnchorCompiler {
         )
     }
 
-    private fun runeCount(ranges: IntArray): Int {
-        var runes = 0
-        var i = 0
-        while (i < ranges.size) {
-            runes += ranges[i + 1] - ranges[i] + 1
-            i += 2
-        }
-        return runes
-    }
+    private fun runeCount(ranges: IntArray): Int = LeadingClassWidth.runeCount(ranges)
 
     /**
      * Returns the literal the start accelerator will scan for, unwrapping a leading expansion, or
@@ -380,13 +368,11 @@ internal object MultiAnchorCompiler {
      * cross. Such a class drives a leading expansion only when it excludes very few code points; see
      * [.extractStartLeadingExpansion].
      */
-    private fun isWideLeadingClass(numRunes: Long): Boolean {
-        return numRunes > MAX_LEADING_CLASS_RUNES
-    }
+    private fun isWideLeadingClass(numRunes: Long): Boolean =
+        LeadingClassWidth.isWideLeadingClass(numRunes)
 
-    fun isWideLeadingClass(leadingClass: CharClassScanInfo): Boolean {
-        return isWideLeadingClass(runeCount(leadingClass.ranges).toLong())
-    }
+    fun isWideLeadingClass(leadingClass: CharClassScanInfo): Boolean =
+        LeadingClassWidth.isWideLeadingClass(leadingClass)
 
     /**
      * Returns the code points a wide leading class excludes, in increasing order, or null when the
@@ -1274,18 +1260,18 @@ internal object MultiAnchorCompiler {
         return CharClassScanInfo.fromCharClass(cc)
     }
 
-    fun extractFixedOffsetLiteral(re: Regexp?): FixedOffsetLiteral? {
+    fun extractFixedOffsetLiteral(re: Regexp?): FixedOffsetLiteralSpan? {
         return extractFixedOffsetLiteral(re, null)
     }
 
     private fun extractFixedOffsetLiteral(
         re: Regexp?, children: MutableList<NodeAnalysis>?
-    ): FixedOffsetLiteral? {
+    ): FixedOffsetLiteralSpan? {
         val node = unwrapCaptures(re)
         if (node == null || node.op != RegexpOp.CONCAT || node.subs == null) {
             return null
         }
-        var best: FixedOffsetLiteral? = null
+        var best: FixedOffsetLiteralSpan? = null
         var bestScore = 0
         var prefixWidth = AsciiWidthRange.ZERO
 
@@ -1309,7 +1295,7 @@ internal object MultiAnchorCompiler {
                         val candidateScore: Int = RarityOracle.literalSelectivityScore(literal)
                         if (best == null || candidateScore > bestScore) {
                             best =
-                                FixedOffsetLiteral(
+                                FixedOffsetLiteralSpan(
                                     literal.toString(),
                                     prefixWidth.minWidth,
                                     prefixWidth.maxWidth,
@@ -1886,7 +1872,7 @@ internal object MultiAnchorCompiler {
     }
 
     @JvmRecord
-    internal data class FixedOffsetLiteral(
+    internal data class FixedOffsetLiteralSpan(
         val literal: String?,
         val minOffset: Int,
         val maxOffset: Int,
@@ -1923,7 +1909,7 @@ internal object MultiAnchorCompiler {
     internal data class StartFacets(
         val prefix: PrefixResult?,
         val charClassPrefix: CharClassScanInfo?,
-        val fixedOffsetLiteral: FixedOffsetLiteral?,
+        val fixedOffsetLiteral: FixedOffsetLiteralSpan?,
         val startAcceleration: StartAcceleration?,
         val anchoredPrefix: PrefixResult,
         val anchoredCharClassPrefix: CharClassScanInfo?,
