@@ -176,7 +176,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return indexOfByteTriple(bytes, offset, scanLen, b0, b1, b2, start)
     }
 
-    fun slice(start: Int, end: Int): Utf8InputScanner {
+    override fun slice(start: Int, end: Int): Utf8InputScanner {
         return Utf8InputScanner(bytes, offset + start, end - start)
     }
 

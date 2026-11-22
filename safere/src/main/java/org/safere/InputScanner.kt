@@ -117,6 +117,15 @@ internal interface InputScanner {
         return -1
     }
 
+    /**
+     * Returns a view of `[start, end)` in the same index units as this scanner.
+     *
+     * Default implementation is unsupported; UTF-8 scanners override it.
+     */
+    fun slice(start: Int, end: Int): InputScanner {
+        throw UnsupportedOperationException("slice")
+    }
+
     companion object {
         fun decoded(codePoint: Int, position: Int): Long {
             return (codePoint.toLong() shl 32) or (position.toLong() and 0xFFFFFFFFL)

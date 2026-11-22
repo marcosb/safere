@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
 import kotlin.jvm.JvmRecord
 
 /** Immutable execution bounds shared by regex engines.  */

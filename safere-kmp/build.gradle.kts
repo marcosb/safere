@@ -43,7 +43,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/OnePass.kt",
   "org/safere/ShiftDfa.kt",
   "org/safere/InnerLiteralSearch.kt",
-  "org/safere/GraphemeSupport.kt",
   // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",
   "org/safere/SystemProperties.kt",
@@ -54,7 +53,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/Utf8SinkBuffers.kt",
   // Remaining JDK-tied surface parked for later M3 batches
   "org/safere/MatcherTransitionInventory.kt",
-  "org/safere/EngineContext.kt",
   "module-info.java",
 )
 
