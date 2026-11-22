@@ -90,7 +90,7 @@ internal class LiteralAlternation private constructor(
      * the DFA. When the first bytes are common, that stops at almost every word, so after [ ][.DENSE_CANDIDATES] candidates within [.DENSE_CANDIDATE_SPAN] bytes it switches to the
      * String path's strategy of one bounded scan per literal. Those scans start with [ ][.PROBE_LENGTH]-byte windows, long enough for the word-at-a-time literal filter.
      */
-    fun find(text: Utf8InputScanner, from: Int): Long {
+    fun find(text: InputScanner, from: Int): Long {
         if (from != 0 || utf8FirstByteScan == null) {
             return FALLBACK
         }
@@ -123,7 +123,6 @@ internal class LiteralAlternation private constructor(
             position++
         }
     }
-
     /** Returns the bounds of the highest-priority literal starting at `position`, or -1.  */
     private fun matchAt(bytes: ByteArray?, offset: Int, length: Int, position: Int): Long {
         for (literal in utf8Literals) {
@@ -140,7 +139,7 @@ internal class LiteralAlternation private constructor(
     }
 
     /** Searches [start, length), where no literal starts before start.  */
-    private fun searchFrom(text: Utf8InputScanner, start: Int): Long {
+    private fun searchFrom(text: InputScanner, start: Int): Long {
         val length = text.length
         if (length - start <= PROBE_LENGTH * 4) {
             return search(text, start, length)
@@ -149,7 +148,7 @@ internal class LiteralAlternation private constructor(
         return if (match >= 0) match else searchGrowingWindows(text, start + PROBE_LENGTH, PROBE_LENGTH * 2)
     }
 
-    private fun searchGrowingWindows(text: Utf8InputScanner, start: Int, windowLength: Int): Long {
+    private fun searchGrowingWindows(text: InputScanner, start: Int, windowLength: Int): Long {
         var start = start
         var windowLength = windowLength
         val length = text.length
@@ -168,7 +167,7 @@ internal class LiteralAlternation private constructor(
     }
 
     /** Search literal starts in [from, limit), including literals crossing the upper boundary.  */
-    private fun search(text: Utf8InputScanner, from: Int, limit: Int): Long {
+    private fun search(text: InputScanner, from: Int, limit: Int): Long {
         var bestStart = limit
         var bestEnd = -1
         for (i in utf8Literals.indices) {

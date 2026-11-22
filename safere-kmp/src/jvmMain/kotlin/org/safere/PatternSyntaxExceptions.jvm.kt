@@ -29,6 +29,10 @@ internal actual object PatternSyntaxExceptions {
     return error is ClassSyntaxException
   }
 
+  actual fun isSyntaxError(error: Throwable?): Boolean {
+    return error is PatternSyntaxException
+  }
+
   private class ClassSyntaxException(description: String?, pattern: String?, index: Int) :
     PatternSyntaxException(description, pattern, index)
 }

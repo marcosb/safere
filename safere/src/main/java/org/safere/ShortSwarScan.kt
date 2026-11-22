@@ -4,14 +4,11 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.invoke.MethodHandles
-import java.lang.invoke.VarHandle
-import java.nio.ByteOrder
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /** Shared 64-bit SWAR kernels for scanning bounded 2-byte sequences (UTF-16 and char[]).  */
 internal object ShortSwarScan {
-    private val LONG_VIEW: VarHandle =
-        MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.LITTLE_ENDIAN)
 
     fun indexOfCharClass(chars: CharArray, offset: Int, length: Int, ranges: IntArray, start: Int): Int {
         if (!Swar.supportsBmpCodeUnitRanges(ranges, 2)) {
@@ -76,7 +73,7 @@ internal object ShortSwarScan {
     }
 
     fun indexOfCharClassUtf16(bytes: ByteArray, offset: Int, length: Int, ranges: IntArray, start: Int): Int {
-        if (!Swar.supportsBmpCodeUnitRanges(ranges, 2) || ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
+        if (!Swar.supportsBmpCodeUnitRanges(ranges, 2) || !ByteArrayLongView.isNativeLittleEndian) {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
         val numRanges: Int = ranges.size / 2
@@ -94,7 +91,7 @@ internal object ShortSwarScan {
 
         if (numRanges == 1) {
             while (pos <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + (pos shl 1)) as Long
+                val word = ByteArrayLongView.getLittleEndian(bytes, offset + (pos shl 1))
                 val matches = Swar.exactShortRangeMask(word, low0, high0)
                 if (matches != 0L) {
                     val limit = pos + 4
@@ -111,7 +108,7 @@ internal object ShortSwarScan {
             }
         } else {
             while (pos <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + (pos shl 1)) as Long
+                val word = ByteArrayLongView.getLittleEndian(bytes, offset + (pos shl 1))
                 val matches =
                     Swar.exactShortRangeMask(word, low0, high0) or Swar.exactShortRangeMask(word, low1, high1)
                 if (matches != 0L) {
@@ -212,7 +209,7 @@ internal object ShortSwarScan {
         if (prefixLen > 1) {
             return Utf16.indexOfIgnoreCaseUtf16(bytes, offset, length, prefix, start)
         }
-        if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) {
+        if (!ByteArrayLongView.isNativeLittleEndian) {
             return VectorScanProvider.Companion.UNSUPPORTED
         }
 
@@ -226,7 +223,7 @@ internal object ShortSwarScan {
         val repeatedHigh = (high.toLong() and 0xFFFFL) * Swar.SHORT_ONES
 
         while (pos <= wordEnd) {
-            val word = LONG_VIEW.get(bytes, offset + (pos shl 1)) as Long
+            val word = ByteArrayLongView.getLittleEndian(bytes, offset + (pos shl 1))
             val diffLow = word xor repeatedLow
             val diffHigh = word xor repeatedHigh
             val matches =

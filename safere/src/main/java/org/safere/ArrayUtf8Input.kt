@@ -5,7 +5,6 @@
 package org.safere
 
 
-import kotlin.text.Charsets
 internal class ArrayUtf8Input(
     bytes: ByteArray,
     offset: Int,
@@ -26,7 +25,9 @@ internal class ArrayUtf8Input(
     }
 
     fun decode(): String {
-        return String(scanner.bytes()!!, scanner.offset(), scanner.length, Charsets.UTF_8)
+        val bytes = scanner.bytes()!!
+        val offset = scanner.offset()
+        return bytes.decodeToString(offset, offset + scanner.length)
     }
 
     fun appendRange(sink: Utf8Sink, start: Int, end: Int) {

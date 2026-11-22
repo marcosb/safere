@@ -16,4 +16,6 @@ internal expect object PatternSyntaxExceptions {
   fun createClass(description: String?, pattern: String?, index: Int): RuntimeException
 
   fun isClassSyntaxError(error: Throwable?): Boolean
+
+  fun isSyntaxError(error: Throwable?): Boolean
 }

@@ -74,6 +74,52 @@ internal class IncubatorVectorScanProvider : VectorScanProvider {
         )
     }
 
+    override fun indexOfIgnoreCase(
+        bytes: ByteArray?,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        anchorOffset: Int,
+        low: Byte,
+        high: Byte,
+        start: Int,
+    ): Int {
+        return ByteVectorScan.indexOfIgnoreCase(
+            bytes!!, offset, length, prefix!!, prefixLen, anchorOffset, low, high, start
+        )
+    }
+
+    override fun indexOfPairIgnoreCase(
+        bytes: ByteArray?,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        offset1: Int,
+        low1: Byte,
+        high1: Byte,
+        offset2: Int,
+        low2: Byte,
+        high2: Byte,
+        start: Int,
+    ): Int {
+        return ByteVectorScan.indexOfPairIgnoreCase(
+            bytes!!,
+            offset,
+            length,
+            prefix!!,
+            prefixLen,
+            offset1,
+            low1,
+            high1,
+            offset2,
+            low2,
+            high2,
+            start,
+        )
+    }
+
     companion object {
         private const val MINIMUM_BYTE_WINDOW_LENGTH = 64
         private const val MINIMUM_PAIR_WINDOW_LENGTH = 64

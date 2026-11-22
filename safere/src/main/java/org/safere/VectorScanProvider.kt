@@ -75,6 +75,39 @@ internal interface VectorScanProvider {
         start: Int
     ): Int
 
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfIgnoreCase(
+        bytes: ByteArray?,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        anchorOffset: Int,
+        low: Byte,
+        high: Byte,
+        start: Int,
+    ): Int {
+        return UNSUPPORTED
+    }
+
+    /** Returns a match position, `-1` when absent, or [.UNSUPPORTED].  */
+    fun indexOfPairIgnoreCase(
+        bytes: ByteArray?,
+        offset: Int,
+        length: Int,
+        prefix: String?,
+        prefixLen: Int,
+        offset1: Int,
+        low1: Byte,
+        high1: Byte,
+        offset2: Int,
+        low2: Byte,
+        high2: Byte,
+        start: Int,
+    ): Int {
+        return UNSUPPORTED
+    }
+
     companion object {
         val UNSUPPORTED: Int = -2
     }

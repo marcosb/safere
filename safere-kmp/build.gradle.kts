@@ -14,24 +14,19 @@ version = "1.2.0-SNAPSHOT"
  * public API sources are unchanged.
  */
 val jvmOnlyRelativePaths = listOf(
-  // Vector / VarHandle SWAR stack
+  // Incubator Vector kernels (SWAR lives in commonMain via ByteArrayLongView)
   "org/safere/ByteVectorScan.kt",
   "org/safere/ShortVectorScan.kt",
   "org/safere/TeddyVectorScan.kt",
-  "org/safere/ByteSwarScan.kt",
-  "org/safere/ShortSwarScan.kt",
   "org/safere/IncubatorVectorScanProvider.kt",
   "org/safere/VectorScanProviderFactory.kt",
   "org/safere/VectorScanProviders.kt", // expect/actual overlays in safere-kmp
-  "org/safere/Utf8InputScanner.kt",
-  "org/safere/Utf8StartAccelerator.kt",
-  "org/safere/LiteralAlternation.kt",
-  "org/safere/ArrayUtf8Input.kt",
+  "org/safere/ByteArrayLongView.kt",
+  "org/safere/ByteArrayRegions.kt",
   // java.util.regex-shaped public façade (JVM public API preserved in Maven + jvmMain)
   "org/safere/Pattern.kt",
   "org/safere/Matcher.kt",
   "org/safere/Utf8Matcher.kt",
-  "org/safere/Parser.kt",
   "org/safere/PatternSet.kt",
   // Pattern-typed diagnostics overloads (core SafeReDiagnostics is common)
   "org/safere/SafeReDiagnosticsPattern.kt",
@@ -43,6 +38,7 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/Utf8InputPlatform.kt",
   "org/safere/PatternSyntaxExceptions.kt",
   "org/safere/UnicodeCharacterNames.kt",
+  "org/safere/MatchDiagnosticsAccess.kt",
   // JVM-only ByteBuffer sink extension (Utf8Sink itself is common)
   "org/safere/Utf8SinkBuffers.kt",
   // Class-reflection Matcher inventory (stays JVM)
@@ -54,6 +50,8 @@ val jvmOnlyRelativePaths = listOf(
 val kmpOverlayRelativePaths =
   setOf(
     "org/safere/VectorScanProviders.kt",
+    "org/safere/ByteArrayLongView.kt",
+    "org/safere/ByteArrayRegions.kt",
     "org/safere/ThreadLocalRef.kt",
     "org/safere/SystemProperties.kt",
     "org/safere/UnicodeJdkAliases.kt",
@@ -61,6 +59,7 @@ val kmpOverlayRelativePaths =
     "org/safere/Utf8InputPlatform.kt",
     "org/safere/PatternSyntaxExceptions.kt",
     "org/safere/UnicodeCharacterNames.kt",
+    "org/safere/MatchDiagnosticsAccess.kt",
   )
 
 /** Shared JVM-only .kt files compiled into Gradle jvmMain (not replaced by overlays). */

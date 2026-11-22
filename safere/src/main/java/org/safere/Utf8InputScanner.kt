@@ -4,10 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.invoke.MethodHandles
-import java.lang.invoke.VarHandle
-import java.nio.ByteOrder
-import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.jvm.JvmOverloads
 
 internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : ByteSwarScan(bytes, offset, length),
@@ -19,8 +17,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -38,8 +36,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAsciiOrNonAscii(ascii: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -71,8 +69,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAsciiPair(c1: Int, c2: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -91,8 +89,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAsciiPairOrNonAscii(c1: Int, c2: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -112,8 +110,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAsciiTriple(c1: Int, c2: Int, c3: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -132,8 +130,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfAsciiTripleOrNonAscii(c1: Int, c2: Int, c3: Int, fromIndex: Int, limit: Int): Int {
-        val start = Math.max(0, fromIndex)
-        val scanLen = Math.min(length, limit)
+        val start = max(0, fromIndex)
+        val scanLen = min(length, limit)
         if (start >= scanLen) {
             return -1
         }
@@ -185,14 +183,14 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     @JvmOverloads
-    fun startsWith(prefix: ByteArray, startPos: Int, foldCase: Boolean = false): Boolean {
+    override fun startsWith(prefix: ByteArray, startPos: Int, foldCase: Boolean): Boolean {
         val prefixLen: Int = prefix.size
         if (startPos >= 0 && length - startPos >= prefixLen) {
             val start = offset + startPos
             if (if (foldCase)
                     equalsFoldCase(bytes, start, prefix, 0, prefixLen)
                 else
-                    Arrays.equals(bytes, start, start + prefixLen, prefix, 0, prefixLen)
+                    ByteArrayRegions.regionEquals(bytes, start, prefix, 0, prefixLen)
             ) {
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record(prefixLen.toLong())
@@ -210,7 +208,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             if (if (foldCase)
                     equalsFoldCase(bytes, start, suffix, 0, suffixLen)
                 else
-                    Arrays.equals(bytes, start, start + suffixLen, suffix, 0, suffixLen)
+                    ByteArrayRegions.regionEquals(bytes, start, suffix, 0, suffixLen)
             ) {
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record(suffixLen.toLong())
@@ -227,7 +225,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
             if (if (foldCase)
                     equalsFoldCase(bytes, start, suffix, 0, suffixLen)
                 else
-                    Arrays.equals(bytes, start, start + suffixLen, suffix, 0, suffixLen)
+                    ByteArrayRegions.regionEquals(bytes, start, suffix, 0, suffixLen)
             ) {
                 if (WorkCounterConfig.ENABLED) {
                     WorkCounter.record(suffixLen.toLong())
@@ -253,8 +251,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
 
     override fun indexOfCodePointClass(ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {
         val rangeTable = ranges ?: return -1
-        var position = Math.max(0, start)
-        val scanLen = Math.min(length, limit)
+        var position = max(0, start)
+        val scanLen = min(length, limit)
         if (position >= scanLen) {
             return -1
         }
@@ -271,13 +269,13 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
                 // time. Declining the Vector tier is not a reason to fall all the way back to scalar.
                 ScanAudit.recordConsultation(ScanKind.CLASS, window)
                 ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.SWAR)
-                val scalarLimit = Math.min(scanLen, position + MULTI_RANGE_SWAR_SCALAR_PROLOGUE_LENGTH)
+                val scalarLimit = min(scanLen, position + MULTI_RANGE_SWAR_SCALAR_PROLOGUE_LENGTH)
                 while (position < scalarLimit) {
                     val value = unsignedByteAt(position)
-                    if ((value < java.lang.Long.SIZE && (bitmap0 and (1L shl value)) != 0L)
-                        || (value >= java.lang.Long.SIZE
+                    if ((value < 64 && (bitmap0 and (1L shl value)) != 0L)
+                        || (value >= 64
                                 && value < 128
-                                && (bitmap1 and (1L shl (value - java.lang.Long.SIZE))) != 0L)
+                                && (bitmap1 and (1L shl (value - 64))) != 0L)
                     ) {
                         return position
                     }
@@ -361,7 +359,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         val classProvider = VectorScanProviders.providerFor(ScanKind.CLASS, window)
         if (classProvider != null) {
             var position = start
-            val scalarLimit = Math.min(scanLen, position + VECTOR_SCALAR_PROLOGUE_LENGTH)
+            val scalarLimit = min(scanLen, position + VECTOR_SCALAR_PROLOGUE_LENGTH)
             while (position < scalarLimit) {
                 if (InputScanner.classContains(ranges, bitmap0, bitmap1, unsignedByteAt(position))) {
                     ScanAudit.record(ScanKind.CLASS, ScanDirection.FORWARD, window, ScanPath.VECTOR)
@@ -393,9 +391,9 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
      * because the sequence starts with a lead byte. The last byte is a continuation byte, which
      * varies more than lead bytes do in text from one script, so fewer hits fail the comparison.
      */
-    fun indexOfUtf8Sequence(sequence: ByteArray, start: Int, limit: Int): Int {
-        val position = Math.max(0, start)
-        val scanLen = Math.min(length, limit)
+    override fun indexOfUtf8Sequence(sequence: ByteArray, start: Int, limit: Int): Int {
+        val position = max(0, start)
+        val scanLen = min(length, limit)
         val tail: Int = sequence.size - 1
         val last = sequence[tail]
         var from = position + tail
@@ -419,8 +417,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
     }
 
     override fun indexOfMixedPair(ascii: Int, sequence: ByteArray, start: Int, limit: Int): Int {
-        val position = Math.max(0, start)
-        val scanLen = Math.min(length, limit)
+        val position = max(0, start)
+        val scanLen = min(length, limit)
         if (position >= scanLen) {
             return -1
         }
@@ -465,12 +463,12 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
 
     private fun indexOfNonAsciiCodePointClass(ranges: IntArray, start: Int, scanLen: Int): Int {
         var position = start
-        val wordEnd = scanLen - java.lang.Long.BYTES
+        val wordEnd = scanLen - ByteArrayLongView.LONG_BYTES
         while (position < scanLen) {
             if (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 if ((word and BYTE_HIGH_BITS) == 0L) {
-                    position += java.lang.Long.BYTES
+                    position += ByteArrayLongView.LONG_BYTES
                     continue
                 }
             }
@@ -545,7 +543,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return indexOf(literal, failure, null, start)
     }
 
-    fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int, rareByteOffset: Int): Int {
+    override fun indexOf(literal: ByteArray, failure: IntArray, shifts: IntArray?, start: Int, rareByteOffset: Int): Int {
         if (rareByteOffset < 0 || WorkCounterConfig.ENABLED
             || remaining(start) < filterThreshold(literal.size)
         ) {
@@ -582,11 +580,11 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return -1
     }
 
-    fun indexOfWithin(literal: ByteArray, failure: IntArray, start: Int, maxStart: Int): Int {
+    override fun indexOfWithin(literal: ByteArray, failure: IntArray, start: Int, maxStart: Int): Int {
         if (literal.size == 0) {
             return if (start <= maxStart) start else -1
         }
-        val lastStart = Math.min(length - literal.size, maxStart)
+        val lastStart = min(length - literal.size, maxStart)
         if (start > lastStart) {
             return -1
         }
@@ -611,7 +609,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         return indexOfLinear(bytes, offset, length, literal, failure, start)
     }
 
-    fun indexOfIgnoreCase(
+    override fun indexOfIgnoreCase(
         prefix: String, failure: IntArray, anchorOffset: Int, anchorLow: Byte, anchorHigh: Byte, start: Int
     ): Int {
         val prefixLen: Int = prefix.length
@@ -620,9 +618,10 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         }
         if (!WorkCounterConfig.ENABLED) {
             val window = length - start
-            if (VectorScanProviders.providerFor(ScanKind.IGNORE_CASE, window) != null) {
+            val ignoreCaseProvider = VectorScanProviders.providerFor(ScanKind.IGNORE_CASE, window)
+            if (ignoreCaseProvider != null) {
                 val result =
-                    ByteVectorScan.indexOfIgnoreCase(
+                    ignoreCaseProvider.indexOfIgnoreCase(
                         bytes,
                         offset,
                         length,
@@ -655,11 +654,11 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (prefix.isEmpty()) {
             return if (start <= maxStart) start else -1
         }
-        val limit = Math.min(length, maxStart + prefix.length)
+        val limit = min(length, maxStart + prefix.length)
         return indexOfLinearIgnoreCase(bytes, offset, limit, prefix, failure, start)
     }
 
-    fun indexOfPairIgnoreCase(
+    override fun indexOfPairIgnoreCase(
         prefix: String,
         failure: IntArray,
         offset1: Int,
@@ -676,9 +675,10 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         }
         if (!WorkCounterConfig.ENABLED) {
             val window = length - start
-            if (VectorScanProviders.providerFor(ScanKind.IGNORE_CASE, window) != null) {
+            val ignoreCaseProvider = VectorScanProviders.providerFor(ScanKind.IGNORE_CASE, window)
+            if (ignoreCaseProvider != null) {
                 val result =
-                    ByteVectorScan.indexOfPairIgnoreCase(
+                    ignoreCaseProvider.indexOfPairIgnoreCase(
                         bytes, offset, length, prefix, prefixLen, offset1, low1, high1, offset2, low2,
                         high2, start
                     )
@@ -837,7 +837,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (last < 0x80) {
             return InputScanner.decoded(last, pos - 1)
         }
-        val earliest = Math.max(0, pos - 4)
+        val earliest = max(0, pos - 4)
         for (start in pos - 2 downTo earliest) {
             val decoded = decodeForward(start)
             if (InputScanner.position(decoded) == pos) {
@@ -854,7 +854,7 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         if (pos == 0 || pos == length) {
             return true
         }
-        val earliest = Math.max(0, pos - 3)
+        val earliest = max(0, pos - 3)
         for (start in earliest until pos) {
             val decoded = decodeForward(start)
             if (InputScanner.position(decoded) > pos) {
@@ -891,17 +891,17 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
 
     override fun positionDependentThreshold(dollarAnchorEnd: Boolean, unixLines: Boolean): Int {
         if (!dollarAnchorEnd) {
-            return Integer.MAX_VALUE
+            return Int.MAX_VALUE
         }
         val trailingTerminator = trailingLineTerminatorStart(unixLines, length)
         return if (trailingTerminator >= 0) trailingTerminator else length
     }
 
-    fun bytes(): ByteArray {
+    override fun bytes(): ByteArray {
         return bytes
     }
 
-    fun offset(): Int {
+    override fun offset(): Int {
         return offset
     }
 
@@ -953,11 +953,8 @@ internal class Utf8InputScanner(bytes: ByteArray?, offset: Int, length: Int) : B
         private const val BYTE_HIGH_BITS = -0x7f7f7f7f7f7f7f80L
         private const val BOYER_MOORE_HORSPOOL_BATCH_SIZE = 2
         private const val MULTI_RANGE_SWAR_MINIMUM_LENGTH = 64
-        private val MULTI_RANGE_SWAR_SCALAR_PROLOGUE_LENGTH = java.lang.Long.BYTES
-        private val VECTOR_SCALAR_PROLOGUE_LENGTH = Integer.BYTES
-
-        private val LONG_VIEW: VarHandle =
-            MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.nativeOrder())
+        private val MULTI_RANGE_SWAR_SCALAR_PROLOGUE_LENGTH = ByteArrayLongView.LONG_BYTES
+        private val VECTOR_SCALAR_PROLOGUE_LENGTH = 4
 
         fun validate(bytes: ByteArray?, offset: Int, length: Int) {
             val scanner = Utf8InputScanner(bytes, offset, length)

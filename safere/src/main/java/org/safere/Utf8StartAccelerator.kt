@@ -11,12 +11,12 @@ import kotlin.jvm.JvmRecord
 import kotlin.math.*
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
- * positions in a [Utf8InputScanner].
+ * positions in a UTF-8 [InputScanner].
  */
 internal interface Utf8StartAccelerator : Utf8StartAcceleration {
     /** A search-local cursor for accelerators that scan multiple folded byte variants.  */
     interface SearchCursor {
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int
     }
 
     /** Returns the tuning and diagnostic policy for this accelerator.  */
@@ -25,8 +25,8 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
     }
 
     override fun findNextCandidate(scanner: InputScanner, pos: Int): Int {
-        check(scanner is Utf8InputScanner) {
-            "supportsUtf8ByteSearch() requires Utf8InputScanner for start acceleration"
+        check(scanner.supportsUtf8ByteSearch()) {
+            "supportsUtf8ByteSearch() required for start acceleration"
         }
         return Companion.findNextCandidate(this, scanner, pos)
     }
@@ -34,8 +34,8 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
     override fun searchCursor(): Utf8StartSearchCursor? {
         val cursor = Companion.searchCursor(this) ?: return null
         return Utf8StartSearchCursor { scanner, fromIndex ->
-            check(scanner is Utf8InputScanner) {
-                "supportsUtf8ByteSearch() requires Utf8InputScanner for start acceleration"
+            check(scanner.supportsUtf8ByteSearch()) {
+                "supportsUtf8ByteSearch() required for start acceleration"
             }
             cursor.findCandidate(scanner, fromIndex)
         }
@@ -52,7 +52,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             return scanner.indexOf(
                 prefixUtf8, prefixUtf8Failure, prefixUtf8Shifts, fromIndex, rareByteOffset
             )
@@ -90,7 +90,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             if (anchorOffset2 >= 0) {
                 return scanner.indexOfPairIgnoreCase(
                     prefix,
@@ -143,7 +143,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             return SearchCursorImpl().findCandidate(scanner, fromIndex)
         }
 
@@ -153,7 +153,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             private var verificationWork: Long = 0
             private var workLimit: Long = -1
 
-            override fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+            override fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
                 val start = max(0, fromIndex)
                 if (exhausted) {
                     return start
@@ -204,7 +204,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             }
         }
 
-        private fun matchesPrefix(scanner: Utf8InputScanner, candidate: Int): Boolean {
+        private fun matchesPrefix(scanner: InputScanner, candidate: Int): Boolean {
             var position = candidate
             for (foldVariants in prefixFoldVariants) {
                 if (position >= scanner.length) {
@@ -261,7 +261,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             return Companion.nextFixedOffsetCandidate(scanner, fixedOffset!!, charClassPrefix, fromIndex)
         }
 
@@ -269,7 +269,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
 
         companion object {
             private fun nextFixedOffsetCandidate(
-                scanner: Utf8InputScanner,
+                scanner: InputScanner,
                 fixedOffsetLiteral: FixedOffsetLiteral,
                 charClassPrefix: CharClassScanInfo?,
                 searchFrom: Int
@@ -405,7 +405,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.CHAR_CLASS
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             if (scanInfo == null) {
                 return fromIndex
             }
@@ -470,7 +470,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.VECTOR_MULTI_LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             val window = scanner.length - fromIndex
             val provider = VectorScanProviders.providerFor(ScanKind.TEDDY, window)
             if (provider == null) {
@@ -522,7 +522,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.CHAR_CLASS
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             val start = max(0, fromIndex)
             if (offset >= scanner.length - start) {
                 return -1
@@ -591,7 +591,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
              * Returns false only when `[from, to)` holds no excluded code point. With non-ASCII
              * members and up to three ASCII members, any non-ASCII byte also counts as a possible hit.
              */
-            fun mayContain(scanner: Utf8InputScanner, from: Int, to: Int): Boolean {
+            fun mayContain(scanner: InputScanner, from: Int, to: Int): Boolean {
                 val anyNonAscii = nonAscii != null && nonAscii.size > 0
                 val hit =
                     when (ascii!!.size) {
@@ -615,7 +615,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
                 return hit >= 0 && hit < to
             }
 
-            private fun indexOfAny(scanner: Utf8InputScanner, from: Int, to: Int): Int {
+            private fun indexOfAny(scanner: InputScanner, from: Int, to: Int): Int {
                 for (c in ascii!!) {
                     val hit = scanner.indexOfAscii(c, from, to)
                     if (hit >= 0) {
@@ -664,7 +664,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return minRepetition == 0 && !hasLeadingAssertions && !wideLeadingClass
         }
 
-        fun findInnerCandidate(scanner: Utf8InputScanner, searchPos: Int): Int {
+        fun findInnerCandidate(scanner: InputScanner, searchPos: Int): Int {
             if (wideLeadingClass && inner is Literal && inner.prefixUtf8 != null) {
                 // Search the way the UTF-8 reject prefilter does, since find() skips that prefilter when
                 // this search subsumes it (see Pattern.startSubsumesFindReject).
@@ -673,7 +673,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return Companion.findNextCandidate(inner!!, scanner, searchPos)
         }
 
-        fun expandBackward(scanner: Utf8InputScanner, innerMatch: Int, fromIndex: Int): Int {
+        fun expandBackward(scanner: InputScanner, innerMatch: Int, fromIndex: Int): Int {
             var start = innerMatch
             var count = 0
             while (start > fromIndex) {
@@ -698,7 +698,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return start
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             var searchPos = max(0, fromIndex)
             val textLen = scanner.length
             // A wide class's walk covers the rest of the line, so a skip shorter than
@@ -765,7 +765,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return AcceleratorPolicy.Companion.VECTOR_MULTI_LITERAL
         }
 
-        fun findCandidate(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        fun findCandidate(scanner: InputScanner, fromIndex: Int): Int {
             val window = scanner.length - fromIndex
             val provider = VectorScanProviders.providerFor(ScanKind.MULTI_LITERAL, window)
             if (provider != null) {
@@ -793,7 +793,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
             return findScalar(scanner, fromIndex)
         }
 
-        private fun findScalar(scanner: Utf8InputScanner, fromIndex: Int): Int {
+        private fun findScalar(scanner: InputScanner, fromIndex: Int): Int {
             val len = scanner.length
             val infoNonNull = info!!
             val minLen = infoNonNull.minLength
@@ -932,7 +932,7 @@ internal interface Utf8StartAccelerator : Utf8StartAcceleration {
          * allows C2 to inline candidate searches directly into caller loops.
          */
         fun findNextCandidate(
-            accelerator: Utf8StartAccelerator, scanner: Utf8InputScanner, pos: Int
+            accelerator: Utf8StartAccelerator, scanner: InputScanner, pos: Int
         ): Int {
             return when (accelerator) {
                 is Literal -> accelerator.findCandidate(scanner, pos)

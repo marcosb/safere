@@ -4,23 +4,22 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.lang.invoke.MethodHandles
-import java.lang.invoke.VarHandle
-import java.nio.ByteOrder
-import java.util.*
-import kotlin.math.*
+import kotlin.math.max
+import kotlin.math.min
+
 /** Shared 64-bit SWAR kernels for scanning bounded 1-byte sequences.  */
 internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int) {
     val bytes: ByteArray
     val offset: Int
     val length: Int
     init {
-        this.bytes = Objects.requireNonNull<ByteArray>(bytes, "bytes")
-        if (offset < 0 || length < 0 || offset > bytes!!.size - length) {
+        val nonNullBytes = requireNotNull(bytes) { "bytes" }
+        if (offset < 0 || length < 0 || offset > nonNullBytes.size - length) {
             throw IndexOutOfBoundsException(
-                "offset=" + offset + ", length=" + length + ", arrayLength=" + bytes!!.size
+                "offset=" + offset + ", length=" + length + ", arrayLength=" + nonNullBytes.size
             )
         }
+        this.bytes = nonNullBytes
         this.offset = offset
         this.length = length
     }
@@ -40,27 +39,24 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
 
         const val FILTER_LENGTH_FACTOR: Int = 40
 
-        private val LONG_VIEW: VarHandle =
-            MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.nativeOrder())
-
         fun filterThreshold(literalLength: Int): Long {
             return max(MIN_FILTER_LENGTH.toLong(), literalLength.toLong() * FILTER_LENGTH_FACTOR)
         }
 
         fun indexOfByte(bytes: ByteArray, offset: Int, length: Int, target: Byte, start: Int): Int {
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             val repeatedTarget = (target.toLong() and 0xFFL) * Swar.BYTE_ONES
             while (position <= wordEnd) {
-                val difference = LONG_VIEW.get(bytes, offset + position) as Long xor repeatedTarget
+                val difference = ByteArrayLongView.getNative(bytes, offset + position) xor repeatedTarget
                 if (((difference - Swar.BYTE_ONES) and difference.inv() and Swar.BYTE_HIGH_BITS) != 0L) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         if (bytes[offset + position + index] == target) {
                             return position + index
                         }
                     }
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             while (position < length) {
                 if (bytes[offset + position] == target) {
@@ -98,12 +94,12 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             targetCount: Int
         ): Int {
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             val repeatedFirst = (first.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedSecond = (second.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedThird = (third.toLong() and 0xFFL) * Swar.BYTE_ONES
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val firstDifference = word xor repeatedFirst
                 var candidates = (firstDifference - Swar.BYTE_ONES) and firstDifference.inv()
                 if (targetCount >= 2) {
@@ -115,7 +111,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                     candidates = candidates or ((thirdDifference - Swar.BYTE_ONES) and thirdDifference.inv())
                 }
                 if (((candidates or word) and Swar.BYTE_HIGH_BITS) != 0L) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val value = bytes[offset + position + index]
                         if (value < 0 || value == first || (targetCount >= 2 && value == second)
                             || (targetCount == 3 && value == third)
@@ -124,7 +120,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                         }
                     }
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             while (position < length) {
                 val value = bytes[offset + position]
@@ -204,7 +200,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
 
             val maxAnchorOffset = max(offset1, offset2)
             // Both anchor word loads and the immediate full-prefix check must fit in the slice.
-            val wordEnd = ByteScanBounds.lastWideScanStart(length, prefixLen, maxAnchorOffset, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastWideScanStart(length, prefixLen, maxAnchorOffset, ByteArrayLongView.LONG_BYTES)
             val repeatedLow1 = (low1.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedHigh1 = (high1.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedLow2 = (low2.toLong() and 0xFFL) * Swar.BYTE_ONES
@@ -229,7 +225,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                     }
                 }
 
-                val word1 = LONG_VIEW.get(bytes, offset + pos + offset1) as Long
+                val word1 = ByteArrayLongView.getNative(bytes, offset + pos + offset1)
                 val lowDiff1 = word1 xor repeatedLow1
                 var match1 = (lowDiff1 - Swar.BYTE_ONES) and lowDiff1.inv()
                 if (hasHigh1) {
@@ -238,11 +234,11 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                 }
                 val highBits1 = match1 and Swar.BYTE_HIGH_BITS
                 if (highBits1 == 0L) {
-                    pos += java.lang.Long.BYTES
+                    pos += ByteArrayLongView.LONG_BYTES
                     continue
                 }
 
-                val word2 = LONG_VIEW.get(bytes, offset + pos + offset2) as Long
+                val word2 = ByteArrayLongView.getNative(bytes, offset + pos + offset2)
                 val lowDiff2 = word2 xor repeatedLow2
                 var match2 = (lowDiff2 - Swar.BYTE_ONES) and lowDiff2.inv()
                 if (hasHigh2) {
@@ -252,7 +248,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
 
                 val candidates = highBits1 and match2
                 if (candidates != 0L) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val candidatePos = pos + index
                         if (candidatePos <= ByteScanBounds.lastMatchStart(length, prefixLen)) {
                             val v1 = bytes[offset + candidatePos + offset1]
@@ -269,7 +265,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                         }
                     }
                 }
-                pos += java.lang.Long.BYTES
+                pos += ByteArrayLongView.LONG_BYTES
             }
 
             val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
@@ -314,7 +310,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val workLimit = WorkLimit.forRemaining(length - pos)
 
             // Preserve a full match for every lane by bounding a load at the final prefix byte.
-            val wordEnd = ByteScanBounds.lastLoadStart(length, prefixLen - 1, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, prefixLen - 1, ByteArrayLongView.LONG_BYTES)
             val repeatedLow = (low.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedHigh = (high.toLong() and 0xFFL) * Swar.BYTE_ONES
 
@@ -333,14 +329,14 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                     continue
                 }
 
-                val word = LONG_VIEW.get(bytes, offset + pos + anchorOffset) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + pos + anchorOffset)
                 val lowDiff = word xor repeatedLow
                 val highDiff = word xor repeatedHigh
                 if (((((lowDiff - Swar.BYTE_ONES) and lowDiff.inv()) or ((highDiff - Swar.BYTE_ONES) and highDiff.inv()))
                             and Swar.BYTE_HIGH_BITS)
                     != 0L
                 ) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val value = bytes[offset + pos + anchorOffset + index]
                         if (value == low || value == high) {
                             val candidatePos = pos + index
@@ -356,7 +352,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                         }
                     }
                 }
-                pos += java.lang.Long.BYTES
+                pos += ByteArrayLongView.LONG_BYTES
             }
 
             val limitScalar = ByteScanBounds.lastMatchStart(length, prefixLen)
@@ -380,11 +376,11 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             bytes: ByteArray, offset: Int, length: Int, first: Byte, second: Byte, start: Int
         ): Int {
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             val repeatedFirst = (first.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedSecond = (second.toLong() and 0xFFL) * Swar.BYTE_ONES
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val firstDifference = word xor repeatedFirst
                 val secondDifference = word xor repeatedSecond
                 if (((((firstDifference - Swar.BYTE_ONES) and firstDifference.inv())
@@ -392,14 +388,14 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                             and Swar.BYTE_HIGH_BITS)
                     != 0L
                 ) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val value = bytes[offset + position + index]
                         if (value == first || value == second) {
                             return position + index
                         }
                     }
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             while (position < length) {
                 val value = bytes[offset + position]
@@ -415,12 +411,12 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             bytes: ByteArray, offset: Int, length: Int, first: Byte, second: Byte, third: Byte, start: Int
         ): Int {
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             val repeatedFirst = (first.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedSecond = (second.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedThird = (third.toLong() and 0xFFL) * Swar.BYTE_ONES
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val firstDifference = word xor repeatedFirst
                 val secondDifference = word xor repeatedSecond
                 val thirdDifference = word xor repeatedThird
@@ -430,14 +426,14 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                             and Swar.BYTE_HIGH_BITS)
                     != 0L
                 ) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val value = bytes[offset + position + index]
                         if (value == first || value == second || value == third) {
                             return position + index
                         }
                     }
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             while (position < length) {
                 val value = bytes[offset + position]
@@ -459,24 +455,24 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
          * bucket; the scalar candidate check provides the exact answer.
          */
         fun indexOfByteRange(bytes: ByteArray, offset: Int, length: Int, low: Int, high: Int, start: Int): Int {
-            val differingBit = Integer.highestOneBit(low xor high)
+            val differingBit = (low xor high).takeHighestOneBit()
             val commonMask = ((differingBit shl 1) - 1).inv() and 0xFF
             val repeatedMask = (commonMask.toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedPrefix = (low and commonMask) * Swar.BYTE_ONES
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val difference = (word and repeatedMask) xor repeatedPrefix
                 if (((difference - Swar.BYTE_ONES) and difference.inv() and Swar.BYTE_HIGH_BITS) != 0L) {
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val value = bytes[offset + position + index].toInt() and 0xFF
                         if (value >= low && value <= high) {
                             return position + index
                         }
                     }
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             while (position < length) {
                 val value = bytes[offset + position].toInt() and 0xFF
@@ -519,13 +515,13 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val last: Int = literal.size - 1
             val repeatedFirst = (literal[0].toLong() and 0xFFL) * Swar.BYTE_ONES
             val repeatedLast = (literal[last].toLong() and 0xFFL) * Swar.BYTE_ONES
-            val wordEnd = ByteScanBounds.lastLoadStart(length, last, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, last, ByteArrayLongView.LONG_BYTES)
             var work: Long = 0
             val workLimit = WorkLimit.forRemaining(length - start)
             var position = start
             while (position <= wordEnd) {
-                val firstDifference = LONG_VIEW.get(bytes, offset + position) as Long xor repeatedFirst
-                val lastDifference = LONG_VIEW.get(bytes, offset + position + last) as Long xor repeatedLast
+                val firstDifference = ByteArrayLongView.getNative(bytes, offset + position) xor repeatedFirst
+                val lastDifference = ByteArrayLongView.getNative(bytes, offset + position + last) xor repeatedLast
                 val candidates =
                     ((firstDifference - Swar.BYTE_ONES)
                             and firstDifference.inv()
@@ -536,7 +532,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                     // Scanning the eight positions in address order keeps this independent of byte order and
                     // returns the leftmost match within the word.
                     var candidateCount = 0
-                    for (index in 0..<java.lang.Long.BYTES) {
+                    for (index in 0..<ByteArrayLongView.LONG_BYTES) {
                         val candidate = position + index
                         if (bytes[offset + candidate] == literal[0]) {
                             if (matchesAt(bytes, offset, literal, candidate)) {
@@ -547,7 +543,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                     }
                     work = WorkLimit.addCandidateWork(work, candidateCount, literal.size)
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
                 work++
                 if (WorkLimit.isExhausted(work, workLimit)) {
                     return -2
@@ -608,17 +604,17 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val low1 = ranges[2] * Swar.BYTE_ONES
             val high1 = ranges[3] * Swar.BYTE_ONES
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val values = word and Swar.BYTE_HIGH_BITS.inv()
                 val ascii = word.inv() and Swar.BYTE_HIGH_BITS
                 var matches = Swar.exactAsciiRangeMask(values, ascii, low0, high0)
                 matches = matches or Swar.exactAsciiRangeMask(values, ascii, low1, high1)
                 if (matches != 0L) {
-                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + java.lang.Long.BYTES)
+                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + ByteArrayLongView.LONG_BYTES)
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, length)
         }
@@ -633,18 +629,18 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val low2 = ranges[4] * Swar.BYTE_ONES
             val high2 = ranges[5] * Swar.BYTE_ONES
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val values = word and Swar.BYTE_HIGH_BITS.inv()
                 val ascii = word.inv() and Swar.BYTE_HIGH_BITS
                 var matches = Swar.exactAsciiRangeMask(values, ascii, low0, high0)
                 matches = matches or Swar.exactAsciiRangeMask(values, ascii, low1, high1)
                 matches = matches or Swar.exactAsciiRangeMask(values, ascii, low2, high2)
                 if (matches != 0L) {
-                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + java.lang.Long.BYTES)
+                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + ByteArrayLongView.LONG_BYTES)
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, length)
         }
@@ -661,9 +657,9 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val low3 = ranges[6] * Swar.BYTE_ONES
             val high3 = ranges[7] * Swar.BYTE_ONES
             var position = start
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
             while (position <= wordEnd) {
-                val word = LONG_VIEW.get(bytes, offset + position) as Long
+                val word = ByteArrayLongView.getNative(bytes, offset + position)
                 val values = word and Swar.BYTE_HIGH_BITS.inv()
                 val ascii = word.inv() and Swar.BYTE_HIGH_BITS
                 var matches = Swar.exactAsciiRangeMask(values, ascii, low0, high0)
@@ -671,9 +667,9 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                 matches = matches or Swar.exactAsciiRangeMask(values, ascii, low2, high2)
                 matches = matches or Swar.exactAsciiRangeMask(values, ascii, low3, high3)
                 if (matches != 0L) {
-                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + java.lang.Long.BYTES)
+                    return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, position + ByteArrayLongView.LONG_BYTES)
                 }
-                position += java.lang.Long.BYTES
+                position += ByteArrayLongView.LONG_BYTES
             }
             return scalarRangeCheck(bytes, offset, bitmap0, bitmap1, position, length)
         }
@@ -685,7 +681,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             val numRanges: Int = ranges.size / 2
 
             var pos = max(0, start)
-            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, java.lang.Long.BYTES)
+            val wordEnd = ByteScanBounds.lastLoadStart(length, 0, ByteArrayLongView.LONG_BYTES)
 
             val low0 = (ranges[0].toLong() and 0xFFL) * Swar.BYTE_ONES
             val high0 = (ranges[1].toLong() and 0xFFL) * Swar.BYTE_ONES
@@ -694,13 +690,13 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
 
             if (numRanges == 1) {
                 while (pos <= wordEnd) {
-                    val word = LONG_VIEW.get(bytes, offset + pos) as Long
+                    val word = ByteArrayLongView.getNative(bytes, offset + pos)
                     val values = word and Swar.BYTE_HIGH_BITS.inv()
                     val ascii = word.inv() and Swar.BYTE_HIGH_BITS
                     val matches = Swar.exactAsciiRangeMask(values, ascii, low0, high0)
 
                     if (matches != 0L) {
-                        val limit = pos + java.lang.Long.BYTES
+                        val limit = pos + ByteArrayLongView.LONG_BYTES
                         for (i in pos..<limit) {
                             val b = bytes[offset + i].toInt() and 0xFF
                             if (b >= ranges[0] && b <= ranges[1]) {
@@ -708,11 +704,11 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                             }
                         }
                     }
-                    pos += java.lang.Long.BYTES
+                    pos += ByteArrayLongView.LONG_BYTES
                 }
             } else {
                 while (pos <= wordEnd) {
-                    val word = LONG_VIEW.get(bytes, offset + pos) as Long
+                    val word = ByteArrayLongView.getNative(bytes, offset + pos)
                     val values = word and Swar.BYTE_HIGH_BITS.inv()
                     val ascii = word.inv() and Swar.BYTE_HIGH_BITS
                     val matches =
@@ -720,7 +716,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                                 or Swar.exactAsciiRangeMask(values, ascii, low1, high1))
 
                     if (matches != 0L) {
-                        val limit = pos + java.lang.Long.BYTES
+                        val limit = pos + ByteArrayLongView.LONG_BYTES
                         for (i in pos..<limit) {
                             val b = bytes[offset + i].toInt() and 0xFF
                             if ((b >= ranges[0] && b <= ranges[1]) || (b >= ranges[2] && b <= ranges[3])) {
@@ -728,7 +724,7 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
                             }
                         }
                     }
-                    pos += java.lang.Long.BYTES
+                    pos += ByteArrayLongView.LONG_BYTES
                 }
             }
 
@@ -750,8 +746,8 @@ internal abstract class ByteSwarScan(bytes: ByteArray?, offset: Int, length: Int
             var position = position
             while (position < limit) {
                 val value = bytes[offset + position].toInt() and 0xFF
-                if ((value < java.lang.Long.SIZE && (bitmap0 and (1L shl value)) != 0L)
-                    || (value >= java.lang.Long.SIZE && value < 128 && (bitmap1 and (1L shl (value - java.lang.Long.SIZE))) != 0L)
+                if ((value < 64 && (bitmap0 and (1L shl value)) != 0L)
+                    || (value >= 64 && value < 128 && (bitmap1 and (1L shl (value - 64))) != 0L)
                 ) {
                     return position
                 }

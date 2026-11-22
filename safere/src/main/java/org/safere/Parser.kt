@@ -6,10 +6,9 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
+import kotlin.math.max
+
 import org.safere.RegexLexer.RepetitionMode
-import java.util.*
-import java.util.List
-import java.util.regex.PatternSyntaxException
 
 /**
  * Parser for SafeRE's [Pattern] syntax. Converts a JDK-compatible regular expression string
@@ -74,7 +73,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         fun addChild(child: RepeatCount, limit: Int) {
             when (re.op) {
                 RegexpOp.ALTERNATE -> {
-                    cost = Math.max(cost, child.cost)
+                    cost = max(cost, child.cost)
                     hasRepeat = hasRepeat or child.hasRepeat
                 }
 
@@ -127,7 +126,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     }
 
     private fun reportIntentionalDivergences(classSyntaxFailure: Boolean) {
-        val listener: SafeReMatchDiagnostics = Pattern.diagnostics()
+        val listener: SafeReMatchDiagnostics = MatchDiagnosticsAccess.current()
         if (lexer.sawCommentQuoting()) {
             listener.onIntentionalDivergence(IntentionalDivergence.COMMENT_QUOTING)
         }
@@ -330,11 +329,11 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                 if (literalCount == runes.size) {
                     if (WorkCounterConfig.ENABLED) WorkCounter.record(runes.size.toLong())
                     val capacity =
-                        if (runes.size <= Integer.MAX_VALUE / 2)
+                        if (runes.size <= Int.MAX_VALUE / 2)
                             runes.size * 2
                         else
-                            Integer.MAX_VALUE
-                    literalRunes = Arrays.copyOf(runes, capacity)
+                            Int.MAX_VALUE
+                    literalRunes = runes.copyOf(capacity)
                 }
             }
             if (literalCount == 1) literalRunes!![0] = firstLiteral
@@ -350,7 +349,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         } else if (length > 1) {
             if (WorkCounterConfig.ENABLED) WorkCounter.record(2L * length)
             // Regexp takes its own copy, allowing the parser's scratch array to serve later runs.
-            pushRegexp(Regexp.literalString(Arrays.copyOf(literalRunes, length), flags))
+            pushRegexp(Regexp.literalString(literalRunes!!.copyOf(length), flags))
         }
         if (separateLast) {
             val last = if (literalCount == 1) firstLiteral else literalRunes!![literalCount - 1]
@@ -674,7 +673,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             }
             e = next
         }
-        Collections.reverse(subs)
+        subs.reverse()
         if (op == RegexpOp.CONCAT) {
             subs = coalesceLiteralStrings(subs)
         }
@@ -696,9 +695,9 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
     // ---- Character-class grammar over shared lexical tokens ----
     private fun parseCharClass(rootStart: Int): Regexp {
         val stack: ArrayDeque<ClassExpressionFrame> = ArrayDeque<ClassExpressionFrame>()
-        stack.push(newClassFrame(rootStart))
+        stack.addFirst(newClassFrame(rootStart))
         while (!stack.isEmpty()) {
-            val frame = stack.peek()
+            val frame = stack.first()
             val token = lexer.takeClass()
             val start = token!!.start
             when (token!!.kind) {
@@ -714,15 +713,15 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                         start
                     )
                     val completed = completeClassExpression(frame)!!
-                    stack.pop()
+                    stack.removeFirst()
                     if (stack.isEmpty()) return finishCharClassBuilder(completed)
-                    val parent = stack.peek()
+                    val parent = stack.first()
                     parent.currentUnion.addCharClass(completed)
                     parent.hasItems = true
                     parent.afterIntersection = false
                 }
 
-                RegexLexer.Kind.CLASS_OPEN -> stack.push(newClassFrame(start))
+                RegexLexer.Kind.CLASS_OPEN -> stack.addFirst(newClassFrame(start))
                 RegexLexer.Kind.INTERSECTION -> {
                     if (!frame.hasItems || frame.afterIntersection) {
                         throw lexer.classError("empty left side of character class intersection", start)
@@ -881,7 +880,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
         ccb.addRune(0x2029) // U+2029 PARAGRAPH SEPARATOR
         val singleLinebreak: Regexp = Regexp.charClass(ccb.build()!!, flags)
 
-        return Regexp.alternate(List.of<Regexp?>(crLf, singleLinebreak), flags)
+        return Regexp.alternate(listOf(crLf, singleLinebreak), flags)
     }
 
     companion object {
@@ -907,7 +906,10 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
             val result: Regexp?
             try {
                 result = p.doParse()
-            } catch (syntaxFailure: PatternSyntaxException) {
+            } catch (syntaxFailure: RuntimeException) {
+                if (!PatternSyntaxExceptions.isSyntaxError(syntaxFailure)) {
+                    throw syntaxFailure
+                }
                 try {
                     p.reportIntentionalDivergences(RegexLexer.isClassSyntaxError(syntaxFailure))
                 } catch (notificationFailure: RuntimeException) {
@@ -947,7 +949,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                     return true
                 }
                 if (current.subs != null) {
-                    pending.addAll(current.subs!!)
+                    pending.addAll(current.subs!!.filterNotNull())
                 }
             }
             return false
@@ -971,17 +973,17 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                     }
 
                     RegexpOp.CAPTURE, RegexpOp.NON_CAPTURE, RegexpOp.STAR, RegexpOp.PLUS, RegexpOp.QUEST -> pending.add(
-                        current.subs!!.first()
+                        current.subs!!.first()!!
                     )
 
                     RegexpOp.REPEAT -> {
                         // A zero-count repetition never executes its child, regardless of the child's width.
                         if (current.max != 0) {
-                            pending.add(current.subs!!.first())
+                            pending.add(current.subs!!.first()!!)
                         }
                     }
 
-                    RegexpOp.CONCAT, RegexpOp.ALTERNATE -> pending.addAll(current.subs!!)
+                    RegexpOp.CONCAT, RegexpOp.ALTERNATE -> pending.addAll(current.subs!!.filterNotNull())
                     else -> {
                         return false
                     }
@@ -1001,21 +1003,21 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
 
         private fun repeatCount(re: Regexp, limit: Int): RepeatCount {
             val stack: ArrayDeque<RepeatCountFrame> = ArrayDeque<RepeatCountFrame>()
-            stack.push(RepeatCountFrame(re))
+            stack.addFirst(RepeatCountFrame(re))
             var result: RepeatCount? = null
             while (!stack.isEmpty()) {
-                val frame = stack.peek()
+                val frame = stack.first()
                 val nsub = if (frame.re.subs == null) 0 else frame.re.subs!!.size
                 if (frame.nextSub < nsub) {
-                    stack.push(RepeatCountFrame(frame.re!!.subs!!.get(frame.nextSub)!!))
+                    stack.addFirst(RepeatCountFrame(frame.re!!.subs!!.get(frame.nextSub)!!))
                     frame.nextSub++
                     continue
                 }
 
                 result = frame.finish(limit)
-                stack.pop()
+                stack.removeFirst()
                 if (!stack.isEmpty()) {
-                    stack.peek().addChild(result, limit)
+                    stack.first().addChild(result, limit)
                 }
             }
             return result!!
@@ -1092,7 +1094,7 @@ internal class Parser private constructor(pattern: String?, flags: Int) {
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record(re.runes.size.toLong())
                     }
-                    System.arraycopy(re.runes, 0, runes, out, re.runes.size)
+                    re.runes.copyInto(runes, out, 0, 0 + re.runes.size)
                     out += re.runes.size
                 }
             }

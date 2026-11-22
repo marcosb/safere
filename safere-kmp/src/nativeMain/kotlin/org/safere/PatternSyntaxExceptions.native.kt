@@ -23,6 +23,10 @@ internal actual object PatternSyntaxExceptions {
     return error is NativePatternSyntaxException && error.classError
   }
 
+  actual fun isSyntaxError(error: Throwable?): Boolean {
+    return error is NativePatternSyntaxException
+  }
+
   private class NativePatternSyntaxException(
     description: String?,
     pattern: String?,

@@ -130,9 +130,8 @@ internal interface InputScanner {
      * Returns whether this scanner exposes UTF-8 byte-search kernels (literal BMH, mixed-pair,
      * byte-suffix endsWith, and related helpers).
      *
-     * Callers that also use [Utf8StartAcceleration] must only return true for scanners that are
-     * [Utf8InputScanner] (or otherwise accepted by that bridge). Returning true for any other
-     * type would make start acceleration treat every candidate search as a miss.
+     * Callers that also use [Utf8StartAcceleration] must only return true for scanners that
+     * implement the UTF-8 byte-search kernels those accelerators invoke.
      */
     fun supportsUtf8ByteSearch(): Boolean {
         return false
@@ -155,6 +154,69 @@ internal interface InputScanner {
 
     /** UTF-8 suffix check; default is unsupported (`false`).  */
     fun endsWith(suffix: ByteArray, wasDollar: Boolean, unixLines: Boolean, foldCase: Boolean): Boolean {
+        return false
+    }
+
+    /** UTF-8 backing array; default unsupported.  */
+    fun bytes(): ByteArray {
+        throw UnsupportedOperationException("bytes")
+    }
+
+    /** Offset into [bytes]; default `0`.  */
+    fun offset(): Int {
+        return 0
+    }
+
+    /** UTF-8 literal search with rare-byte anchor; default unsupported (`-1`).  */
+    fun indexOf(
+        literal: ByteArray,
+        failure: IntArray,
+        shifts: IntArray?,
+        start: Int,
+        rareByteOffset: Int,
+    ): Int {
+        return -1
+    }
+
+    /** UTF-8 literal search bounded by max start; default unsupported (`-1`).  */
+    fun indexOfWithin(literal: ByteArray, failure: IntArray, start: Int, maxStart: Int): Int {
+        return -1
+    }
+
+    /** UTF-8 byte-sequence search; default unsupported (`-1`).  */
+    fun indexOfUtf8Sequence(sequence: ByteArray, start: Int, limit: Int): Int {
+        return -1
+    }
+
+    /** Case-insensitive UTF-8 prefix search; default unsupported (`-1`).  */
+    fun indexOfIgnoreCase(
+        prefix: String,
+        failure: IntArray,
+        anchorOffset: Int,
+        anchorLow: Byte,
+        anchorHigh: Byte,
+        start: Int,
+    ): Int {
+        return -1
+    }
+
+    /** Case-insensitive UTF-8 prefix search with two anchors; default unsupported (`-1`).  */
+    fun indexOfPairIgnoreCase(
+        prefix: String,
+        failure: IntArray,
+        offset1: Int,
+        low1: Byte,
+        high1: Byte,
+        offset2: Int,
+        low2: Byte,
+        high2: Byte,
+        start: Int,
+    ): Int {
+        return -1
+    }
+
+    /** UTF-8 prefix check; default unsupported (`false`).  */
+    fun startsWith(prefix: ByteArray, startPos: Int, foldCase: Boolean = false): Boolean {
         return false
     }
 
