@@ -5,24 +5,22 @@
 package org.safere
 
 import org.safere.Dfa.ManyMatchResult
-import java.util.*
-import java.util.List
 
 /**
  * A compiled set of regular expression patterns that can be matched against a text simultaneously.
- * 
- * 
+ *
+ *
  * Unlike [Pattern], which compiles and matches one pattern at a time, `PatternSet`
  * compiles multiple patterns into a single automaton and tests all of them in a single pass over
  * the input text. This is useful for tasks such as URL routing, lexical analysis, or content
  * filtering where the input must be checked against many patterns.
- * 
- * 
+ *
+ *
  * Usage:
- * 
+ *
  * <pre>`PatternSet.Builder builder = new PatternSet.Builder(PatternSet.Anchor.UNANCHORED); int id0 = builder.add("foo"); int id1 = builder.add("bar"); int id2 = builder.add("[0-9]+"); PatternSet set = builder.compile(); List<Integer> matches = set.match("foobar123"); // matches contains id0, id1, id2 `</pre>
- * 
- * 
+ *
+ *
  * This class is modeled on RE2's `RE2::Set`. The compiled automaton uses the DFA engine
  * for fast matching. If the DFA exhausts its state budget, the match falls back to running each
  * pattern individually through the NFA.
@@ -31,8 +29,8 @@ class PatternSet private constructor(
     private val anchor: Anchor?,
     private val prog: Prog,
     private val size: Int,
-    private val patterns: MutableList<String?>,
-    private val fallbackPatterns: MutableList<Pattern>,
+    private val patterns: List<String?>,
+    private val fallbackProgs: List<Prog>,
     private val maxDfaStates: Int,
 ) {
     /** Anchor mode for the pattern set. Determines how patterns are matched against the text.  */
@@ -46,9 +44,10 @@ class PatternSet private constructor(
         /** Patterns must match the entire text from start to end.  */
         ANCHOR_BOTH
     }
+
     /**
      * Returns the number of patterns in this set.
-     * 
+     *
      * @return the number of patterns
      */
     fun size(): Int {
@@ -57,105 +56,128 @@ class PatternSet private constructor(
 
     /**
      * Returns the pattern at the given index.
-     * 
+     *
      * @param index the pattern index (as returned by [Builder.add])
      * @return the pattern string
      * @throws IndexOutOfBoundsException if index is out of range
      */
     fun pattern(index: Int): String? {
-        return patterns.get(index)
+        return patterns[index]
     }
 
     /**
      * Tests whether any pattern in this set matches the text.
-     * 
+     *
      * @param text the input text to match against
      * @return `true` if at least one pattern matches
      */
     fun matches(text: String?): Boolean {
-        return !match(text).isEmpty()
+        return match(text).isNotEmpty()
     }
 
     /**
      * Matches the text against all patterns and returns the indices of the patterns that matched.
-     * 
-     * 
+     *
+     *
      * The returned list contains the 0-based indices (as returned by [Builder.add]) of all
      * patterns that matched the text. The list is sorted in ascending order. If no pattern matched,
      * an empty list is returned.
-     * 
+     *
      * @param text the input text to match against
      * @return a sorted list of indices of matching patterns (may be empty)
      */
-    fun match(text: String?): MutableList<Int> {
+    fun match(text: String?): List<Int> {
+        val input = text!!
         val anchored = (anchor != Anchor.UNANCHORED)
 
         if (prog.hasGraphemeClusterInstruction()) {
-            return matchFallback(text)
+            return matchFallback(input)
         }
 
         // Try DFA multi-match first.
-        val dfaResult: ManyMatchResult? = Dfa.Companion.searchMany(prog, text, anchored, maxDfaStates)
+        val dfaResult: ManyMatchResult? = Dfa.searchMany(prog, input, anchored, maxDfaStates)
         if (dfaResult != null) {
             if (!dfaResult.matched) {
-                return Collections.emptyList<Int>()
+                return emptyList()
             }
-            val result: MutableList<Int> = ArrayList<Int>(dfaResult.matchIds!!.size)
-            for (id in dfaResult.matchIds!!) {
-                result.add(id)
-            }
-            result.sort()
-            return Collections.unmodifiableList(result)
+            return freezeMatchIds(dfaResult.matchIds!!.sorted())
         }
 
         // DFA bailed out — fall back to running each pattern individually through NFA.
-        return matchFallback(text)
+        return matchFallback(input)
     }
 
     /**
      * Fallback matching that runs each pattern individually through the NFA. Used when the DFA
      * exceeds its state budget.
      */
-    private fun matchFallback(text: String?): MutableList<Int> {
-        val result: MutableList<Int> = ArrayList<Int>()
+    private fun matchFallback(text: String): List<Int> {
+        val result = ArrayList<Int>()
         for (i in 0..<size) {
-            val p = fallbackPatterns.get(i)
-            val m = p.matcher(text)
+            val fallback = fallbackProgs[i]
             val matched =
                 when (anchor) {
-                    Anchor.UNANCHORED -> m.find()
-                    Anchor.ANCHOR_START -> m.lookingAt()
-                    Anchor.ANCHOR_BOTH -> m.matches()
+                    Anchor.UNANCHORED ->
+                        Nfa.search(
+                            fallback,
+                            text,
+                            Nfa.Anchor.UNANCHORED,
+                            Nfa.MatchKind.FIRST_MATCH,
+                            1,
+                        ) != null
+
+                    Anchor.ANCHOR_START ->
+                        Nfa.search(
+                            fallback,
+                            text,
+                            Nfa.Anchor.ANCHORED,
+                            Nfa.MatchKind.FIRST_MATCH,
+                            1,
+                        ) != null
+
+                    Anchor.ANCHOR_BOTH ->
+                        Nfa.search(
+                            fallback,
+                            text,
+                            Nfa.Anchor.ANCHORED,
+                            Nfa.MatchKind.FULL_MATCH,
+                            1,
+                        ) != null
+
                     null -> false
                 }
             if (matched) {
                 result.add(i)
             }
         }
-        return Collections.unmodifiableList<Int?>(result)
+        return freezeMatchIds(result)
+    }
+
+    /** Shared empty list for no-match; fixed-size list otherwise (KMP-safe stand-in for unmodifiable). */
+    private fun freezeMatchIds(ids: List<Int>): List<Int> {
+        return if (ids.isEmpty()) emptyList() else ids.toIntArray().asList()
     }
 
     /**
      * Builder for constructing a [PatternSet]. Patterns are added one at a time, then the set
      * is compiled into a single automaton.
-     * 
-     * 
+     *
+     *
      * Once [.compile] is called, no more patterns can be added.
      */
     class Builder(private val anchor: Anchor?) {
-        private val patterns: MutableList<String?> = ArrayList<String?>()
+        private val patterns: MutableList<String?> = ArrayList()
         private var compiled = false
 
         /**
          * Creates a new builder with the given anchor mode.
-         * 
+         *
          * @param anchor the anchor mode for matching
          */
 
-
         /**
          * Adds a pattern to the set.
-         * 
+         *
          * @param pattern the regular expression pattern
          * @return the 0-based index assigned to this pattern
          * @throws PatternSyntaxException if the pattern is invalid
@@ -165,7 +187,7 @@ class PatternSet private constructor(
             check(!compiled) { "Cannot add patterns after compile()" }
             // Validate the pattern by parsing it.
             val parseFlags: Int = SET_PARSE_FLAGS
-            Parser.Companion.parse(pattern, parseFlags)
+            Parser.parse(pattern, parseFlags)
 
             val index: Int = patterns.size
             patterns.add(pattern)
@@ -174,7 +196,7 @@ class PatternSet private constructor(
 
         /**
          * Compiles all added patterns into a single automaton.
-         * 
+         *
          * @return the compiled [PatternSet]
          * @throws IllegalStateException if no patterns have been added or if already compiled
          */
@@ -184,36 +206,43 @@ class PatternSet private constructor(
 
         /**
          * Compiles all added patterns with a custom DFA state budget. Package-private for testing.
-         * 
+         *
          * @param maxDfaStates maximum number of DFA states before falling back to NFA
          * @return the compiled [PatternSet]
          */
         fun compile(maxDfaStates: Int): PatternSet {
             check(!compiled) { "compile() has already been called" }
-            check(!patterns.isEmpty()) { "No patterns have been added" }
+            check(patterns.isNotEmpty()) { "No patterns have been added" }
             compiled = true
 
             val parseFlags: Int = SET_PARSE_FLAGS
             val size: Int = patterns.size
 
-            val tagged: MutableList<Regexp?> = ArrayList<Regexp?>(size)
-            val fallbackPatterns: MutableList<Pattern?> = ArrayList<Pattern?>(size)
+            val tagged: MutableList<Regexp?> = ArrayList(size)
+            val fallbackProgs: MutableList<Prog> = ArrayList(size)
             for (i in 0..<size) {
-                val pattern = patterns.get(i)
-                val re: Regexp = Parser.Companion.parse(pattern, parseFlags)!!
-                fallbackPatterns.add(Pattern.compile(pattern!!))
-                val haveMatch: Regexp = Regexp.Companion.haveMatch(i, parseFlags)
-                tagged.add(Regexp.Companion.concat(List.of<Regexp?>(re, haveMatch), parseFlags))
+                val pattern = patterns[i]
+                val re: Regexp = Parser.parse(pattern, parseFlags)!!
+                val fallbackProg =
+                    Compiler.compile(re)
+                        ?: throw PatternSyntaxExceptions.create(
+                            "compiled program too large",
+                            pattern,
+                            -1,
+                        )
+                fallbackProgs.add(fallbackProg)
+                val haveMatch: Regexp = Regexp.haveMatch(i, parseFlags)
+                tagged.add(Regexp.concat(listOf(re, haveMatch), parseFlags))
             }
 
-            val combined: Regexp?
-            if (size == 1) {
-                combined = tagged.first()!!
-            } else {
-                combined = Regexp.Companion.alternate(tagged, parseFlags)
-            }
+            val combined: Regexp =
+                if (size == 1) {
+                    tagged.first()!!
+                } else {
+                    Regexp.alternate(tagged, parseFlags)!!
+                }
 
-            val prog: Prog = Compiler.Companion.compile(combined!!)!!
+            val prog: Prog = Compiler.compile(combined)!!
 
             if (anchor == Anchor.ANCHOR_START || anchor == Anchor.ANCHOR_BOTH) {
                 prog.setAnchorStart(true)
@@ -226,9 +255,9 @@ class PatternSet private constructor(
                 anchor,
                 prog,
                 size,
-                List.copyOf<String?>(patterns),
-                List.copyOf<Pattern?>(fallbackPatterns),
-                maxDfaStates
+                patterns.toList(),
+                fallbackProgs.toList(),
+                maxDfaStates,
             )
         }
     }

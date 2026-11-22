@@ -27,7 +27,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/Pattern.kt",
   "org/safere/Matcher.kt",
   "org/safere/Utf8Matcher.kt",
-  "org/safere/PatternSet.kt",
   // Pattern-typed diagnostics overloads (core SafeReDiagnostics is common)
   "org/safere/SafeReDiagnosticsPattern.kt",
   // Maven JVM helpers replaced by KMP expect/actual overlays
