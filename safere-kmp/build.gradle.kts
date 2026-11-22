@@ -41,7 +41,6 @@ val jvmOnlyRelativePaths = listOf(
   "org/safere/Dfa.kt",
   "org/safere/BitState.kt",
   "org/safere/OnePass.kt",
-  "org/safere/ShiftDfa.kt",
   "org/safere/InnerLiteralSearch.kt",
   // Maven JVM helpers replaced by KMP expect/actual overlays
   "org/safere/ThreadLocalRef.kt",

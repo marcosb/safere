@@ -26,7 +26,7 @@ internal class ShiftDfaTest {
 
         val bytes = "abc".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(bytes, 0, bytes.size)
-        Assertions.assertThat(dfa.matches(scanner, 0, 3)).isTrue()
+        Assertions.assertThat(dfa.matches(scanner, scanner.bytes(), scanner.offset(), 0, 3)).isTrue()
     }
 
     @Test
@@ -55,7 +55,9 @@ internal class ShiftDfaTest {
         val storage = "xxxxfalseyyyy".toByteArray(StandardCharsets.UTF_8)
         val scanner = Utf8InputScanner(storage, 4, 5)
 
-        Assertions.assertThat(dfa.matches(scanner, 0, scanner.length)).isTrue()
+        Assertions.assertThat(
+            dfa.matches(scanner, scanner.bytes(), scanner.offset(), 0, scanner.length)
+        ).isTrue()
     }
 
     @Test
@@ -323,7 +325,9 @@ internal class ShiftDfaTest {
             Assertions.assertThat(dfa.matches(input, 0, input.length)).`as`("String %s", expected).isEqualTo(matched)
             val bytes = input.toByteArray(StandardCharsets.UTF_8)
             val scanner = Utf8InputScanner(bytes, 0, bytes.size)
-            Assertions.assertThat(dfa.matches(scanner, 0, bytes.size)).`as`("UTF-8 %s", expected).isEqualTo(matched)
+            Assertions.assertThat(
+                dfa.matches(scanner, scanner.bytes(), scanner.offset(), 0, bytes.size)
+            ).`as`("UTF-8 %s", expected).isEqualTo(matched)
         }
     }
 }

@@ -5364,7 +5364,8 @@ class Matcher : MatchResult {
             if (matcher.text != null) {
                 matched = shiftDfa.matches(matcher.text!!, 0, len)
             } else if (scanner is Utf8InputScanner) {
-                matched = shiftDfa.matches(scanner, 0, len)
+                matched =
+                    shiftDfa.matches(scanner, scanner.bytes(), scanner.offset(), 0, len)
             } else {
                 return matcher.matchesCore()
             }

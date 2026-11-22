@@ -4,7 +4,8 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Shift-based Scalar DFA engine for small deterministic regular expressions ( 10 states).
@@ -53,13 +54,26 @@ internal class ShiftDfa private constructor(
         }
 
         fun copyFrontier(): IntArray {
-            return Arrays.copyOf(frontier, frontierSize)
+            return frontier.copyOf(frontierSize)
+        }
+
+
+        private fun samePrefix(state: IntArray, frontier: IntArray, frontierSize: Int): Boolean {
+            if (state.size != frontierSize) {
+                return false
+            }
+            for (i in 0 until frontierSize) {
+                if (state[i] != frontier[i]) {
+                    return false
+                }
+            }
+            return true
         }
 
         fun findState(states: MutableList<IntArray>): Int {
             for (i in 0 until states.size) {
                 val state = states[i]
-                if (Arrays.equals(state, 0, state.size, frontier, 0, frontierSize)) {
+                if (samePrefix(state, frontier, frontierSize)) {
                     return i
                 }
             }
@@ -108,7 +122,7 @@ internal class ShiftDfa private constructor(
                     }
                 }
             }
-            Arrays.sort(frontier, 0, frontierSize)
+            frontier.sort(0, frontierSize)
             return true
         }
 
@@ -169,18 +183,17 @@ internal class ShiftDfa private constructor(
         return (acceptMask and (1L shl state)) != 0L
     }
 
-    /** Matches full input UTF-8 byte scanner from `start` to `end`.  */
-    fun matches(scanner: Utf8InputScanner, start: Int, end: Int): Boolean {
+    /** Matches full input UTF-8 bytes from `start` to `end` (scanner index units).  */
+    fun matches(scanner: InputScanner, bytes: ByteArray, offset: Int, start: Int, end: Int): Boolean {
         var state = initialShiftState
         val tab = this.table
         val accs = this.accelerators
-        val bytes = scanner.bytes()
         var i = start
         while (i < end) {
             if (accs != null && end - i >= 16) {
                 val acc = accs[state / STATE_SHIFT_STEP]
                 if (acc != null) {
-                    val nextPos: Int = StateAccelerator.Companion.findNextAsciiOrNonAsciiEscape(acc, scanner!!, i, end)
+                    val nextPos: Int = StateAccelerator.Companion.findNextAsciiOrNonAsciiEscape(acc, scanner, i, end)
                     if (nextPos == -1) {
                         break
                     }
@@ -195,7 +208,7 @@ internal class ShiftDfa private constructor(
             if (WorkCounterConfig.ENABLED) {
                 WorkCounter.record()
             }
-            val b = bytes!![scanner.offset() + i++].toInt() and 0xFF
+            val b = bytes[offset + i++].toInt() and 0xFF
             state = ((tab[b] ushr state) and STATE_MASK.toLong()).toInt()
             if (state == DEAD_STATE) {
                 return false
@@ -291,7 +304,7 @@ internal class ShiftDfa private constructor(
                 }
                 // Dead state slot (slot 10 at bit offset 60) self-loops to dead state (60)
                 row = row or (DEAD_STATE.toLong() shl DEAD_STATE)
-                Arrays.fill(table, boundaries[cls], boundaries[cls + 1], row)
+                table.fill(row, boundaries[cls], boundaries[cls + 1])
             }
 
             // For non-ASCII bytes (128..255), all states transition to DEAD_STATE
@@ -299,7 +312,7 @@ internal class ShiftDfa private constructor(
             for (s in 0..MAX_STATES) {
                 nonAsciiDeadRow = nonAsciiDeadRow or (DEAD_STATE.toLong() shl (s * STATE_SHIFT_STEP))
             }
-            Arrays.fill(table, 128, 256, nonAsciiDeadRow)
+            table.fill(nonAsciiDeadRow, 128, 256)
 
             var acceptMask = 0L
             for (s in 0 until numDfaStates) {
@@ -376,13 +389,13 @@ internal class ShiftDfa private constructor(
                     boundaries[count++] = c
                 }
             }
-            return Arrays.copyOf(boundaries, count)
+            return boundaries.copyOf(count)
         }
 
         private fun addAsciiBoundaries(boundary: BooleanArray, lo: Int, hi: Int) {
             if (lo < 128 && hi >= 0) {
-                boundary[Math.max(0, lo)] = true
-                boundary[Math.min(127, hi) + 1] = true
+                boundary[max(0, lo)] = true
+                boundary[min(127, hi) + 1] = true
             }
         }
 
