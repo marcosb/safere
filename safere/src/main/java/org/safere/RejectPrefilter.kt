@@ -4,7 +4,6 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import org.safere.CharClassScanInfo.AsciiSmallSet
 import org.safere.MultiAnchorDescriptor.RejectPlan
 import org.safere.EndAnchoredCharClassInfo
 import org.safere.SuffixInfo
@@ -148,17 +147,17 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(literal: String): Literal {
-                val utf8: ByteArray = literal.encodeToByteArray()
-                val failure: IntArray = ByteLiteralScan.literalFailure(utf8)
-                val shifts: IntArray? = ByteLiteralScan.literalShifts(utf8)
-                val anchorOffset = StringLiteralSearch.anchorOffset(literal)
+                return from(RejectLiteralPlan.from(literal))
+            }
+
+            fun from(plan: RejectLiteralPlan): Literal {
                 return Literal(
-                    literal,
-                    utf8,
-                    failure,
-                    shifts,
-                    anchorOffset,
-                    StringLiteralSearch.anchorAt(literal, anchorOffset)
+                    plan.literal,
+                    plan.utf8,
+                    plan.failure,
+                    plan.shifts,
+                    plan.anchorOffset,
+                    plan.anchor,
                 )
             }
         }
@@ -310,58 +309,18 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(scanInfo: CharClassScanInfo): CharClass {
-                val small: CharArray? = smallChars(scanInfo)
+                return from(RejectCharClassPlan.from(scanInfo))
+            }
+
+            fun from(plan: RejectCharClassPlan): CharClass {
                 return CharClass(
-                    scanInfo.ranges,
-                    scanInfo.bitmap0,
-                    scanInfo.bitmap1,
-                    singleAscii(scanInfo),
-                    small,
-                    nonAsciiUtf8OfMixedPair(small)
+                    plan.ranges,
+                    plan.bitmap0,
+                    plan.bitmap1,
+                    plan.singleAscii,
+                    plan.smallChars,
+                    plan.nonAsciiUtf8,
                 )
-            }
-
-            /**
-             * Returns the UTF-8 encoding of the non-ASCII member of a small set with one ASCII and one
-             * non-ASCII member, such as `[\]\uFF3D]`, or `null` for every other class. Members
-             * are sorted, so the ASCII one comes first. Small-set members are never surrogates.
-             */
-            private fun nonAsciiUtf8OfMixedPair(small: CharArray?): ByteArray? {
-                return if (small != null && small.size == 2 && small[0].code < 0x80 && small[1].code >= 0x80)
-                    small[1].toString().encodeToByteArray()
-                else
-                    null
-            }
-
-            /**
-             * Returns the sole member of a one-character ASCII class, or `-1` for every other class.
-             * 
-             * 
-             * A one-character reject class is a character search, not a class scan. [ ][InputScanner.indexOfAscii] reaches [String.indexOf], which is intrinsified,
-             * whereas [InputScanner.indexOfCodePointClass] walks `codePointAt` and `charCount` per character. [CharClassScanInfo.AsciiSmallSet] already records its
-             * enumerated members; this reads that back so the distinction survives construction.
-             */
-            private fun singleAscii(scanInfo: CharClassScanInfo?): Int {
-                return if (scanInfo is AsciiSmallSet
-                    && scanInfo.chars != null && scanInfo.chars.size == 1
-                )
-                    scanInfo.chars[0]
-                        .code
-                else
-                    -1
-            }
-
-            /**
-             * Returns the members of a two-member small class, or `null`. On the `String` path
-             * they are searched with [.rejectsSmall]. A single ASCII member is already one `String.indexOf` through [.singleAscii], and routing it through the windowed search
-             * instead cost 9% on `bracketCitation.match`. A three-member set would cost three
-             * intrinsic passes over a gap, which has not been measured against the class scan.
-             */
-            private fun smallChars(scanInfo: CharClassScanInfo?): CharArray? {
-                return if (scanInfo is CharClassScanInfo.SmallSet && scanInfo.chars.size == 2)
-                    scanInfo.chars
-                else
-                    null
             }
 
             /**
@@ -426,49 +385,14 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(literals: Array<String?>?): DisjointLiterals? {
-                if (literals == null || literals.size == 0) {
-                    return null
-                }
-                var utf8Count = 0
-                for (literal in literals) {
-                    if (!hasUnpairedSurrogate(literal!!)) {
-                        utf8Count++
-                    }
-                }
-                val utf8Literals = arrayOfNulls<ByteArray>(utf8Count)
-                val failures = arrayOfNulls<IntArray>(utf8Count)
-                val shifts = arrayOfNulls<IntArray>(utf8Count)
-                var idx = 0
-                for (literal in literals) {
-                    val lit = literal!!
-                    if (!hasUnpairedSurrogate(lit)) {
-                        val utf8: ByteArray = lit.encodeToByteArray()
-                        utf8Literals[idx] = utf8
-                        failures[idx] = ByteLiteralScan.literalFailure(utf8)
-                        shifts[idx] = ByteLiteralScan.literalShifts(utf8)
-                        idx++
-                    }
-                }
-                return DisjointLiterals(literals, utf8Literals, failures, shifts)
+                val plan = RejectDisjointLiteralsPlan.from(literals) ?: return null
+                return from(plan)
             }
 
-            private fun hasUnpairedSurrogate(s: String): Boolean {
-                val len: Int = s.length
-                var i = 0
-                while (i < len) {
-                    val c: Char = s[i]
-                    if (CodePoints.isHighSurrogate(c)) {
-                        if (i + 1 < len && CodePoints.isLowSurrogate(s[i + 1])) {
-                            i++
-                        } else {
-                            return true
-                        }
-                    } else if (CodePoints.isLowSurrogate(c)) {
-                        return true
-                    }
-                    i++
-                }
-                return false
+            fun from(plan: RejectDisjointLiteralsPlan): DisjointLiterals {
+                return DisjointLiterals(
+                    plan.literals, plan.utf8Literals, plan.failures, plan.shifts
+                )
             }
         }
     }
@@ -506,12 +430,17 @@ internal interface RejectPrefilter {
 
         companion object {
             fun create(info: SuffixInfo?): EndAnchoredSuffix? {
-                if (info == null || info.suffix == null || info.suffix.isEmpty()) {
-                    return null
-                }
-                val utf8: ByteArray = info.suffix.encodeToByteArray()
+                val plan = RejectEndAnchoredSuffixPlan.from(info) ?: return null
+                return from(plan)
+            }
+
+            fun from(plan: RejectEndAnchoredSuffixPlan): EndAnchoredSuffix {
                 return EndAnchoredSuffix(
-                    info.suffix, utf8, info.wasDollar, info.unixLines, info.foldCase
+                    plan.suffix,
+                    plan.suffixUtf8,
+                    plan.wasDollar,
+                    plan.unixLines,
+                    plan.foldCase,
                 )
             }
 

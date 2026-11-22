@@ -159,8 +159,17 @@ internal class MultiAnchorDescriptor @JvmOverloads constructor(
       }
     }
 
+    /**
+     * @param multiLiteralInfo precomputed ASCII multi-literal tables from
+     * [MultiLiteralInfo.create], or null when the alternation is ineligible for that path
+     * (Teddy / char-class fallback decide at accelerator create time).
+     */
     @JvmRecord
-    data class MultiLiteral(val literals: Array<String?>?, val fallbackClass: CharClassScanInfo?) : StartPlan {
+    data class MultiLiteral(
+      val literals: Array<String?>?,
+      val fallbackClass: CharClassScanInfo?,
+      val multiLiteralInfo: MultiLiteralInfo? = null,
+    ) : StartPlan {
       init {
         requireNotNull(literals) { "literals" }
       }

@@ -7,6 +7,8 @@ package org.safere
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.StartAcceleration
 import kotlin.jvm.JvmRecord
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
@@ -64,7 +66,7 @@ internal interface StringStartAccelerator {
         }
 
         fun findCandidate(text: String?, fromIndex: Int, unixLines: Boolean): Int {
-            return Matcher.indexOfIgnoreCase(
+            return IgnoreCaseSearch.indexOfIgnoreCase(
                 text!!, prefix!!, anchorOffset, anchorLow, anchorHigh, classHashChain, fromIndex
             )
         }
@@ -95,9 +97,9 @@ internal interface StringStartAccelerator {
 
         fun findCandidate(text: String, fromIndex: Int, unixLines: Boolean): Int {
             if (prefix == null || prefix.isEmpty()) {
-                return Math.min(Math.max(0, fromIndex), text.length)
+                return min(max(0, fromIndex), text.length)
             }
-            val pos = Math.max(0, fromIndex)
+            val pos = max(0, fromIndex)
             if (classHashChain != null) {
                 val limit = WorkLimit.forRemaining(text.length - pos)
                 val result = classHashChain.search(text, pos, limit)
@@ -192,7 +194,7 @@ internal interface StringStartAccelerator {
                             val candidateStart = literalStart - discreteOffsets[0]
                             if (candidateStart >= fromIndex) {
                                 val first =
-                                    if (candidateStart < text.length) Character.codePointAt(
+                                    if (candidateStart < text.length) CodePoints.codePointAt(
                                         text,
                                         candidateStart
                                     ) else -1
@@ -229,7 +231,7 @@ internal interface StringStartAccelerator {
                             continue
                         }
                     }
-                    return Math.max(
+                    return max(
                         fromIndex,
                         retreatByCodePoints(text, literalStart, fixedOffsetLiteral.maxOffset(), fromIndex)
                     )
@@ -262,10 +264,10 @@ internal interface StringStartAccelerator {
                     val start = literalStart - discreteOffsets[i]
                     if (start >= fromIndex
                         && start < text.length
-                        && firstCharClass.contains(Character.codePointAt(text, start))
+                        && firstCharClass.contains(CodePoints.codePointAt(text, start))
                     ) {
-                        return Math.max(
-                            fromIndex, Math.min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
+                        return max(
+                            fromIndex, min(start, literalStart + 1 - fixedOffsetLiteral.maxOffset())
                         )
                     }
                 }
@@ -287,7 +289,7 @@ internal interface StringStartAccelerator {
                     retreatByCodePoints(text, literalStart, fixedOffsetLiteral.maxOffset(), fromIndex)
                 if (candidateStart >= fromIndex) {
                     val first =
-                        if (candidateStart < text.length) Character.codePointAt(text, candidateStart) else -1
+                        if (candidateStart < text.length) CodePoints.codePointAt(text, candidateStart) else -1
                     if (first >= 0 && firstCharClass.contains(first)) {
                         return candidateStart
                     }
@@ -300,14 +302,14 @@ internal interface StringStartAccelerator {
                 var pos = index
                 while (count > 0 && pos > minIndex) {
                     pos--
-                    if (pos > minIndex && Character.isLowSurrogate(text[pos])
-                        && Character.isHighSurrogate(text[pos - 1])
+                    if (pos > minIndex && CodePoints.isLowSurrogate(text[pos])
+                        && CodePoints.isHighSurrogate(text[pos - 1])
                     ) {
                         pos--
                     }
                     count--
                 }
-                return Math.max(minIndex, pos)
+                return max(minIndex, pos)
             }
         }
     }
@@ -330,7 +332,7 @@ internal interface StringStartAccelerator {
         }
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
-            val start = Math.max(0, fromIndex)
+            val start = max(0, fromIndex)
             if (offset >= text.length - start) {
                 return -1
             }
@@ -405,11 +407,11 @@ internal interface StringStartAccelerator {
                     if (WorkCounterConfig.ENABLED) {
                         WorkCounter.record()
                     }
-                    val cp = text.codePointAt(index)
-                    if (!isAscii && Matcher.binarySearchRanges(ranges, cp)) {
+                    val cp = CodePoints.codePointAt(text, index)
+                    if (!isAscii && org.safere.CharClass.containsInFlatRanges(ranges, cp)) {
                         return index
                     }
-                    index += Character.charCount(cp)
+                    index += CodePoints.charCount(cp)
                 }
                 return -1
             }
@@ -462,7 +464,7 @@ internal interface StringStartAccelerator {
             private fun nextAcceleratedStart(
                 text: CharSequence, acceleration: StartAcceleration, fromIndex: Int, unixLines: Boolean
             ): Int {
-                val start = Math.max(0, fromIndex)
+                val start = max(0, fromIndex)
                 var i = start
                 while (i < text.length) {
                     if (WorkCounterConfig.ENABLED) {
@@ -471,8 +473,8 @@ internal interface StringStartAccelerator {
                     if (matchesStartAcceleration(text, i, acceleration, unixLines)) {
                         return i
                     }
-                    val cp: Int = Character.codePointAt(text, i)
-                    i += Character.charCount(cp) - 1
+                    val cp: Int = CodePoints.codePointAt(text, i)
+                    i += CodePoints.charCount(cp) - 1
                     i++
                 }
                 return -1
@@ -563,8 +565,8 @@ internal interface StringStartAccelerator {
             var start = innerMatch
             var count = 0
             while (start > fromIndex) {
-                var cp = Character.codePointBefore(text, start)
-                var cpStart = start - Character.charCount(cp)
+                var cp = CodePoints.codePointBefore(text, start)
+                var cpStart = start - CodePoints.charCount(cp)
                 if (cpStart < fromIndex) {
                     // Preserve an explicit low-surrogate cursor when its high surrogate precedes fromIndex.
                     cp = text[fromIndex].code
@@ -583,7 +585,7 @@ internal interface StringStartAccelerator {
         }
 
         fun findCandidate(text: CharSequence, fromIndex: Int, unixLines: Boolean): Int {
-            var searchPos = Math.max(0, fromIndex)
+            var searchPos = max(0, fromIndex)
             val textLen: Int = text.length
             // A wide class's walk covers the rest of the line, so a skip shorter than
             // MIN_WIDE_LEADING_SKIP saves less than the literal scan and the walk cost. Such searches
@@ -599,7 +601,7 @@ internal interface StringStartAccelerator {
                 if (wideLeadingClass
                     && innerMatch - fromIndex < MultiAnchorCompiler.MIN_WIDE_LEADING_SKIP
                 ) {
-                    return Math.max(0, fromIndex)
+                    return max(0, fromIndex)
                 }
                 // A forward scan can show that the walk would reach the search start. Probe only the
                 // first hit: an excluded code point before it will also precede every later hit.
@@ -611,8 +613,8 @@ internal interface StringStartAccelerator {
                 var start = innerMatch
                 var count = 0
                 while (start > fromIndex) {
-                    var cp = Character.codePointBefore(text, start)
-                    var cpStart = start - Character.charCount(cp)
+                    var cp = CodePoints.codePointBefore(text, start)
+                    var cpStart = start - CodePoints.charCount(cp)
                     if (cpStart < fromIndex) {
                         // Preserve an explicit low-surrogate cursor when its high surrogate precedes fromIndex.
                         cp = text[fromIndex].code
@@ -644,13 +646,13 @@ internal interface StringStartAccelerator {
              */
             fun forwardScanChars(le: StartPlan.LeadingExpansion): CharArray? {
                 val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
-                if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Integer.MAX_VALUE) {
+                    if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Int.MAX_VALUE) {
                     return null
                 }
                 val chars = CharArray(excluded.size)
                 for (i in excluded.indices) {
                     val cp = excluded[i]
-                    if (cp > Character.MAX_VALUE.code || Character.isSurrogate(cp.toChar())) {
+                    if (cp > 0xFFFF || CodePoints.isSurrogate(cp.toChar())) {
                         return null
                     }
                     chars[i] = cp.toChar()

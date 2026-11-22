@@ -230,7 +230,15 @@ internal object CharClassExpander {
     }
 
     private fun normalizePropertyName(name: String): String {
-        return name.uppercase().replace("_", "").replace("-", "").replace(" ", "")
+        val out = StringBuilder(name.length)
+        for (i in 0 until name.length) {
+            val ch = name[i]
+            if (ch == '_' || ch == '-' || ch == ' ') {
+                continue
+            }
+            out.append(Ascii.toUpperCase(ch))
+        }
+        return out.toString()
     }
 
     internal enum class CaseFoldPolicy {

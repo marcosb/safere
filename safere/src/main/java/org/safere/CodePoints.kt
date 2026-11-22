@@ -50,6 +50,20 @@ internal object CodePoints {
     return count
   }
 
+  /** Returns the code points of [s] in order (UTF-16 surrogates as unpaired scalars). */
+  fun toCodePointArray(s: CharSequence): IntArray {
+    val count = codePointCount(s, 0, s.length)
+    val codePoints = IntArray(count)
+    var i = 0
+    var index = 0
+    while (i < s.length) {
+      val cp = codePointAt(s, i)
+      codePoints[index++] = cp
+      i += charCount(cp)
+    }
+    return codePoints
+  }
+
   fun offsetByCodePoints(seq: CharSequence, index: Int, codePointOffset: Int): Int {
     var i = index
     var offset = codePointOffset

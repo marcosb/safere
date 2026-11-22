@@ -172,7 +172,11 @@ internal object MultiAnchorCompiler {
 
         val altLiterals = start.literalAlternation
         if (altLiterals != null && altLiterals.size >= 2) {
-            return StartPlan.MultiLiteral(altLiterals, start.charClassPrefix)
+            return StartPlan.MultiLiteral(
+                altLiterals,
+                start.charClassPrefix,
+                MultiLiteralInfo.create(altLiterals),
+            )
         }
 
         if (allowLeadingExpansion) {

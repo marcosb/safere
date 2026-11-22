@@ -7,12 +7,8 @@ package org.safere
 import org.safere.CharClassScanInfo.UnicodeSmallSet
 import org.safere.MultiAnchorDescriptor.StartPlan
 import org.safere.Utf8StartAccelerator.LeadingExpansion.ExcludedSet
-import java.util.*
-import java.util.function.IntFunction
-import java.util.function.IntPredicate
 import kotlin.jvm.JvmRecord
 import kotlin.math.*
-import kotlin.text.Charsets
 /**
  * Encapsulates pre-computed start acceleration search strategies for finding candidate match
  * positions in a [Utf8InputScanner].
@@ -49,12 +45,15 @@ internal interface Utf8StartAccelerator {
 
         companion object {
             fun create(prefix: String): Literal {
-                val utf8: ByteArray = prefix.toByteArray(Charsets.UTF_8)
+                return from(Utf8LiteralStartPlan.from(prefix))
+            }
+
+            fun from(plan: Utf8LiteralStartPlan): Literal {
                 return Literal(
-                    utf8,
-                    Pattern.Companion.literalFailure(utf8),
-                    Pattern.Companion.literalShifts(utf8),
-                    RarityOracle.rarestUtf8LiteralByteOffset(utf8)
+                    plan.prefixUtf8,
+                    plan.prefixUtf8Failure,
+                    plan.prefixUtf8Shifts,
+                    plan.rareByteOffset,
                 )
             }
         }
@@ -97,33 +96,20 @@ internal interface Utf8StartAccelerator {
 
         companion object {
             fun create(prefix: String): Utf8StartAccelerator? {
-                for (i in 0..<prefix.length) {
-                    if (prefix[i] > 127.toChar()) {
-                        return null
-                    }
-                }
-                val len: Int = prefix.length
-                if (len >= 2) {
-                    val pair = RarityOracle.rarestAsciiPairIgnoreCase(prefix, len)
-                    if (pair != null) {
-                        return CaseInsensitiveLiteral(
-                            prefix,
-                            Ascii.ignoreCaseFailure(prefix),
-                            pair.offset1,
-                            pair.low1,
-                            pair.high1,
-                            pair.offset2,
-                            pair.low2,
-                            pair.high2
-                        )
-                    }
-                }
-                val anchorOffset = RarityOracle.rarestAsciiOffset(prefix, len, true)
-                val anchor: Char = prefix[anchorOffset]
-                val low = Ascii.toLowerCase(anchor).code.toByte()
-                val high = Ascii.toUpperCase(anchor).code.toByte()
+                val plan = Utf8CaseInsensitiveLiteralPlan.from(prefix) ?: return null
+                return from(plan)
+            }
+
+            fun from(plan: Utf8CaseInsensitiveLiteralPlan): CaseInsensitiveLiteral {
                 return CaseInsensitiveLiteral(
-                    prefix, Ascii.ignoreCaseFailure(prefix), anchorOffset, low, high, -1, 0.toByte(), 0.toByte()
+                    plan.prefix,
+                    plan.failure,
+                    plan.anchorOffset,
+                    plan.anchorLow,
+                    plan.anchorHigh,
+                    plan.anchorOffset2,
+                    plan.anchorLow2,
+                    plan.anchorHigh2,
                 )
             }
         }
@@ -230,84 +216,23 @@ internal interface Utf8StartAccelerator {
         private class EncodedFold(val bytes: ByteArray, val failure: IntArray?)
 
         companion object {
-            private const val MAX_FOLD_VARIANTS = 4
             private const val ANCHOR_SCAN_WINDOW = 256
 
             fun create(prefix: String): Utf8StartAccelerator? {
-                val codePoints = prefix.codePoints().toArray()
-                var stablePrefixBytes = 0
-                var bestRarity = -1
-                var bestOffset = 0
-                var bestVariants: MutableList<EncodedFold>? = null
-                val prefixFoldVariants: MutableList<IntArray> = ArrayList<IntArray>(codePoints.size)
-                var stablePrefixWidth = true
-                for (codePoint in codePoints) {
-                    if (codePoint >= Character.MIN_SURROGATE.code && codePoint <= Character.MAX_SURROGATE.code) {
-                        return null
-                    }
-                    val foldVariants: IntArray? = foldVariants(codePoint)
-                    if (foldVariants == null) {
-                        return null
-                    }
-                    prefixFoldVariants.add(foldVariants)
-                    if (!stablePrefixWidth) {
-                        continue
-                    }
-                    val variants: MutableList<EncodedFold> = encodedFoldVariants(foldVariants)
-                    var rarity = 255
-                    val width: Int = variants.first().bytes.size
-                    var stableWidth = true
-                    for (variant in variants) {
-                        var variantRarity = 0
-                        for (value in variant.bytes) {
-                            variantRarity =
-                                max(variantRarity, RarityOracle.exactByteRarity(value.toInt() and 0xFF))
-                        }
-                        rarity = min(rarity, variantRarity)
-                        stableWidth = stableWidth and (variant.bytes.size == width)
-                    }
-                    if (rarity > bestRarity) {
-                        bestRarity = rarity
-                        bestOffset = stablePrefixBytes
-                        bestVariants = variants
-                    }
-                    // A later anchor has no fixed byte offset if an earlier fold changes UTF-8 width.
-                    if (!stableWidth) {
-                        stablePrefixWidth = false
-                    } else {
-                        stablePrefixBytes += width
-                    }
-                }
-                return if (bestVariants == null)
-                    null
-                else
-                    UnicodeCaseInsensitiveLiteral(prefixFoldVariants, bestOffset, bestVariants)
+                val plan = Utf8UnicodeCaseInsensitiveLiteralPlan.from(prefix) ?: return null
+                return from(plan)
             }
 
-            private fun foldVariants(codePoint: Int): IntArray? {
-                val builder = CharClassBuilder()
-                UnicodeCaseFolding.addUnicodeFoldedRange(builder, codePoint, codePoint)
-                val closure = builder.build()
-                if (closure.numRunes() > MAX_FOLD_VARIANTS) {
-                    return null
+            fun from(plan: Utf8UnicodeCaseInsensitiveLiteralPlan): UnicodeCaseInsensitiveLiteral {
+                val anchorVariants = ArrayList<EncodedFold>(plan.anchorVariants.size)
+                for (variant in plan.anchorVariants) {
+                    anchorVariants.add(EncodedFold(variant.bytes, variant.failure))
                 }
-                val variants = IntArray(closure.numRunes())
-                var count = 0
-                for (i in 0..<closure.numRanges()) {
-                    for (cp in closure.lo(i)..closure.hi(i)) {
-                        variants[count++] = cp
-                    }
-                }
-                return variants
-            }
-
-            private fun encodedFoldVariants(foldVariants: IntArray): MutableList<EncodedFold> {
-                val variants: MutableList<EncodedFold> = ArrayList<EncodedFold>()
-                for (folded in foldVariants) {
-                    val bytes: ByteArray = String(CodePoints.toChars(folded)).toByteArray(Charsets.UTF_8)
-                    variants.add(EncodedFold(bytes, Pattern.Companion.literalFailure(bytes)))
-                }
-                return variants
+                return UnicodeCaseInsensitiveLiteral(
+                    plan.prefixFoldVariants.toMutableList(),
+                    plan.anchorByteOffset,
+                    anchorVariants,
+                )
             }
         }
     }
@@ -456,7 +381,8 @@ internal interface Utf8StartAccelerator {
     // nonAsciiUtf8 is an internal precomputed UTF-8 byte sequence, never mutated or exposed.
     @JvmRecord
     data class CharClass(val scanInfo: CharClassScanInfo?, val nonAsciiUtf8: ByteArray?) : Utf8StartAccelerator {
-        internal constructor(scanInfo: CharClassScanInfo?) : this(scanInfo, nonAsciiUtf8(scanInfo))
+        internal constructor(scanInfo: CharClassScanInfo?) :
+            this(scanInfo, Utf8CharClassStartPlan.nonAsciiUtf8(scanInfo))
 
         override fun policy(): AcceleratorPolicy {
             return AcceleratorPolicy.Companion.CHAR_CLASS
@@ -515,17 +441,8 @@ internal interface Utf8StartAccelerator {
 
 
         companion object {
-            private fun nonAsciiUtf8(scanInfo: CharClassScanInfo?): ByteArray? {
-                if (scanInfo is UnicodeSmallSet) {
-                    val chars = scanInfo.chars
-                    if (chars.size == 1) {
-                        return chars[0].toString().toByteArray(Charsets.UTF_8)
-                    }
-                    if (chars.size == 2 && chars[0].code < 0x80 && chars[1].code >= 0x80) {
-                        return chars[1].toString().toByteArray(Charsets.UTF_8)
-                    }
-                }
-                return null
+            fun from(plan: Utf8CharClassStartPlan): CharClass {
+                return CharClass(plan.scanInfo, plan.nonAsciiUtf8)
             }
         }
     }
@@ -705,23 +622,12 @@ internal interface Utf8StartAccelerator {
                  * the repetition must be unbounded with at most one required repetition. Otherwise null.
                  */
                 fun of(le: StartPlan.LeadingExpansion): ExcludedSet? {
-                    val excluded = MultiAnchorCompiler.excludedCodePoints(le.leadingClass!!)
-                    if (excluded == null || le.minRepetition > 1 || le.maxRepetition != Int.MAX_VALUE) {
-                        return null
-                    }
-                    return ExcludedSet(
-                        Arrays.stream(excluded).filter(IntPredicate { cp: Int -> cp < 0x80 }).toArray(),
-                        Arrays.stream(excluded)
-                            .filter(
-                                IntPredicate { cp: Int ->
-                                    cp >= 0x80
-                                            && (cp > Char.MAX_VALUE.code || !CodePoints.isSurrogate(cp.toChar()))
-                                })
-                            .mapToObj<ByteArray?>(IntFunction { cp: Int ->
-                                Character.toString(cp).toByteArray(Charsets.UTF_8)
-                            })
-                            .toArray(IntFunction { size: Int -> arrayOfNulls<ByteArray>(size) })
-                    )
+                    val plan = Utf8LeadingExpansionExcludedPlan.from(le) ?: return null
+                    return from(plan)
+                }
+
+                fun from(plan: Utf8LeadingExpansionExcludedPlan): ExcludedSet {
+                    return ExcludedSet(plan.ascii, plan.nonAscii)
                 }
             }
         }
@@ -946,7 +852,7 @@ internal interface Utf8StartAccelerator {
                         return null
                     }
                     if (VectorScanProviders.vectorProviderAvailable()) {
-                        val info: MultiLiteralInfo? = MultiLiteralInfo.create(plan.literals)
+                        val info: MultiLiteralInfo? = plan.multiLiteralInfo
                         if (info != null) {
                             val teddy: TeddyModel? =
                                 if (VectorScanProviders.vectorProviderAvailable())

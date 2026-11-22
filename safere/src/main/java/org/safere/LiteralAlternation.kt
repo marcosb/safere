@@ -4,8 +4,7 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-import java.nio.charset.StandardCharsets
-import kotlin.math.*
+import kotlin.math.min
 /** Complete, ordered literal alternatives for a bounded String and UTF-8 search fast path.  */
 internal class LiteralAlternation private constructor(
     private val literals: Array<String>,
@@ -14,9 +13,9 @@ internal class LiteralAlternation private constructor(
 ) {
     // The literals are ASCII, so their UTF-8 encodings are their chars as bytes.
     private val utf8Literals: Array<ByteArray> =
-        Array(literals.size) { i -> literals[i].toByteArray(StandardCharsets.US_ASCII) }
+        Array(literals.size) { i -> literals[i].encodeToByteArray() }
     private val utf8Failures: Array<IntArray> =
-        Array(literals.size) { i -> Pattern.literalFailure(utf8Literals[i]) }
+        Array(literals.size) { i -> ByteLiteralScan.literalFailure(utf8Literals[i]) }
 
     // The first-byte scan that UTF-8 searches without this plan start with, or null when they use
     // something else; the UTF-8 search is then off.
@@ -248,9 +247,7 @@ internal class LiteralAlternation private constructor(
         val NO_MATCH: Long = -1
         val FALLBACK: Long = -2
         private const val PROBE_LENGTH = 1024
-        private const val MAX_ALTERNATIVES = 8
         private const val WINDOW_LENGTH = 256
-        private const val MAX_LITERAL_LENGTH = 12
 
         // The UTF-8 search verifies first-byte candidates one at a time until it sees this many within
         // DENSE_CANDIDATE_SPAN bytes, then switches to one bounded scan per literal.
@@ -267,30 +264,14 @@ internal class LiteralAlternation private constructor(
         fun compile(
             ast: Regexp, wholeInputRejection: Boolean, utf8FirstByteScan: Utf8StartAccelerator.CharClass?
         ): LiteralAlternation? {
-            var ast = ast
-            while (ast.op == RegexpOp.NON_CAPTURE || (ast.op == RegexpOp.CAPTURE && ast.cap == 0)) {
-                ast = ast.sub()!!
-            }
-            if (ast.op != RegexpOp.ALTERNATE || ast.nsub() < 2 || ast.nsub() > MAX_ALTERNATIVES) {
-                return null
-            }
-            val literals: Array<String?> = arrayOfNulls<String>(ast.nsub())
-            for (i in literals.indices) {
-                literals[i] = MultiAnchorCompiler.extractExactAsciiLiteral(ast.subs!!.get(i))
-                if (literals[i] == null) {
-                    return null
-                }
-                // indexOf can repeatedly compare long near-matching prefixes. Even a whole-tail rejection
-                // filter may stop after its first successful alternative, whereas exact bounds require us
-                // to inspect later alternatives too. MAX_LITERAL_LENGTH * MAX_ALTERNATIVES bounds the
-                // comparison work per input position, keeping indexOf's O(n * m) worst case linear in n.
-                // WorkCounter charges distance, not character comparisons, so it relies on these caps.
-                // Keep the existing engine for longer needles.
-                if (literals[i]!!.length > MAX_LITERAL_LENGTH) {
-                    return null
-                }
-            }
-            return LiteralAlternation(literals.requireNoNulls(), wholeInputRejection, utf8FirstByteScan)
+            val plan = LiteralAlternationPlan.compile(ast, wholeInputRejection) ?: return null
+            return from(plan, utf8FirstByteScan)
+        }
+
+        fun from(
+            plan: LiteralAlternationPlan, utf8FirstByteScan: Utf8StartAccelerator.CharClass?
+        ): LiteralAlternation {
+            return LiteralAlternation(plan.literals, plan.wholeInputRejection, utf8FirstByteScan)
         }
     }
 }
