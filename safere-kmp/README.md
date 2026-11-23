@@ -8,8 +8,23 @@ Sources: reuses `../safere/src/main/java` as `commonMain` (with
 stub (Maven generates the real JVM class). Track promotion work in
 `kotlin_conversion_helpers/KMP_CLEANUP.md`.
 
+## Portable façade
+
+`PlatformPattern` / `PlatformMatcher` are the multiplatform entry points:
+
+- **JVM actual** delegates to the shipping Maven `Pattern` / `Matcher`.
+- **Native actual** compiles and matches through common engines
+  (`PlatformRegexEngine`: Parser → Compiler → BitState/Nfa).
+
+The JDK-shaped `Pattern` / `Matcher` / `Utf8Matcher` types and incubator Vector
+kernels stay on `jvmMain`.
+
 ```bash
 # From the repository root (task name follows the host native target).
 ./tools/machine-run --label "safere-kmp native" -- \
   ./gradlew :safere-kmp:compileKotlinLinuxX64 --continue
+
+# Host-native PlatformPattern tests (linuxX64 in WSL/Linux).
+./tools/machine-run --label "safere-kmp nativeTest" -- \
+  ./gradlew :safere-kmp:linuxX64Test --continue
 ```

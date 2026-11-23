@@ -2460,49 +2460,49 @@ class Pattern private constructor(
         /**
          * Enables Unix lines mode. In this mode, only `'\n'` is recognized as a line terminator.
          */
-        val UNIX_LINES: Int = java.util.regex.Pattern.UNIX_LINES // 1
+        val UNIX_LINES: Int = PatternFlagMapping.UNIX_LINES
 
         /**
          * Enables case-insensitive matching. By default, case-insensitive matching assumes only US-ASCII
          * characters. Unicode-aware case folding can be enabled with [.UNICODE_CASE].
          */
-        val CASE_INSENSITIVE: Int = java.util.regex.Pattern.CASE_INSENSITIVE // 2
+        val CASE_INSENSITIVE: Int = PatternFlagMapping.CASE_INSENSITIVE
 
         /**
          * Permits whitespace and comments in the pattern. Whitespace is ignored, and comments starting
          * with `#` run to end-of-line.
          */
-        val COMMENTS: Int = java.util.regex.Pattern.COMMENTS // 4
+        val COMMENTS: Int = PatternFlagMapping.COMMENTS
 
         /**
          * Enables multiline mode. In multiline mode, `^` and `$` match at the start and end
          * of each line, not just the start and end of the entire input.
          */
-        val MULTILINE: Int = java.util.regex.Pattern.MULTILINE // 8
+        val MULTILINE: Int = PatternFlagMapping.MULTILINE
 
         /**
          * Enables literal parsing of the pattern. Metacharacters and escape sequences have no special
          * meaning.
          */
-        val LITERAL: Int = java.util.regex.Pattern.LITERAL // 16
+        val LITERAL: Int = PatternFlagMapping.LITERAL
 
         /**
          * Enables dotall mode. In dotall mode, `.` matches any character including line
          * terminators.
          */
-        val DOTALL: Int = java.util.regex.Pattern.DOTALL // 32
+        val DOTALL: Int = PatternFlagMapping.DOTALL
 
         /**
          * Enables Unicode-aware case folding. When used with [.CASE_INSENSITIVE], matching is done
          * in a manner consistent with the Unicode Standard.
          */
-        val UNICODE_CASE: Int = java.util.regex.Pattern.UNICODE_CASE // 64
+        val UNICODE_CASE: Int = PatternFlagMapping.UNICODE_CASE
 
         /**
          * Enables Unicode-aware character classes. When enabled, predefined character classes such as
          * `\w`, `\d`, and `\s` match Unicode characters instead of only ASCII.
          */
-        val UNICODE_CHARACTER_CLASS: Int = java.util.regex.Pattern.UNICODE_CHARACTER_CLASS // 256
+        val UNICODE_CHARACTER_CLASS: Int = PatternFlagMapping.UNICODE_CHARACTER_CLASS
 
         private fun canUseLiteralPreparedRunner(
             literal: String?, numCaptures: Int, enginePathOptions: EnginePathOptions
@@ -2671,22 +2671,7 @@ class Pattern private constructor(
          * @return a literal pattern string
          */
         fun quote(s: String): String {
-            // Use \Q...\E quoting. If the string contains \E, split around it.
-            if (!s.contains("\\E")) {
-                return "\\Q" + s + "\\E"
-            }
-            val sb = StringBuilder()
-            sb.append("\\Q")
-            var last = 0
-            var idx: Int
-            while ((s.indexOf("\\E", last).also { idx = it }) != -1) {
-                sb.append(s, last, idx)
-                sb.append("\\E\\\\E\\Q")
-                last = idx + 2
-            }
-            sb.append(s, last, s.length)
-            sb.append("\\E")
-            return sb.toString()
+            return PatternFlagMapping.quote(s)
         }
 
         fun literalFailure(literal: ByteArray): IntArray {
@@ -2740,73 +2725,25 @@ class Pattern private constructor(
         // ---------------------------------------------------------------------------
         // Flag mapping
         // ---------------------------------------------------------------------------
-        /** The set of all flag bits we support.  */
-        private val SUPPORTED_FLAGS: Int = (UNIX_LINES
-                or CASE_INSENSITIVE
-                or COMMENTS
-                or MULTILINE
-                or LITERAL
-                or DOTALL
-                or UNICODE_CASE
-                or UNICODE_CHARACTER_CLASS)
-
         /** Validates that no unsupported flag bits are set.  */
         private fun validateFlags(flags: Int) {
-            val unsupported = flags and SUPPORTED_FLAGS.inv()
-            require(unsupported == 0) {
-                ("Unsupported flags: 0x"
-                        + Integer.toHexString(unsupported)
-                        + ". CANON_EQ is not supported by SafeRE.")
-            }
+            PatternFlagMapping.validateFlags(flags)
         }
 
         /** Returns JDK-compatible effective flags after applying implied flags.  */
         private fun effectiveFlags(flags: Int): Int {
-            var flags = flags
-            if ((flags and UNICODE_CHARACTER_CLASS) != 0) {
-                flags = flags or UNICODE_CASE
-            }
-            return flags
+            return PatternFlagMapping.effectiveFlags(flags)
         }
 
         /**
          * Converts `java.util.regex.Pattern` flags to internal [ParseFlags].
-         * 
-         * 
+         *
+         *
          * The baseline is [ParseFlags.LIKE_PERL], which includes `ONE_LINE` (single-line
          * mode where `^` and `$` match only at the start/end of the entire input).
          */
         fun toParseFlags(flags: Int): Int {
-            // Start with LIKE_PERL as the baseline.
-            var pf = ParseFlags.LIKE_PERL
-
-            if ((flags and CASE_INSENSITIVE) != 0) {
-                pf = pf or ParseFlags.FOLD_CASE
-            }
-            if ((flags and MULTILINE) != 0) {
-                // Multiline mode: ^ and $ match at line boundaries.
-                // Remove ONE_LINE so that ^ and $ are per-line.
-                pf = pf and ParseFlags.ONE_LINE.inv()
-            }
-            if ((flags and DOTALL) != 0) {
-                pf = pf or ParseFlags.DOT_NL
-            }
-            if ((flags and LITERAL) != 0) {
-                pf = pf or ParseFlags.LITERAL
-            }
-            if ((flags and COMMENTS) != 0) {
-                pf = pf or ParseFlags.COMMENTS
-            }
-            if ((flags and UNICODE_CASE) != 0) {
-                pf = pf or ParseFlags.UNICODE_CASE
-            }
-            if ((flags and UNICODE_CHARACTER_CLASS) != 0) {
-                pf = pf or (ParseFlags.UNICODE_GROUPS or ParseFlags.UNICODE_CHAR_CLASS)
-            }
-            if ((flags and UNIX_LINES) != 0) {
-                pf = pf or ParseFlags.UNIX_LINES
-            }
-            return pf
+            return PatternFlagMapping.toParseFlags(flags)
         }
 
         // ---------------------------------------------------------------------------

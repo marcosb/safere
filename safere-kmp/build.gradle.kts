@@ -111,6 +111,11 @@ kotlin {
         exclude("module-info.java")
       }
     }
+    commonTest {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
     jvmMain {
       kotlin {
         srcDir(sharedMain)
