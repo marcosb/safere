@@ -9,7 +9,7 @@ import kotlin.math.min
 
 /** Utilities for regex case-folded literal and range expansion.  */
 internal object UnicodeCaseFolding {
-    private val CASE_FOLD_NOT_FOUND = Int.MIN_VALUE
+    private const val CASE_FOLD_NOT_FOUND = Int.MIN_VALUE
 
     fun asciiFoldRune(r: Int): Int {
         return Ascii.toLowerCase(r)
@@ -35,9 +35,9 @@ internal object UnicodeCaseFolding {
     }
 
     fun hasUnicodeCaseVariant(cp: Int): Boolean {
-        return UnicodeCaseMapping.toUpperCase(cp) != cp || UnicodeCaseMapping.toLowerCase(cp) != cp || UnicodeCaseMapping.toTitleCase(cp) != cp || UnicodeCaseMapping.toLowerCase(
-            UnicodeCaseMapping.toUpperCase(cp)
-        ) != cp || UnicodeCaseMapping.toUpperCase(UnicodeCaseMapping.toLowerCase(cp)) != cp
+        val asChar = cp.toChar()
+        return asChar.uppercaseChar() != asChar || asChar.lowercaseChar() != asChar || asChar.titlecaseChar() != asChar
+                || asChar.uppercaseChar().lowercaseChar() != asChar || asChar.lowercaseChar().uppercaseChar() != asChar
     }
 
     fun cycleFoldRune(r: Int): Int {
@@ -46,7 +46,7 @@ internal object UnicodeCaseFolding {
         if (idx < 0) {
             return r
         }
-        return UnicodeCaseFolding.applyFold(cf[idx]!!, r)
+        return applyFold(cf[idx]!!, r)
     }
 
     private fun lookupCaseFold(r: Int): Int {
@@ -122,9 +122,10 @@ internal object UnicodeCaseFolding {
             // code points have no links and need no entry in the component arrays.
             val links = LongArrayBuilder()
             for (cp in 0..Utils.MAX_RUNE) {
-                addLink(links, cp, UnicodeCaseMapping.toUpperCase(cp))
-                addLink(links, cp, UnicodeCaseMapping.toLowerCase(cp))
-                addLink(links, cp, UnicodeCaseMapping.toTitleCase(cp))
+                val asChar = cp.toChar()
+                addLink(links, cp, asChar.uppercaseChar().code)
+                addLink(links, cp, asChar.lowercaseChar().code)
+                addLink(links, cp, asChar.titlecaseChar().code)
                 addLink(links, cp, cycleFoldRune(cp))
             }
             val edges = links.toArray()
