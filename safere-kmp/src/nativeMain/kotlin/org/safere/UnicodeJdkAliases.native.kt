@@ -5,7 +5,11 @@
 package org.safere
 
 /**
- * Native actual: JDK UnicodeBlock/Script alias fallbacks are unavailable; table miss stays a miss.
+ * Native actual: no JDK [Character.UnicodeBlock]/[Character.UnicodeScript] alias fallback.
+ *
+ * SafeRE's generated block/script tables already cover canonical names. Alternate spellings that
+ * only [Character.UnicodeBlock.forName] / [Character.UnicodeScript.forName] would rescue on the JVM
+ * remain unresolved on native (intentional divergence; see INTENTIONAL_DIVERGENCES.md).
  */
 internal actual object UnicodeJdkAliases {
   actual fun resolveBlockTableKey(name: String): String? = null

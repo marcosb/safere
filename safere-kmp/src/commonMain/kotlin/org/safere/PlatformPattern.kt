@@ -19,6 +19,12 @@ expect class PlatformPattern {
 
   fun matcher(input: CharSequence): PlatformMatcher
 
+  fun matcher(input: Utf8Input): PlatformUtf8Matcher
+
+  fun split(input: CharSequence, limit: Int = 0): Array<String>
+
+  fun namedGroups(): Map<String, Int>
+
   companion object {
     fun compile(regex: String): PlatformPattern
 
@@ -37,6 +43,8 @@ expect class PlatformMatcher {
 
   fun reset(input: CharSequence): PlatformMatcher
 
+  fun usePattern(newPattern: PlatformPattern): PlatformMatcher
+
   fun matches(): Boolean
 
   fun lookingAt(): Boolean
@@ -49,6 +57,60 @@ expect class PlatformMatcher {
 
   fun group(group: Int): String?
 
+  fun group(name: String): String?
+
+  fun groupCount(): Int
+
+  fun namedGroups(): Map<String, Int>
+
+  fun start(): Int
+
+  fun start(group: Int): Int
+
+  fun start(name: String): Int
+
+  fun end(): Int
+
+  fun end(group: Int): Int
+
+  fun end(name: String): Int
+
+  fun region(start: Int, end: Int): PlatformMatcher
+
+  fun regionStart(): Int
+
+  fun regionEnd(): Int
+
+  fun useTransparentBounds(b: Boolean): PlatformMatcher
+
+  fun hasTransparentBounds(): Boolean
+
+  fun replaceFirst(replacement: String): String
+
+  fun replaceAll(replacement: String): String
+
+  fun appendReplacement(sb: StringBuilder, replacement: String): PlatformMatcher
+
+  fun appendTail(sb: StringBuilder): StringBuilder
+
+  companion object {
+    fun quoteReplacement(s: String): String
+  }
+}
+
+/**
+ * Portable UTF-8 matcher entry for [PlatformPattern.matcher].
+ *
+ * Offsets are reported in decoded UTF-16 char indices of the validated input (same model as
+ * matching the decoded [String]); byte-offset [Utf8Matcher] remains JVM-only.
+ */
+expect class PlatformUtf8Matcher {
+  fun matches(): Boolean
+
+  fun lookingAt(): Boolean
+
+  fun find(): Boolean
+
   fun groupCount(): Int
 
   fun start(): Int
@@ -58,4 +120,6 @@ expect class PlatformMatcher {
   fun end(): Int
 
   fun end(group: Int): Int
+
+  fun reset(): PlatformUtf8Matcher
 }

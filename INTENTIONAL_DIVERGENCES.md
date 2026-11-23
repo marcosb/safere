@@ -820,6 +820,14 @@ atomic CRLF line terminator even though opaque bounds hide that CR. SafeRE keeps
 the opaque-region model because boundary constructs should not depend on
 pre-region text when opaque bounds are active.
 
+## KMP Native Unicode Block and Script Aliases
+
+The optional `safere-kmp` native target resolves `\p{Block=…}` / `\p{Script=…}`
+names only through SafeRE's generated tables. On the JVM, a miss falls back to
+`Character.UnicodeBlock.forName` / `Character.UnicodeScript.forName`, which can
+rescue alternate spellings. Native leaves those table misses unresolved. Canonical
+names already present in the generated tables continue to work on every target.
+
 ## Sweep Classification Map
 
 | Sweep class | Status | Documentation section |

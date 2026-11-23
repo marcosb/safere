@@ -5,27 +5,16 @@
 package org.safere
 
 /**
- * Native actual: length-only byte views so [Utf8Input] companions compile without the JVM UTF-8
- * scanner stack. Full matching engines remain parked on jvmMain.
+ * Native actual mirroring the JVM [Utf8InputPlatform]: [ArrayUtf8Input] plus
+ * [Utf8InputScanner.validate] (both already in commonMain).
  */
 internal actual object Utf8InputPlatform {
   actual fun trusted(bytes: ByteArray, offset: Int, length: Int): Utf8Input {
-    checkWindow(bytes, offset, length)
-    return NativeUtf8Input(length)
+    return ArrayUtf8Input(bytes, offset, length, false)
   }
 
   actual fun validated(bytes: ByteArray, offset: Int, length: Int): Utf8Input {
-    // Validation stays with Utf8InputScanner on JVM; native accepts the window as trusted.
-    return trusted(bytes, offset, length)
+    Utf8InputScanner.validate(bytes, offset, length)
+    return ArrayUtf8Input(bytes, offset, length, true)
   }
-
-  private fun checkWindow(bytes: ByteArray, offset: Int, length: Int) {
-    if (offset < 0 || length < 0 || offset > bytes.size - length) {
-      throw IndexOutOfBoundsException(
-        "offset=$offset, length=$length, bytes.size=${bytes.size}"
-      )
-    }
-  }
-
-  private class NativeUtf8Input(override val length: Int) : Utf8Input
 }

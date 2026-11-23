@@ -36,8 +36,8 @@ Optional native benchmark engines have additional prerequisites; see
 Maven remains the shipping JVM build. An opt-in Gradle module
 [`safere-kmp`](../safere-kmp/) compiles the same library sources against a host
 kotlin/native target so JVM-only APIs can be replaced iteratively. It is not
-part of the Maven reactor and is expected to fail until those references are
-ported.
+part of the Maven reactor. Native entry points use `PlatformPattern` /
+`PlatformMatcher`; JDK-shaped `Pattern` / `Matcher` remain on `jvmMain`.
 
 ```bash
 # Host native compile (linuxX64 in WSL/Linux, mingwX64 on Windows, macOS* on Mac).

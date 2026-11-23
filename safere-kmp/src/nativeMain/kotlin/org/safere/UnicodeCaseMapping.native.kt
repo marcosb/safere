@@ -5,16 +5,13 @@
 package org.safere
 
 /**
- * Native actual: BMP code points use Kotlin [Char] case mapping; supplementary code points are
- * identity-mapped until a shared native Unicode case table is available.
+ * Native actual: full single-code-point case mapping via [UnicodeCaseMappingTables]
+ * (JDK [Character]-extracted sparse maps).
  */
 internal actual object UnicodeCaseMapping {
-  actual fun toUpperCase(cp: Int): Int =
-    if (cp in 0..0xFFFF) cp.toChar().uppercaseChar().code else cp
+  actual fun toUpperCase(cp: Int): Int = UnicodeCaseMappingTables.toUpperCase(cp)
 
-  actual fun toLowerCase(cp: Int): Int =
-    if (cp in 0..0xFFFF) cp.toChar().lowercaseChar().code else cp
+  actual fun toLowerCase(cp: Int): Int = UnicodeCaseMappingTables.toLowerCase(cp)
 
-  actual fun toTitleCase(cp: Int): Int =
-    if (cp in 0..0xFFFF) cp.toChar().titlecaseChar().code else cp
+  actual fun toTitleCase(cp: Int): Int = UnicodeCaseMappingTables.toTitleCase(cp)
 }

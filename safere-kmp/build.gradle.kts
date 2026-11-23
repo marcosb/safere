@@ -119,7 +119,10 @@ kotlin {
     jvmMain {
       kotlin {
         srcDir(sharedMain)
+        // include() applies to every srcDir; keep shared JVM-only sources and the
+        // sidecar expect/actual overlays under src/jvmMain/kotlin.
         include(*jvmMainSharedIncludes.toTypedArray())
+        include("org/safere/*.jvm.kt")
       }
     }
   }
