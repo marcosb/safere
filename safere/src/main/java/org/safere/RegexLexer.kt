@@ -321,7 +321,7 @@ internal class RegexLexer(private val source: String, flags: Int) {
                     throw error("invalid escape sequence", out.start)
                 }
                 out.kind = Kind.PREDEFINED
-                out.rune = CodePoints.toLowerCase(c)
+                out.rune = Ascii.toLowerCase(c)
                 out.negated = c >= 'A'.code && c <= 'Z'.code
             }
 
@@ -436,14 +436,14 @@ internal class RegexLexer(private val source: String, flags: Int) {
 
     private fun unicodeTail(out: Token, code: Int) {
         out.rune = code
-        if (!CodePoints.isHighSurrogate(code.toChar())) return
+        if (!code.toChar().isHighSurrogate()) return
         skipTrivia()
         if (peekRaw() != '\\'.code || peekRaw(1) != 'u'.code) return
         val start = position()
         readRaw()
         readRaw()
         val low = exactHex(4, start)
-        if (CodePoints.isLowSurrogate(low.toChar())) {
+        if (low.toChar().isLowSurrogate()) {
             out.rune = CodePoints.toCodePoint(code.toChar(), low.toChar())
             out.end = lastEnd
         } else {

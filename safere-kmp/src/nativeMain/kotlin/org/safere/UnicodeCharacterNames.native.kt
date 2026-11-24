@@ -4,9 +4,10 @@
 // Licensed under the BSD 3-Clause License (see LICENSE file).
 package org.safere
 
-/** KMP expect for [Utf8InputPlatform]. */
-internal expect object Utf8InputPlatform {
-  fun trusted(bytes: ByteArray, offset: Int, length: Int): Utf8Input
-
-  fun validated(bytes: ByteArray, offset: Int, length: Int): Utf8Input
+/**
+ * Native actual: `\N{...}` lookup via ICU4J-derived [UnicodeCharacterNameTables]
+ * (algorithmic CJK/Hangul/Tangut names included).
+ */
+internal actual object UnicodeCharacterNames {
+  actual fun codePointOf(name: String): Int = UnicodeCharacterNameTables.codePointOf(name)
 }

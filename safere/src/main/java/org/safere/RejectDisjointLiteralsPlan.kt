@@ -48,13 +48,13 @@ internal class RejectDisjointLiteralsPlan(
       var i = 0
       while (i < len) {
         val c = s[i]
-        if (CodePoints.isHighSurrogate(c)) {
-          if (i + 1 < len && CodePoints.isLowSurrogate(s[i + 1])) {
+        if (c.isHighSurrogate()) {
+          if (i + 1 < len && s[i + 1].isLowSurrogate()) {
             i++
           } else {
             return true
           }
-        } else if (CodePoints.isLowSurrogate(c)) {
+        } else if (c.isLowSurrogate()) {
           return true
         }
         i++

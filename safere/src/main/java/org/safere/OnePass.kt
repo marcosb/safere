@@ -256,8 +256,8 @@ internal class OnePass {
                 if (ch.code < 128) {
                     nextPos = pos + 1
                     cls = ascMap[ch.code]
-                } else if (CodePoints.isHighSurrogate(ch)
-                    && pos + 1 < endPos && CodePoints.isLowSurrogate(stringText[pos + 1])
+                } else if (ch.isHighSurrogate()
+                    && pos + 1 < endPos && stringText[pos + 1].isLowSurrogate()
                 ) {
                     nextPos = pos + 2
                     cls = classOf(CodePoints.toCodePoint(ch, stringText[pos + 1]))

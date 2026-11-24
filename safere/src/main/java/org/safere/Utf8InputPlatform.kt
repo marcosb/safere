@@ -5,10 +5,10 @@
 package org.safere
 
 /**
- * JVM factory helpers for [Utf8Input] companions.
+ * Factory helpers for [Utf8Input] companions.
  *
- * The Maven JVM build compiles this implementation. The KMP sidecar excludes it and supplies
- * expect/actual overlays so native targets compile without [ArrayUtf8Input] / [Utf8InputScanner].
+ * Pure Kotlin over [ArrayUtf8Input] and [Utf8InputScanner], so Maven and every KMP target compile
+ * this same file (no expect/actual overlay).
  */
 internal object Utf8InputPlatform {
   fun trusted(bytes: ByteArray, offset: Int, length: Int): Utf8Input {

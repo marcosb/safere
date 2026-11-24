@@ -302,8 +302,8 @@ internal interface StringStartAccelerator {
                 var pos = index
                 while (count > 0 && pos > minIndex) {
                     pos--
-                    if (pos > minIndex && CodePoints.isLowSurrogate(text[pos])
-                        && CodePoints.isHighSurrogate(text[pos - 1])
+                    if (pos > minIndex && text[pos].isLowSurrogate()
+                        && text[pos - 1].isHighSurrogate()
                     ) {
                         pos--
                     }
@@ -652,7 +652,7 @@ internal interface StringStartAccelerator {
                 val chars = CharArray(excluded.size)
                 for (i in excluded.indices) {
                     val cp = excluded[i]
-                    if (cp > 0xFFFF || CodePoints.isSurrogate(cp.toChar())) {
+                    if (cp > 0xFFFF || cp.toChar().isSurrogate()) {
                         return null
                     }
                     chars[i] = cp.toChar()

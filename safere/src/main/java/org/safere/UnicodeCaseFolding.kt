@@ -10,6 +10,7 @@ import kotlin.math.min
 /** Utilities for regex case-folded literal and range expansion.  */
 internal object UnicodeCaseFolding {
     private const val CASE_FOLD_NOT_FOUND = Int.MIN_VALUE
+    private val CASED_LETTER_CATEGORIES = arrayOf("Lu", "Ll", "Lt")
 
     fun asciiFoldRune(r: Int): Int {
         return Ascii.toLowerCase(r)
@@ -35,9 +36,44 @@ internal object UnicodeCaseFolding {
     }
 
     fun hasUnicodeCaseVariant(cp: Int): Boolean {
-        val asChar = cp.toChar()
-        return asChar.uppercaseChar() != asChar || asChar.lowercaseChar() != asChar || asChar.titlecaseChar() != asChar
-                || asChar.uppercaseChar().lowercaseChar() != asChar || asChar.lowercaseChar().uppercaseChar() != asChar
+        val upper = upperCaseCodePoint(cp)
+        val lower = lowerCaseCodePoint(cp)
+        return upper != cp || lower != cp || titleCaseCodePoint(cp) != cp
+                || lowerCaseCodePoint(upper) != cp || upperCaseCodePoint(lower) != cp
+    }
+
+    // Single-code-point case mappings equivalent to Character.toUpperCase/toLowerCase/toTitleCase
+    // (int), using only common Kotlin stdlib so the same code compiles for KMP targets.
+    //
+    // Char.uppercaseChar() etc. only see one UTF-16 unit, so supplementary code points go through
+    // String.uppercase()/lowercase(), which handle surrogate pairs on every platform. Unicode has no
+    // SpecialCasing (1:many) entries outside the BMP, and no supplementary titlecase mapping that
+    // differs from uppercase, so a single-code-point result is the simple mapping.
+
+    private fun upperCaseCodePoint(cp: Int): Int =
+        if (cp < CodePoints.MIN_SUPPLEMENTARY_CODE_POINT) {
+            cp.toChar().uppercaseChar().code
+        } else {
+            singleCodePointOr(CodePoints.toChars(cp).concatToString().uppercase(), cp)
+        }
+
+    private fun lowerCaseCodePoint(cp: Int): Int =
+        if (cp < CodePoints.MIN_SUPPLEMENTARY_CODE_POINT) {
+            cp.toChar().lowercaseChar().code
+        } else {
+            singleCodePointOr(CodePoints.toChars(cp).concatToString().lowercase(), cp)
+        }
+
+    private fun titleCaseCodePoint(cp: Int): Int =
+        if (cp < CodePoints.MIN_SUPPLEMENTARY_CODE_POINT) {
+            cp.toChar().titlecaseChar().code
+        } else {
+            upperCaseCodePoint(cp)
+        }
+
+    private fun singleCodePointOr(mapped: String, fallback: Int): Int {
+        val first = CodePoints.codePointAt(mapped, 0)
+        return if (CodePoints.charCount(first) == mapped.length) first else fallback
     }
 
     fun cycleFoldRune(r: Int): Int {
@@ -121,12 +157,29 @@ internal object UnicodeCaseFolding {
             // Gather only nontrivial single-code-point casing and simple-fold links. Most Unicode
             // code points have no links and need no entry in the component arrays.
             val links = LongArrayBuilder()
-            for (cp in 0..Utils.MAX_RUNE) {
+            for (cp in 0 until CodePoints.MIN_SUPPLEMENTARY_CODE_POINT) {
                 val asChar = cp.toChar()
                 addLink(links, cp, asChar.uppercaseChar().code)
                 addLink(links, cp, asChar.lowercaseChar().code)
                 addLink(links, cp, asChar.titlecaseChar().code)
                 addLink(links, cp, cycleFoldRune(cp))
+            }
+            for (cp in CodePoints.MIN_SUPPLEMENTARY_CODE_POINT..Utils.MAX_RUNE) {
+                addLink(links, cp, cycleFoldRune(cp))
+            }
+            // Outside the BMP only cased letters (Lu/Ll/Lt) have case mappings. Visiting just those
+            // ranges avoids building a String for each of the ~1M supplementary code points.
+            for (category in CASED_LETTER_CATEGORIES) {
+                for (range in UnicodeGeneratedTables.CATEGORIES.getValue(category)) {
+                    val hi = range[1]
+                    if (hi < CodePoints.MIN_SUPPLEMENTARY_CODE_POINT) {
+                        continue
+                    }
+                    for (cp in max(range[0], CodePoints.MIN_SUPPLEMENTARY_CODE_POINT)..hi) {
+                        addLink(links, cp, upperCaseCodePoint(cp))
+                        addLink(links, cp, lowerCaseCodePoint(cp))
+                    }
+                }
             }
             val edges = links.toArray()
             val codePoints = IntArray(edges.size * 2)

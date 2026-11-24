@@ -316,7 +316,7 @@ internal class GraphemeSupport private constructor() {
 
             var variant = 0
             val ch: Char = text[pos]
-            if (CodePoints.isLowSurrogate(ch)
+            if (ch.isLowSurrogate()
                 && hasHighSurrogateBeforeLowSurrogateInRegion(text, pos, start)
             ) {
                 variant = variant or LOW_SURROGATE_PAIR_VISIBLE
@@ -449,8 +449,8 @@ internal class GraphemeSupport private constructor() {
                 return -1
             }
             val ch: Char = text[pos]
-            if (CodePoints.isHighSurrogate(ch)
-                && pos + 1 < endPos && pos + 1 < text.length && CodePoints.isLowSurrogate(text[pos + 1])
+            if (ch.isHighSurrogate()
+                && pos + 1 < endPos && pos + 1 < text.length && text[pos + 1].isLowSurrogate()
             ) {
                 return CodePoints.toCodePoint(ch, text[pos + 1])
             }
@@ -469,8 +469,8 @@ internal class GraphemeSupport private constructor() {
                 return endPos + 1
             }
             val ch: Char = text[pos]
-            if (CodePoints.isHighSurrogate(ch)
-                && pos + 1 < endPos && pos + 1 < text.length && CodePoints.isLowSurrogate(text[pos + 1])
+            if (ch.isHighSurrogate()
+                && pos + 1 < endPos && pos + 1 < text.length && text[pos + 1].isLowSurrogate()
             ) {
                 return pos + 2
             }
@@ -702,16 +702,16 @@ internal class GraphemeSupport private constructor() {
             }
             val prevChar: Char = text[pos - 1]
             val nextChar: Char = text[pos]
-            if (CodePoints.isHighSurrogate(prevChar) && CodePoints.isLowSurrogate(nextChar)) {
+            if (prevChar.isHighSurrogate() && nextChar.isLowSurrogate()) {
                 return false
             }
             if (prevChar == '\r' && nextChar == '\n') {
                 return false
             }
-            if (CodePoints.isHighSurrogate(prevChar) && !CodePoints.isLowSurrogate(nextChar)) {
+            if (prevChar.isHighSurrogate() && !nextChar.isLowSurrogate()) {
                 return true
             }
-            if (CodePoints.isLowSurrogate(prevChar)
+            if (prevChar.isLowSurrogate()
                 && !hasHighSurrogateBeforeLowSurrogateInRegion(text, pos - 1, regionStart)
             ) {
                 return true
@@ -767,17 +767,15 @@ internal class GraphemeSupport private constructor() {
         }
 
         private fun isLowHighSurrogateBoundary(text: CharSequence, pos: Int): Boolean {
-            return pos > 0 && pos < text.length && CodePoints.isLowSurrogate(text[pos - 1])
-                    && CodePoints.isHighSurrogate(text[pos])
+            return pos > 0 && pos < text.length && text[pos - 1].isLowSurrogate()
+                    && text[pos].isHighSurrogate()
         }
 
         private fun isRegionStartSplitSurrogateBoundary(
             text: CharSequence, pos: Int, regionStart: Int
         ): Boolean {
-            return pos == regionStart && regionStart > 0 && regionStart < text.length && CodePoints.isHighSurrogate(
-                text[regionStart - 1]
-            )
-                    && CodePoints.isLowSurrogate(text[regionStart])
+            return pos == regionStart && regionStart > 0 && regionStart < text.length && text[regionStart - 1].isHighSurrogate()
+                    && text[regionStart].isLowSurrogate()
         }
 
         private fun isAfterRegionStartSplitLowSurrogateBoundary(
@@ -790,12 +788,8 @@ internal class GraphemeSupport private constructor() {
         private fun isRegionEndSplitSurrogateBoundary(
             text: CharSequence, pos: Int, regionEnd: Int
         ): Boolean {
-            return pos == regionEnd && regionEnd > 0 && regionEnd < text.length && CodePoints.isHighSurrogate(
-                text[
-                    regionEnd - 1
-                ]
-            )
-                    && CodePoints.isLowSurrogate(text[regionEnd])
+            return pos == regionEnd && regionEnd > 0 && regionEnd < text.length && text[regionEnd - 1].isHighSurrogate()
+                    && text[regionEnd].isLowSurrogate()
         }
 
         private fun suppressesConsumedSplitLowSurrogateExplicitBoundary(
@@ -815,7 +809,7 @@ internal class GraphemeSupport private constructor() {
         private fun isLowSurrogateBeforeZwjBoundary(
             text: CharSequence, pos: Int, matchStart: Int, regionStart: Int
         ): Boolean {
-            return pos == matchStart && pos > 0 && pos < text.length && CodePoints.isLowSurrogate(text[pos - 1])
+            return pos == matchStart && pos > 0 && pos < text.length && text[pos - 1].isLowSurrogate()
                     && text[pos].code == 0x200D && !hasHighSurrogateBeforeLowSurrogateInRegion(
                 text,
                 pos - 1,
@@ -837,9 +831,7 @@ internal class GraphemeSupport private constructor() {
         private fun isStandaloneZwjAfterLowSurrogateBoundary(
             text: CharSequence, pos: Int, matchStart: Int, regionStart: Int
         ): Boolean {
-            return pos == matchStart && pos > 1 && pos < text.length && text[pos - 1].code == 0x200D && CodePoints.isLowSurrogate(
-                text[pos - 2]
-            )
+            return pos == matchStart && pos > 1 && pos < text.length && text[pos - 1].code == 0x200D && text[pos - 2].isLowSurrogate()
                     && !hasHighSurrogateBeforeLowSurrogateInRegion(text, pos - 2, regionStart)
         }
 
@@ -874,12 +866,8 @@ internal class GraphemeSupport private constructor() {
             if (regionStart <= lowSurrogatePos && regionStart > 0) {
                 return false
             }
-            return pos > 2 && text[pos - 1].code == 0x200D && CodePoints.isLowSurrogate(
-                text[
-                    lowSurrogatePos
-                ]
-            )
-                    && CodePoints.isHighSurrogate(text[pos - 3])
+            return pos > 2 && text[pos - 1].code == 0x200D && text[lowSurrogatePos].isLowSurrogate()
+                    && text[pos - 3].isHighSurrogate()
                     && context.hasExtendedPictographicBefore(pos - 1, regionStart)
         }
 
@@ -893,21 +881,15 @@ internal class GraphemeSupport private constructor() {
         private fun hasHighSurrogateBeforeLowSurrogateInRegion(
             text: CharSequence, lowSurrogatePos: Int, regionStart: Int
         ): Boolean {
-            return lowSurrogatePos > regionStart && lowSurrogatePos > 0 && CodePoints.isHighSurrogate(
-                text[
-                    lowSurrogatePos - 1
-                ]
-            )
+            return lowSurrogatePos > regionStart && lowSurrogatePos > 0 && text[lowSurrogatePos - 1].isHighSurrogate()
         }
 
         private fun startsAtLowSurrogate(text: CharSequence, matchStart: Int): Boolean {
-            return matchStart >= 0 && matchStart < text.length && CodePoints.isLowSurrogate(text[matchStart])
+            return matchStart >= 0 && matchStart < text.length && text[matchStart].isLowSurrogate()
         }
 
         private fun startsAtStandaloneZwj(text: CharSequence, matchStart: Int, regionStart: Int): Boolean {
-            return matchStart >= 0 && matchStart < text.length && text[matchStart].code == 0x200D && (matchStart == 0 || matchStart <= regionStart || !CodePoints.isLowSurrogate(
-                text[matchStart - 1]
-            ) || !hasHighSurrogateBeforeLowSurrogateInRegion(text, matchStart - 1, regionStart))
+            return matchStart >= 0 && matchStart < text.length && text[matchStart].code == 0x200D && (matchStart == 0 || matchStart <= regionStart || !text[matchStart - 1].isLowSurrogate() || !hasHighSurrogateBeforeLowSurrogateInRegion(text, matchStart - 1, regionStart))
         }
 
         /** Returns whether `c` attaches to the preceding code point (GB9 and GB9a).  */
@@ -918,11 +900,11 @@ internal class GraphemeSupport private constructor() {
 
         private fun isUnpairedSurrogateAt(text: CharSequence, pos: Int): Boolean {
             val c: Char = text[pos]
-            if (CodePoints.isLowSurrogate(c)) {
+            if (c.isLowSurrogate()) {
                 return true
             }
-            return CodePoints.isHighSurrogate(c)
-                    && (pos + 1 >= text.length || !CodePoints.isLowSurrogate(text[pos + 1]))
+            return c.isHighSurrogate()
+                    && (pos + 1 >= text.length || !text[pos + 1].isLowSurrogate())
         }
 
         private fun isGraphemeControl(c: Int): Boolean {

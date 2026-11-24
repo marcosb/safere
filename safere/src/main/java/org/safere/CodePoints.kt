@@ -10,11 +10,7 @@ internal object CodePoints {
 
   fun charCount(cp: Int): Int = if (cp >= MIN_SUPPLEMENTARY_CODE_POINT) 2 else 1
 
-  fun isSupplementaryCodePoint(cp: Int): Boolean = cp >= MIN_SUPPLEMENTARY_CODE_POINT
-
   fun isValidCodePoint(cp: Int): Boolean = cp in MIN_CODE_POINT..MAX_CODE_POINT
-
-  fun isBmpCodePoint(cp: Int): Boolean = cp in 0..0xFFFF
 
   fun codePointAt(seq: CharSequence, index: Int): Int {
     val c1 = seq[index]
@@ -101,80 +97,11 @@ internal object CodePoints {
     else charArrayOf(highSurrogate(cp), lowSurrogate(cp))
   }
 
-  fun digit(cp: Int, radix: Int): Int {
-    if (radix !in 2..36) return -1
-    val value =
-      when {
-        cp in '0'.code..'9'.code -> cp - '0'.code
-        cp in 'a'.code..'z'.code -> cp - 'a'.code + 10
-        cp in 'A'.code..'Z'.code -> cp - 'A'.code + 10
-        else -> return -1
-      }
-    return if (value < radix) value else -1
-  }
-
-  fun forDigit(digit: Int, radix: Int): Char {
-    if (digit < 0 || digit >= radix || radix !in 2..36) return 0.toChar()
-    return if (digit < 10) ('0'.code + digit).toChar() else ('a'.code + digit - 10).toChar()
-  }
-
-  // BMP-oriented predicates (full Unicode general-category checks stay on JVM Character /
-  // SafeRE Unicode tables where required). Suitable for lexer/ASCII-adjacent call sites.
-  fun isDigit(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isDigit()
-
-  fun isLetter(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isLetter()
-
-  fun isLetterOrDigit(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isLetterOrDigit()
-
-  fun isWhitespace(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isWhitespace()
-
-  fun isSpaceChar(cp: Int): Boolean = isWhitespace(cp)
-
-  fun isUpperCase(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isUpperCase()
-
-  fun isLowerCase(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isLowerCase()
-
-  fun isISOControl(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isISOControl()
-
+  // Int overloads for call sites that hold a rune; Char call sites use the stdlib directly
+  // (`ch.isHighSurrogate()` etc.).
   fun isHighSurrogate(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isHighSurrogate()
 
   fun isLowSurrogate(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isLowSurrogate()
 
   fun isSurrogate(cp: Int): Boolean = cp in 0..0xFFFF && cp.toChar().isSurrogate()
-
-  fun toLowerCase(cp: Int): Int =
-    if (cp in 0..0xFFFF) cp.toChar().lowercaseChar().code else cp
-
-  fun toUpperCase(cp: Int): Int =
-    if (cp in 0..0xFFFF) cp.toChar().uppercaseChar().code else cp
-
-  fun isDigit(ch: Char): Boolean = ch.isDigit()
-
-  fun isLetter(ch: Char): Boolean = ch.isLetter()
-
-  fun isLetterOrDigit(ch: Char): Boolean = ch.isLetterOrDigit()
-
-  fun isWhitespace(ch: Char): Boolean = ch.isWhitespace()
-
-  fun isSpaceChar(ch: Char): Boolean = ch.isWhitespace()
-
-  fun isUpperCase(ch: Char): Boolean = ch.isUpperCase()
-
-  fun isLowerCase(ch: Char): Boolean = ch.isLowerCase()
-
-  fun isISOControl(ch: Char): Boolean = ch.isISOControl()
-
-  fun isHighSurrogate(ch: Char): Boolean = ch.isHighSurrogate()
-
-  fun isLowSurrogate(ch: Char): Boolean = ch.isLowSurrogate()
-
-  fun isSurrogate(ch: Char): Boolean = ch.isSurrogate()
-
-  fun toLowerCase(ch: Char): Char = ch.lowercaseChar()
-
-  fun toUpperCase(ch: Char): Char = ch.uppercaseChar()
-
-  fun toLowerCase(ch: Char, localeIgnored: Boolean): Char = ch.lowercaseChar()
-
 }
-

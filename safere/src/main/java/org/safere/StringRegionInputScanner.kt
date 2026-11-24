@@ -165,8 +165,8 @@ internal class StringRegionInputScanner(
 
     override fun singleUnitCodePointAt(pos: Int): Int {
         val c = text[base + checkIndex(pos, length)]
-        return if (CodePoints.isHighSurrogate(c)
-            && pos + 1 < length && CodePoints.isLowSurrogate(text[base + pos + 1])
+        return if (c.isHighSurrogate()
+            && pos + 1 < length && text[base + pos + 1].isLowSurrogate()
         )
             -1
         else
@@ -175,8 +175,8 @@ internal class StringRegionInputScanner(
 
     override fun singleUnitCodePointBefore(pos: Int): Int {
         val c = text[base + checkIndex(pos - 1, length)]
-        return if (CodePoints.isLowSurrogate(c)
-            && pos >= 2 && CodePoints.isHighSurrogate(text[base + pos - 2])
+        return if (c.isLowSurrogate()
+            && pos >= 2 && text[base + pos - 2].isHighSurrogate()
         )
             -1
         else
@@ -198,8 +198,8 @@ internal class StringRegionInputScanner(
         }
         val first = text[base + checkIndex(pos, length)]
         val cp =
-            if (CodePoints.isHighSurrogate(first)
-                && pos + 1 < end && CodePoints.isLowSurrogate(text[base + pos + 1])
+            if (first.isHighSurrogate()
+                && pos + 1 < end && text[base + pos + 1].isLowSurrogate()
             )
                 CodePoints.toCodePoint(first, text[base + pos + 1])
             else
@@ -222,8 +222,8 @@ internal class StringRegionInputScanner(
         }
         val last = text[base + checkIndex(pos - 1, length)]
         val cp =
-            if (CodePoints.isLowSurrogate(last)
-                && pos - 2 >= lower && CodePoints.isHighSurrogate(text[base + pos - 2])
+            if (last.isLowSurrogate()
+                && pos - 2 >= lower && text[base + pos - 2].isHighSurrogate()
             )
                 CodePoints.toCodePoint(text[base + pos - 2], last)
             else
@@ -236,9 +236,9 @@ internal class StringRegionInputScanner(
             return InputScanner.END_OF_INPUT
         }
         val c = text[base + checkIndex(pos, length)]
-        if (CodePoints.isHighSurrogate(c) && pos + 1 < length) {
+        if (c.isHighSurrogate() && pos + 1 < length) {
             val next = text[base + pos + 1]
-            if (CodePoints.isLowSurrogate(next)) {
+            if (next.isLowSurrogate()) {
                 return CodePoints.toCodePoint(c, next)
             }
         }
@@ -250,9 +250,9 @@ internal class StringRegionInputScanner(
             return InputScanner.END_OF_INPUT
         }
         val c = text[base + checkIndex(pos - 1, length)]
-        if (CodePoints.isLowSurrogate(c) && pos >= 2) {
+        if (c.isLowSurrogate() && pos >= 2) {
             val previous = text[base + pos - 2]
-            if (CodePoints.isHighSurrogate(previous)) {
+            if (previous.isHighSurrogate()) {
                 return CodePoints.toCodePoint(previous, c)
             }
         }
@@ -260,8 +260,8 @@ internal class StringRegionInputScanner(
     }
 
     override fun isCodePointBoundary(pos: Int): Boolean {
-        return pos >= 0 && pos <= length && (pos == 0 || pos == length || !CodePoints.isLowSurrogate(text[base + pos])
-                || !CodePoints.isHighSurrogate(text[base + pos - 1]))
+        return pos >= 0 && pos <= length && (pos == 0 || pos == length || !text[base + pos].isLowSurrogate()
+                || !text[base + pos - 1].isHighSurrogate())
     }
 
     override fun indexOfCodePointClass(ranges: IntArray?, bitmap0: Long, bitmap1: Long, start: Int, limit: Int): Int {

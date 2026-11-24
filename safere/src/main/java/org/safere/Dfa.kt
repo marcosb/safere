@@ -1294,7 +1294,7 @@ internal class Dfa {
                 // see the whole pair, not the half.
                 // Only split-pair cursors bypass the cache; truly unpaired halves remain cacheable.
                 if (prog.reversed()
-                    && CodePoints.isLowSurrogate(cp.toChar())
+                    && cp.toChar().isLowSurrogate()
                     && !text.isCodePointBoundary(nextPos)
                 ) {
                     val pairIsUnicodeWord: Boolean = Nfa.isUnicodeWordChar(text.codePointBefore(nextPos + 1))

@@ -1907,7 +1907,8 @@ class Pattern private constructor(
      * @since 20
      */
     fun namedGroups(): Map<String, Int> {
-        return astAnalysis.namedGroups
+        // Common Kotlin's toMap() is mutable at runtime on the JVM; keep the JDK contract.
+        return Collections.unmodifiableMap(astAnalysis.namedGroups)
     }
 
     internal fun astAnalysis(): AstAnalysis {

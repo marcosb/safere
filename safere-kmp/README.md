@@ -20,8 +20,8 @@ multiplatform entry points:
   start+reject accelerators / Nfa).
 
 The JDK-shaped `Pattern` / `Matcher` / `Utf8Matcher` types and incubator Vector
-kernels stay on `jvmMain`. Native Unicode overlays use generated case maps and
-ICU4J-derived `\N{...}` tables; JDK Block/Script alias fallback is intentionally
+kernels stay on `jvmMain`. Case mapping uses common Kotlin `Char`/`String` APIs;
+native `\N{...}` uses ICU4J-derived name tables; JDK Block/Script alias fallback is intentionally
 JVM-only (see `INTENTIONAL_DIVERGENCES.md`).
 
 ```bash

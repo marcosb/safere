@@ -358,7 +358,7 @@ object SafeReDiagnostics {
     }
 
     private fun appendJsonChar(json: StringBuilder, ch: Char) {
-        if (ch.code < 0x20 || CodePoints.isSurrogate(ch)) {
+        if (ch.code < 0x20 || ch.isSurrogate()) {
             appendUnicodeEscape(json, ch)
         } else {
             json.append(ch)
